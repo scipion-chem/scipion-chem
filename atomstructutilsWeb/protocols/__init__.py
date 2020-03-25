@@ -25,3 +25,4 @@
 # **************************************************************************
 
 from .protocol_dali import ProtAtomStructDali
+from .protocol_pdb_smallMolecules import ProtAtomStructPDBSmallMolecules
