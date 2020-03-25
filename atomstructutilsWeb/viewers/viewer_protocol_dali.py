@@ -112,6 +112,7 @@ class ProtAtomStructDaliViewer(ProtocolViewer):
                 pdbId._DaliSuperpositionLength=pwobj.Integer(int(tokens[4]))
                 pdbId._DaliSeqLength=pwobj.Integer(int(tokens[5]))
                 pdbId._DaliSeqIdentity=pwobj.Float(float(tokens[6]))
+                pdbId._DaliDescription=pwobj.String(" ".join(tokens[7:]))
                 outputSet.append(pdbId)
         outputDict = {'outputDatabaseIds%s' % subset: outputSet}
         self.protocol._defineOutputs(**outputDict)
