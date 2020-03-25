@@ -1,0 +1,9 @@
+include *.txt
+# Include the README
+ include *.rst
+
+# Include the license file
+ include LICENSE
+
+# Include conf file
+ include atomstructutilsWeb/protocols.conf
