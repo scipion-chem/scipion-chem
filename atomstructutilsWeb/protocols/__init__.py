@@ -26,4 +26,4 @@
 
 from .protocol_dali import ProtAtomStructDali
 from .protocol_pdb_smallMolecules import ProtAtomStructPDBSmallMolecules
-from .protocol_listIDs_unique import ProtAtomStructListUnique
+from .protocol_listIDs_operate import ProtAtomStructListOperate
