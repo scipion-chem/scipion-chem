@@ -78,6 +78,7 @@ class ProtAtomStructPDBSmallMolecules(EMProtocol):
                         currentLigand = DatabaseID()
                         currentLigand.setDatabase("pdb")
                         currentLigand.setDbId(newLigandName)
+                        currentLigamd._PDBChemId=pwobj.String(newLigandName)
                         currentLigand._iteractsWithPDBId=pwobj.String(pdbId)
                         if "type" in child.attrib:
                             currentLigand._PDBLigandType=pwobj.String(child.attrib["type"])
