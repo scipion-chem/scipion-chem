@@ -29,7 +29,7 @@ import os
 import sys
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, EnumParam, MultiPointerParam, BooleanParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, MultiPointerParam, BooleanParam, StringParam
 from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID
 
 class ProtAtomStructListOperate(EMProtocol):
@@ -38,7 +38,7 @@ class ProtAtomStructListOperate(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('operation', EnumParam, choices=['Unique', 'Union', 'Intersection', 'Difference'],
+        form.addParam('operation', EnumParam, choices=['Unique', 'Union', 'Intersection', 'Difference', 'Change DbID'],
                       label='Operation', default=0,
                       help='Unique: Remove replicated Ids.')
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
@@ -46,7 +46,10 @@ class ProtAtomStructListOperate(EMProtocol):
         form.addParam('multipleInputListID', MultiPointerParam, pointerClass="SetOfDatabaseID",
                        label='List of DB Ids:', allowsNull=True, condition='(operation==1)')
         form.addParam('inputListID2', PointerParam, pointerClass="SetOfDatabaseID",
-                       label='List of DB Ids:', allowsNull=True, condition='(operation>=2)')
+                       label='List of DB Ids:', allowsNull=True, condition='(operation==2 or operation==3)')
+        form.addParam('newDbId', StringParam,
+                       label='New DbID:', condition='(operation==4)',
+                       help='It must be one of the existing labels in the database list')
         form.addParam('removeDuplicates', BooleanParam, default=False,
                        label='Remove duplicates:', condition='(operation!=1)')
 
@@ -67,7 +70,7 @@ class ProtAtomStructListOperate(EMProtocol):
                         dbEntry = DatabaseID()
                         dbEntry.copy(databaseEntry, copyId=False)
                         ligandDict[databaseEntry.getDbId()]=dbEntry
-        else:
+        elif self.operation.get()==0 or self.operation.get()==2 or self.operation.get()==3:
             ligandList2 = []
             if self.operation.get()==2 or self.operation.get()==3:
                 for databaseEntry in self.inputListID2.get():
@@ -75,13 +78,13 @@ class ProtAtomStructListOperate(EMProtocol):
 
             for databaseEntry in self.inputListID.get():
                 add=False
-                if self.operation.get()==0:
+                if self.operation.get()==0: # Unique
                     add = not databaseEntry.getDbId() in ligandDict
-                elif self.operation.get()==2:
+                elif self.operation.get()==2: # Intersection
                     add = databaseEntry.getDbId() in ligandList2
                     if self.removeDuplicates.get():
                         add=add and not databaseEntry.getDbId() in ligandDict
-                elif self.operation.get()==3:
+                elif self.operation.get()==3: # Difference
                     add = not databaseEntry.getDbId() in ligandList2
                     if self.removeDuplicates.get():
                         add = add and not databaseEntry.getDbId() in ligandDict
@@ -89,6 +92,17 @@ class ProtAtomStructListOperate(EMProtocol):
                     dbEntry = DatabaseID()
                     dbEntry.copy(databaseEntry)
                     ligandDict[databaseEntry.getDbId()]=dbEntry
+        elif self.operation.get()==4: # Change ID
+            for databaseEntry in self.inputListID.get():
+                dbEntry = DatabaseID()
+                dbEntry.copy(databaseEntry)
+                if hasattr(dbEntry,self.newDbId.get()):
+                    dbEntry.setDbId(dbEntry.getAttributeValue(self.newDbId.get()))
+                add = True
+                if self.removeDuplicates.get():
+                    add = add and not dbEntry.getDbId() in ligandDict
+                if add:
+                    ligandDict[dbEntry.getDbId()] = dbEntry
 
         outputDatabaseID = SetOfDatabaseID().create(path=self._getPath())
         for dbId in ligandDict:
