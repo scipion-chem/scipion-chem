@@ -64,7 +64,7 @@ class ProtAtomStructDali(EMProtocol):
         aStruct1.write(outFileName)
         args='-F "file1=@%s" -F "method=%s" -F "title=%s"  -F "address=%s" http://ekhidna.biocenter.helsinki.fi/cgi-bin/dali/dump.cgi' %\
              (outFileName,self.methodsDict[self.method.get()],self.title.get(),self.email.get())
-        # self.runJob("curl",args)
+        self.runJob("curl",args)
 
     # --------------------------- UTILS functions ------------------
     def _validate(self):
