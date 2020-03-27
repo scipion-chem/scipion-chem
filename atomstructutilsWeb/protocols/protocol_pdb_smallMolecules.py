@@ -36,7 +36,7 @@ from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID
 
 class ProtAtomStructPDBSmallMolecules(EMProtocol):
     """Query PDB for small molecules of a list of PDB ids"""
-    _label = 'pdb small mols'
+    _label = 'pdb -> small mols'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
