@@ -51,8 +51,9 @@ class ProtAtomStructPDBSmallMolecules(EMProtocol):
     def searchStep(self):
         listIds=[]
         for item in self.inputListID.get():
-            if item.dbId not in listIds:
-                listIds.append(item.dbId.get())
+            pdbId = item._pdbId.get()
+            if pdbId not in listIds:
+                listIds.append(pdbId)
 
         ligandDict = {}
         currentLigand = None
@@ -63,46 +64,67 @@ class ProtAtomStructPDBSmallMolecules(EMProtocol):
             if not os.path.exists(fnXml):
                 urlId="https://www.rcsb.org/pdb/rest/ligandInfo?structureId=%s"%pdbId
                 print("Fetching ligands: %s"%urlId)
-                urllib.request.urlretrieve(urlId,fnXml)
-            tree = ET.parse(fnXml)
-            # print(ET.tostring(tree, pretty_print=True))
+                for i in range(3):
+                    try:
+                        urllib.request.urlretrieve(urlId,fnXml)
+                        break
+                    except: # The library raises an exception when the web is not found
+                        pass
+            if os.path.exists(fnXml):
+                tree = ET.parse(fnXml)
+                # print(ET.tostring(tree, pretty_print=True))
 
-            for child in tree.getroot().iter():
-                if child.tag=="ligand":
+                for child in tree.getroot().iter():
+                    if child.tag=="ligand":
+                        if ligandName:
+                            ligandDict[ligandName] = currentLigand
+
+                        newLigandName=child.attrib["chemicalID"]
+
+                        if not newLigandName in ligandDict:
+                            currentLigand = DatabaseID()
+                            currentLigand.setDatabase("pdb")
+                            currentLigand.setDbId(newLigandName)
+                            currentLigand._PDBChemId=pwobj.String(newLigandName)
+                            currentLigand._PDBLink=pwobj.String("https://www.rcsb.org/ligand/%s"%newLigandName)
+                            currentLigand._iteractsWithPDBId=pwobj.String(pdbId)
+                            if "type" in child.attrib:
+                                currentLigand._PDBLigandType=pwobj.String(child.attrib["type"])
+                            else:
+                                currentLigand._PDBLigandType = pwobj.String("Not available")
+                            if "molecularWeight" in child.attrib:
+                                currentLigand._PDBLigandMolWeight = pwobj.Float(child.attrib["molecularWeight"])
+                            else:
+                                currentLigand._PDBLigandMolWeight = pwobj.Float(-1)
+                            ligandName = newLigandName
+                        else:
+                            ligandDict[newLigandName]._iteractsWithPDBId.set(ligandDict[newLigandName]._iteractsWithPDBId.get()+" ; "+pdbId)
+                            ligandName = None # Skip this ligand as it is already in the dictionary
                     if ligandName:
-                        ligandDict[ligandName] = currentLigand
-
-                    newLigandName=child.attrib["chemicalID"]
-
-                    if not newLigandName in ligandDict:
-                        currentLigand = DatabaseID()
-                        currentLigand.setDatabase("pdb")
-                        currentLigand.setDbId(newLigandName)
-                        currentLigamd._PDBChemId=pwobj.String(newLigandName)
-                        currentLigand._iteractsWithPDBId=pwobj.String(pdbId)
-                        if "type" in child.attrib:
-                            currentLigand._PDBLigandType=pwobj.String(child.attrib["type"])
-                        if "molecularWeight" in child.attrib:
-                            currentLigand._PDBLigandMolWeight = pwobj.Float(child.attrib["molecularWeight"])
-                        ligandName = newLigandName
-                    else:
-                        ligandDict[newLigandName]._iteractsWithPDBId.set(ligandDict[newLigandName]._iteractsWithPDBId.get()+" ; "+pdbId)
-                        ligandName = None # Skip this ligand as it is already in the dictionary
-                if ligandName:
-                    ctl = child.tag.lower()
-                    if ctl == "chemicalname":
-                        currentLigand._PDBLigandChemicalName=pwobj.String(child.text)
-                    elif ctl == "formula":
-                        currentLigand._PDBLigandFormula = pwobj.String(child.text)
-                    elif ctl == "inchi":
-                        currentLigand._PDBLigandInChi = pwobj.String(child.text)
-                    elif ctl == "inchikey":
-                        currentLigand._PDBLigandInChiKey = pwobj.String(child.text)
-                    elif ctl == "smiles":
-                        currentLigand._PDBLigandSmiles = pwobj.String(child.text)
+                        ctl = child.tag.lower()
+                        if ctl == "chemicalname":
+                            currentLigand._PDBLigandChemicalName=pwobj.String(child.text)
+                        elif ctl == "formula":
+                            currentLigand._PDBLigandFormula = pwobj.String(child.text)
+                        elif ctl == "inchi":
+                            currentLigand._PDBLigandInChI = pwobj.String(child.text)
+                        elif ctl == "inchikey":
+                            currentLigand._PDBLigandInChiKey = pwobj.String(child.text)
+                        elif ctl == "smiles":
+                            currentLigand._PDBLigandSmiles = pwobj.String(child.text)
 
         outputDatabaseID = SetOfDatabaseID().create(path=self._getPath(),suffix='SmallMols')
         for chemId in ligandDict:
+            if not hasattr(ligandDict[chemId],"_PDBLigandChemicalName"):
+                ligandDict[chemId]._PDBLigandChemicalName = pwobj.String("Not available")
+            if not hasattr(ligandDict[chemId],"_PDBLigandFormula"):
+                ligandDict[chemId]._PDBLigandFormula = pwobj.String("Not available")
+            if not hasattr(ligandDict[chemId],"_PDBLigandInChI"):
+                ligandDict[chemId]._PDBLigandInChI = pwobj.String("Not available")
+            if not hasattr(ligandDict[chemId],"_PDBLigandInChiKey"):
+                ligandDict[chemId]._PDBLigandInChiKey = pwobj.String("Not available")
+            if not hasattr(ligandDict[chemId],"_PDBLigandSmiles"):
+                ligandDict[chemId]._PDBLigandSmiles = pwobj.String("Not available")
             outputDatabaseID.append(ligandDict[chemId])
         self._defineOutputs(outputSmallMols=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)

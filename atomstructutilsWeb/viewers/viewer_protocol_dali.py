@@ -58,7 +58,6 @@ class ProtAtomStructDaliViewer(ProtocolViewer):
         fnDir = self.protocol._getExtraPath(DALISERVER)
         fnBaseDir=None
         for fn in Path(fnDir).rglob('*.html'):
-            print(fn)
             if fn.name=="index.html":
                 fnBaseDir=str(fn.parent)
                 break
@@ -71,7 +70,10 @@ class ProtAtomStructDaliViewer(ProtocolViewer):
         if not fnBaseDir:
             if os.path.exists(self.protocol._getExtraPath(DALISERVER)):
                 os.system("rm -rf %s"%self.protocol._getExtraPath(DALISERVER))
-            os.system('cd %s; wget -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 %s'%(self.protocol._getExtraPath(),self.url.get()))
+            url=self.url.get()
+            if not url.endswith("index.html"):
+                url+="/index.html"
+            os.system('cd %s; wget -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 %s'%(self.protocol._getExtraPath(),url))
             fnBaseDir = self.getResultsDir()
         if fnBaseDir:
             webbrowser.open_new_tab(os.path.join(fnBaseDir,"index.html"))
@@ -104,9 +106,11 @@ class ProtAtomStructDaliViewer(ProtocolViewer):
                 pdbId=DatabaseID()
                 tokens2=tokens[1].split('-')
                 pdbId.setDatabase("pdb")
-                pdbId.setDbId(tokens2[0])
+                pdbId.setDbId(tokens[1])
+                pdbId._pdbId=pwobj.String(tokens2[0])
                 if len(tokens2)>1:
                     pdbId._chain=pwobj.String(tokens2[1])
+                pdbId._PDBLink=pwobj.String("https://www.rcsb.org/structure/%s"%tokens2[0])
                 pdbId._DaliZscore=pwobj.Float(float(tokens[2]))
                 pdbId._DaliRMSD=pwobj.Float(float(tokens[3]))
                 pdbId._DaliSuperpositionLength=pwobj.Integer(int(tokens[4]))
