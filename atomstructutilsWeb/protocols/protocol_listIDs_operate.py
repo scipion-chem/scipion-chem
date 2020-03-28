@@ -38,7 +38,8 @@ class ProtAtomStructListOperate(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('operation', EnumParam, choices=['Unique', 'Union', 'Intersection', 'Difference', 'Change DbID'],
+        form.addParam('operation', EnumParam, choices=['Unique', 'Union', 'Intersection', 'Difference', 'Change DbID',
+                                                       'Keep columns'],
                       label='Operation', default=0,
                       help='Unique: Remove replicated Ids.')
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
@@ -50,6 +51,9 @@ class ProtAtomStructListOperate(EMProtocol):
         form.addParam('newDbId', StringParam,
                        label='New DbID:', condition='(operation==4)',
                        help='It must be one of the existing labels in the database list')
+        form.addParam('keepColumns', StringParam,
+                       label='Keep columns:', condition='(operation==5)',
+                       help='They must exist in the input database list. Separated by semicolons')
         form.addParam('removeDuplicates', BooleanParam, default=False,
                        label='Remove duplicates:', condition='(operation!=1)')
 
@@ -58,18 +62,18 @@ class ProtAtomStructListOperate(EMProtocol):
         self._insertFunctionStep('operateStep')
 
     def operateStep(self):
-        ligandDict = {}
+        outputDict = {}
         if self.operation.get()==1:
             # Union
             for database in self.multipleInputListID:
                 for databaseEntry in database.get():
                     add=True
                     if self.removeDuplicates.get():
-                        add=not databaseEntry.getDbId() in ligandDict
+                        add=not databaseEntry.getDbId() in outputDict
                     if add:
                         dbEntry = DatabaseID()
                         dbEntry.copy(databaseEntry, copyId=False)
-                        ligandDict[databaseEntry.getDbId()]=dbEntry
+                        outputDict[databaseEntry.getDbId()]=dbEntry
         elif self.operation.get()==0 or self.operation.get()==2 or self.operation.get()==3:
             ligandList2 = []
             if self.operation.get()==2 or self.operation.get()==3:
@@ -79,19 +83,19 @@ class ProtAtomStructListOperate(EMProtocol):
             for databaseEntry in self.inputListID.get():
                 add=False
                 if self.operation.get()==0: # Unique
-                    add = not databaseEntry.getDbId() in ligandDict
+                    add = not databaseEntry.getDbId() in outputDict
                 elif self.operation.get()==2: # Intersection
                     add = databaseEntry.getDbId() in ligandList2
                     if self.removeDuplicates.get():
-                        add=add and not databaseEntry.getDbId() in ligandDict
+                        add=add and not databaseEntry.getDbId() in outputDict
                 elif self.operation.get()==3: # Difference
                     add = not databaseEntry.getDbId() in ligandList2
                     if self.removeDuplicates.get():
-                        add = add and not databaseEntry.getDbId() in ligandDict
+                        add = add and not databaseEntry.getDbId() in outputDict
                 if add:
                     dbEntry = DatabaseID()
                     dbEntry.copy(databaseEntry)
-                    ligandDict[databaseEntry.getDbId()]=dbEntry
+                    outputDict[databaseEntry.getDbId()]=dbEntry
         elif self.operation.get()==4: # Change ID
             for databaseEntry in self.inputListID.get():
                 dbEntry = DatabaseID()
@@ -100,12 +104,29 @@ class ProtAtomStructListOperate(EMProtocol):
                     dbEntry.setDbId(dbEntry.getAttributeValue(self.newDbId.get()))
                 add = True
                 if self.removeDuplicates.get():
-                    add = add and not dbEntry.getDbId() in ligandDict
+                    add = add and not dbEntry.getDbId() in outputDict
                 if add:
-                    ligandDict[dbEntry.getDbId()] = dbEntry
+                    outputDict[dbEntry.getDbId()] = dbEntry
+        elif self.operation.get()==5: # Keep columns
+            keepList=[x.strip() for x in self.keepColumns.get().split()]
+            keepList.append("database")
+            keepList.append("dbId")
+
+            ignoreList=[]
+            for name, _ in self.inputListID.get().getFirstItem().getAttributes():
+                if not name in keepList:
+                    ignoreList.append(name)
+            for databaseEntry in self.inputListID.get():
+                dbEntry = DatabaseID()
+                dbEntry.copy(databaseEntry,ignoreAttrs=ignoreList)
+                add = True
+                if self.removeDuplicates.get():
+                    add = add and not dbEntry.getDbId() in outputDict
+                if add:
+                    outputDict[dbEntry.getDbId()] = dbEntry
 
         outputDatabaseID = SetOfDatabaseID().create(path=self._getPath())
-        for dbId in ligandDict:
-            outputDatabaseID.append(ligandDict[dbId])
+        for dbId in outputDict:
+            outputDatabaseID.append(outputDict[dbId])
         self._defineOutputs(output=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)
