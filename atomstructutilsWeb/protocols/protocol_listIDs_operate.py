@@ -48,6 +48,9 @@ class ProtAtomStructListOperate(EMProtocol):
                        label='List of DB Ids:', allowsNull=True, condition='(operation==1)')
         form.addParam('inputListID2', PointerParam, pointerClass="SetOfDatabaseID",
                        label='List of DB Ids:', allowsNull=True, condition='(operation==2 or operation==3)')
+        form.addParam('newDb', StringParam,
+                       label='New Db:', condition='(operation==4)',
+                       help='New database')
         form.addParam('newDbId', StringParam,
                        label='New DbID:', condition='(operation==4)',
                        help='It must be one of the existing labels in the database list')
@@ -101,6 +104,7 @@ class ProtAtomStructListOperate(EMProtocol):
                 dbEntry = DatabaseID()
                 dbEntry.copy(databaseEntry)
                 if hasattr(dbEntry,self.newDbId.get()):
+                    dbEntry.setDatabase(self.newDb.get())
                     dbEntry.setDbId(dbEntry.getAttributeValue(self.newDbId.get()))
                 add = True
                 if self.removeDuplicates.get():
