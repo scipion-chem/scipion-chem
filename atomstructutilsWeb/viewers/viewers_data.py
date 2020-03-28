@@ -43,6 +43,7 @@ class AtomUtilsDataViewer(pwviewer.Viewer):
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
         atomstructutilsWeb.objects.SetOfDatabaseID,
+        atomstructutilsWeb.objects.ProteinSequenceFile
     ]
 
     def __init__(self, **kwargs):
@@ -60,5 +61,7 @@ class AtomUtilsDataViewer(pwviewer.Viewer):
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, atomstructutilsWeb.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
+        elif issubclass(cls, atomstructutilsWeb.objects.ProteinSequenceFile):
+            views.append(self.textView([obj.getFileName()]))
 
         return views

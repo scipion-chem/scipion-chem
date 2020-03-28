@@ -54,8 +54,14 @@ class DatabaseID(data.EMObject):
 
 
 class SetOfDatabaseID(data.EMSet):
+    """ Set of DatabaseIDs """
     ITEM_TYPE = DatabaseID
     FILE_TEMPLATE_NAME = 'setOfDatabaseIds%s.sqlite'
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+
+class ProteinSequenceFile(data.EMFile):
+    """A file with a list of protein sequences"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
