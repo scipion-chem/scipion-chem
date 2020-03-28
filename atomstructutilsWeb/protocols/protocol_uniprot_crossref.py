@@ -43,7 +43,7 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
                        label='List of Uniprot Ids:', allowsNull=False,
                        help="List of atomic structures for the query")
-        form.addParam('extract', EnumParam, choices=['PDB'], default=0,
+        form.addParam('extract', EnumParam, choices=['PDB (structure)', 'ENA (RNA sequence)'], default=0,
                        label='What to extract:')
 
     # --------------------------- INSERT steps functions --------------------
@@ -76,6 +76,9 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
                         if self.extract.get()==0:
                             if child.attrib['type']=='PDB':
                                 outputId.append(child.attrib['id'])
+                        elif self.extract.get()==1:
+                            if child.attrib['type'] == 'EMBL':
+                                outputId.append(child.attrib['id'])
                 if len(outputId)>0:
                     for outId in outputId:
                         newItem = DatabaseID()
@@ -83,6 +86,9 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
                         if self.extract.get()==0:
                             newItem._pdbId = pwobj.String(outId)
                             newItem._PDBLink = pwobj.String("https://www.rcsb.org/structure/%s" % outId)
+                        elif self.extract.get()==1:
+                            newItem._enaId = pwobj.String(outId)
+                            newItem._ENALink = pwobj.String("https://www.ebi.ac.uk/ena/data/view/%s" % outId)
                         outputDatabaseID.append(newItem)
 
         self._defineOutputs(outputUniprot=outputDatabaseID)
