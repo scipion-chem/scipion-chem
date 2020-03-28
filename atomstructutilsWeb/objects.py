@@ -65,3 +65,8 @@ class ProteinSequenceFile(data.EMFile):
     """A file with a list of protein sequences"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+
+class NucleotideSequenceFile(data.EMFile):
+    """A file with a list of nucleotide sequences"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)

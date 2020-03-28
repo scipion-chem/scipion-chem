@@ -31,3 +31,4 @@ from .protocol_smallMolecules_pdb import ProtAtomStructSmallMoleculesPDB
 from .protocol_pdb_uniprot import ProtAtomStructPDBUniprot
 from .protocol_uniprot_download import ProtAtomStructUniprotDownload
 from .protocol_uniprot_crossref import ProtAtomStructUniprotCrossRef
+from .protocol_ena_download import ProtAtomStructEnaDownload

@@ -43,7 +43,8 @@ class AtomUtilsDataViewer(pwviewer.Viewer):
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
         atomstructutilsWeb.objects.SetOfDatabaseID,
-        atomstructutilsWeb.objects.ProteinSequenceFile
+        atomstructutilsWeb.objects.ProteinSequenceFile,
+        atomstructutilsWeb.objects.NucleotideSequenceFile
     ]
 
     def __init__(self, **kwargs):
@@ -62,6 +63,8 @@ class AtomUtilsDataViewer(pwviewer.Viewer):
         if issubclass(cls, atomstructutilsWeb.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, atomstructutilsWeb.objects.ProteinSequenceFile):
+            views.append(self.textView([obj.getFileName()]))
+        elif issubclass(cls, atomstructutilsWeb.objects.NucleotideSequenceFile):
             views.append(self.textView([obj.getFileName()]))
 
         return views
