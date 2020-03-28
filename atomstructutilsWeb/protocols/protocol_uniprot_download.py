@@ -29,6 +29,7 @@ import sys
 import urllib.request
 
 from pwem.protocols import EMProtocol
+from pwem.convert.sequence import sequenceLength
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam
 from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID, ProteinSequenceFile
@@ -54,6 +55,7 @@ class ProtAtomStructUniprotDownload(EMProtocol):
             newItem = DatabaseID()
             newItem.copy(item)
             newItem._uniprotFile = pwobj.String("Not available")
+            newItem._unitprotSeqLength = pwobj.Integer(-1)
 
             uniprotId = item._uniprotId.get()
             print("Processing %s"%uniprotId)
@@ -73,6 +75,7 @@ class ProtAtomStructUniprotDownload(EMProtocol):
                         pass
             if os.path.exists(fnFasta):
                 newItem._uniprotFile = pwobj.String(fnFasta)
+                newItem._unitprotSeqLength = pwobj.Integer(sequenceLength(fnFasta))
 
             outputDatabaseID.append(newItem)
 
