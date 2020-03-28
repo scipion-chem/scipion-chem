@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 
-import lxml.etree as ET
 import os
 import sys
 import urllib.request
