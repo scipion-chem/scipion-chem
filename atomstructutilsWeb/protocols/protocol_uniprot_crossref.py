@@ -43,8 +43,8 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
                        label='List of Uniprot Ids:', allowsNull=False,
                        help="List of atomic structures for the query")
-        form.addParam('extract', EnumParam, choices=['PDB (structure)', 'ENA (RNA sequence)'], default=0,
-                       label='What to extract:')
+        form.addParam('extract', EnumParam, choices=['PDB (structure)', 'ENA (RNA sequence)', 'GO (Gene Ontology)'],
+                       default=0, label='What to extract:')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -78,18 +78,45 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
                                 outputId.append(child.attrib['id'])
                         elif self.extract.get()==1:
                             if child.attrib['type'] == 'EMBL':
-                                outputId.append(child.attrib['id'])
+                                moleculeType="Not available"
+                                for childChild in child.iter():
+                                    if childChild.tag.endswith("property"):
+                                        if childChild.attrib["type"]=="molecule type":
+                                            moleculeType=childChild.attrib["value"]
+                                outputId.append((child.attrib['id'],moleculeType))
+                        elif self.extract.get()==2:
+                            if child.attrib['type'] == 'GO':
+                                goTerm="Not available"
+                                for childChild in child.iter():
+                                    if childChild.tag.endswith("property"):
+                                        if childChild.attrib["type"]=="term":
+                                            goTerm=childChild.attrib["value"]
+                                outputId.append((child.attrib['id'],goTerm))
+
                 if len(outputId)>0:
-                    for outId in outputId:
-                        newItem = DatabaseID()
-                        newItem.copy(item, copyId=False)
-                        if self.extract.get()==0:
+                    if self.extract.get() == 0:
+                        for outId in outputId:
+                            newItem = DatabaseID()
+                            newItem.copy(item, copyId=False)
                             newItem._pdbId = pwobj.String(outId)
                             newItem._PDBLink = pwobj.String("https://www.rcsb.org/structure/%s" % outId)
-                        elif self.extract.get()==1:
+                            outputDatabaseID.append(newItem)
+                    elif self.extract.get()==1:
+                        for outId, moleculeType in outputId:
+                            newItem = DatabaseID()
+                            newItem.copy(item, copyId=False)
                             newItem._enaId = pwobj.String(outId)
-                            newItem._ENALink = pwobj.String("https://www.ebi.ac.uk/ena/data/view/%s" % outId)
-                        outputDatabaseID.append(newItem)
+                            newItem._enaLink = pwobj.String("https://www.ebi.ac.uk/ena/data/view/%s" % outId)
+                            newItem._enaMoleculeType = pwobj.String(moleculeType)
+                            outputDatabaseID.append(newItem)
+                    elif self.extract.get()==2:
+                        for outId, goTerm in outputId:
+                            newItem = DatabaseID()
+                            newItem.copy(item, copyId=False)
+                            newItem._goId = pwobj.String(outId)
+                            newItem._goLink = pwobj.String("http://amigo.geneontology.org/amigo/term/%s" % outId)
+                            newItem._goTerm = pwobj.String(goTerm)
+                            outputDatabaseID.append(newItem)
 
         self._defineOutputs(outputUniprot=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)
