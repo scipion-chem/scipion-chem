@@ -25,7 +25,7 @@
 import pyworkflow.viewer as pwviewer
 import pwem.viewers.views as views
 import pwem.viewers.showj as showj
-import atomstructutilsWeb.objects
+import bioinformatics.objects
 
 class SetOfDatabaseIDView(views.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
@@ -36,15 +36,15 @@ class SetOfDatabaseIDView(views.ObjectView):
         views.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)
 
-class AtomUtilsDataViewer(pwviewer.Viewer):
+class BioinformaticsDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
     with the Xmipp program xmipp_showj
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        atomstructutilsWeb.objects.SetOfDatabaseID,
-        atomstructutilsWeb.objects.ProteinSequenceFile,
-        atomstructutilsWeb.objects.NucleotideSequenceFile
+        bioinformatics.objects.SetOfDatabaseID,
+        bioinformatics.objects.ProteinSequenceFile,
+        bioinformatics.objects.NucleotideSequenceFile
     ]
 
     def __init__(self, **kwargs):
@@ -60,11 +60,11 @@ class AtomUtilsDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         # For now handle both types of SetOfTiltSeries together
-        if issubclass(cls, atomstructutilsWeb.objects.SetOfDatabaseID):
+        if issubclass(cls, bioinformatics.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, atomstructutilsWeb.objects.ProteinSequenceFile):
+        elif issubclass(cls, bioinformatics.objects.ProteinSequenceFile):
             views.append(self.textView([obj.getFileName()]))
-        elif issubclass(cls, atomstructutilsWeb.objects.NucleotideSequenceFile):
+        elif issubclass(cls, bioinformatics.objects.NucleotideSequenceFile):
             views.append(self.textView([obj.getFileName()]))
 
         return views

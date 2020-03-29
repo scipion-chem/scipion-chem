@@ -31,7 +31,7 @@ import urllib.request
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import (PointerParam)
-from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID
+from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
 class ProtAtomStructSmallMoleculesPDB(EMProtocol):
     """Extract a set of PDB Ids from the interaction list of a set of small molecules"""

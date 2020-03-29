@@ -6,4 +6,4 @@ include *.txt
  include LICENSE
 
 # Include conf file
- include atomstructutilsWeb/protocols.conf
+ include bioinformatics/protocols.conf

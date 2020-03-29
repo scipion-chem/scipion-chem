@@ -21,11 +21,11 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='scipion-em-atomstructutilsWeb',
+    name='scipion-em-bioinformatics',
     version='3.0.0',
     description='A Scipion plugin for atomic models utilities in the web',
     long_description=long_description,
-    url='https://github.com/scipion-em/scipion-em-atomstructutilsWeb',
+    url='https://github.com/scipion-em/scipion-em-bioinformatics',
     author='Carlos Oscar Sorzano',
     author_email='scipion@cnb.csic.es',
     keywords='scipion pdb scipion-3',
@@ -33,9 +33,9 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'atom_struct_utils_web': ['tool.png'],
+       'bioinformatics': ['tool.png'],
     },
     entry_points={
-        'pyworkflow.plugin': 'atomstructutilsWeb = atomstructutilsWeb'
+        'pyworkflow.plugin': 'bioinformatics = bioinformatics'
     }
 )

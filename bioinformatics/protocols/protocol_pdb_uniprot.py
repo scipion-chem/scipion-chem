@@ -24,24 +24,24 @@
 # *
 # **************************************************************************
 
+import lxml.etree as ET
 import os
 import sys
 import urllib.request
 
 from pwem.protocols import EMProtocol
-from pwem.convert.sequence import sequenceLength
 import pyworkflow.object as pwobj
-from pyworkflow.protocol.params import PointerParam
-from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID, ProteinSequenceFile
+from pyworkflow.protocol.params import (PointerParam)
+from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
-class ProtAtomStructUniprotDownload(EMProtocol):
-    """Download the Fasta files of a set of uniprotId's"""
-    _label = 'uniprot download'
+class ProtAtomStructPDBUniprot(EMProtocol):
+    """Query PDB for Uniprot sequences related to these proteins"""
+    _label = 'pdb -> uniprot'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
-                       label='List of Uniprot Ids:', allowsNull=False,
+                       label='List of PDB Ids:', allowsNull=False,
                        help="List of atomic structures for the query")
 
     # --------------------------- INSERT steps functions --------------------
@@ -50,52 +50,46 @@ class ProtAtomStructUniprotDownload(EMProtocol):
 
     def searchStep(self):
         outputDatabaseID = SetOfDatabaseID().create(path=self._getPath())
-        fnList = []
         for item in self.inputListID.get():
             newItem = DatabaseID()
             newItem.copy(item)
-            newItem._uniprotFile = pwobj.String("Not available")
-            newItem._unitprotSeqLength = pwobj.Integer(-1)
+            newItem._uniprotId = pwobj.String("Not available")
+            newItem._uniprotLink = pwobj.String("Not available")
 
-            uniprotId = item._uniprotId.get()
-            print("Processing %s"%uniprotId)
+            pdbId = item._pdbId.get()
+            print("Processing %s"%pdbId)
 
-            urlId = "https://www.uniprot.org/uniprot/%s.fasta" % uniprotId
+            urlId = "https://www.rcsb.org/pdb/rest/das/pdb_uniprot_mapping/alignment?query=%s" % pdbId
+            if hasattr(item,"_chain"):
+                urlId+="."+item._chain.get().upper()
 
-            fnFasta=self._getExtraPath("%s.fasta"%uniprotId)
-            if not os.path.exists(fnFasta):
+            fnXml=self._getExtraPath("%s.xml"%pdbId)
+            if not os.path.exists(fnXml):
                 print("Fetching uniprot: %s"%urlId)
                 for i in range(3):
                     try:
-                        urllib.request.urlretrieve(urlId,fnFasta)
-                        if not fnFasta in fnList:
-                            fnList.append(fnFasta)
+                        urllib.request.urlretrieve(urlId,fnXml)
                         break
                     except: # The library raises an exception when the web is not found
                         pass
-            if os.path.exists(fnFasta):
-                newItem._uniprotFile = pwobj.String(fnFasta)
-                newItem._unitprotSeqLength = pwobj.Integer(sequenceLength(fnFasta))
+            if os.path.exists(fnXml):
+                try:
+                    tree = ET.parse(fnXml)
+                    # print(ET.tostring(tree, pretty_print=True))
 
-            outputDatabaseID.append(newItem)
+                    uniprotId = None
+                    for child in tree.getroot().iter():
+                        if child.tag.endswith("alignObject"):
+                            if child.attrib['dbSource']=="UniProt":
+                                uniprotId=child.attrib['dbAccessionId']
+                                break
+                    if uniprotId:
+                        newItem._uniprotId = pwobj.String(uniprotId)
+                        newItem._uniprotLink = pwobj.String("https://www.uniprot.org/uniprot/%s"%uniprotId)
+                except:
+                    print("    Cannot parse the Uniprot XML: %s"%fnXml)
 
-        fnAll = self._getPath("sequences.fasta")
-        with open(fnAll, 'w') as outfile:
-            for fname in fnList:
-                with open(fname) as infile:
-                    for line in infile:
-                        outfile.write(line)
-                    outfile.write('\n\n')
-        seqFile=ProteinSequenceFile()
-        seqFile.setFileName(fnAll)
+                outputDatabaseID.append(newItem)
 
         self._defineOutputs(outputUniprot=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)
-        self._defineOutputs(outputSequence=seqFile)
-        self._defineSourceRelation(self.inputListID, seqFile)
-
-    def _validate(self):
-        errors=[]
-        if not hasattr(self.inputListID.get().getFirstItem(),"_uniprotId"):
-            errors.append("The set does not have an _uniprotId")
-        return errors

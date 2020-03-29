@@ -14,7 +14,7 @@ You will need to use `3.0.0 <https://github.com/I2PC/scipion/releases/tag/v3.0>`
 
 .. code-block:: 
 
-      scipion installp -p scipion-em-atom_struct_utils_web
+      scipion installp -p scipion-em-bioinformatics
       
 OR
 
@@ -26,13 +26,13 @@ OR
 
 .. code-block::
 
-            git clone https://github.com/scipion-em/scipion-em-atomstructutilsWeb.git
+            git clone https://github.com/scipion-em/scipion-em-bioinformatics.git
 
 2. Install:
 
 .. code-block::
 
-            scipion installp -p path_to_scipion-em-atomstructutilsWeb --devel
+            scipion installp -p path_to_scipion-em-bioinformatics --devel
 
 - **Binary files** 
 
@@ -48,8 +48,8 @@ Buildbot status
 
 Status devel version: 
 
-.. image:: http://scipion-test.cnb.csic.es:9980/badges/atomstructutilsWeb_devel.svg
+.. image:: http://scipion-test.cnb.csic.es:9980/badges/bioinformatics_dev.svg
 
 Status production version: 
 
-.. image:: http://scipion-test.cnb.csic.es:9980/badges/atomstructutilsWeb_prod.svg
+.. image:: http://scipion-test.cnb.csic.es:9980/badges/bioinformatics_prod.svg

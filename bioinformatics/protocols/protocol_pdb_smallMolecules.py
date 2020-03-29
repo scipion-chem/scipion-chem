@@ -32,7 +32,7 @@ import urllib.request
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import (PointerParam)
-from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID
+from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
 class ProtAtomStructPDBSmallMolecules(EMProtocol):
     """Query PDB for small molecules of a list of PDB ids"""

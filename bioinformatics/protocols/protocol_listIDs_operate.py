@@ -29,8 +29,9 @@ import os
 import sys
 
 from pwem.protocols import EMProtocol
+from pyworkflow.object import Float, Integer
 from pyworkflow.protocol.params import PointerParam, EnumParam, MultiPointerParam, BooleanParam, StringParam
-from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID
+from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
 class ProtAtomStructListOperate(EMProtocol):
     """This protocol will remove all duplicated entries using the DbID as key"""
@@ -39,7 +40,7 @@ class ProtAtomStructListOperate(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('operation', EnumParam, choices=['Unique', 'Union', 'Intersection', 'Difference', 'Change DbID',
-                                                       'Keep columns'],
+                                                       'Keep columns', 'Filter'],
                       label='Operation', default=0,
                       help='Unique: Remove replicated Ids.')
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
@@ -50,13 +51,23 @@ class ProtAtomStructListOperate(EMProtocol):
                        label='List of DB Ids:', allowsNull=True, condition='(operation==2 or operation==3)')
         form.addParam('newDb', StringParam,
                        label='New Db:', condition='(operation==4)',
-                       help='New database')
+                       help='New database. It can be a label or one of the columns in the table')
         form.addParam('newDbId', StringParam,
                        label='New DbID:', condition='(operation==4)',
                        help='It must be one of the existing labels in the database list')
         form.addParam('keepColumns', StringParam,
                        label='Keep columns:', condition='(operation==5)',
                        help='They must exist in the input database list. Separated by semicolons')
+        form.addParam('filterColumn', StringParam,
+                       label='Filter column:', condition='(operation==6)',
+                       help='It must exist in the input database list.')
+        form.addParam('filterOp', EnumParam, choices=['==', '>', '>=', '<', '<=', '!=', 'startswith',
+                                                      'endswith', 'contains', 'does not startwith',
+                                                      'does not end with', 'does not contain'],
+                       label='Filter operation:', condition='(operation==6)')
+        form.addParam('filterValue', StringParam,
+                       label='Value:', condition='(operation==6)',
+                       help='Value to use in the filter')
         form.addParam('removeDuplicates', BooleanParam, default=False,
                        label='Remove duplicates:', condition='(operation!=1)')
 
@@ -78,40 +89,52 @@ class ProtAtomStructListOperate(EMProtocol):
                         dbEntry.copy(databaseEntry, copyId=False)
                         outputDict[databaseEntry.getDbId()]=dbEntry
         elif self.operation.get()==0 or self.operation.get()==2 or self.operation.get()==3:
-            ligandList2 = []
+            # Unique, Intersection, Difference
+            outputList2 = []
             if self.operation.get()==2 or self.operation.get()==3:
                 for databaseEntry in self.inputListID2.get():
-                    ligandList2.append(databaseEntry.getDbId())
+                    outputList2.append(databaseEntry.getDbId())
 
             for databaseEntry in self.inputListID.get():
                 add=False
                 if self.operation.get()==0: # Unique
                     add = not databaseEntry.getDbId() in outputDict
                 elif self.operation.get()==2: # Intersection
-                    add = databaseEntry.getDbId() in ligandList2
+                    add = databaseEntry.getDbId() in outputList2
                     if self.removeDuplicates.get():
                         add=add and not databaseEntry.getDbId() in outputDict
                 elif self.operation.get()==3: # Difference
-                    add = not databaseEntry.getDbId() in ligandList2
+                    add = not databaseEntry.getDbId() in outputList2
                     if self.removeDuplicates.get():
                         add = add and not databaseEntry.getDbId() in outputDict
                 if add:
                     dbEntry = DatabaseID()
                     dbEntry.copy(databaseEntry)
                     outputDict[databaseEntry.getDbId()]=dbEntry
-        elif self.operation.get()==4: # Change ID
+        elif self.operation.get()==4:
+            # Change ID
+            newLabel=True
+            for name, _ in self.inputListID.get().getFirstItem().getAttributes():
+                if self.newDb.get()==name:
+                    newLabel=False
+                    break
+
             for databaseEntry in self.inputListID.get():
                 dbEntry = DatabaseID()
                 dbEntry.copy(databaseEntry)
                 if hasattr(dbEntry,self.newDbId.get()):
-                    dbEntry.setDatabase(self.newDb.get())
+                    if newLabel:
+                        dbEntry.setDatabase(self.newDb.get())
+                    else:
+                        dbEntry.setDatabase(dbEntry.getAttributeValue(self.newDb.get()))
                     dbEntry.setDbId(dbEntry.getAttributeValue(self.newDbId.get()))
                 add = True
                 if self.removeDuplicates.get():
                     add = add and not dbEntry.getDbId() in outputDict
                 if add:
                     outputDict[dbEntry.getDbId()] = dbEntry
-        elif self.operation.get()==5: # Keep columns
+        elif self.operation.get()==5:
+            # Keep columns
             keepList=[x.strip() for x in self.keepColumns.get().split()]
             keepList.append("database")
             keepList.append("dbId")
@@ -124,6 +147,56 @@ class ProtAtomStructListOperate(EMProtocol):
                 dbEntry = DatabaseID()
                 dbEntry.copy(databaseEntry,ignoreAttrs=ignoreList)
                 add = True
+                if self.removeDuplicates.get():
+                    add = add and not dbEntry.getDbId() in outputDict
+                if add:
+                    outputDict[dbEntry.getDbId()] = dbEntry
+        elif self.operation.get()==6:
+            # Filter columns
+            referenceValue = self.filterValue.get()
+            value = self.inputListID.get().getFirstItem().getAttributeValue(self.filterColumn.get())
+            if isinstance(value,float):
+                referenceValue = float(referenceValue)
+            elif isinstance(value,int):
+                referenceValue = int(referenceValue)
+
+            for databaseEntry in self.inputListID.get():
+                dbEntry = DatabaseID()
+                dbEntry.copy(databaseEntry)
+                add = False
+
+                value = dbEntry.getAttributeValue(self.filterColumn.get())
+                if isinstance(value, Float):
+                    value = float(value)
+                elif isinstance(value, Integer):
+                    value = int(value)
+
+                filterOp = self.filterOp.get()
+                if filterOp == 0: # ==
+                    add = value==referenceValue
+                elif filterOp == 1: # >
+                    add = value>referenceValue
+                elif filterOp == 2:  # >=
+                    add = value > referenceValue
+                elif filterOp == 3:  # <
+                    add = value < referenceValue
+                elif filterOp == 4:  # <=
+                    add = value <= referenceValue
+                elif filterOp == 5:  # !=
+                    add = value != referenceValue
+                elif filterOp == 6:  #startswith
+                    add = value.startswith(referenceValue)
+                elif filterOp == 7:  # endswith
+                    add = value.endswith(referenceValue)
+                elif filterOp == 8:  # contains
+                    add = referenceValue in value
+                elif filterOp == 9:  # does not startswith
+                    add = not (value.startswith(referenceValue))
+                elif filterOp == 10:  # does not endswith
+                    add = not (value.endswith(referenceValue))
+                elif filterOp == 11:  # does not contains
+                    add = not (referenceValue in value)
+
                 if self.removeDuplicates.get():
                     add = add and not dbEntry.getDbId() in outputDict
                 if add:

@@ -32,7 +32,7 @@ import urllib.request
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam, EnumParam
-from atomstructutilsWeb.objects import DatabaseID, SetOfDatabaseID
+from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
 class ProtAtomStructUniprotCrossRef(EMProtocol):
     """Extract cross references from uniprot"""
@@ -43,7 +43,8 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
         form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
                        label='List of Uniprot Ids:', allowsNull=False,
                        help="List of atomic structures for the query")
-        form.addParam('extract', EnumParam, choices=['PDB (structure)', 'ENA (RNA sequence)', 'GO (Gene Ontology)'],
+        form.addParam('extract', EnumParam, choices=['PDB (structure)', 'ENA (RNA sequence)', 'GO (Gene Ontology)',
+                                                     'Family or domain'],
                        default=0, label='What to extract:')
 
     # --------------------------- INSERT steps functions --------------------
@@ -92,6 +93,48 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
                                         if childChild.attrib["type"]=="term":
                                             goTerm=childChild.attrib["value"]
                                 outputId.append((child.attrib['id'],goTerm))
+                        elif self.extract.get()==3:
+                            if child.attrib['type'] == 'Gene3D':
+                                famId = child.attrib['id']
+                                url = 'http://www.cathdb.info/version/latest/superfamily/%s'%famId
+                                outputId.append(('Gene3D', famId,'Not available',url))
+                            elif child.attrib['type'] == 'HAMAP':
+                                famId = child.attrib['id']
+                                superfamily="Not available"
+                                for childChild in child.iter():
+                                    if childChild.tag.endswith("property"):
+                                        if childChild.attrib["type"]=="entry name":
+                                            superfamily=childChild.attrib["value"]
+                                            break
+                                url = 'https://hamap.expasy.org/signature/%s'%famId
+                                outputId.append(('HAMAP',child.attrib['id'],superfamily,url))
+                            elif child.attrib['type'] == 'InterPro':
+                                famId = child.attrib['id']
+                                superfamily="Not available"
+                                for childChild in child.iter():
+                                    if childChild.tag.endswith("property"):
+                                        if childChild.attrib["type"]=="entry name":
+                                            superfamily=childChild.attrib["value"]
+                                url = 'https://www.ebi.ac.uk/interpro/entry/InterPro/%s'%famId
+                                outputId.append(('InterPro',child.attrib['id'],superfamily,url))
+                            elif child.attrib['type'] == 'Pfam':
+                                famId = child.attrib['id']
+                                superfamily="Not available"
+                                for childChild in child.iter():
+                                    if childChild.tag.endswith("property"):
+                                        if childChild.attrib["type"]=="entry name":
+                                            superfamily=childChild.attrib["value"]
+                                url = 'http://pfam.xfam.org/family/%s'%famId
+                                outputId.append(('Pfam',child.attrib['id'],superfamily,url))
+                            elif child.attrib['type'] == 'SUPFAM':
+                                famId = child.attrib['id']
+                                superfamily="Not available"
+                                for childChild in child.iter():
+                                    if childChild.tag.endswith("property"):
+                                        if childChild.attrib["type"]=="entry name":
+                                            superfamily=childChild.attrib["value"]
+                                url = 'http://supfam.org/SUPERFAMILY/cgi-bin/scop.cgi?ipid=%s'%famId
+                                outputId.append(('Supfam',child.attrib['id'],superfamily,url))
 
                 if len(outputId)>0:
                     if self.extract.get() == 0:
@@ -116,6 +159,15 @@ class ProtAtomStructUniprotCrossRef(EMProtocol):
                             newItem._goId = pwobj.String(outId)
                             newItem._goLink = pwobj.String("http://amigo.geneontology.org/amigo/term/%s" % outId)
                             newItem._goTerm = pwobj.String(goTerm)
+                            outputDatabaseID.append(newItem)
+                    elif self.extract.get()==3:
+                        for familyDb, outId, superfamily, url in outputId:
+                            newItem = DatabaseID()
+                            newItem.copy(item, copyId=False)
+                            newItem._familyDb = pwobj.String(familyDb)
+                            newItem._familyId = pwobj.String(outId)
+                            newItem._familyLink = pwobj.String(url)
+                            newItem._familyName = pwobj.String(superfamily)
                             outputDatabaseID.append(newItem)
 
         self._defineOutputs(outputUniprot=outputDatabaseID)
