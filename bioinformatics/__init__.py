@@ -29,18 +29,64 @@ This package contains the protocols for
 manipulation of atomic struct objects
 """
 
+import os
 import pwem
 from .bibtex import _bibtexStr
 
 _logo = 'tool.png'
 
-
 class Plugin(pwem.Plugin):
-
     @classmethod
     def defineBinaries(cls, env):
-        pass
+        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
 
+    @classmethod
+    def _defineVariables(cls):
+        cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
 
+    @classmethod
+    def getRDKitEnvActivation(cls):
+        activation = cls.getVar("RDKIT_ENV_ACTIVATION")
+        scipionHome = pw.Config.SCIPION_HOME + os.path.sep
 
+        return activation.replace(scipionHome, "", 1)
 
+    @classmethod
+    def getDependencies(cls):
+        # try to get CONDA activation command
+        condaActivationCmd = cls.getCondaActivationCmd()
+        neededProgs = []
+        if not condaActivationCmd:
+            neededProgs.append('conda')
+
+        return neededProgs
+
+    @classmethod
+    def addRDKitPackage(cls, env, default=False):
+        RDKIT_INSTALLED = 'rdkit_installed'
+
+        # try to get CONDA activation command
+        installationCmd = cls.getCondaActivationCmd()
+
+        # Create the environment
+        installationCmd += ' conda create -y -c rdkit -n my-rdkit-env rdkit &&'
+
+        # Flag installation finished
+        installationCmd += ' touch %s' % RDKIT_INSTALLED
+
+        rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
+
+        envPath = os.environ.get('PATH', "")  # keep path since conda likely in there
+        installEnvVars = {'PATH': envPath} if envPath else None
+        env.addPackage('rdkit',
+                       tar='void.tgz',
+                       commands=rdkit_commands,
+                       neededProgs=cls.getDependencies(),
+                       default=default,
+                       vars=installEnvVars)
+
+    @classmethod
+    def runRDKit(cls, protocol, program, args, cwd=None):
+        """ Run rdkit command from a given protocol. """
+        fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
+        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
