@@ -38,6 +38,9 @@ _logo = 'tool.png'
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        # The activation command should be something like
+        # CONDA_ACTIVATION_CMD=eval "$(path-to-conda shell.bash hook)"
+        # in the .config/scipion/scipion.conf file
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
@@ -47,9 +50,10 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getRDKitEnvActivation(cls):
         activation = cls.getVar("RDKIT_ENV_ACTIVATION")
-        scipionHome = pw.Config.SCIPION_HOME + os.path.sep
+        return activation
+        #scipionHome = pw.Config.SCIPION_HOME + os.path.sep
 
-        return activation.replace(scipionHome, "", 1)
+        #return activation.replace(scipionHome, "", 1)
 
     @classmethod
     def getDependencies(cls):
@@ -84,6 +88,12 @@ class Plugin(pwem.Plugin):
                        neededProgs=cls.getDependencies(),
                        default=default,
                        vars=installEnvVars)
+
+    @classmethod
+    def getPluginHome(cls, path=""):
+        import bioinformatics
+        fnDir = os.path.split(bioinformatics.__file__)[0]
+        return os.path.join(fnDir,path)
 
     @classmethod
     def runRDKit(cls, protocol, program, args, cwd=None):

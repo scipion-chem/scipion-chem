@@ -31,7 +31,8 @@ class SetOfDatabaseIDView(views.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
     def __init__(self, project, inputid, path, other='',
                  viewParams={}, **kwargs):
-        defaultViewParams = {showj.MODE: 'metadata'}
+        defaultViewParams = {showj.MODE: 'metadata',
+                             showj.RENDER: '_PDBLigandSmilesImage'}
         defaultViewParams.update(viewParams)
         views.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)

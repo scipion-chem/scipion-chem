@@ -33,6 +33,7 @@ from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import (PointerParam)
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID
+from bioinformatics import Plugin
 
 class ProtAtomStructPDBSmallMolecules(EMProtocol):
     """Query PDB for small molecules of a list of PDB ids"""
@@ -125,6 +126,16 @@ class ProtAtomStructPDBSmallMolecules(EMProtocol):
                 ligandDict[chemId]._PDBLigandInChiKey = pwobj.String("Not available")
             if not hasattr(ligandDict[chemId],"_PDBLigandSmiles"):
                 ligandDict[chemId]._PDBLigandSmiles = pwobj.String("Not available")
+                ligandDict[chemId]._PDBLigandSmilesImage = pwobj.String("Not available")
+            else:
+                fnTmp = self._getTmpPath("molecule.smiles")
+                fnOut = self._getExtraPath("%s.png"%chemId)
+                fh = open(fnTmp,"w")
+                fh.write(ligandDict[chemId]._PDBLigandSmiles.get())
+                fh.close()
+                args = Plugin.getPluginHome('utils/rdkitUtils.py')+" drawSmile %s %s"%(fnTmp,fnOut)
+                Plugin.runRDKit(self,"python3",args)
+                ligandDict[chemId]._PDBLigandSmilesImage = pwobj.String(fnOut)
             outputDatabaseID.append(ligandDict[chemId])
         self._defineOutputs(outputSmallMols=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)
