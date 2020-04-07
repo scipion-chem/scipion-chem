@@ -30,7 +30,7 @@ from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
 from pyworkflow.protocol.params import (EnumParam, PointerParam, StringParam)
 
-class ProtAtomStructDali(EMProtocol):
+class ProtBioinformaticsDali(EMProtocol):
     """Query Dali server (http://ekhidna2.biocenter.helsinki.fi/dali) with a structure.
     The server returns other structures that are structurally similar"""
     methodsDict = {0: 'search', 1: 'pdb25'}

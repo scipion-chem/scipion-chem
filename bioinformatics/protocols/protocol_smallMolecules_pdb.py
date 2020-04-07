@@ -33,7 +33,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import (PointerParam)
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
-class ProtAtomStructSmallMoleculesPDB(EMProtocol):
+class ProtBioinformaticsSmallMoleculesPDB(EMProtocol):
     """Extract a set of PDB Ids from the interaction list of a set of small molecules"""
     _label = 'small mols -> pdb'
 

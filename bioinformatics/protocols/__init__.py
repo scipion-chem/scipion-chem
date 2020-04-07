@@ -24,11 +24,12 @@
 # *
 # **************************************************************************
 
-from .protocol_dali import ProtAtomStructDali
-from .protocol_pdb_smallMolecules import ProtAtomStructPDBSmallMolecules
-from .protocol_listIDs_operate import ProtAtomStructListOperate
-from .protocol_smallMolecules_pdb import ProtAtomStructSmallMoleculesPDB
-from .protocol_pdb_uniprot import ProtAtomStructPDBUniprot
-from .protocol_uniprot_download import ProtAtomStructUniprotDownload
-from .protocol_uniprot_crossref import ProtAtomStructUniprotCrossRef
-from .protocol_ena_download import ProtAtomStructEnaDownload
+from .protocol_dali import ProtBioinformaticsDali
+from .protocol_pdb_smallMolecules import ProtBioinformaticsPDBSmallMolecules
+from .protocol_listIDs_operate import ProtBioinformaticsListOperate
+from .protocol_smallMolecules_pdb import ProtBioinformaticsSmallMoleculesPDB
+from .protocol_pdb_uniprot import ProtBioinformaticsPDBUniprot
+from .protocol_uniprot_download import ProtBioinformaticsUniprotDownload
+from .protocol_uniprot_crossref import ProtBioinformaticsUniprotCrossRef
+from .protocol_ena_download import ProtBioinformaticsEnaDownload
+from .protocol_Cquark import ProtBioinformaticsCQuark

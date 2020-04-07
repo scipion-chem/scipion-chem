@@ -34,5 +34,14 @@ _bibtexStr = """
    Number="11",
    Pages="1422--1423",
    Month="Jun"
-}s
+}
+
+@Article{Zheng2019,
+   Author="Zheng, W. and Li, Y. and Zhang, C. and Pearce, R. and Mortuza, S. M and Zhang, Y.",
+   Title="{Deep-learning contact-map guided protein structure prediction in CASP13}",
+   Journal="Proteins: Structure, Function, and Bioinformatics",
+   Year="2019",
+   Volume="87",
+   Pages="1149-1164"
+}
 """

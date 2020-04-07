@@ -33,7 +33,7 @@ from pyworkflow.object import Float, Integer
 from pyworkflow.protocol.params import PointerParam, EnumParam, MultiPointerParam, BooleanParam, StringParam
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
-class ProtAtomStructListOperate(EMProtocol):
+class ProtBioinformaticsListOperate(EMProtocol):
     """This protocol will remove all duplicated entries using the DbID as key"""
     _label = 'operate list'
 

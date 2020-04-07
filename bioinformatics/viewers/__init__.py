@@ -1,2 +1,2 @@
-from .viewer_protocol_dali import ProtAtomStructDaliViewer
+from .viewer_protocol_dali import ProtBioinformaticsDaliViewer
 from .viewers_data import BioinformaticsDataViewer

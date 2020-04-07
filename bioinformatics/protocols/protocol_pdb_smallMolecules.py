@@ -35,7 +35,7 @@ from pyworkflow.protocol.params import (PointerParam)
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 from bioinformatics import Plugin
 
-class ProtAtomStructPDBSmallMolecules(EMProtocol):
+class ProtBioinformaticsPDBSmallMolecules(EMProtocol):
     """Query PDB for small molecules of a list of PDB ids"""
     _label = 'pdb -> small mols'
 

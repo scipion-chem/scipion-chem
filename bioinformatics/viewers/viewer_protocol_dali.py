@@ -28,7 +28,7 @@ import os
 from pathlib import Path
 import webbrowser
 
-from bioinformatics.protocols.protocol_dali import ProtAtomStructDali
+from bioinformatics.protocols.protocol_dali import ProtBioinformaticsDali
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 import pyworkflow.object as pwobj
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
@@ -36,10 +36,10 @@ from pyworkflow.protocol.params import StringParam
 
 DALISERVER="ekhidna2.biocenter.helsinki.fi"
 
-class ProtAtomStructDaliViewer(ProtocolViewer):
+class ProtBioinformaticsDaliViewer(ProtocolViewer):
     """ Visualize the output of protocol Dali """
     _label = 'viewer dali'
-    _targets = [ProtAtomStructDali]
+    _targets = [ProtBioinformaticsDali]
     _environments = [DESKTOP_TKINTER]
 
     def __init__(self, **args):

@@ -34,7 +34,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID, NucleotideSequenceFile
 
-class ProtAtomStructEnaDownload(EMProtocol):
+class ProtBioinformaticsEnaDownload(EMProtocol):
     """Download the Fasta files of a set of enaId's"""
     _label = 'ena download'
 
