@@ -31,7 +31,26 @@ from rdkit.Chem import Draw
 if __name__ == "__main__":
     if len(sys.argv)==1:
         print("Usage: python3 rdkitUtils.py [options]")
-        print("   drawSmile <smileFile> <pngFile>")
-    elif sys.argv[1]=="drawSmile":
-        smile=open(sys.argv[2]).readlines()[0]
-        Draw.MolToFile(Chem.MolFromSmiles(smile),sys.argv[3])
+        print("   draw <smallMoleculeFile> <pngFile>: Small molecules .smi, .sdf, .mae, .mol2. .pdb")
+    elif sys.argv[1]=="draw":
+        fnIn = sys.argv[2]
+        fnOut = sys.argv[3]
+        if fnIn.endswith('.smi'):
+            smile=open(fnIn).readlines()[0]
+            smile=smile.split()[0]
+            Draw.MolToFile(Chem.MolFromSmiles(smile),fnOut)
+        elif fnIn.endswith('.sdf'):
+            supplier = Chem.rdmolfiles.SDMolSupplier(fnIn)
+            for molecule in supplier:
+                Draw.MolToFile(molecule, fnOut)
+        # elif fnIn.endswith('.mae') or fnIn.endswith('.maegz'):
+        #     supplier = Chem.rdmolfiles.MaeMolSupplier(fnIn)
+        #     for molecule in supplier:
+        #         Draw.MolToFile(molecule, fnOut)
+        elif fnIn.endswith('.mol2'):
+            supplier = Chem.rdmolfiles.MolFromMol2Block(fnIn)
+            for molecule in supplier:
+                Draw.MolToFile(molecule, fnOut)
+        elif fnIn.endswith('.pdb'):
+            molecule = Chem.rdmolfiles.MolFromPDBFile(fnIn)
+            Draw.MolToFile(molecule, fnOut)

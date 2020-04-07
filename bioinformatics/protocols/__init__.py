@@ -33,3 +33,4 @@ from .protocol_uniprot_download import ProtBioinformaticsUniprotDownload
 from .protocol_uniprot_crossref import ProtBioinformaticsUniprotCrossRef
 from .protocol_ena_download import ProtBioinformaticsEnaDownload
 from .protocol_Cquark import ProtBioinformaticsCQuark
+from .protocol_import_smallMolecules import ProtBioinformaticsImportSmallMolecules

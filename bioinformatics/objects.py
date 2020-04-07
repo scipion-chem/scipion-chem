@@ -52,7 +52,6 @@ class DatabaseID(data.EMObject):
         if copyId:
             self.copyObjId(other)
 
-
 class SetOfDatabaseID(data.EMSet):
     """ Set of DatabaseIDs """
     ITEM_TYPE = DatabaseID
@@ -70,3 +69,17 @@ class NucleotideSequenceFile(data.EMFile):
     """A file with a list of nucleotide sequences"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+
+class SmallMolecule(data.EMObject):
+    """ Small molecule """
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
+
+class SetOfSmallMolecules(data.EMSet):
+    """ Set of Small molecules """
+    ITEM_TYPE = SmallMolecule
+    FILE_TEMPLATE_NAME = 'setOfSmallMolecules%s.sqlite'
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)

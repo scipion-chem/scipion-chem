@@ -32,7 +32,7 @@ class SetOfDatabaseIDView(views.ObjectView):
     def __init__(self, project, inputid, path, other='',
                  viewParams={}, **kwargs):
         defaultViewParams = {showj.MODE: 'metadata',
-                             showj.RENDER: '_PDBLigandSmilesImage'}
+                             showj.RENDER: '_PDBLigandImage'}
         defaultViewParams.update(viewParams)
         views.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)
@@ -45,7 +45,8 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
     _targets = [
         bioinformatics.objects.SetOfDatabaseID,
         bioinformatics.objects.ProteinSequenceFile,
-        bioinformatics.objects.NucleotideSequenceFile
+        bioinformatics.objects.NucleotideSequenceFile,
+        bioinformatics.objects.SetOfSmallMolecules
     ]
 
     def __init__(self, **kwargs):
@@ -62,6 +63,8 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
 
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, bioinformatics.objects.SetOfDatabaseID):
+            views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
+        elif issubclass(cls, bioinformatics.objects.SetOfSmallMolecules):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, bioinformatics.objects.ProteinSequenceFile):
             views.append(self.textView([obj.getFileName()]))
