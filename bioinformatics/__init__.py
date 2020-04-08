@@ -73,7 +73,7 @@ class Plugin(pwem.Plugin):
         installationCmd = cls.getCondaActivationCmd()
 
         # Create the environment
-        installationCmd += ' conda create -y -c rdkit -n my-rdkit-env rdkit &&'
+        installationCmd += ' conda create -y -c conda-forge -n my-rdkit-env rdkit &&'
 
         # Flag installation finished
         installationCmd += ' touch %s' % RDKIT_INSTALLED
