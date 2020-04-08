@@ -43,10 +43,10 @@ if __name__ == "__main__":
             supplier = Chem.rdmolfiles.SDMolSupplier(fnIn)
             for molecule in supplier:
                 Draw.MolToFile(molecule, fnOut)
-        # elif fnIn.endswith('.mae') or fnIn.endswith('.maegz'):
-        #     supplier = Chem.rdmolfiles.MaeMolSupplier(fnIn)
-        #     for molecule in supplier:
-        #         Draw.MolToFile(molecule, fnOut)
+        elif fnIn.endswith('.mae') or fnIn.endswith('.maegz'):
+            supplier = Chem.rdmolfiles.MaeMolSupplier(fnIn)
+            for molecule in supplier:
+                Draw.MolToFile(molecule, fnOut)
         elif fnIn.endswith('.mol2'):
             supplier = Chem.rdmolfiles.MolFromMol2Block(fnIn)
             for molecule in supplier:
