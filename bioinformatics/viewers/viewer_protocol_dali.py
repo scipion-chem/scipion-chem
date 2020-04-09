@@ -84,7 +84,6 @@ class ProtBioinformaticsDaliViewer(ProtocolViewer):
         return views
 
     def constructOutput(self,fnTxt):
-        print("Construcing",fnTxt)
         fnDir, fnResults=os.path.split(fnTxt)
         tokens=fnResults.split('-')
         if len(tokens)>1:
