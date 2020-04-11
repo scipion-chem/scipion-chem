@@ -29,9 +29,10 @@ from pathlib import Path
 import webbrowser
 
 from bioinformatics.protocols.protocol_Cquark import ProtBioinformaticsCQuark
-import pyworkflow.object as pwobj
+from bioinformatics import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import StringParam
+import pyworkflow.utils as pwutils
 from pwem.objects.data import AtomStruct
 
 CQUARKSERVER="zhanglab.ccmb.med.umich.edu"
@@ -77,7 +78,9 @@ class ProtBioinformaticsCQuarkViewer(ProtocolViewer):
             os.system('cd %s; wget --mirror -p --convert-links -P . -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 %s'%(self.protocol._getExtraPath(),url))
             fnBaseDir = self.getResultsDir()
         if fnBaseDir:
-            webbrowser.open_new_tab(os.path.join(fnBaseDir,"index.html"))
+            url=os.path.abspath(os.path.join(fnBaseDir,"index.html"))
+            pwutils.runJob(None,"python",Plugin.getPluginHome('utils/showCQuarkResults.py')+" "+url)
+            #webbrowser.open_new_tab(url)
             if not hasattr(self.protocol,"outputPdb_1"):
                 for fn in Path(fnBaseDir).rglob('model*.pdb'):
                     self.constructOutput(str(fn))
