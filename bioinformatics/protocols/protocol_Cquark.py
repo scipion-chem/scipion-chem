@@ -46,16 +46,6 @@ class ProtBioinformaticsCQuark(EMProtocol):
         form.addParam('inputSeq', PointerParam, pointerClass="SetOfDatabaseID, Sequence",
                        label='Sequence:', allowsNull=False,
                        help="Input FASTA sequence, the set must have a single structure")
-        form.addParam('title', StringParam,
-                         label="Job title:", default="Scipion search",
-                         help="Put a label that helps you to identify the job")
-        form.addParam('email', StringParam,
-                         label="Email:", default="",
-                         help="The web page will send an email to this address when the calculations are finished. "
-                              "Copy the URL at the email in the Analyze Results of this protocol")
-        form.addParam('password', StringParam,
-                         label="Password in C-Quark:", default="",
-                         help="The server asks for a password associated to this email")
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -74,22 +64,17 @@ class ProtBioinformaticsCQuark(EMProtocol):
             fh=open(outFileName)
         record = SeqIO.read(outFileName, "fasta")
 
-        args ='-d SEQUENCE="%s"'%record.seq
-        args+=' -d REPLY-E-MAIL="%s"'%self.email.get()
-        args+=' -d PASSWORD="%s"'%self.password.get()
-        args+=' -d TARGET="%s"'%self.title.get()
-        args+=" https://zhanglab.ccmb.med.umich.edu/C-QUARK/"
-        args+=" > %s"%self._getExtraPath("submission_response.html")
-        print(args)
-        #self.runJob("curl",args)
+        summary = "C-Quark does not allow programmatic access. Go to: https://zhanglab.ccmb.med.umich.edu/C-QUARK/\n"
+        summary +="You will have to register and submit the sequence yourself. Use the job ID 'ScipionRun %s'\n"% \
+                  os.path.split(self._getPath())[1][0:6]
+        summary +="When you get an answer in your email, open the Analyze Results before 3 days and provide the results URL\n\n\n"
+        summary +=str(record.seq)+"\n"
+        fh=open(self._getPath("summary.txt"),'w')
+        fh.write(summary)
 
     # --------------------------- UTILS functions ------------------
     def _validate(self):
         errors = []
-        if self.email.get()=="":
-            errors.append("The email cannot be empty")
-        if self.password.get()=="":
-            errors.append("Password cannot be empty")
         if isinstance(self.inputSeq.get(),SetOfDatabaseID):
             if len(self.inputSeq.get())!=1:
                 errors.append("The input list can only have a single sequence")
@@ -97,14 +82,17 @@ class ProtBioinformaticsCQuark(EMProtocol):
             if not hasattr(obj,"_uniprotFile"):
                 errors.append("The input list does not have a sequence file")
         from pyworkflow.utils.which import which
-        if which("curl") == "":
-            errors.append("Cannot find curl in the path. Install with apt-get install curl, yum install curl or equivalent in your system")
         if which("wget") == "":
             errors.append("Cannot find curl in the path. Install with apt-get install wget, yum install wget or equivalent in your system")
         return errors
 
     def _summary(self):
         summary = []
+        fnSummary = self._getPath("summary.txt")
+        if os.path.exists(fnSummary):
+            fh=open(fnSummary)
+            for line in fh.readlines():
+                summary.append(line.strip())
         return summary
 
     def _citations(self):
