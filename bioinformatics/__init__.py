@@ -43,6 +43,17 @@ class Plugin(pwem.Plugin):
         # in the .config/scipion/scipion.conf file
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
 
+        SWEM = env.getEmFolder()
+        autodock_commands = [('cd .. && mv x86_64Linux2 autodock-4.2.6',
+                              ['%s/autodock-4.2.6/autodock4'%SWEM])]
+
+        env.addPackage('autodock', version='4.2.6',
+                       url='http://autodock.scripps.edu/downloads/autodock-registration/tars/dist426/autodocksuite-4.2.6-x86_64Linux2.tar',
+                       tar='autodock-4.2.6.tar',
+                       commands=autodock_commands,
+                       targetDir='autodock-4.2.6',
+                       default=True)
+
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')

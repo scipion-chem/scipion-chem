@@ -28,7 +28,7 @@ import os
 from pathlib import Path
 import webbrowser
 
-from bioinformatics.protocols.protocol_Cquark import ProtBioinformaticsCQuark
+from bioinformatics.protocols.protocol_ZL_predict import ProtBioinformaticsZLPredict
 from bioinformatics import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import StringParam
@@ -37,10 +37,10 @@ from pwem.objects.data import AtomStruct
 
 CQUARKSERVER="zhanglab.ccmb.med.umich.edu"
 
-class ProtBioinformaticsCQuarkViewer(ProtocolViewer):
-    """ Visualize the output of protocol CQuark """
-    _label = 'viewer C-quark'
-    _targets = [ProtBioinformaticsCQuark]
+class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
+    """ Visualize the output of protocol Zhang Lab """
+    _label = 'viewer Zhang lab'
+    _targets = [ProtBioinformaticsZLPredict]
     _environments = [DESKTOP_TKINTER]
 
     def __init__(self, **args):
@@ -50,11 +50,16 @@ class ProtBioinformaticsCQuarkViewer(ProtocolViewer):
         form.addSection(label='Visualization')
         # Select the level to show
         form.addParam('url', StringParam,
-                      label="URL of CQuark results",
-                      help='Example http://zhanglab.ccmb.med.umich.edu/C-QUARK/output/QB663')
+                      label="URL of Zhang Lab results",
+                      help='It is only needed  only the first time.\n'
+                           'Example http://zhanglab.ccmb.med.umich.edu/C-QUARK/output/QB663.')
+        form.addParam('chimera', StringParam,
+                      label="See all models in chimera", default="Press eye",
+                      help='It is available when the results have first been downloaded')
 
     def _getVisualizeDict(self):
-        return {'url': self._viewResults}
+        return {'url': self._viewResults,
+                'chimera': self._viewChimera}
 
     def getResultsDir(self):
         fnDir = self.protocol._getExtraPath(CQUARKSERVER)
@@ -79,12 +84,21 @@ class ProtBioinformaticsCQuarkViewer(ProtocolViewer):
             fnBaseDir = self.getResultsDir()
         if fnBaseDir:
             url=os.path.abspath(os.path.join(fnBaseDir,"index.html"))
-            pwutils.runJob(None,"python",Plugin.getPluginHome('utils/showCQuarkResults.py')+" "+url)
+            pwutils.runJob(None,"python",Plugin.getPluginHome('utils/showZLPredictResults.py')+" "+url)
             #webbrowser.open_new_tab(url)
             if not hasattr(self.protocol,"outputPdb_1"):
                 for fn in Path(fnBaseDir).rglob('model*.pdb'):
                     self.constructOutput(str(fn))
         return views
+
+    def _viewChimera(self, e=None):
+        from chimera import Plugin as chimera_plugin
+        args=""
+        fnBaseDir = self.getResultsDir()
+        if fnBaseDir:
+            for fn in Path(fnBaseDir).rglob('model*.pdb'):
+                args+=str(fn)+" "
+        os.system("%s %s &"%(chimera_plugin.getProgram(),args))
 
     def constructOutput(self,fnPdb):
         fnDir, fnResults=os.path.split(fnPdb)

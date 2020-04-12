@@ -28,7 +28,7 @@ from multiprocessing import Process
 import os
 import sys
 
-CQUARKSERVER="zhanglab.ccmb.med.umich.edu"
+ZLSERVER="zhanglab.ccmb.med.umich.edu"
 
 def serverRun(fnDir):
     import socket
@@ -38,12 +38,12 @@ def serverRun(fnDir):
 
 if __name__ == "__main__":
     if len(sys.argv)==1:
-        print("Usage: python3 showCQuarkResults.py [url]")
+        print("Usage: python3 showZLPredictResults.py [url]")
     url = sys.argv[1]
-    fnDir=url.split(CQUARKSERVER)[0]
-    localurl=url.split(CQUARKSERVER)[1]
+    fnDir=url.split(ZLSERVER)[0]
+    localurl=url.split(ZLSERVER)[1]
 
-    server = Process(target=serverRun, args=(os.path.join(fnDir,CQUARKSERVER),))
+    server = Process(target=serverRun, args=(os.path.join(fnDir,ZLSERVER),))
     server.start()
     os.system("sensible-browser http://localhost:1234/%s"%localurl)
     server.terminate()

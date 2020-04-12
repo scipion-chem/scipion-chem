@@ -1,3 +1,3 @@
 from .viewer_protocol_dali import ProtBioinformaticsDaliViewer
-from .viewer_protocol_Cquark import ProtBioinformaticsCQuarkViewer
+from .viewer_protocol_ZL_predict import ProtBioinformaticsZLPredictViewer
 from .viewers_data import BioinformaticsDataViewer

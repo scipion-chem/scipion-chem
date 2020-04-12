@@ -32,5 +32,5 @@ from .protocol_pdb_uniprot import ProtBioinformaticsPDBUniprot
 from .protocol_uniprot_download import ProtBioinformaticsUniprotDownload
 from .protocol_uniprot_crossref import ProtBioinformaticsUniprotCrossRef
 from .protocol_ena_download import ProtBioinformaticsEnaDownload
-from .protocol_Cquark import ProtBioinformaticsCQuark
+from .protocol_ZL_predict import ProtBioinformaticsZLPredict
 from .protocol_import_smallMolecules import ProtBioinformaticsImportSmallMolecules
