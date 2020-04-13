@@ -24,16 +24,10 @@
 # *
 # **************************************************************************
 import os
-import sys
-
-from Bio import SeqIO
 
 from pyworkflow.protocol.params import (EnumParam, PointerParam)
-from pyworkflow.utils.path import createLink
 from pwem.protocols import EMProtocol
-from pwem.objects.data import Sequence
-from pwem.convert.atom_struct import AtomicStructHandler
-from bioinformatics.objects import SetOfDatabaseID
+from bioinformatics.utils.utils import *
 
 class ProtBioinformaticsZLPredict(EMProtocol):
     """Query Zhang-Lab servers (https://zhanglab.ccmb.med.umich.edu/) with an aminoacid sequence.
@@ -57,17 +51,7 @@ class ProtBioinformaticsZLPredict(EMProtocol):
         self._insertFunctionStep('searchStep')
 
     def searchStep(self):
-        outFileName = self._getExtraPath("sequence.fasta")
-        if isinstance(self.inputSeq.get(),Sequence):
-            fh=open(outFileName,"w")
-            fh.write(">%s\n"%self.inputSeq.get().getSeqName())
-            fh.write("%s\n"%self.inputSeq.get().getSequence())
-            fh.close()
-        elif isinstance(self.inputSeq.get(),SetOfDatabaseID):
-            obj=self.inputSeq.get().getFirstItem()
-            createLink(obj._uniprotFile.get(),outFileName)
-            fh=open(outFileName)
-        record = SeqIO.read(outFileName, "fasta")
+        seq = copyFastaSequenceAndRead(self)
 
         url={}
         url[0]='https://zhanglab.ccmb.med.umich.edu/C-QUARK/'
@@ -82,7 +66,7 @@ class ProtBioinformaticsZLPredict(EMProtocol):
         summary +="You may have to register depending on the method and submit the sequence yourself. Use the job ID 'ScipionRun%s'\n"% \
                   os.path.split(self._getPath())[1][0:6]
         summary +="When you get an answer in your email, open the Analyze Results before 3 days and provide the results URL\n\n\n"
-        seq = str(record.seq)
+
         ok=True
         if self.method.get()==0 and len(seq)>500:
             ok=False
@@ -101,13 +85,7 @@ class ProtBioinformaticsZLPredict(EMProtocol):
 
     # --------------------------- UTILS functions ------------------
     def _validate(self):
-        errors = []
-        if isinstance(self.inputSeq.get(),SetOfDatabaseID):
-            if len(self.inputSeq.get())!=1:
-                errors.append("The input list can only have a single sequence")
-            obj=self.inputSeq.get().getFirstItem()
-            if not hasattr(obj,"_uniprotFile"):
-                errors.append("The input list does not have a sequence file")
+        errors = checkInputHasFasta(self)
         from pyworkflow.utils.which import which
         if which("wget") == "":
             errors.append("Cannot find curl in the path. Install with apt-get install wget, yum install wget or equivalent in your system")
