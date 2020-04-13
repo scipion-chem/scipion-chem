@@ -34,3 +34,4 @@ from .protocol_uniprot_crossref import ProtBioinformaticsUniprotCrossRef
 from .protocol_ena_download import ProtBioinformaticsEnaDownload
 from .protocol_ZL_predict import ProtBioinformaticsZLPredict
 from .protocol_import_smallMolecules import ProtBioinformaticsImportSmallMolecules
+from .protocol_raptorX import ProtBioinformaticsRaptorX
