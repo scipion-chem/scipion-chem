@@ -31,7 +31,7 @@ import webbrowser
 from bioinformatics.protocols.protocol_ZL_predict import ProtBioinformaticsZLPredict
 from bioinformatics import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
-from pyworkflow.protocol.params import StringParam
+from pyworkflow.protocol.params import LabelParam, StringParam
 import pyworkflow.utils as pwutils
 from pwem.objects.data import AtomStruct
 
@@ -53,8 +53,8 @@ class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
                       label="URL of Zhang Lab results",
                       help='It is only needed  only the first time.\n'
                            'Example http://zhanglab.ccmb.med.umich.edu/C-QUARK/output/QB663.')
-        form.addParam('chimera', StringParam,
-                      label="See all models in chimera", default="Press eye",
+        form.addParam('chimera', LabelParam,
+                      label="See all models in chimera",
                       help='It is available when the results have first been downloaded')
 
     def _getVisualizeDict(self):
@@ -77,10 +77,16 @@ class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
         if not fnBaseDir:
             if os.path.exists(self.protocol._getExtraPath(CQUARKSERVER)):
                 os.system("rm -rf %s"%self.protocol._getExtraPath(CQUARKSERVER))
-            url=self.url.get()
+            url=self.url.get().strip()
             if not url.endswith("index.html"):
                 url+="/index.html"
-            os.system('cd %s; wget --mirror -p --convert-links -P . -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 %s'%(self.protocol._getExtraPath(),url))
+            urlDir=url.replace("/index.html","").split(".edu")[1]
+            if 'I-TASSER' in urlDir:
+                includeDirs = "-I jsmol,3Dmol,I-TASSER/output"
+            else:
+                includeDirs = "-I jsmol,3Dmol,%s" % urlDir
+            os.system('cd %s; wget %s --mirror -p --convert-links -P . -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 %s'%\
+                      (self.protocol._getExtraPath(),includeDirs,url))
             fnBaseDir = self.getResultsDir()
         if fnBaseDir:
             url=os.path.abspath(os.path.join(fnBaseDir,"index.html"))

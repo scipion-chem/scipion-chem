@@ -33,8 +33,12 @@ ZLSERVER="zhanglab.ccmb.med.umich.edu"
 def serverRun(fnDir):
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        if s.connect_ex(('localhost', 1234)) != 0:
-            os.system("cd %s; python -m http.server 1234"%fnDir)
+        if s.connect_ex(('localhost', 1234)) == 0:
+            data = [(int(p), c) for p, c in [x.rstrip('\n').split(' ', 1) for x in os.popen('ps h -eo pid:1,command')]]
+            for pid, cmd in data:
+                if "python -m http.server 1234" in cmd:
+                    os.system('kill -9 %d'%pid)
+    os.system("cd %s; python -m http.server 1234"%fnDir)
 
 if __name__ == "__main__":
     if len(sys.argv)==1:
@@ -43,7 +47,11 @@ if __name__ == "__main__":
     fnDir=url.split(ZLSERVER)[0]
     localurl=url.split(ZLSERVER)[1]
 
-    server = Process(target=serverRun, args=(os.path.join(fnDir,ZLSERVER),))
+    serverDir = os.path.join(fnDir,ZLSERVER)
+    if "I-TASSER" in url:
+        serverDir=os.path.join(serverDir,'I-TASSER','output')
+        localurl=localurl.replace('I-TASSER/output','')
+    server = Process(target=serverRun, args=(serverDir,))
     server.start()
     os.system("sensible-browser http://localhost:1234/%s"%localurl)
     server.terminate()
