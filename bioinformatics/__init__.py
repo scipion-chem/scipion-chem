@@ -49,6 +49,13 @@ class Plugin(pwem.Plugin):
                        buildDir='x86_64Linux2',
                        default=True)
 
+        env.addPackage('mgltools', version='1.5.6',
+                       url='http://mgltools.scripps.edu/downloads/downloads/tars/releases/REL1.5.6/mgltools_x86_64Linux2_1.5.6.tar.gz',
+                       buildDir='mgltools_x86_64Linux2_1.5.6',
+                       commands=[("./install.sh", "initMGLtools.sh")],
+                       default=True)
+
+
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
