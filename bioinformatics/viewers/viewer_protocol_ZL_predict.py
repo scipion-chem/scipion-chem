@@ -87,6 +87,20 @@ class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
                 includeDirs = "-I jsmol,3Dmol,%s" % urlDir
             os.system('cd %s; wget %s --mirror -p --convert-links -P . -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 %s'%\
                       (self.protocol._getExtraPath(),includeDirs,url))
+            if 'I-TASSER' in urlDir:
+                extraDownloads = ['I-TASSER/output/bin/jmol/j2s/core/package.js',
+                                  'I-TASSER/output/bin/jmol/j2s/core/corescript.z.js',
+                                  'I-TASSER/output/bin/jmol/j2s/core/core.z.js',
+                                  'I-TASSER/output/bin/jmol/j2s/JM/Resolver.js',
+                                  'I-TASSER/output/bin/jmol/j2s/J/shape/Mesh.js',
+                                  'I-TASSER/output/bin/jmol/j2s/J/render/MeshRenderer.js',
+                                  'I-TASSER/output/bin/jmol/j2s/core/corescriptcmd.z.js',
+                                  'I-TASSER/output/bin/jmol/j2s/J/thread/SpinThread.js',
+                                  'I-TASSER/output/bin/jmol/j2s/J/g3d/HermiteRenderer.js',
+                                  'I-TASSER/output/bin/jmol/j2s/core/coretext.z.js']
+                for fn in extraDownloads:
+                    os.system('cd %s; wget --mirror -p --convert-links -P . -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 https://%s/%s'%\
+                              (self.protocol._getExtraPath(),fn))
             fnBaseDir = self.getResultsDir()
         if fnBaseDir:
             url=os.path.abspath(os.path.join(fnBaseDir,"index.html"))
