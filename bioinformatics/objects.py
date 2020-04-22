@@ -76,10 +76,34 @@ class SmallMolecule(data.EMObject):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
 
+    def getFileName(self):
+        return self.smallMoleculeFile.get()
+
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
     ITEM_TYPE = SmallMolecule
     FILE_TEMPLATE_NAME = 'setOfSmallMolecules%s.sqlite'
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+
+class BindingSite(data.EMObject):
+    """ Binding site """
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self.bindingSiteFile = pwobj.String(kwargs.get('bindingSiteFilename', None))
+        self.structurePtr = None
+
+    def getFileName(self):
+        return self.bindingSiteFile.get()
+
+    def setStructure(self, structurePtr):
+        self.structurePtr = structurePtr
+
+class SetOfBindingSites(data.EMSet):
+    """ Set of Binding sites """
+    ITEM_TYPE = BindingSite
+    FILE_TEMPLATE_NAME = 'setOfBindingSites%s.sqlite'
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)

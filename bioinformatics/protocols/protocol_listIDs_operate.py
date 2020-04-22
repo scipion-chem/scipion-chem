@@ -33,9 +33,9 @@ from pyworkflow.object import Float, Integer
 from pyworkflow.protocol.params import PointerParam, EnumParam, MultiPointerParam, BooleanParam, StringParam
 from bioinformatics.objects import DatabaseID, SetOfDatabaseID
 
-class ProtBioinformaticsListOperate(EMProtocol):
+class ProtBioinformaticsListIDOperate(EMProtocol):
     """This protocol will remove all duplicated entries using the DbID as key"""
-    _label = 'operate list'
+    _label = 'operate ID list'
 
     def _defineParams(self, form):
         form.addSection(label='Input')

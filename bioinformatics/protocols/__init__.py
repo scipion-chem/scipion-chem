@@ -26,7 +26,8 @@
 
 from .protocol_dali import ProtBioinformaticsDali
 from .protocol_pdb_smallMolecules import ProtBioinformaticsPDBSmallMolecules
-from .protocol_listIDs_operate import ProtBioinformaticsListOperate
+from .protocol_listIDs_operate import ProtBioinformaticsListIDOperate
+from .protocol_list_operate import ProtBioinformaticsListOperate
 from .protocol_smallMolecules_pdb import ProtBioinformaticsSmallMoleculesPDB
 from .protocol_pdb_uniprot import ProtBioinformaticsPDBUniprot
 from .protocol_uniprot_download import ProtBioinformaticsUniprotDownload
