@@ -100,10 +100,14 @@ class BindingSite(data.EMObject):
     def setStructure(self, structurePtr):
         self.structurePtr = structurePtr
 
+    def getStructure(self):
+        return self.structurePtr
+
 class SetOfBindingSites(data.EMSet):
     """ Set of Binding sites """
     ITEM_TYPE = BindingSite
     FILE_TEMPLATE_NAME = 'setOfBindingSites%s.sqlite'
+    EXPOSE_ITEMS = True
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
