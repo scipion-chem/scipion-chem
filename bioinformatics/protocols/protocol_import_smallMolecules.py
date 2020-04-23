@@ -25,15 +25,13 @@
 # **************************************************************************
 
 import glob
-import lxml.etree as ET
 import os
-import sys
-import urllib.request
+
 
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
-from pyworkflow.protocol.params import PathParam, StringParam
+from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
 from bioinformatics.objects import SmallMolecule, SetOfSmallMolecules
 from bioinformatics import Plugin
 
@@ -46,7 +44,9 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('filesPath', PathParam,
+        form.addParam('multiple', BooleanParam, default=True,
+                      label='Each file is a molecule')
+        form.addParam('filesPath', PathParam, condition='multiple',
                       label="Files directory",
                       help="Directory with the files you want to import.\n\n"
                            "The path can also contain wildcards to select"
@@ -61,7 +61,7 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
                            "file ID\n\n"
                            "NOTE: wildcard characters ('*', '?', '#') "
                            "cannot appear in the actual path.)")
-        form.addParam('filesPattern', StringParam,
+        form.addParam('filesPattern', StringParam,  condition='multiple',
                       label='Pattern',
                       default="*",
                       help="Pattern of the files to be imported.\n\n"
@@ -73,16 +73,30 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
                            "actual path.\n\n"
                            "You may create small molecules from Smiles (.smi), Tripos Mol2 (.mol2), "
                            "SDF (.sdf), Maestro (.mae, .maegz), or PDB blocks (.pdb)")
+        form.addParam('filePath', PathParam, condition='not multiple',
+                      label='File', help='Allowed formats: CSV smiles (ID, compound; this is downloaded from ZINC)')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
+        if not self.multiple.get():
+            copyFile(self.filePath.get(),self._getPath(os.path.split(self.filePath.get())[1]))
+            fh = open(self.filePath.get())
+            for line in fh.readlines():
+                tokens = line.split(',')
+                if len(tokens)==2:
+                    fhSmile = open(self._getExtraPath(tokens[0].strip()+".smi"),'w')
+                    fhSmile.write(tokens[1].strip()+"\n")
+                    fhSmile.close()
+        else:
+            for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
+                fnSmall = self._getExtraPath(os.path.split(filename)[1])
+                copyFile(filename, fnSmall)
+
         outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
-        for filename in glob.glob(os.path.join(self.filesPath.get(),self.filesPattern.get())):
-            fnSmall = self._getExtraPath(os.path.split(filename)[1])
-            copyFile(filename,fnSmall)
+        for fnSmall in glob.glob(self._getExtraPath("*")):
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
 
             fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
