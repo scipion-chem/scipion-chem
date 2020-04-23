@@ -37,10 +37,14 @@ class ProtBioinformaticsListOperate(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('operation', EnumParam, choices=['Filter', 'Keep columns', 'Unique', 'Top N', 'Bottom N',
-                                                       'Top %', 'Bottom %'],
-                      label='Operation', default=0)
+                                                       'Top %', 'Bottom %', 'Count', 'Intersection'],
+                      label='Operation', default=0,
+                      help='In intersection, we keep those entries of the Set to filter whose identifier (filter column) '
+                           'are in the second set')
         form.addParam('inputSet', PointerParam, pointerClass="EMSet",
                        label='Set to filter:', allowsNull=False)
+        form.addParam('secondSet', PointerParam, pointerClass="EMSet", condition="operation==8",
+                       label='Set with IDs:', allowsNull=True)
         form.addParam('filterColumn', StringParam,
                        label='Filter column:', condition='(operation!=1)',
                        help='It must exist in the input object.')
@@ -158,6 +162,37 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     newEntry.copy(oldEntry)
                     outputSet.append(newEntry)
                 elif (op==4 or op==6) and value<=threshold:
+                    newEntry = self.inputSet.get().ITEM_TYPE()
+                    newEntry.copy(oldEntry)
+                    outputSet.append(newEntry)
+
+        elif self.operation.get()==7:
+            count={}
+            for oldEntry in self.inputSet.get():
+                value = oldEntry.getAttributeValue(self.filterColumn.get())
+                if not value in count:
+                    count[value] = 0
+                count[value] += 1
+
+            for oldEntry in self.inputSet.get():
+                value = oldEntry.getAttributeValue(self.filterColumn.get())
+
+                newEntry = self.inputSet.get().ITEM_TYPE()
+                newEntry.copy(oldEntry)
+                newEntry.count = Integer(count[value])
+                outputSet.append(newEntry)
+
+        elif self.operation.get()==8:
+            secondSet={}
+            for entry in self.secondSet.get():
+                value = entry.getAttributeValue(self.filterColumn.get())
+                if not value in secondSet:
+                    secondSet[value] = True
+
+            for oldEntry in self.inputSet.get():
+                value = oldEntry.getAttributeValue(self.filterColumn.get())
+
+                if value in secondSet:
                     newEntry = self.inputSet.get().ITEM_TYPE()
                     newEntry.copy(oldEntry)
                     outputSet.append(newEntry)
