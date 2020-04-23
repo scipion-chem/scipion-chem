@@ -24,10 +24,11 @@
 # *
 # **************************************************************************
 
+from math import ceil
+
 from pwem.protocols import EMProtocol
 from pyworkflow.object import Float, Integer
-from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam
-from bioinformatics.objects import DatabaseID, SetOfDatabaseID
+from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, IntParam, FloatParam
 
 class ProtBioinformaticsListOperate(EMProtocol):
     """Filter a set by a column value or keep just a few columns"""
@@ -35,13 +36,14 @@ class ProtBioinformaticsListOperate(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('operation', EnumParam, choices=['Filter', 'Keep columns'],
+        form.addParam('operation', EnumParam, choices=['Filter', 'Keep columns', 'Unique', 'Top N', 'Bottom N',
+                                                       'Top %', 'Bottom %'],
                       label='Operation', default=0)
         form.addParam('inputSet', PointerParam, pointerClass="EMSet",
                        label='Set to filter:', allowsNull=False)
         form.addParam('filterColumn', StringParam,
-                       label='Filter column:', condition='(operation==0)',
-                       help='It must exist in the input database list.')
+                       label='Filter column:', condition='(operation!=1)',
+                       help='It must exist in the input object.')
         form.addParam('filterOp', EnumParam, choices=['==', '>', '>=', '<', '<=', '!=', 'startswith',
                                                       'endswith', 'contains', 'does not startwith',
                                                       'does not end with', 'does not contain'],
@@ -52,6 +54,11 @@ class ProtBioinformaticsListOperate(EMProtocol):
         form.addParam('keepColumns', StringParam,
                        label='Keep columns:', condition='(operation==1)',
                        help='They must exist in the input database list. Separated by semicolons')
+        form.addParam('N', IntParam,
+                       label='N:', default=500, condition='(operation==3 or operation==4)')
+        form.addParam('percentile', FloatParam,
+                       label='Percentile:', default=5, condition='(operation==5 or operation==6)',
+                       help='Between 0 and 100')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -118,6 +125,42 @@ class ProtBioinformaticsListOperate(EMProtocol):
                 newEntry = self.inputSet.get().ITEM_TYPE()
                 newEntry.copy(oldEntry,ignoreAttrs=ignoreList)
                 outputSet.append(newEntry)
+
+        elif self.operation.get()==2:
+            found={}
+            for oldEntry in self.inputSet.get():
+                value = oldEntry.getAttributeValue(self.filterColumn.get())
+                if not value in found:
+                    found[value] = True
+                    newEntry = self.inputSet.get().ITEM_TYPE()
+                    newEntry.copy(oldEntry)
+                    outputSet.append(newEntry)
+
+        elif self.operation.get()>=3 and self.operation.get()<=6:
+            V = []
+            for entry in self.inputSet.get():
+                V.append(entry.getAttributeValue(self.filterColumn.get()))
+            V.sort()
+            op = self.operation.get()
+            if op==3:
+                threshold = V[-self.N.get()]
+            elif op==4:
+                threshold = V[self.N.get()-1]
+            elif op==5:
+                threshold = V[-ceil(self.percentile.get()/100*len(V))]
+            elif op==6:
+                threshold = V[ceil(self.percentile.get()/100*len(V))-1]
+
+            for oldEntry in self.inputSet.get():
+                value = oldEntry.getAttributeValue(self.filterColumn.get())
+                if (op==3 or op==5) and value>=threshold:
+                    newEntry = self.inputSet.get().ITEM_TYPE()
+                    newEntry.copy(oldEntry)
+                    outputSet.append(newEntry)
+                elif (op==4 or op==6) and value<=threshold:
+                    newEntry = self.inputSet.get().ITEM_TYPE()
+                    newEntry.copy(oldEntry)
+                    outputSet.append(newEntry)
 
         self._defineOutputs(output=outputSet)
         self._defineSourceRelation(self.inputSet, outputSet)
