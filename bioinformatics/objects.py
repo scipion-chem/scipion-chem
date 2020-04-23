@@ -97,12 +97,6 @@ class BindingSite(data.EMObject):
     def getFileName(self):
         return self.bindingSiteFile.get()
 
-    def setStructure(self, structurePtr):
-        self.structurePtr = structurePtr
-
-    def getStructure(self):
-        return self.structurePtr
-
 class SetOfBindingSites(data.EMSet):
     """ Set of Binding sites """
     ITEM_TYPE = BindingSite
