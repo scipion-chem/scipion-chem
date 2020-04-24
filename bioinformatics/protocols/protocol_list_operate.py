@@ -197,5 +197,6 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     newEntry.copy(oldEntry)
                     outputSet.append(newEntry)
 
-        self._defineOutputs(output=outputSet)
-        self._defineSourceRelation(self.inputSet, outputSet)
+        if len(outputSet)>0:
+            self._defineOutputs(output=outputSet)
+            self._defineSourceRelation(self.inputSet, outputSet)
