@@ -99,14 +99,15 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
         for fnSmall in glob.glob(self._getExtraPath("*")):
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
 
-            fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-            fnOut = self._getExtraPath("%s.png" % fnRoot)
-            args = Plugin.getPluginHome('utils/rdkitUtils.py') + " draw %s %s" % (fnSmall, fnOut)
-            try:
-                Plugin.runRDKit(self, "python3", args)
-                smallMolecule._PDBLigandImage = pwobj.String(fnOut)
-            except:
-                smallMolecule._PDBLigandImage = pwobj.String("Not available")
+            if not fnSmall.endswith('.mae') and not fnSmall.endswith('.maegz'):
+                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
+                fnOut = self._getExtraPath("%s.png" % fnRoot)
+                args = Plugin.getPluginHome('utils/rdkitUtils.py') + " draw %s %s" % (fnSmall, fnOut)
+                try:
+                    Plugin.runRDKit(self, "python3", args)
+                    smallMolecule._PDBLigandImage = pwobj.String(fnOut)
+                except:
+                    smallMolecule._PDBLigandImage = pwobj.String("Not available")
 
             outputSmallMolecules.append(smallMolecule)
         self._defineOutputs(outputSmallMols=outputSmallMolecules)
