@@ -91,6 +91,7 @@ class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
                 extraDownloads = ['I-TASSER/output/bin/jmol/j2s/core/package.js',
                                   'I-TASSER/output/bin/jmol/j2s/core/corescript.z.js',
                                   'I-TASSER/output/bin/jmol/j2s/core/core.z.js',
+                                  'I-TASSER/output/bin/jmol/j2s/core/corebio.z.js',
                                   'I-TASSER/output/bin/jmol/j2s/JM/Resolver.js',
                                   'I-TASSER/output/bin/jmol/j2s/J/shape/Mesh.js',
                                   'I-TASSER/output/bin/jmol/j2s/J/render/MeshRenderer.js',
@@ -100,7 +101,7 @@ class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
                                   'I-TASSER/output/bin/jmol/j2s/core/coretext.z.js']
                 for fn in extraDownloads:
                     os.system('cd %s; wget --mirror -p --convert-links -P . -r --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 5 https://%s/%s'%\
-                              (self.protocol._getExtraPath(),fn))
+                              (self.protocol._getExtraPath(),CQUARKSERVER,fn))
             fnBaseDir = self.getResultsDir()
         if fnBaseDir:
             url=os.path.abspath(os.path.join(fnBaseDir,"index.html"))
