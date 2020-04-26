@@ -32,17 +32,12 @@ from pwem.convert.atom_struct import AtomicStructHandler
 from bioinformatics import Plugin as bioinformatics_plugin
 from pwem.objects.data import AtomStruct
 
-class ProtBioinformaticsADTPrepareReceptor(EMProtocol):
-    """Prepare receptor using Autodocking Tools from MGL"""
-    _label = 'target preparation ADT'
-    _program = ""
-
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
-                      label='Atomic Structure:', allowsNull=False,
-                      help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-        form.addParam('repair', EnumParam, choices=['None', 'Bonds hydrogens', 'Bonds', 'Hydrogens', 'Check hydrogens'],
+class ProtBioinformaticsADTPrepare(EMProtocol):
+    def _defineParamsBasic(self, form):
+        choicesRepair = ['None', 'Bonds hydrogens', 'Bonds', 'Hydrogens']
+        if self.typeRL=="target":
+            choicesRepair.append('Check hydrogens')
+        form.addParam('repair', EnumParam, choices=choicesRepair,
                       default=0, label='Repair action:',
                       help='Bonds hydrogens: build bonds and add hydrogens\n'
                            'Bonds: build a single bond from each atom with no bonds to its closest neighbor\n'
@@ -59,26 +54,18 @@ class ProtBioinformaticsADTPrepareReceptor(EMProtocol):
                       label='Merge charges and remove lone pairs')
         form.addParam('waters', BooleanParam, default=True,
                       label='Remove water residues')
-        form.addParam('nonstdres', BooleanParam, default=True,
-                      label='Remove chains composed entirely of non-standard residues')
-        form.addParam('nonstd', BooleanParam, default=False,
-                      label='Remove non-standard residues from all chains')
+        if self.typeRL=="target":
+            form.addParam('nonstdres', BooleanParam, default=True,
+                          label='Remove chains composed entirely of non-standard residues')
+            form.addParam('nonstd', BooleanParam, default=False,
+                          label='Remove non-standard residues from all chains')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
         self._insertFunctionStep('createOutput')
 
-    def preparationStep(self):
-        if self.inputStructure.get().getFileName().endswith('.cif'):
-            fnIn = self._getTmpPath("atomStructIn.pdb")
-            aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
-            aStruct1.write(fnIn)
-        else:
-            fnIn = self.inputStructure.get().getFileName()
-        fnOut = self._getExtraPath('atomStruct.pdbqt')
-
-        args = ' -v -r %s -o %s'%(fnIn,fnOut)
+    def callPrepare(self, prog, args):
         if self.repair.get()==1:
             args+=' -A bonds_hydrogens'
         elif self.repair.get()==2:
@@ -109,18 +96,20 @@ class ProtBioinformaticsADTPrepareReceptor(EMProtocol):
                 cleanup+="_"
             cleanup+="waters"
             first=False
-        if self.nonstdres.get():
-            if not first:
-                cleanup+="_"
-            cleanup+="nonstdres"
+        if self.typeRL=="target":
+            if self.nonstdres.get():
+                if not first:
+                    cleanup+="_"
+                cleanup+="nonstdres"
         if cleanup!="-U ":
             args+=cleanup
 
-        if self.nonstd.get():
-            args+=" -e"
+        if self.typeRL=="target":
+            if self.nonstd.get():
+                args+=" -e"
 
         self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
-                    bioinformatics_plugin.getADTPath('Utilities24/prepare_receptor4.py')+args)
+                    bioinformatics_plugin.getADTPath('Utilities24/%s.py'%prog)+args)
 
     def createOutput(self):
         fnOut = self._getExtraPath('atomStruct.pdbqt')
@@ -129,7 +118,37 @@ class ProtBioinformaticsADTPrepareReceptor(EMProtocol):
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputStructure, target)
 
+class ProtBioinformaticsADTPrepareReceptor(ProtBioinformaticsADTPrepare):
+    """Prepare receptor using Autodocking Tools from MGL"""
+    _label = 'target preparation ADT'
+    _program = ""
 
+    def _defineParams(self, form):
+        self.typeRL="target"
+        form.addSection(label='Input')
+        form.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
+                      label='Atomic Structure:', allowsNull=False,
+                      help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
+        ProtBioinformaticsADTPrepare._defineParamsBasic(self, form)
+
+    def preparationStep(self):
+        if self.inputStructure.get().getFileName().endswith('.cif'):
+            fnIn = self._getTmpPath("atomStructIn.pdb")
+            aStruct1 = AtomicStructHandler(self.inputStructure.get().getFileName())
+            aStruct1.write(fnIn)
+        else:
+            fnIn = self.inputStructure.get().getFileName()
+        fnOut = self._getExtraPath('atomStruct.pdbqt')
+
+        args = ' -v -r %s -o %s'%(fnIn,fnOut)
+        ProtBioinformaticsADTPrepare.callPrepare(self,"prepare_receptor4",args)
+
+    def createOutput(self):
+        fnOut = self._getExtraPath('atomStruct.pdbqt')
+        if os.path.exists(fnOut):
+            target = AtomStruct(filename=fnOut)
+            self._defineOutputs(outputStructure=target)
+            self._defineSourceRelation(self.inputStructure, target)
 
     def _validate(self):
         errors = []

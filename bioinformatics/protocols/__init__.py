@@ -37,3 +37,4 @@ from .protocol_ZL_predict import ProtBioinformaticsZLPredict
 from .protocol_import_smallMolecules import ProtBioinformaticsImportSmallMolecules
 from .protocol_raptorX import ProtBioinformaticsRaptorX
 from .protocol_preparation_receptor import ProtBioinformaticsADTPrepareReceptor
+from .protocol_preparation_ligands import ProtBioinformaticsADTPrepareLigands
