@@ -30,6 +30,7 @@ manipulation of atomic struct objects
 """
 
 import os
+import pyworkflow.utils as pwutils
 import pwem
 from .bibtex import _bibtexStr
 
@@ -59,6 +60,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
+        cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
 
     @classmethod
     def getRDKitEnvActivation(cls):
@@ -110,3 +112,21 @@ class Plugin(pwem.Plugin):
         """ Run rdkit command from a given protocol. """
         fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def getMGLEnviron(cls):
+        """ Create the needed environment for MGL Tools programs. """
+        environ = pwutils.Environ(os.environ)
+        pos = pwutils.Environ.BEGIN
+        environ.update({
+            'PATH': cls.getMGLPath('bin')
+        }, position=pos)
+        return environ
+
+    @classmethod
+    def getMGLPath(cls, path=''):
+        return os.path.join(cls.getVar('MGL_HOME'),path)
+
+    @classmethod
+    def getADTPath(cls, path=''):
+        return cls.getMGLPath(os.path.join('MGLToolsPckgs','AutoDockTools',path))
