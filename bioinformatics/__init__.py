@@ -61,6 +61,7 @@ class Plugin(pwem.Plugin):
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
         cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
+        cls._defineEmVar('AUTODOCK_HOME', 'autodock-4.2.6')
 
     @classmethod
     def getRDKitEnvActivation(cls):
@@ -130,3 +131,8 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getADTPath(cls, path=''):
         return cls.getMGLPath(os.path.join('MGLToolsPckgs','AutoDockTools',path))
+
+    @classmethod
+    def getAutodockPath(cls, path=''):
+        return os.path.join(cls.getVar('AUTODOCK_HOME'),path)
+

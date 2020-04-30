@@ -105,3 +105,8 @@ class SetOfBindingSites(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+
+class AutodockGrid(data.EMFile):
+    """A search grid in the file format of Autodock"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
