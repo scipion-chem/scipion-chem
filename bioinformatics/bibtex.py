@@ -36,6 +36,15 @@ _bibtexStr = """
    Month="Jun"
 }
 
+@Article{Morris2009,
+   Author="Morris, G. M., Huey, R., Lindstrom, W., Sanner, M. F., Belew, R. K., Goodsell, D. S. and Olson, A. J.",
+   Title="{Autodock4 and AutoDockTools4: automated docking with selective receptor flexiblity}",
+   Journal="J. Computational Chemistry",
+   Year="2009",
+   Volume="16",
+   Pages="2785--2791"
+}
+
 @Article{Zheng2019,
    Author="Zheng, W. and Li, Y. and Zhang, C. and Pearce, R. and Mortuza, S. M and Zhang, Y.",
    Title="{Deep-learning contact-map guided protein structure prediction in CASP13}",

@@ -39,3 +39,4 @@ from .protocol_raptorX import ProtBioinformaticsRaptorX
 from .protocol_preparation_receptor import ProtBioinformaticsADTPrepareReceptor
 from .protocol_preparation_ligands import ProtBioinformaticsADTPrepareLigands
 from .protocol_ZINC_filter import ProtBioinformaticsZINCFilter
+from .protocol_autodock import ProtBioinformaticsAutodock
