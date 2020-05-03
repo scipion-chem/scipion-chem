@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os
+import sys
 import urllib.request
 
 import pyworkflow.object as pwobj
@@ -60,47 +61,54 @@ class ProtBioinformaticsZINCFilter(EMProtocol):
             if not "ZINC" in fnBase:
                 continue
             url="http://zinc15.docking.org/substances/%s"%fnBase
-            fp = urllib.request.urlopen(url)
-            mybytes = fp.read()
-            mystr = mybytes.decode("utf8")
-            fp.close()
-            notForSale=False
-            agent=False
-            forSale=False
-            inTitle = False
-            title = ""
-            for line in mystr.split('\n'):
-                if "/substances/subsets/not-for-sale/" in line:
-                    notForSale = True
-                elif "/substances/subsets/agent/" in line:
-                    agent = True
-                elif "/substances/subsets/for-sale/" in line:
-                    forSale = True
-                if "</title>" in line:
-                    inTitle = False
-                if inTitle and not fnBase in line:
-                    title+=line.strip()
-                if "<title>" in line:
-                    inTitle = True
             print(url)
-            print("  Not for sale: %s"%str(notForSale))
-            print("  Agent: %s"%str(agent))
-            print("  For sale: %s"%str(forSale))
+            sys.stdout.flush()
             add = True
-            if self.mode.get()==0:
-                if notForSale and self.notForSale.get():
-                    add=False
-                if agent and self.agent.get():
-                    add=False
-                if forSale and self.forSale.get():
-                    add=False
-            else:
-                if not notForSale and self.notForSale.get():
-                    add=False
-                if not agent and self.agent.get():
-                    add=False
-                if not forSale and self.forSale.get():
-                    add=False
+            try:
+                fp = urllib.request.urlopen(url)
+                mybytes = fp.read()
+                mystr = mybytes.decode("utf8")
+                fp.close()
+                notForSale=False
+                agent=False
+                forSale=False
+                inTitle = False
+                title = ""
+                for line in mystr.split('\n'):
+                    if "/substances/subsets/not-for-sale/" in line:
+                        notForSale = True
+                    elif "/substances/subsets/agent/" in line:
+                        agent = True
+                    elif "/substances/subsets/for-sale/" in line:
+                        forSale = True
+                    if "</title>" in line:
+                        inTitle = False
+                    if inTitle and not fnBase in line:
+                        title+=line.strip()
+                    if "<title>" in line:
+                        inTitle = True
+                print("  Title: %s"%title)
+                print("  Not for sale: %s"%str(notForSale))
+                print("  Agent: %s"%str(agent))
+                print("  For sale: %s"%str(forSale))
+                if self.mode.get()==0:
+                    if notForSale and self.notForSale.get():
+                        add=False
+                    if agent and self.agent.get():
+                        add=False
+                    if forSale and self.forSale.get():
+                        add=False
+                else:
+                    if not notForSale and self.notForSale.get():
+                        add=False
+                    if not agent and self.agent.get():
+                        add=False
+                    if not forSale and self.forSale.get():
+                        add=False
+            except:
+                add = True
+                title = "Could not retrieve from ZINC"
+                print("  Could not be retrieved")
             if add:
                 newEntry = self.inputSet.get().ITEM_TYPE()
                 newEntry.copy(oldEntry)
