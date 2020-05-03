@@ -24,11 +24,13 @@
 # *
 # **************************************************************************
 
+import glob
 import os
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam
 from bioinformatics import Plugin as bioinformatics_plugin
+from pyworkflow.utils.path import makePath, createLink
 
 class ProtBioinformaticsAutodock(EMProtocol):
     """Perform a docking experiment with autodock. See the help at
@@ -70,19 +72,21 @@ class ProtBioinformaticsAutodock(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        fnReceptor = self.inputGrid.get().structureFile.get()
         fnGridDir = self.inputGrid.get().getFileName()
         dockSteps = []
         for smallMol in self.inputLibrary.get():
             fnSmall = smallMol.getFileName()
 
-            stepId = self._insertFunctionStep('dockStep', fnReceptor, fnGridDir, fnSmall, prerequisites=[])
+            stepId = self._insertFunctionStep('dockStep', fnGridDir, fnSmall, prerequisites=[])
             dockSteps.append(stepId)
         # self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
-    def dockStep(self, fnReceptor, fnGridDir, fnSmall):
+    def dockStep(self, fnGridDir, fnSmall):
+        fnReceptor = os.path.join(fnGridDir,"atomStruct.pdbqt")
         fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
-        fnDPF = self._getExtraPath(fnBase+".dpf")
+        fnSmallDir = self._getExtraPath(fnBase)
+        makePath(fnSmallDir)
+        fnDPF = os.path.join(fnSmallDir,fnBase+".dpf")
         args = " -l %s -r %s -o %s"%(fnSmall, fnReceptor, fnDPF)
 
         args += " -p ga_pop_size=%d"%self.gaPop.get()
@@ -103,8 +107,25 @@ class ProtBioinformaticsAutodock(EMProtocol):
 
         self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
                     bioinformatics_plugin.getADTPath('Utilities24/prepare_dpf42.py')+args)
-        #        self.runJob(bioinformatics_plugin.getAutodockPath("autogrid4"),args, cwd=fnGridDirAbs)
 
+        fnSmallLocal = os.path.split(fnSmall)[1]
+        createLink(fnSmall,os.path.join(fnSmallDir,fnSmallLocal))
+        createLink(fnReceptor,os.path.join(fnSmallDir,"atomStruct.pdbqt"))
+#        createLink(os.path.join(fnGridDir,"atomStruct.maps.fld"),os.path.join(fnSmallDir,"atomStruct.maps.fld"))
+#        createLink(os.path.join(fnGridDir,"atomStruct.maps.xyz"),os.path.join(fnSmallDir,"atomStruct.maps.xyz"))
+#        for fn in glob.glob(os.path.join(fnGridDir,"*map")):
+#            createLink(fn, os.path.join(fnSmallDir, os.path.split(fn)[1]))
+
+        args = " -r atomStruct.pdbqt -l %s -o library.gpf"%fnSmallLocal
+        self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
+                    bioinformatics_plugin.getADTPath('Utilities24/prepare_gpf4.py') + args,
+                    cwd=fnSmallDir)
+
+        args = "-p library.gpf -l library.glg"
+        self.runJob(bioinformatics_plugin.getAutodockPath("autogrid4"), args, cwd=fnSmallDir)
+
+        args = "-p %s.dpf -l %s.dlg"%(fnBase,fnBase)
+        self.runJob(bioinformatics_plugin.getAutodockPath("autodock4"), args, cwd=fnSmallDir)
 
     def _citations(self):
         return ['Morris2009']

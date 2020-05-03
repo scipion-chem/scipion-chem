@@ -48,14 +48,14 @@ class ProtBioinformaticsADTPrepareLigands(ProtBioinformaticsADTPrepare):
                 fnSmall = mol.smallMoleculeFile.get()
                 fnMol = os.path.split(fnSmall)[1]
                 fnRoot = os.path.splitext(fnMol)[0]
-                fnOut = self._getExtraPath(fnRoot+".mol2")
+                fnOut = self._getExtraPath(fnRoot+".pdbqt")
 
                 args = ' -v -l %s -o %s' % (fnSmall, fnOut)
                 ProtBioinformaticsADTPrepare.callPrepare(self, "prepare_ligand4", args)
 
         def createOutput(self):
             outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(), suffix='SmallMols')
-            for fnOut in glob.glob(self._getExtraPath("*.mol2")):
+            for fnOut in glob.glob(self._getExtraPath("*.pdbqt")):
                 smallMolecule = SmallMolecule(smallMolFilename=fnOut)
                 outputSmallMolecules.append(smallMolecule)
             if len(outputSmallMolecules)>0:
