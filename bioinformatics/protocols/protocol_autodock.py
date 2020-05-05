@@ -24,13 +24,14 @@
 # *
 # **************************************************************************
 
-import glob
 import os
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam
+import pyworkflow.object as pwobj
 from bioinformatics import Plugin as bioinformatics_plugin
-from pyworkflow.utils.path import makePath, createLink
+from pyworkflow.utils.path import makePath, createLink, cleanPattern
+from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
 
 class ProtBioinformaticsAutodock(EMProtocol):
     """Perform a docking experiment with autodock. See the help at
@@ -79,7 +80,7 @@ class ProtBioinformaticsAutodock(EMProtocol):
 
             stepId = self._insertFunctionStep('dockStep', fnGridDir, fnSmall, prerequisites=[])
             dockSteps.append(stepId)
-        # self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
+        self._insertFunctionStep('createOutputStep', prerequisites=dockSteps)
 
     def dockStep(self, fnGridDir, fnSmall):
         fnReceptor = os.path.join(fnGridDir,"atomStruct.pdbqt")
@@ -111,10 +112,6 @@ class ProtBioinformaticsAutodock(EMProtocol):
         fnSmallLocal = os.path.split(fnSmall)[1]
         createLink(fnSmall,os.path.join(fnSmallDir,fnSmallLocal))
         createLink(fnReceptor,os.path.join(fnSmallDir,"atomStruct.pdbqt"))
-#        createLink(os.path.join(fnGridDir,"atomStruct.maps.fld"),os.path.join(fnSmallDir,"atomStruct.maps.fld"))
-#        createLink(os.path.join(fnGridDir,"atomStruct.maps.xyz"),os.path.join(fnSmallDir,"atomStruct.maps.xyz"))
-#        for fn in glob.glob(os.path.join(fnGridDir,"*map")):
-#            createLink(fn, os.path.join(fnSmallDir, os.path.split(fn)[1]))
 
         args = " -r atomStruct.pdbqt -l %s -o library.gpf"%fnSmallLocal
         self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
@@ -126,6 +123,67 @@ class ProtBioinformaticsAutodock(EMProtocol):
 
         args = "-p %s.dpf -l %s.dlg"%(fnBase,fnBase)
         self.runJob(bioinformatics_plugin.getAutodockPath("autodock4"), args, cwd=fnSmallDir)
+
+        # Clean a bit
+        cleanPattern(os.path.join(fnSmallDir,"atomStruct.*.map"))
+
+    def createOutputStep(self):
+        outputSetBest = SetOfSmallMolecules().create(path=self._getPath(),suffix='Best')
+        outputSet = SetOfSmallMolecules().create(path=self._getPath())
+        for smallMol in self.inputLibrary.get():
+            fnSmall = smallMol.getFileName()
+            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            fnSmallDir = self._getExtraPath(fnBase)
+            fnDlg = os.path.join(fnSmallDir,fnBase+".dlg")
+            if os.path.exists(fnDlg):
+                args = " -d . -b -o bestDock.txt"
+                self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
+                            bioinformatics_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
+                            cwd=fnSmallDir)
+                args = " -d . -o bestCluster.txt"
+                self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
+                            bioinformatics_plugin.getADTPath('Utilities24/summarize_results4.py') + args,
+                            cwd=fnSmallDir)
+                args = " -f %s.dlg -o %s_top.pdbqt"%(fnBase,fnBase)
+                self.runJob(bioinformatics_plugin.getMGLPath('bin/pythonsh'),
+                            bioinformatics_plugin.getADTPath('Utilities24/write_lowest_energy_ligand.py') + args,
+                            cwd=fnSmallDir)
+
+                newSmallMol = SmallMolecule()
+                newSmallMol.copy(smallMol)
+                fh = open(os.path.join(fnSmallDir,"bestDock.txt"))
+                lineNo = 0
+                for line in fh.readlines():
+                    if lineNo == 1:
+                        tokens = line.split(',')
+                        newSmallMol.dockingScoreLE = pwobj.Float(tokens[4].strip())
+                        newSmallMol.ligandEfficiency = pwobj.Float(tokens[-1].strip())
+                        newSmallMol.smallMoleculeFilePose = pwobj.String(os.path.join(fnSmallDir,"%s_top.pdbqt"%fnBase))
+                    lineNo += 1
+                fh.close()
+                outputSetBest.append(newSmallMol)
+
+                fh = open(os.path.join(fnSmallDir, "bestCluster.txt"))
+                lineNo = 0
+                for line in fh.readlines():
+                    if lineNo >= 1:
+                        newSmallMol = SmallMolecule()
+                        newSmallMol.copy(smallMol)
+                        newSmallMol.cleanObjId()
+                        tokens = line.split(',')
+                        newSmallMol.dockingScoreLE = pwobj.Float(tokens[2].strip())
+                        newSmallMol.ligandEfficiency = pwobj.Float(tokens[-1].strip())
+                        outputSet.append(newSmallMol)
+                    lineNo += 1
+                fh.close()
+
+        self._defineOutputs(outputSmallMolecules=outputSet)
+        self._defineSourceRelation(self.inputGrid, outputSet)
+        self._defineSourceRelation(self.inputLibrary, outputSet)
+
+        self._defineOutputs(outputSmallMoleculesBest=outputSetBest)
+        self._defineSourceRelation(self.inputGrid, outputSetBest)
+        self._defineSourceRelation(self.inputLibrary, outputSetBest)
 
     def _citations(self):
         return ['Morris2009']
