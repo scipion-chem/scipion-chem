@@ -25,6 +25,7 @@
 # **************************************************************************
 
 from math import ceil
+import numpy as np
 
 from pwem.protocols import EMProtocol
 from pyworkflow.object import Float, Integer
@@ -37,7 +38,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('operation', EnumParam, choices=['Filter', 'Keep columns', 'Unique', 'Top N', 'Bottom N',
-                                                       'Top %', 'Bottom %', 'Count', 'Intersection'],
+                                                       'Top %', 'Bottom %', 'Count', 'Intersection', 'Sort'],
                       label='Operation', default=0,
                       help='In intersection, we keep those entries of the Set to filter whose identifier (filter column) '
                            'are in the second set')
@@ -63,6 +64,8 @@ class ProtBioinformaticsListOperate(EMProtocol):
         form.addParam('percentile', FloatParam,
                        label='Percentile:', default=5, condition='(operation==5 or operation==6)',
                        help='Between 0 and 100')
+        form.addParam('direction', EnumParam, choices=['Ascending', 'Descending'], default=0,
+                       label='Sorting direction:', condition='(operation==9)')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -196,6 +199,23 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     newEntry = self.inputSet.get().ITEM_TYPE()
                     newEntry.copy(oldEntry)
                     outputSet.append(newEntry)
+
+        elif self.operation.get()==9:
+            V = []
+            newEntries = []
+            for entry in self.inputSet.get():
+                V.append(entry.getAttributeValue(self.filterColumn.get()))
+                newEntry = self.inputSet.get().ITEM_TYPE()
+                newEntry.copy(entry)
+                newEntry.cleanObjId()
+                newEntries.append(newEntry)
+            if self.direction.get()==0:
+                idxSort = np.argsort(V)
+            else:
+                idxSort = np.argsort(-np.asarray(V))
+
+            for idx in idxSort:
+                outputSet.append(newEntries[idx])
 
         if len(outputSet)>0:
             self._defineOutputs(output=outputSet)
