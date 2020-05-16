@@ -26,7 +26,6 @@
 
 import os
 from pathlib import Path
-import webbrowser
 
 from bioinformatics.protocols.protocol_ZL_predict import ProtBioinformaticsZLPredict
 from bioinformatics import Plugin

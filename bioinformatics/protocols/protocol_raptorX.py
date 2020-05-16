@@ -60,7 +60,7 @@ class ProtBioinformaticsRaptorX(EMProtocol):
             title="ScipionRun%s"%os.path.split(self._getPath())[1][0:6]
 
         args='-F "jobname=%s" -F "email=%s" -F "seqeunces=%s" http://raptorx.uchicago.edu/StructPredV2/predict/' %\
-             (title, self.email.get(), sequence, self._getPath("output.html"))
+             (title, self.email.get(), sequence)
         self.runJob("curl",args)
 
 
