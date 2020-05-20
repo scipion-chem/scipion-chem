@@ -66,7 +66,7 @@ class ProtBioinformaticsPubChemSearch(EMProtocol):
                     fp.close()
 
                 if cid!="0":
-                    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/%s/XML"%cid
+                    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/%s/XML/?response_type=save&response_basename=compound_CID_%s"%(cid,cid)
                     print(url)
                     fnXml = self._getTmpPath("compound.xml")
                     urllib.request.urlretrieve(url, fnXml)
