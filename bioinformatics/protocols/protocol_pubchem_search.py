@@ -52,11 +52,11 @@ class ProtBioinformaticsPubChemSearch(EMProtocol):
             fnSmall = oldEntry.smallMoleculeFile.get()
             if fnSmall.endswith('.smi'):
                 fhSmile = open(fnSmall)
-                smile = fhSmile.readlines()[0].strip() # Only first line
+                smile = fhSmile.readlines()[0].split()[0].strip() # Only first line
                 fhSmile.close()
                 url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/%s/cids/TXT"%smile
                 print(url)
-            pubChemUrl = ""
+
             pubChemName = ""
             cid = None
             try:
@@ -74,17 +74,18 @@ class ProtBioinformaticsPubChemSearch(EMProtocol):
                     if os.path.exists(fnXml):
                         tree = ET.parse(fnXml)
 
-                    moleculeName = ""
+                    pubChemName = ""
                     for child in tree.getroot().iter():
                         if "RecordTitle" in child.tag:
-                            moleculeName = child.text
+                            pubChemName = child.text
+                            print(pubChemName)
                             break
             except:
                 print("  Could not be retrieved")
 
             newEntry = self.inputSet.get().ITEM_TYPE()
             newEntry.copy(oldEntry)
-            newEntry.pubChemName = pwobj.String(moleculeName)
+            newEntry.pubChemName = pwobj.String(pubChemName)
             if cid is not None and cid!="0":
                 url = "https://pubchem.ncbi.nlm.nih.gov/compound/%s"%cid
             else:
