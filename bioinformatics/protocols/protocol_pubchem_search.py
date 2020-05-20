@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+import contextlib
 import lxml.etree as ET
 import os
 import urllib.request
@@ -59,16 +60,17 @@ class ProtBioinformaticsPubChemSearch(EMProtocol):
             pubChemName = ""
             cid = None
             try:
-                fp = urllib.request.urlopen(url)
-                mybytes = fp.read()
-                cid = mybytes.decode("utf8").split()[0]
-                fp.close()
+                with contextlib.closing(urllib.request.urlopen(url)) as fp:
+                    mybytes = fp.read()
+                    cid = mybytes.decode("utf8").split()[0]
+                    fp.close()
 
                 if cid!="0":
                     url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/%s/XML"%cid
                     print(url)
                     fnXml = self._getTmpPath("compound.xml")
                     urllib.request.urlretrieve(url, fnXml)
+                    urllib.urlcleanup()
                     if os.path.exists(fnXml):
                         tree = ET.parse(fnXml)
 

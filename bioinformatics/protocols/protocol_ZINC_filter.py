@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+import contextlib
 import os
 import sys
 import urllib.request
@@ -65,10 +66,10 @@ class ProtBioinformaticsZINCFilter(EMProtocol):
             sys.stdout.flush()
             add = True
             try:
-                fp = urllib.request.urlopen(url)
-                mybytes = fp.read()
-                mystr = mybytes.decode("utf8")
-                fp.close()
+                with contextlib.closing(urllib.request.urlopen(url)) as fp:
+                    mybytes = fp.read()
+                    mystr = mybytes.decode("utf8")
+                    fp.close()
                 notForSale=False
                 agent=False
                 forSale=False
