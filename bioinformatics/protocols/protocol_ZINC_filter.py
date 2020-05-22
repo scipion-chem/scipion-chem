@@ -61,55 +61,70 @@ class ProtBioinformaticsZINCFilter(EMProtocol):
                 fnBase = fnBase.split("-")[0]
             if not "ZINC" in fnBase:
                 continue
-            url="http://zinc15.docking.org/substances/%s"%fnBase
-            print(url)
-            sys.stdout.flush()
-            add = True
-            try:
-                with contextlib.closing(urllib.request.urlopen(url)) as fp:
-                    mybytes = fp.read()
-                    mystr = mybytes.decode("utf8")
-                    fp.close()
-                notForSale=False
-                agent=False
-                forSale=False
-                inTitle = False
-                title = ""
-                for line in mystr.split('\n'):
-                    if "/substances/subsets/not-for-sale/" in line:
-                        notForSale = True
-                    elif "/substances/subsets/agent/" in line:
-                        agent = True
-                    elif "/substances/subsets/for-sale/" in line:
-                        forSale = True
-                    if "</title>" in line:
-                        inTitle = False
-                    if inTitle and not fnBase in line:
-                        title+=line.strip()
-                    if "<title>" in line:
-                        inTitle = True
-                print("  Title: %s"%title)
-                print("  Not for sale: %s"%str(notForSale))
-                print("  Agent: %s"%str(agent))
-                print("  For sale: %s"%str(forSale))
-                if self.mode.get()==0:
-                    if notForSale and self.notForSale.get():
-                        add=False
-                    if agent and self.agent.get():
-                        add=False
-                    if forSale and self.forSale.get():
-                        add=False
-                else:
-                    if not notForSale and self.notForSale.get():
-                        add=False
-                    if not agent and self.agent.get():
-                        add=False
-                    if not forSale and self.forSale.get():
-                        add=False
-            except:
+            fnAdd = self._getExtraPath(fnBase+".txt")
+            if not os.path.exists(fnAdd):
+                url="http://zinc15.docking.org/substances/%s"%fnBase
+                print(url)
+                sys.stdout.flush()
                 add = True
-                title = "Could not retrieve from ZINC"
-                print("  Could not be retrieved")
+                try:
+                    with contextlib.closing(urllib.request.urlopen(url)) as fp:
+                        mybytes = fp.read()
+                        mystr = mybytes.decode("utf8")
+                        fp.close()
+                    notForSale=False
+                    agent=False
+                    forSale=False
+                    inTitle = False
+                    title = ""
+                    for line in mystr.split('\n'):
+                        if "/substances/subsets/not-for-sale/" in line:
+                            notForSale = True
+                        elif "/substances/subsets/agent/" in line:
+                            agent = True
+                        elif "/substances/subsets/for-sale/" in line:
+                            forSale = True
+                        if "</title>" in line:
+                            inTitle = False
+                        if inTitle and not fnBase in line:
+                            title+=line.strip()
+                        if "<title>" in line:
+                            inTitle = True
+                    print("  Title: %s"%title)
+                    print("  Not for sale: %s"%str(notForSale))
+                    print("  Agent: %s"%str(agent))
+                    print("  For sale: %s"%str(forSale))
+                    if self.mode.get()==0:
+                        if notForSale and self.notForSale.get():
+                            add=False
+                        if agent and self.agent.get():
+                            add=False
+                        if forSale and self.forSale.get():
+                            add=False
+                    else:
+                        if not notForSale and self.notForSale.get():
+                            add=False
+                        if not agent and self.agent.get():
+                            add=False
+                        if not forSale and self.forSale.get():
+                            add=False
+                except:
+                    add = True
+                    title = "Could not retrieve from ZINC"
+                    print("  Could not be retrieved")
+                fh = open(fnAdd,'w')
+                fh.write(str(add)+" ;; "+title)
+                fh.close()
+            else:
+                fh = open(fnAdd)
+                tokens = fh.readline().split(';;')
+                add = bool(tokens[0].strip())
+                if len(tokens)>1:
+                    title = tokens[1].strip()
+                else:
+                    title = ""
+                fh.close()
+
             if add:
                 newEntry = self.inputSet.get().ITEM_TYPE()
                 newEntry.copy(oldEntry)

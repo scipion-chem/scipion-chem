@@ -50,38 +50,50 @@ class ProtBioinformaticsPubChemSearch(EMProtocol):
         outputSet = self.inputSet.get().create(self._getPath())
         for oldEntry in self.inputSet.get():
             fnSmall = oldEntry.smallMoleculeFile.get()
-            if fnSmall.endswith('.smi'):
-                fhSmile = open(fnSmall)
-                smile = fhSmile.readlines()[0].split()[0].strip() # Only first line
-                fhSmile.close()
-                url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/%s/cids/TXT"%smile
-                print(url)
-
-            pubChemName = ""
+            fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            fnName = self._getExtraPath(fnBase+".txt")
             cid = None
-            try:
-                with contextlib.closing(urllib.request.urlopen(url)) as fp:
-                    mybytes = fp.read()
-                    cid = mybytes.decode("utf8").split()[0]
-                    fp.close()
-
-                if cid!="0":
-                    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/%s/XML/?response_type=save&response_basename=compound_CID_%s"%(cid,cid)
+            if not os.path.exists(fnName):
+                if fnSmall.endswith('.smi'):
+                    fhSmile = open(fnSmall)
+                    smile = fhSmile.readlines()[0].split()[0].strip() # Only first line
+                    fhSmile.close()
+                    url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/%s/cids/TXT"%smile
                     print(url)
-                    fnXml = self._getTmpPath("compound.xml")
-                    urllib.request.urlretrieve(url, fnXml)
-                    urllib.urlcleanup()
-                    if os.path.exists(fnXml):
-                        tree = ET.parse(fnXml)
 
-                    pubChemName = ""
-                    for child in tree.getroot().iter():
-                        if "RecordTitle" in child.tag:
-                            pubChemName = child.text
-                            print(pubChemName)
-                            break
-            except:
-                print("  Could not be retrieved")
+                pubChemName = ""
+                try:
+                    with contextlib.closing(urllib.request.urlopen(url)) as fp:
+                        mybytes = fp.read()
+                        cid = mybytes.decode("utf8").split()[0]
+                        fp.close()
+
+                    if cid!="0":
+                        url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/%s/XML/?response_type=save&response_basename=compound_CID_%s"%(cid,cid)
+                        print(url)
+                        fnXml = self._getTmpPath("compound.xml")
+                        urllib.request.urlretrieve(url, fnXml)
+                        if os.path.exists(fnXml):
+                            tree = ET.parse(fnXml)
+
+                        pubChemName = ""
+                        for child in tree.getroot().iter():
+                            if "RecordTitle" in child.tag:
+                                pubChemName = child.text
+                                print(pubChemName)
+                                fh = open(fnName,'w')
+                                fh.write(pubChemName+" ;; %s"%cid)
+                                fh.close()
+                                break
+                except Exception as e:
+                    print(e)
+                    print("  Could not be retrieved")
+            else:
+                fh = open(fnName)
+                tokens = fh.readline().split(';;')
+                pubChemName = tokens[0].strip()
+                cid = tokens[1].strip()
+                fh.close()
 
             newEntry = self.inputSet.get().ITEM_TYPE()
             newEntry.copy(oldEntry)
