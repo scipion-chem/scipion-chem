@@ -118,7 +118,7 @@ class ProtBioinformaticsZINCFilter(EMProtocol):
             else:
                 fh = open(fnAdd)
                 tokens = fh.readline().split(';;')
-                add = bool(tokens[0].strip())
+                add = tokens[0].strip()=="True"
                 if len(tokens)>1:
                     title = tokens[1].strip()
                 else:
