@@ -81,8 +81,13 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
+
         if not self.multiple.get():
-            copyFile(self.filePath.get(),self._getPath(os.path.split(self.filePath.get())[1]))
+
+            fnSmall = self._getExtraPath(os.path.split(self.filePath.get())[1]) #Puse Extra porque luego toma de ese folder
+            copyFile(self.filePath.get(), fnSmall)
+
+            #     copyFile(self.filePath.get(),self._getPath(os.path.split(self.filePath.get())[1]))
             fh = open(self.filePath.get())
             for line in fh.readlines():
                 tokens = line.split(',')
@@ -90,16 +95,19 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
                     fhSmile = open(self._getExtraPath(tokens[0].strip()+".smi"),'w')
                     fhSmile.write(tokens[1].strip()+"\n")
                     fhSmile.close()
-        else:
+
+        else: # Multiple:true, cuando hay más de un fichero que es necesario cargar en el objeto set
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
                 fnSmall = self._getExtraPath(os.path.split(filename)[1])
                 copyFile(filename, fnSmall)
 
         outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
-        for fnSmall in glob.glob(self._getExtraPath("*")):
+        # _getPath() Return a path inside the workingDir
+
+        for fnSmall in glob.glob(self._getExtraPath("*")): # _getExtraPath() Return a path inside the extra folder Dir
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
 
-            if not fnSmall.endswith('.mae') and not fnSmall.endswith('.maegz'):
+            if not fnSmall.endswith('.mae') or not fnSmall.endswith('.maegz'):  #El problema de several format está aquí pero creo que era por conda. He cambiado and por or pero ahora han dejado de verse estructuras (noo sé si ha sido antes o despues)
                 fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                 fnOut = self._getExtraPath("%s.png" % fnRoot)
                 args = Plugin.getPluginHome('utils/rdkitUtils.py') + " draw %s %s" % (fnSmall, fnOut)
