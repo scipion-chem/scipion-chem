@@ -31,4 +31,5 @@ from .test_export_csv import TestExportcsv
 
 DataSet(name='ligandLibraries',
         folder='ligandLibraries',
-        files={})
+        files={}
+        )
