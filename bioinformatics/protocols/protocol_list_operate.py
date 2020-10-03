@@ -44,21 +44,24 @@ class ProtBioinformaticsListOperate(EMProtocol):
                            'are in the second set')
         form.addParam('inputSet', PointerParam, pointerClass="EMSet",
                        label='Set to filter:', allowsNull=False)
-        form.addParam('secondSet', PointerParam, pointerClass="EMSet", condition="operation==8",
+        form.addParam('secondSet', PointerParam, pointerClass="EMSet", condition="operation==8", # Intersection between 2 Sets
                        label='Set with IDs:', allowsNull=True)
         form.addParam('filterColumn', StringParam,
                        label='Filter column:', condition='(operation!=1)',
                        help='It must exist in the input object.')
-        form.addParam('filterOp', EnumParam, choices=['==', '>', '>=', '<', '<=', '!=', 'startswith',
+        form.addParam('filterOp', EnumParam, choices=['==', '>', '>=', '<', '<=', '!=', 'between', 'startswith',
                                                       'endswith', 'contains', 'does not startwith',
                                                       'does not end with', 'does not contain'],
                        label='Filter operation:', condition='(operation==0)')
         form.addParam('filterValue', StringParam,
                        label='Value:', condition='(operation==0)',
                        help='Value to use in the filter')
+        form.addParam('filterValue2', StringParam,
+                       label='Lower Value:', condition='(operation==0 and filterOp==6)',
+                       help='Value to use in the filter')
         form.addParam('keepColumns', StringParam,
                        label='Keep columns:', condition='(operation==1)',
-                       help='They must exist in the input database list. Separated by semicolons')
+                       help='They must exist in the input database list. Separated by semicolons (e.g. column1 ; column2 ; ...)')
         form.addParam('N', IntParam,
                        label='N:', default=500, condition='(operation==3 or operation==4)')
         form.addParam('percentile', FloatParam,
@@ -72,15 +75,27 @@ class ProtBioinformaticsListOperate(EMProtocol):
         self._insertFunctionStep('operateStep')
 
     def operateStep(self):
+
         outputSet = self.inputSet.get().create(self._getPath())
+
         if self.operation.get()==0:
             # Filter columns
             referenceValue = self.filterValue.get()
             value = self.inputSet.get().getFirstItem().getAttributeValue(self.filterColumn.get())
+
             if isinstance(value,float):
                 referenceValue = float(referenceValue)
             elif isinstance(value,int):
                 referenceValue = int(referenceValue)
+
+            filterOp = self.filterOp.get()
+            if filterOp == 6:
+                referenceValue2 = self.filterValue2.get()
+
+                if isinstance(value, float):
+                    referenceValue2 = float(referenceValue2)
+                elif isinstance(value, int):
+                    referenceValue2 = int(referenceValue2)
 
             for oldEntry in self.inputSet.get():
                 value = oldEntry.getAttributeValue(self.filterColumn.get())
@@ -89,7 +104,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
                 elif isinstance(value, Integer):
                     value = int(value)
 
-                filterOp = self.filterOp.get()
+
                 add = False
                 if filterOp == 0: # ==
                     add = value==referenceValue
@@ -103,17 +118,19 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     add = value <= referenceValue
                 elif filterOp == 5:  # !=
                     add = value != referenceValue
-                elif filterOp == 6:  #startswith
+                elif filterOp == 6:  # between
+                    add = (value <= referenceValue and value >= referenceValue2)
+                elif filterOp == 7:  #startswith
                     add = value.startswith(referenceValue)
-                elif filterOp == 7:  # endswith
+                elif filterOp == 8:  # endswith
                     add = value.endswith(referenceValue)
-                elif filterOp == 8:  # contains
+                elif filterOp == 9:  # contains
                     add = referenceValue in value
-                elif filterOp == 9:  # does not startswith
+                elif filterOp == 10:  # does not startswith
                     add = not (value.startswith(referenceValue))
-                elif filterOp == 10:  # does not endswith
+                elif filterOp == 11:  # does not endswith
                     add = not (value.endswith(referenceValue))
-                elif filterOp == 11:  # does not contains
+                elif filterOp == 12:  # does not contains
                     add = not (referenceValue in value)
                 if add:
                     newEntry = self.inputSet.get().ITEM_TYPE()
@@ -134,6 +151,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
                 outputSet.append(newEntry)
 
         elif self.operation.get()==2:
+            # Unique
             found={}
             for oldEntry in self.inputSet.get():
                 value = oldEntry.getAttributeValue(self.filterColumn.get())
@@ -144,6 +162,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     outputSet.append(newEntry)
 
         elif self.operation.get()>=3 and self.operation.get()<=6:
+            # Top N, Bottom N,Top %, Bottom %
             V = []
             for entry in self.inputSet.get():
                 V.append(entry.getAttributeValue(self.filterColumn.get()))
@@ -170,6 +189,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     outputSet.append(newEntry)
 
         elif self.operation.get()==7:
+            # Count the number of entries that are the same
             count={}
             for oldEntry in self.inputSet.get():
                 value = oldEntry.getAttributeValue(self.filterColumn.get())
@@ -186,6 +206,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
                 outputSet.append(newEntry)
 
         elif self.operation.get()==8:
+            # Intersection between 2 Sets
             secondSet={}
             for entry in self.secondSet.get():
                 value = entry.getAttributeValue(self.filterColumn.get())
@@ -201,6 +222,7 @@ class ProtBioinformaticsListOperate(EMProtocol):
                     outputSet.append(newEntry)
 
         elif self.operation.get()==9:
+            # Sort
             V = []
             newEntries = []
             for entry in self.inputSet.get():
