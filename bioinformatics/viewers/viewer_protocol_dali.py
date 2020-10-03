@@ -80,43 +80,6 @@ class ProtBioinformaticsDaliViewer(ProtocolViewer):
 
             if not hasattr(self.protocol,"outputIds"):
                 for fn in Path(fnBaseDir).rglob('*.txt'):
-                    self.constructOutput(str(fn))
+                    self.protocol.constructOutput(str(fn), self.protocol)
         return views
 
-    def constructOutput(self,fnTxt):
-        fnDir, fnResults=os.path.split(fnTxt)
-        tokens=fnResults.split('-')
-        if len(tokens)>1:
-            subset=tokens[1].split('.')[0]
-        else:
-            subset=""
-
-        outputSet=SetOfDatabaseID.create(path=self._getPath(),suffix=subset)
-        for line in open(fnTxt,"r"):
-            line=line.strip()
-            if line=="":
-                continue
-            elif line.startswith("# Structural equivalences"):
-                break
-            elif line.startswith("#"):
-                continue
-            else:
-                tokens=line.split()
-                pdbId=DatabaseID()
-                tokens2=tokens[1].split('-')
-                pdbId.setDatabase("pdb")
-                pdbId.setDbId(tokens[1])
-                pdbId._pdbId=pwobj.String(tokens2[0])
-                if len(tokens2)>1:
-                    pdbId._chain=pwobj.String(tokens2[1])
-                pdbId._PDBLink=pwobj.String("https://www.rcsb.org/structure/%s"%tokens2[0])
-                pdbId._DaliZscore=pwobj.Float(float(tokens[2]))
-                pdbId._DaliRMSD=pwobj.Float(float(tokens[3]))
-                pdbId._DaliSuperpositionLength=pwobj.Integer(int(tokens[4]))
-                pdbId._DaliSeqLength=pwobj.Integer(int(tokens[5]))
-                pdbId._DaliSeqIdentity=pwobj.Float(float(tokens[6]))
-                pdbId._DaliDescription=pwobj.String(" ".join(tokens[7:]))
-                outputSet.append(pdbId)
-        outputDict = {'outputDatabaseIds%s' % subset: outputSet}
-        self.protocol._defineOutputs(**outputDict)
-        self.protocol._defineSourceRelation(self.protocol.inputStructure, outputSet)
