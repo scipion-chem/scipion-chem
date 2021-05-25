@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# *              Alberto M. Parra Pérez (amparraperez@gmail.com)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -73,8 +74,12 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
                            "actual path.\n\n"
                            "You may create small molecules from Smiles (.smi), Tripos Mol2 (.mol2), "
                            "SDF (.sdf), Maestro (.mae, .maegz), or PDB blocks (.pdb)")
+
         form.addParam('filePath', PathParam, condition='not multiple',
-                      label='File', help='Allowed formats: CSV smiles (ID, compound; this is downloaded from ZINC)')
+                      label='File', help='Allowed formats: \n '
+                                         ' - CSV smiles (ID, compound; this is downloaded from ZINC) \n'
+                                         ' - Mol2 (Multiple mol2 file) \n'
+                                         ' - SDF (Multiple sdf file)')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -84,38 +89,88 @@ class ProtBioinformaticsImportSmallMolecules(EMProtocol):
 
         if not self.multiple.get():
 
-            fnSmall = self._getExtraPath(os.path.split(self.filePath.get())[1]) #Puse Extra porque luego toma de ese folder
+            fnSmall = self._getExtraPath(os.path.split(self.filePath.get())[1])
             copyFile(self.filePath.get(), fnSmall)
 
-            #     copyFile(self.filePath.get(),self._getPath(os.path.split(self.filePath.get())[1]))
-            fh = open(self.filePath.get())
-            for line in fh.readlines():
-                tokens = line.split(',')
-                if len(tokens)==2:
-                    fhSmile = open(self._getExtraPath(tokens[0].strip()+".smi"),'w')
-                    fhSmile.write(tokens[1].strip()+"\n")
-                    fhSmile.close()
+            if fnSmall.endswith(".mol2"): # Multiple mol2
+                with open(fnSmall) as f:
+                    lines = f.readlines()
+                    i = 0
+                    for line in lines:
+                        if line.startswith("#"):
+                            continue
 
-        else: # Multiple:true, cuando hay más de un fichero que es necesario cargar en el objeto set
+                        if line.startswith("@<TRIPOS>MOLECULE"):
+                            zincID = lines[i+1].split()[0]
+                            fname_small = self._getExtraPath("%s.mol2" %zincID)
+                            f_small = open(fname_small, 'w+')
+                            f_small.write(line)
+
+                        f_small.write(line)
+                        try:
+                            if lines[i+1].startswith("@<TRIPOS>MOLECULE"):
+                                f_small.close()
+                        except:
+                            f_small.close()
+
+                        i += 1
+
+                os.remove(fnSmall)
+
+
+            elif fnSmall.endswith(".sdf"): # Multiple sdf
+                with open(fnSmall) as f:
+                    lines = f.readlines()
+                    lines2write = []
+                    i = 0
+                    for line in lines:
+                        lines2write.append(i)
+
+                        if line.startswith("$$$$"):
+                            zincID = lines[i-5].split()[0]
+                            fname_small = self._getExtraPath("%s.sdf" % zincID)
+                            f_small = open(fname_small, 'w+')
+                            for l in lines2write:
+                                f_small.write(lines[l])
+
+                            lines2write = []
+                            f_small.close()
+
+                        i += 1
+
+                os.remove(fnSmall)
+
+            else:
+                fh = open(self.filePath.get())
+                for line in fh.readlines():
+                    tokens = line.split(',')
+                    if len(tokens)==2:
+                        fhSmile = open(self._getExtraPath(tokens[0].strip()+".smi"),'w')
+                        fhSmile.write(tokens[1].strip()+"\n")
+                        fhSmile.close()
+                fh.close()
+
+        else:
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
                 fnSmall = self._getExtraPath(os.path.split(filename)[1])
                 copyFile(filename, fnSmall)
 
         outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
-        # _getPath() Return a path inside the workingDir
 
-        for fnSmall in glob.glob(self._getExtraPath("*")): # _getExtraPath() Return a path inside the extra folder Dir
+
+        for fnSmall in glob.glob(self._getExtraPath("*")):
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
 
-            if not fnSmall.endswith('.mae') or not fnSmall.endswith('.maegz'):  #El problema de several format está aquí pero creo que era por conda. He cambiado and por or pero ahora han dejado de verse estructuras (noo sé si ha sido antes o despues)
-                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-                fnOut = self._getExtraPath("%s.png" % fnRoot)
-                args = Plugin.getPluginHome('utils/rdkitUtils.py') + " draw %s %s" % (fnSmall, fnOut)
-                try:
-                    Plugin.runRDKit(self, "python3", args)
-                    smallMolecule._PDBLigandImage = pwobj.String(fnOut)
-                except:
-                    smallMolecule._PDBLigandImage = pwobj.String("Not available")
+            if len(os.listdir(self._getExtraPath())) <= 100: # costly
+                if not fnSmall.endswith('.mae') or not fnSmall.endswith('.maegz'):
+                    fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
+                    fnOut = self._getExtraPath("%s.png" % fnRoot)
+                    args = Plugin.getPluginHome('utils/rdkitUtils.py') + " draw %s %s" % (fnSmall, fnOut)
+                    try:
+                        Plugin.runRDKit(self, "python3", args)
+                        smallMolecule._PDBLigandImage = pwobj.String(fnOut)
+                    except:
+                        smallMolecule._PDBLigandImage = pwobj.String("Not available")
 
             outputSmallMolecules.append(smallMolecule)
         self._defineOutputs(outputSmallMols=outputSmallMolecules)
