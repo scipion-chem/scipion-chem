@@ -79,6 +79,15 @@ class SmallMolecule(data.EMObject):
     def getFileName(self):
         return self.smallMoleculeFile.get()
 
+    def getConformersFileName(self):
+        return self._ConformersFile.get()
+
+    def getParamsFileName(self):
+        return self._ParamsFile.get()
+
+    def getPDBFileName(self):
+        return self._PDBFile.get()
+
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
     ITEM_TYPE = SmallMolecule
