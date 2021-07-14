@@ -27,7 +27,7 @@
 import os
 from pathlib import Path
 
-from pwchem.protocols.protocol_ZL_predict import ProtBioinformaticsZLPredict
+from pwchem.protocols.protocol_ZL_predict import ProtChemZLPredict
 from pwchem import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import LabelParam, StringParam
@@ -36,10 +36,10 @@ from pwem.objects.data import AtomStruct
 
 CQUARKSERVER="zhanglab.ccmb.med.umich.edu"
 
-class ProtBioinformaticsZLPredictViewer(ProtocolViewer):
+class ProtChemZLPredictViewer(ProtocolViewer):
     """ Visualize the output of protocol Zhang Lab """
     _label = 'viewer Zhang lab'
-    _targets = [ProtBioinformaticsZLPredict]
+    _targets = [ProtChemZLPredict]
     _environments = [DESKTOP_TKINTER]
 
     def __init__(self, **args):

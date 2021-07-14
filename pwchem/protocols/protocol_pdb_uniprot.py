@@ -34,7 +34,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import (PointerParam)
 from pwchem.objects import DatabaseID, SetOfDatabaseID
 
-class ProtBioinformaticsPDBUniprot(EMProtocol):
+class ProtChemPDBUniprot(EMProtocol):
     """Query PDB for Uniprot sequences related to these proteins"""
     _label = 'pdb -> uniprot'
 

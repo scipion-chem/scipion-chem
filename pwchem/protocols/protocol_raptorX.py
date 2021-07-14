@@ -29,7 +29,7 @@ from pyworkflow.protocol.params import (StringParam, PointerParam)
 from pwem.protocols import EMProtocol
 from pwchem.utils.utils import *
 
-class ProtBioinformaticsRaptorX(EMProtocol):
+class ProtChemRaptorX(EMProtocol):
     """This is a wrapper to http://raptorx.uchicago.edu/StructPredV2/predict/. The underlying program
        predicts the 3D structure of a protein from its aminoacid sequence"""
     _label = 'raptorX'

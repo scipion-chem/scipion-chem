@@ -33,7 +33,7 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam
 
-class ProtBioinformaticsPubChemSearch(EMProtocol):
+class ProtChemPubChemSearch(EMProtocol):
     """Add the best batching entry from Pubchem https://pubchem.ncbi.nlm.nih.gov/"""
     _label = 'PubChem'
 

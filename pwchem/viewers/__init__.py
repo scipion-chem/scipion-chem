@@ -1,4 +1,4 @@
-from .viewer_protocol_dali import ProtBioinformaticsDaliViewer
-from .viewer_protocol_ZL_predict import ProtBioinformaticsZLPredictViewer
-from .viewer_protocol_raptorX import ProtBioinformaticsRaptorXViewer
+from .viewer_protocol_dali import ProtChemDaliViewer
+from .viewer_protocol_ZL_predict import ProtChemZLPredictViewer
+from .viewer_protocol_raptorX import ProtChemRaptorXViewer
 from .viewers_data import BioinformaticsDataViewer

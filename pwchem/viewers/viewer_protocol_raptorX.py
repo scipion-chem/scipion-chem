@@ -27,7 +27,7 @@
 import glob
 from pathlib import Path
 
-from pwchem.protocols.protocol_raptorX import ProtBioinformaticsRaptorX
+from pwchem.protocols.protocol_raptorX import ProtChemRaptorX
 from pwchem import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import LabelParam, StringParam
@@ -36,10 +36,10 @@ from pwem.objects.data import AtomStruct
 
 SERVERDIR = 'raptorx.uchicago.edu'
 
-class ProtBioinformaticsRaptorXViewer(ProtocolViewer):
+class ProtChemRaptorXViewer(ProtocolViewer):
     """ Visualize the output of protocol Raptor X"""
     _label = 'viewer raptor X'
-    _targets = [ProtBioinformaticsRaptorX]
+    _targets = [ProtChemRaptorX]
     _environments = [DESKTOP_TKINTER]
 
     def __init__(self, **args):

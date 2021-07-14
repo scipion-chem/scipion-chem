@@ -31,7 +31,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.object import Float, Integer
 from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, IntParam, FloatParam
 
-class ProtBioinformaticsExportCSV(EMProtocol):
+class ProtChemExportCSV(EMProtocol):
     """Export a set as a csv. It is located in the Run directory"""
     _label = 'export csv'
 

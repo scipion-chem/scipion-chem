@@ -31,7 +31,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.object import Float, Integer
 from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, IntParam, FloatParam
 
-class ProtBioinformaticsListOperate(EMProtocol):
+class ProtChemListOperate(EMProtocol):
     """Filter a set by a column value or keep just a few columns"""
     _label = 'operate set'
 

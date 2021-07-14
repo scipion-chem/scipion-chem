@@ -33,7 +33,7 @@ import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam
 
-class ProtBioinformaticsZINCFilter(EMProtocol):
+class ProtChemZINCFilter(EMProtocol):
     """Filter a set of small molecules by being in all selected catalogs of ZINC.
        See https://zinc15.docking.org/substances/subsets/"""
     _label = 'ZINC filter'

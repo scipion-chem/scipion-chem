@@ -29,7 +29,7 @@ from pyworkflow.protocol.params import (EnumParam, PointerParam)
 from pwem.protocols import EMProtocol
 from pwchem.utils.utils import *
 
-class ProtBioinformaticsZLPredict(EMProtocol):
+class ProtChemZLPredict(EMProtocol):
     """Query Zhang-Lab servers (https://zhanglab.ccmb.med.umich.edu/) with an aminoacid sequence.
     The server returns several proposals of 3D structure. """
     _label = 'ZL predict'

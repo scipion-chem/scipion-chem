@@ -24,18 +24,18 @@
 # *
 # **************************************************************************
 
-from .protocol_dali import ProtBioinformaticsDali
-from .protocol_pdb_smallMolecules import ProtBioinformaticsPDBSmallMolecules
-from .protocol_listIDs_operate import ProtBioinformaticsListIDOperate
-from .protocol_list_operate import ProtBioinformaticsListOperate
-from .protocol_smallMolecules_pdb import ProtBioinformaticsSmallMoleculesPDB
-from .protocol_pdb_uniprot import ProtBioinformaticsPDBUniprot
-from .protocol_uniprot_download import ProtBioinformaticsUniprotDownload
-from .protocol_uniprot_crossref import ProtBioinformaticsUniprotCrossRef
-from .protocol_ena_download import ProtBioinformaticsEnaDownload
-from .protocol_ZL_predict import ProtBioinformaticsZLPredict
-from .protocol_import_smallMolecules import ProtBioinformaticsImportSmallMolecules
-from .protocol_raptorX import ProtBioinformaticsRaptorX
-from .protocol_ZINC_filter import ProtBioinformaticsZINCFilter
-from .protocol_pubchem_search import ProtBioinformaticsPubChemSearch
-from .protocol_export_csv import ProtBioinformaticsExportCSV
+from .protocol_dali import ProtChemDali
+from .protocol_pdb_smallMolecules import ProtChemPDBSmallMolecules
+from .protocol_listIDs_operate import ProtChemListIDOperate
+from .protocol_list_operate import ProtChemListOperate
+from .protocol_smallMolecules_pdb import ProtChemSmallMoleculesPDB
+from .protocol_pdb_uniprot import ProtChemPDBUniprot
+from .protocol_uniprot_download import ProtChemUniprotDownload
+from .protocol_uniprot_crossref import ProtChemUniprotCrossRef
+from .protocol_ena_download import ProtChemEnaDownload
+from .protocol_ZL_predict import ProtChemZLPredict
+from .protocol_import_smallMolecules import ProtChemImportSmallMolecules
+from .protocol_raptorX import ProtChemRaptorX
+from .protocol_ZINC_filter import ProtChemZINCFilter
+from .protocol_pubchem_search import ProtChemPubChemSearch
+from .protocol_export_csv import ProtChemExportCSV

@@ -34,7 +34,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam
 from pwchem.objects import DatabaseID, SetOfDatabaseID, ProteinSequenceFile
 
-class ProtBioinformaticsUniprotDownload(EMProtocol):
+class ProtChemUniprotDownload(EMProtocol):
     """Download the Fasta files of a set of uniprotId's"""
     _label = 'uniprot download'
 

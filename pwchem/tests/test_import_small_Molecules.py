@@ -28,7 +28,7 @@
 
 import os
 from pyworkflow.tests import *
-from pwchem.protocols import ProtBioinformaticsImportSmallMolecules as PISmallM
+from pwchem.protocols import ProtChemImportSmallMolecules as PISmallM
 
 
 class TestImportBase(BaseTest):

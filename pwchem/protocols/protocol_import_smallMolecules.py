@@ -36,7 +36,7 @@ from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
 
-class ProtBioinformaticsImportSmallMolecules(EMProtocol):
+class ProtChemImportSmallMolecules(EMProtocol):
     """Import small molecules from a directory. Each molecule should be in a separate file.
        Smiles (.smi), SDF (.sdf), Tripos Mol2 (.mol2), Maestro (.mae, .maegz), PDB blocks (.pdb)
        are accepted.

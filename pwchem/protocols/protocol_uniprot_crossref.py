@@ -34,7 +34,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam, EnumParam
 from pwchem.objects import DatabaseID, SetOfDatabaseID
 
-class ProtBioinformaticsUniprotCrossRef(EMProtocol):
+class ProtChemUniprotCrossRef(EMProtocol):
     """Extract cross references from uniprot"""
     _label = 'uniprot crossref'
 
