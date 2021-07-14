@@ -27,7 +27,7 @@ OR
 
 .. code-block::
 
-            git clone https://github.com/scipion-em/scipion-chem.git
+            git clone https://github.com/scipion-chem/scipion-chem.git
 
 2. Install:
 

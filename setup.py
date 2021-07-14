@@ -21,9 +21,9 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='scipion-em-pwchem',
+    name='scipion-chem',
     version='3.0.0',
-    description='A Scipion plugin for atomic models utilities in the web',
+    description='Base Scipion plugin defining objects and protocols for CHEMoinformatics',
     long_description=long_description,
     url='https://github.com/scipion-chem/scipion-chem',
     author='Carlos Oscar Sorzano',
