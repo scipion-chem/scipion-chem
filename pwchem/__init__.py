@@ -104,8 +104,8 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getPluginHome(cls, path=""):
-        import bioinformatics
-        fnDir = os.path.split(bioinformatics.__file__)[0]
+        import pwchem
+        fnDir = os.path.split(pwchem.__file__)[0]
         return os.path.join(fnDir,path)
 
     @classmethod

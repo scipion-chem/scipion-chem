@@ -31,8 +31,8 @@ import urllib.request
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import (PointerParam)
-from bioinformatics.objects import DatabaseID, SetOfDatabaseID
-from bioinformatics import Plugin
+from pwchem.objects import DatabaseID, SetOfDatabaseID
+from pwchem import Plugin
 
 class ProtBioinformaticsPDBSmallMolecules(EMProtocol):
     """Query PDB for small molecules of a list of PDB ids"""

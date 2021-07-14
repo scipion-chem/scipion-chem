@@ -29,7 +29,7 @@ from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, Boo
 
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler
-from bioinformatics import Plugin as bioinformatics_plugin
+from pwchem import Plugin as bioinformatics_plugin
 from pwem.objects.data import AtomStruct
 
 class ProtBioinformaticsADTPrepare(EMProtocol):

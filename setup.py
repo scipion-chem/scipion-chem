@@ -21,7 +21,7 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setup(
-    name='scipion-em-bioinformatics',
+    name='scipion-em-pwchem',
     version='3.0.0',
     description='A Scipion plugin for atomic models utilities in the web',
     long_description=long_description,
@@ -33,9 +33,9 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'bioinformatics': ['tool.png'],
+       'pwchem': ['tool.png'],
     },
     entry_points={
-        'pyworkflow.plugin': 'bioinformatics = bioinformatics'
+        'pyworkflow.plugin': 'pwchem = pwchem'
     }
 )

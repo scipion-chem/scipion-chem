@@ -28,8 +28,8 @@
 
 import os, csv
 from pyworkflow.tests import *
-from bioinformatics.protocols import ProtBioinformaticsImportSmallMolecules as PISmallM
-from bioinformatics.protocols import ProtBioinformaticsExportCSV as PEcsv
+from pwchem.protocols import ProtBioinformaticsImportSmallMolecules as PISmallM
+from pwchem.protocols import ProtBioinformaticsExportCSV as PEcsv
 
 
 class TestImportBase(BaseTest):

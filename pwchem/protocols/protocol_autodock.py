@@ -29,9 +29,9 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam, IntParam, FloatParam
 import pyworkflow.object as pwobj
-from bioinformatics import Plugin as bioinformatics_plugin
+from pwchem import Plugin as bioinformatics_plugin
 from pyworkflow.utils.path import makePath, createLink, cleanPattern
-from bioinformatics.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 class ProtBioinformaticsAutodock(EMProtocol):
     """Perform a docking experiment with autodock. See the help at

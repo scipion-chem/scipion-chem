@@ -27,8 +27,8 @@
 import os
 from pathlib import Path
 
-from bioinformatics.protocols.protocol_ZL_predict import ProtBioinformaticsZLPredict
-from bioinformatics import Plugin
+from pwchem.protocols.protocol_ZL_predict import ProtBioinformaticsZLPredict
+from pwchem import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import LabelParam, StringParam
 import pyworkflow.utils as pwutils

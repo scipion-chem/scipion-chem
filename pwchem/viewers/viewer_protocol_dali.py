@@ -28,8 +28,8 @@ import os
 from pathlib import Path
 import webbrowser
 
-from bioinformatics.protocols.protocol_dali import ProtBioinformaticsDali
-from bioinformatics.objects import DatabaseID, SetOfDatabaseID
+from pwchem.protocols.protocol_dali import ProtBioinformaticsDali
+from pwchem.objects import DatabaseID, SetOfDatabaseID
 import pyworkflow.object as pwobj
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import StringParam

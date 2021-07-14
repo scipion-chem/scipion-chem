@@ -31,7 +31,7 @@ from pwem.protocols import EMProtocol
 from pwem.convert.sequence import sequenceLength
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam
-from bioinformatics.objects import DatabaseID, SetOfDatabaseID, NucleotideSequenceFile
+from pwchem.objects import DatabaseID, SetOfDatabaseID, NucleotideSequenceFile
 
 class ProtBioinformaticsEnaDownload(EMProtocol):
     """Download the Fasta files of a set of enaId's"""

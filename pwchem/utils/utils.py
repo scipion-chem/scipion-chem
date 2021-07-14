@@ -28,7 +28,7 @@ from Bio import SeqIO
 
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
-from bioinformatics.objects import SetOfDatabaseID
+from pwchem.objects import SetOfDatabaseID
 
 def copyFastaSequenceAndRead(protocol):
     outFileName = protocol._getExtraPath("sequence.fasta")

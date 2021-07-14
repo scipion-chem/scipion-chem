@@ -32,7 +32,7 @@ import urllib.request
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam, EnumParam
-from bioinformatics.objects import DatabaseID, SetOfDatabaseID
+from pwchem.objects import DatabaseID, SetOfDatabaseID
 
 class ProtBioinformaticsUniprotCrossRef(EMProtocol):
     """Extract cross references from uniprot"""

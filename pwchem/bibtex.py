@@ -27,7 +27,7 @@
 _bibtexStr = """
 @Article{Cock2009,
    Author="Cock, P. J.  and Antao, T.  and Chang, J. T.  and Chapman, B. A.  and Cox, C. J.  and Dalke, A.  and Friedberg, I.  and Hamelryck, T.  and Kauff, F.  and Wilczynski, B.  and de Hoon, M. J. ",
-   Title="{{B}iopython: freely available {P}ython tools for computational molecular biology and bioinformatics}",
+   Title="{{B}iopython: freely available {P}ython tools for computational molecular biology and pwchem}",
    Journal="Bioinformatics",
    Year="2009",
    Volume="25",

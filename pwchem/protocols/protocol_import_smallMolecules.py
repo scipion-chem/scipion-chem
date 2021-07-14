@@ -33,8 +33,8 @@ from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
-from bioinformatics.objects import SmallMolecule, SetOfSmallMolecules
-from bioinformatics import Plugin
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem import Plugin
 
 class ProtBioinformaticsImportSmallMolecules(EMProtocol):
     """Import small molecules from a directory. Each molecule should be in a separate file.

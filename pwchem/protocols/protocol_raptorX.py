@@ -27,7 +27,7 @@ import os
 
 from pyworkflow.protocol.params import (StringParam, PointerParam)
 from pwem.protocols import EMProtocol
-from bioinformatics.utils.utils import *
+from pwchem.utils.utils import *
 
 class ProtBioinformaticsRaptorX(EMProtocol):
     """This is a wrapper to http://raptorx.uchicago.edu/StructPredV2/predict/. The underlying program

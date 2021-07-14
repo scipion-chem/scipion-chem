@@ -26,7 +26,7 @@
 import os
 import sys
 
-from bioinformatics.objects import SetOfDatabaseID, DatabaseID
+from pwchem.objects import SetOfDatabaseID, DatabaseID
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import AtomicStructHandler

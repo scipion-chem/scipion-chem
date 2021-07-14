@@ -25,7 +25,7 @@
 import pyworkflow.viewer as pwviewer
 import pwem.viewers.views as views
 import pwem.viewers.showj as showj
-import bioinformatics.objects
+import pwchem.objects
 
 class SetOfDatabaseIDView(views.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
@@ -43,11 +43,11 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
-        bioinformatics.objects.SetOfDatabaseID,
-        bioinformatics.objects.ProteinSequenceFile,
-        bioinformatics.objects.NucleotideSequenceFile,
-        bioinformatics.objects.SetOfSmallMolecules,
-        bioinformatics.objects.SetOfBindingSites
+        pwchem.objects.SetOfDatabaseID,
+        pwchem.objects.ProteinSequenceFile,
+        pwchem.objects.NucleotideSequenceFile,
+        pwchem.objects.SetOfSmallMolecules,
+        pwchem.objects.SetOfBindingSites
     ]
 
     def __init__(self, **kwargs):
@@ -63,15 +63,15 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         cls = type(obj)
 
         # For now handle both types of SetOfTiltSeries together
-        if issubclass(cls, bioinformatics.objects.SetOfDatabaseID):
+        if issubclass(cls, pwchem.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, bioinformatics.objects.SetOfSmallMolecules):
+        elif issubclass(cls, pwchem.objects.SetOfSmallMolecules):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, bioinformatics.objects.SetOfBindingSites):
+        elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, bioinformatics.objects.ProteinSequenceFile):
+        elif issubclass(cls, pwchem.objects.ProteinSequenceFile):
             views.append(self.textView([obj.getFileName()]))
-        elif issubclass(cls, bioinformatics.objects.NucleotideSequenceFile):
+        elif issubclass(cls, pwchem.objects.NucleotideSequenceFile):
             views.append(self.textView([obj.getFileName()]))
 
         return views

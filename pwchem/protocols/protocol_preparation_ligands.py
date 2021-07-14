@@ -28,7 +28,7 @@ import os
 
 from pyworkflow.protocol.params import PointerParam
 from .protocol_preparation_receptor import ProtBioinformaticsADTPrepare
-from bioinformatics.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 
 class ProtBioinformaticsADTPrepareLigands(ProtBioinformaticsADTPrepare):
         """Prepare ligands using Autodocking Tools from MGL"""

@@ -27,8 +27,8 @@
 import glob
 from pathlib import Path
 
-from bioinformatics.protocols.protocol_raptorX import ProtBioinformaticsRaptorX
-from bioinformatics import Plugin
+from pwchem.protocols.protocol_raptorX import ProtBioinformaticsRaptorX
+from pwchem import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import LabelParam, StringParam
 import pyworkflow.utils as pwutils

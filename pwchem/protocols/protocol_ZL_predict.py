@@ -27,7 +27,7 @@ import os
 
 from pyworkflow.protocol.params import (EnumParam, PointerParam)
 from pwem.protocols import EMProtocol
-from bioinformatics.utils.utils import *
+from pwchem.utils.utils import *
 
 class ProtBioinformaticsZLPredict(EMProtocol):
     """Query Zhang-Lab servers (https://zhanglab.ccmb.med.umich.edu/) with an aminoacid sequence.

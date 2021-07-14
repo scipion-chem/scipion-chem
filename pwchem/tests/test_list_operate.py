@@ -31,8 +31,8 @@ from pathlib import Path
 from pyworkflow.tests import *
 from pyworkflow.protocol import *
 from pwem.protocols.protocol_import import ProtImportPdb
-from bioinformatics.protocols import ProtBioinformaticsListOperate as LOperate
-from bioinformatics.protocols import ProtBioinformaticsDali as DALI
+from pwchem.protocols import ProtBioinformaticsListOperate as LOperate
+from pwchem.protocols import ProtBioinformaticsDali as DALI
 
 
 class TestImportBase(BaseTest):
