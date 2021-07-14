@@ -36,9 +36,6 @@ from .protocol_ena_download import ProtBioinformaticsEnaDownload
 from .protocol_ZL_predict import ProtBioinformaticsZLPredict
 from .protocol_import_smallMolecules import ProtBioinformaticsImportSmallMolecules
 from .protocol_raptorX import ProtBioinformaticsRaptorX
-from .protocol_preparation_receptor import ProtBioinformaticsADTPrepareReceptor
-from .protocol_preparation_ligands import ProtBioinformaticsADTPrepareLigands
 from .protocol_ZINC_filter import ProtBioinformaticsZINCFilter
-from .protocol_autodock import ProtBioinformaticsAutodock
 from .protocol_pubchem_search import ProtBioinformaticsPubChemSearch
 from .protocol_export_csv import ProtBioinformaticsExportCSV
