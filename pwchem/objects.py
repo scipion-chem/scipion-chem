@@ -119,3 +119,86 @@ class AutodockGrid(data.EMFile):
     """A search grid in the file format of Autodock"""
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
+
+class proteinPocket(data.EMFile):
+  """ Represent a pocket file """
+
+  def __init__(self, filename=None, **kwargs):
+    data.EMFile.__init__(self, filename, **kwargs)
+
+class fpocketPocket(proteinPocket):
+  """ Represent a pocket file from fpocket"""
+  def __init__(self, filename=None, **kwargs):
+    proteinPocket.__init__(self, filename, **kwargs)
+    self.properties, self.pocketId = self.parseFile(filename)
+    self.setObjId(self.pocketId)
+
+  def __str__(self):
+    s = 'Fpocket pocket {}\nFile: {}'.format(self.pocketId, self.getFileName())
+    return s
+
+  def getVolume(self):
+    return self.properties['Real volume (approximation)']
+
+  def getPocketScore(self):
+    return self.properties['Pocket Score']
+
+  def getNumberOfVertices(self):
+    return self.properties['Number of V. Vertices']
+
+  def parseFile(self, filename):
+    props = {}
+    ini, parse = 'HEADER Information', False
+    with open(filename) as f:
+      for line in f:
+        if line.startswith(ini):
+          parse=True
+          pocketId = int(line.split()[-1].replace(':', ''))
+        elif line.startswith('HEADER') and parse:
+          name = line.split('-')[1].split(':')[0]
+          val = line.split(':')[-1]
+          props[name.strip()] = float(val.strip())
+    return props, pocketId
+
+class autoLigandPocket(proteinPocket):
+    """ Represent a pocket file from autoLigand"""
+
+    def __init__(self, filename=None, resultsFile=None, **kwargs):
+        proteinPocket.__init__(self, filename, **kwargs)
+        print(filename)
+        print(filename.split('out'))
+        print(filename.split('out')[1].split('.'))
+        self.pocketId = int(filename.split('out')[1].split('.')[0])
+        self.properties = self.parseFile(resultsFile)
+        self.setObjId(self.pocketId)
+
+    def __str__(self):
+        s = 'Fpocket pocket {}\nFile: {}'.format(self.pocketId, self.getFileName())
+        return s
+
+    def getVolume(self):
+        return self.properties['Total Volume']
+
+    def getEnergyPerVol(self):
+        return self.properties['Total Energy per Vol']
+
+    def parseFile(self, filename):
+        props, i = {}, 1
+        with open(filename) as f:
+            for line in f:
+                if i==self.pocketId:
+                    line = line.split(',')
+                    print(line)
+                    #Volume
+                    props[line[1].split('=')[0].strip()] = float(line[1].split('=')[1].strip())
+                    #Energy/vol
+                    props[line[2].strip()] = float(line[3].split('=')[1].strip())
+
+        return props
+
+class SetOfPockets(data.EMSet):
+    ITEM_TYPE = proteinPocket
+
+    def __str__(self):
+      s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+      return s
