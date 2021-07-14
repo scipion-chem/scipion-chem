@@ -25,7 +25,7 @@ setup(
     version='3.0.0',
     description='A Scipion plugin for atomic models utilities in the web',
     long_description=long_description,
-    url='https://github.com/scipion-em/scipion-em-bioinformatics',
+    url='https://github.com/scipion-chem/scipion-chem',
     author='Carlos Oscar Sorzano',
     author_email='scipion@cnb.csic.es',
     keywords='scipion pdb scipion-3',
