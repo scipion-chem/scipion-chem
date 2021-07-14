@@ -1,20 +1,21 @@
 ================================
-Atom_struct_utils scipion plugin
+CHEM scipion plugin
 ================================
 
-Atomic model utilties on the web
+Base Scipion plugin defining objects and protocols for CHEMoinformatics with atomic model utilties on the web
 
 ===================
 Install this plugin
 ===================
 
-You will need to use `3.0.0 <https://github.com/I2PC/scipion/releases/tag/v3.0>`_ version of Scipion to run these protocols. To install the plugin, you have two options:
+You will need to use `3.0.0 <https://github.com/I2PC/scipion/releases/tag/v3.0>`_ version of Scipion
+to run these protocols. To install the plugin, you have two options:
 
 - **Stable version**  
 
 .. code-block:: 
 
-      scipion installp -p scipion-em-bioinformatics
+      scipion installp -p scipion-chem
       
 OR
 
@@ -26,13 +27,13 @@ OR
 
 .. code-block::
 
-            git clone https://github.com/scipion-em/scipion-em-bioinformatics.git
+            git clone https://github.com/scipion-em/scipion-chem.git
 
 2. Install:
 
 .. code-block::
 
-            scipion installp -p path_to_scipion-em-bioinformatics --devel
+            scipion installp -p path_to_scipion-chem --devel
 
 - **Binary files** 
 
