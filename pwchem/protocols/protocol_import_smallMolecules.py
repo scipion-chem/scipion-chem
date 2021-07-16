@@ -155,7 +155,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                 fnSmall = self._getExtraPath(os.path.split(filename)[1])
                 copyFile(filename, fnSmall)
 
-        outputSmallMolecules = SetOfSmallMolecules().create(path=self._getPath(),suffix='SmallMols')
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
 
 
         for fnSmall in glob.glob(self._getExtraPath("*")):
