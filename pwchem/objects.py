@@ -115,14 +115,14 @@ class SetOfBindingSites(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
-class proteinPocket(data.EMFile):
+class ProteinPocket(data.EMFile):
   """ Represent a pocket file """
 
   def __init__(self, filename=None, **kwargs):
     data.EMFile.__init__(self, filename, **kwargs)
 
 class SetOfPockets(data.EMSet):
-    ITEM_TYPE = proteinPocket
+    ITEM_TYPE = ProteinPocket
 
     def __str__(self):
       s = '{} ({} items)'.format(self.getClassName(), self.getSize())
