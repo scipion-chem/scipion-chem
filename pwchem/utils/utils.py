@@ -52,3 +52,13 @@ def checkInputHasFasta(protocol):
         if not hasattr(obj, "_uniprotFile"):
             errors.append("The input list does not have a sequence file")
     return errors
+
+def writeRawPDB(pdbFile, outFile, ter=True):
+    '''Creates a new pdb with only the ATOM and HETATM lines'''
+    with open(outFile, 'w') as f:
+        with open(pdbFile) as fIn:
+            for line in fIn:
+                if line.startswith('ATOM') or line.startswith('HETATM'):
+                    f.write(line)
+                elif ter and line.startswith('TER'):
+                    f.write(line)
