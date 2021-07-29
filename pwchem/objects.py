@@ -252,6 +252,12 @@ class ProteinPocket(data.EMFile):
         cHull = spatial.ConvexHull(coords)
         return cHull.volume
 
+    def getPocketBox(self):
+        '''Return the coordinates of the 2 corners determining the box (ortogonal to axis) where the pocket fits in
+        For example: ([-1,0,2], [2,5,4])'''
+        coords = np.array(self.getPointsCoords())
+        return coords.min(axis=0), coords.max(axis=0)
+
     #Utils functions
     def encodeIds(self, idList):
         return '-'.join(idList)
