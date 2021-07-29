@@ -211,17 +211,13 @@ class ProteinPocket(data.EMFile):
                     contactAtoms.append(proteinAtoms[i])
         return contactAtoms
 
-    def calculateMassCenterBase(self, weights=None):
+    def calculateMassCenter(self, weights=None):
         '''Calculates the center of mass of a set of points: [(x,y,z), (x,y,z),...]
         A weight for each point can be specified'''
         coords = self.getPointsCoords()
         return list(np.average(coords, axis=0, weights=weights))
 
-    def calculateMassCenter(self):
-        #To be replaced by son functions which use weights
-        return self.calculateMassCenterBase()
-
-    def getDiameterBase(self, radius=[]):
+    def getDiameter(self, radius=[]):
         '''Returning max distance of points found in the convex hull
         Possibility of adding radius to each row and column to calculate the diameter
         on spheres instead of points'''
@@ -234,10 +230,6 @@ class ProteinPocket(data.EMFile):
         i, j = np.unravel_index(dist_mat.argmax(), dist_mat.shape)
 
         return dist_mat[i, j]
-
-    def getDiameter(self):
-        # To be replaced by son functions which use radius
-        return self.getDiameterBase()
 
     def addRadius(self, dMat, radius):
         '''Add the radius of each alpha sphere to their corresponding row and column in the distances
