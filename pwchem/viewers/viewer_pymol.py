@@ -27,6 +27,8 @@
 import os
 from subprocess import Popen
 
+from pwchem.objects import ProteinPocket, SetOfPockets
+from autodock.protocols import ProtChemAutoLigand
 import pyworkflow.utils as pwutils
 import pyworkflow.viewer as pwviewer
 
@@ -65,3 +67,30 @@ class PyMolViewer(pwviewer.Viewer):
 
   def visualize(self, pymolFile, cwd, **args):
     PyMolView(pymolFile, cwd).show()
+
+
+class PocketPointsViewer(pwviewer.Viewer):
+  _label = 'Viewer pocket points'
+  _environments = [pwviewer.DESKTOP_TKINTER]
+  _targets = [ProteinPocket, SetOfPockets]
+
+  def _visualize(self, obj, **kwargs):
+    pmlFile = obj.getPmlFile()
+    if pmlFile != None:
+      pymolV = PyMolViewer(project=self.getProject())
+      pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+    else:
+      return
+
+class ContactSurfaceViewer(pwviewer.Viewer):
+  _label = 'Viewer contact surface'
+  _environments = [pwviewer.DESKTOP_TKINTER]
+  _targets = [ProteinPocket, SetOfPockets]
+
+  def _visualize(self, obj, **kwargs):
+    pmlFile = obj.getPmlFileSurf()
+    if pmlFile != None:
+      pymolV = PyMolViewer(project=self.getProject())
+      pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+    else:
+      return

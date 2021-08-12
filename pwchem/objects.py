@@ -28,6 +28,7 @@ import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from pyworkflow.object import (Float, Integer, List, String)
 import numpy as np
+import os
 from scipy import spatial
 
 
@@ -132,8 +133,27 @@ class ProteinPocket(data.EMFile):
         self._score = Float(kwargs.get('score', None))
         self._energy = Float(kwargs.get('energy', None))
         self._class = String(kwargs.get('class', None))
+        self.guessPmlFiles()
+
+    def guessPmlFiles(self):
+        proteinFile = self.getProteinFile()
+        if proteinFile != None:
+            pmlFile = 'Runs' + proteinFile.split('Runs')[-1].split('_out.')[0] + '.pml'
+            if os.path.exists(pmlFile):
+                self._pmlFile = String(os.path.abspath(pmlFile))
+            else:
+                self._pmlFile = None
+
+            pmlFileSurf = 'Runs' + proteinFile.split('Runs')[-1].split('_out.')[0] + '_surf.pml'
+            if os.path.exists(pmlFile):
+                self._pmlFileSurf = String(os.path.abspath(pmlFileSurf))
+            else:
+                self._pmlFileSurf = None
 
     #Attributes functions
+    def getPocketClass(self):
+        return str(self._class)
+
     def getNumberOfPoints(self):
         return self._nPoints
 
@@ -143,6 +163,9 @@ class ProteinPocket(data.EMFile):
     def getContactResidues(self):
         return self._contactResidues
 
+    def getDecodedCResidues(self):
+        return self.decodeIds(self.getContactResidues())
+
     def setContactResidues(self, values):
         self._contactResidues.set(values)
 
@@ -151,6 +174,9 @@ class ProteinPocket(data.EMFile):
 
     def getContactAtoms(self):
         return self._contactAtoms
+
+    def getDecodedCAtoms(self):
+        return self.decodeIds(self.getContactAtoms())
 
     def setContactAtoms(self, values):
         self._contactAtoms.set(values)
@@ -176,8 +202,23 @@ class ProteinPocket(data.EMFile):
     def setEnergy(self, value):
         self._score.set(value)
 
+    def setProteinFile(self, value):
+        self._proteinFile.set(value)
+
     def getProteinFile(self):
         return str(self._proteinFile)
+
+    def getPmlFile(self):
+        return str(self._pmlFile)
+
+    def setPmlFile(self, value):
+        self._pmlFile.set(value)
+
+    def getPmlFileSurf(self):
+        return str(self._pmlFileSurf)
+
+    def setPmlFileSurf(self, value):
+        self._pmlFileSurf.set(value)
 
     def getKwargs(self, props, AM):
         nkwargs = {}
@@ -239,17 +280,30 @@ class ProteinPocket(data.EMFile):
             dMat[:, i] += radius[i]
         return dMat
 
-    def getPocketVolume(self, convex=False):
-        '''Return the reported volume or the convex volume'''
-        if float(self.getVolume()) != None and not convex:
+    def getPocketVolume(self, mode=0):
+        '''Return the pocket volume:
+        0: getSurfaceConvexVolume (over protein contact points)
+        1: reported volume
+        2: getConvexVolume (over pocket points)
+        '''
+        if mode==2:
+            return self.getConvexVolume()
+        elif mode==1 and float(self.getVolume()) != None:
             return self.getVolume()
         else:
-            return self.getConvexVolume()
+            return self.getSurfaceConvexVolume()
 
     def getConvexVolume(self):
         '''Calculate the convex volume of the points forming the pocket'''
         coords = np.array(self.getPointsCoords())
         cHull = spatial.ConvexHull(coords)
+        return cHull.volume
+
+    def getSurfaceConvexVolume(self):
+        '''Calculate the convex volume of the protein contact atoms'''
+        cAtoms = self.buildContactAtoms()
+        cCoords = self.getAtomsCoords(cAtoms)
+        cHull = spatial.ConvexHull(cCoords)
         return cHull.volume
 
     def getPocketBox(self):
@@ -333,6 +387,15 @@ class SetOfPockets(data.EMSet):
     def __str__(self):
       s = '{} ({} items)'.format(self.getClassName(), self.getSize())
       return s
+
+    def getPmlFile(self):
+        return self.getFirstItem().getPmlFile()
+
+    def getPmlFileSurf(self):
+        return self.getFirstItem().getPmlFileSurf()
+
+    def getProteinFile(self):
+        return self.getFirstItem().getProteinFile()
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
