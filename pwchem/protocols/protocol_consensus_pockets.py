@@ -40,14 +40,14 @@ from ..constants import *
 from pwchem.utils import *
 import os
 
-MERGE, MAXVOL, MAXSURF = 0, 1, 2
+MAXVOL, MAXSURF = 0, 1
 
-class ConsensusPockets(EMProtocol):
+class ProtocolConsensusPockets(EMProtocol):
     """
     Executes the consensus on the sets of pockets
     """
     _label = 'Consensus pockets'
-    actionChoices = ['Merge', 'MaxVolume', 'MaxSurface']
+    actionChoices = ['MaxVolume', 'MaxSurface']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -59,7 +59,7 @@ class ConsensusPockets(EMProtocol):
                        help='Select the pocket sets to make the consensus')
         form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping',
                       help="Min proportion of residues (from the smaller) of two pockets to be considered overlapping")
-        form.addParam('action', params.EnumParam, default=MERGE,
+        form.addParam('action', params.EnumParam, default=MAXSURF,
                       label='Action on overlapping', choices=self.actionChoices,
                       help='Action to take on overlapping pockets, whther to merge them or keep just one '
                            'with some condition')

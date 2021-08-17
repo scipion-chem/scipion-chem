@@ -39,4 +39,5 @@ from .protocol_raptorX import ProtChemRaptorX
 from .protocol_ZINC_filter import ProtChemZINCFilter
 from .protocol_pubchem_search import ProtChemPubChemSearch
 from .protocol_export_csv import ProtChemExportCSV
-from .protocol_consensus_pockets import ConsensusPockets
+from .protocol_consensus_pockets import ProtocolConsensusPockets
+from .protocol_import_pockets import ImportPockets
