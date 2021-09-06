@@ -86,6 +86,26 @@ def writePDBLine(j):
     return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
            (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
 
+def splitPDBLine(line):
+    if line.startswith(("ATOM", "HETATM")):
+        atomType = line[0:6]
+        atomSerialNumber = line[6:11]
+        atomName = line[12:16]
+        resName = line[17:20]
+        chain = line[21]
+        resNumber = line[22:26]
+        coorX = line[30:38]
+        coorY = line[38:46]
+        coorZ = line[46:54]
+        occupancy = line[54:60]
+        temperatureFact = line[60:66]
+        segmentIdentifier = line[72:76]
+        elementSymbol = line[76:78]
+        return [atomType, atomSerialNumber, atomName, resName, chain, resNumber,
+                coorX, coorY, coorZ, occupancy, temperatureFact, segmentIdentifier, elementSymbol]
+    else:
+        return None
+
 def getScipionObj(value):
     if isinstance(value, Object):
         return value
