@@ -24,36 +24,9 @@
 # *
 # **************************************************************************
 
-from Bio import SeqIO
-
-from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence, Object, String, Integer, Float
-from pwchem.objects import SetOfDatabaseID
 from ..constants import *
 import random as rd
-
-def copyFastaSequenceAndRead(protocol):
-    outFileName = protocol._getExtraPath("sequence.fasta")
-    if isinstance(protocol.inputSeq.get(), Sequence):
-        fh = open(outFileName, "w")
-        fh.write(">%s\n" % protocol.inputSeq.get().getSeqName())
-        fh.write("%s\n" % protocol.inputSeq.get().getSequence())
-        fh.close()
-    elif isinstance(protocol.inputSeq.get(), SetOfDatabaseID):
-        obj = protocol.inputSeq.get().getFirstItem()
-        createLink(obj._uniprotFile.get(), outFileName)
-    record = SeqIO.read(outFileName, "fasta")
-    return str(record.seq)
-
-def checkInputHasFasta(protocol):
-    errors = []
-    if isinstance(protocol.inputSeq.get(), SetOfDatabaseID):
-        if len(protocol.inputSeq.get()) != 1:
-            errors.append("The input list can only have a single sequence")
-        obj = protocol.inputSeq.get().getFirstItem()
-        if not hasattr(obj, "_uniprotFile"):
-            errors.append("The input list does not have a sequence file")
-    return errors
 
 def writeRawPDB(pdbFile, outFile, ter=True):
     '''Creates a new pdb with only the ATOM and HETATM lines'''

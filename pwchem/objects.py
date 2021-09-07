@@ -30,7 +30,7 @@ from pyworkflow.object import (Float, Integer, List, String)
 import numpy as np
 import os
 from scipy import spatial
-
+from .utils import splitPDBLine
 
 class DatabaseID(data.EMObject):
     """ Database identifier """
@@ -443,23 +443,3 @@ class ProteinResidue(data.EMObject):
             self.proteinChain = line[4]
             self.residueNumber = line[5]
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
-
-def splitPDBLine(line):
-    if line.startswith(("ATOM", "HETATM")):
-        atomType = line[0:6]
-        atomSerialNumber = line[6:11]
-        atomName = line[12:16]
-        resName = line[17:20]
-        chain = line[21]
-        resNumber = line[22:26]
-        coorX = line[30:38]
-        coorY = line[38:46]
-        coorZ = line[46:54]
-        occupancy = line[54:60]
-        temperatureFact = line[60:66]
-        segmentIdentifier = line[72:76]
-        elementSymbol = line[76:78]
-        return [atomType, atomSerialNumber, atomName, resName, chain, resNumber,
-                coorX, coorY, coorZ, occupancy, temperatureFact, segmentIdentifier, elementSymbol]
-    else:
-        return None
