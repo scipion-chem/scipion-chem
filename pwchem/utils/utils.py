@@ -61,19 +61,19 @@ def writePDBLine(j):
 
 def splitPDBLine(line):
     if line.startswith(("ATOM", "HETATM")):
-        atomType = line[0:6]
-        atomSerialNumber = line[6:11]
-        atomName = line[12:16]
-        resName = line[17:20]
-        chain = line[21]
-        resNumber = line[22:26]
-        coorX = line[30:38]
-        coorY = line[38:46]
-        coorZ = line[46:54]
-        occupancy = line[54:60]
-        temperatureFact = line[60:66]
-        segmentIdentifier = line[72:76]
-        elementSymbol = line[76:78]
+        atomType = line[0:6].strip()
+        atomSerialNumber = line[6:11].strip()
+        atomName = line[12:16].strip()
+        resName = line[17:20].strip()
+        chain = line[21].strip()
+        resNumber = line[22:26].strip()
+        coorX = line[30:38].strip()
+        coorY = line[38:46].strip()
+        coorZ = line[46:54].strip()
+        occupancy = line[54:60].strip()
+        temperatureFact = line[60:66].strip()
+        segmentIdentifier = line[72:76].strip()
+        elementSymbol = line[76:78].strip()
         return [atomType, atomSerialNumber, atomName, resName, chain, resNumber,
                 coorX, coorY, coorZ, occupancy, temperatureFact, segmentIdentifier, elementSymbol]
     else:
