@@ -24,3 +24,45 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+PML_STR = '''from pymol import cmd,stored
+load {}
+#select pockets, resn STP
+stored.list=[]
+cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
+
+aux = list(map(int, stored.list))
+aux.sort()
+stored.list = list(map(str, aux))
+#print(stored.list)
+lastSTP=stored.list[-1]	#get the index of the last residu
+hide lines, resn STP
+
+#show spheres, resn STP
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index,"pocket"+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))'''
+
+PML_SURF_STR = '''from pymol import cmd,stored
+load {}, protein
+create ligands, protein and organic
+select xlig, protein and organic
+delete xlig
+
+hide everything, all
+
+color white, elem c
+color bluewhite, protein
+show surface, protein
+
+show sticks, ligands
+set stick_color, magenta
+
+{}
+'''
+
+PML_SURF_EACH = '''set_color pcol{} = {}
+select surf_pocket{}, protein and id {} 
+set surface_color,  pcol{}, surf_pocket{}\n'''
