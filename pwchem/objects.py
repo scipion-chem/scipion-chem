@@ -30,7 +30,7 @@ from pyworkflow.object import (Float, Integer, List, String)
 import numpy as np
 import os
 from scipy import spatial
-
+from .utils import splitPDBLine
 
 class DatabaseID(data.EMObject):
     """ Database identifier """
@@ -238,7 +238,7 @@ class ProteinPocket(data.EMFile):
             with open(self.getProteinFile()) as f:
                 for line in f:
                     if line.startswith('ATOM'):
-                        atomId = line.split()[1]
+                        atomId = splitPDBLine(line)[1]
                         if atomId in contactsIds:
                             contactAtoms.append(ProteinAtom(line))
         else:
@@ -363,7 +363,7 @@ class ProteinPocket(data.EMFile):
         with open(self.getProteinFile()) as f:
             for line in f:
                 if line.startswith('HETATM'):
-                    pocketId = int(line.split()[5])
+                    pocketId = int(splitPDBLine(line)[5])
                     if pocketId == self.getObjId():
                         pocketPoints += [ProteinAtom(line)]
         return pocketPoints
@@ -410,7 +410,7 @@ class ProteinAtom(data.EMObject):
             print('Passed line does not seems like an pdb ATOM line')
         else:
             self.line = pdbLine
-            line = pdbLine.split()
+            line = splitPDBLine(pdbLine)
             self.atomId = line[1]
             self.atomType = line[2]
             self.residueType = line[3]
@@ -438,9 +438,8 @@ class ProteinResidue(data.EMObject):
         if not pdbLine.startswith('ATOM'):
             print('Passed line does not seems like an pdb ATOM line')
         else:
-            line = pdbLine.split()
+            line = splitPDBLine(pdbLine)
             self.residueType = line[3]
             self.proteinChain = line[4]
             self.residueNumber = line[5]
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
-
