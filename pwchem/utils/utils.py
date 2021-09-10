@@ -24,36 +24,9 @@
 # *
 # **************************************************************************
 
-from Bio import SeqIO
-
-from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence, Object, String, Integer, Float
-from pwchem.objects import SetOfDatabaseID
 from ..constants import *
 import random as rd
-
-def copyFastaSequenceAndRead(protocol):
-    outFileName = protocol._getExtraPath("sequence.fasta")
-    if isinstance(protocol.inputSeq.get(), Sequence):
-        fh = open(outFileName, "w")
-        fh.write(">%s\n" % protocol.inputSeq.get().getSeqName())
-        fh.write("%s\n" % protocol.inputSeq.get().getSequence())
-        fh.close()
-    elif isinstance(protocol.inputSeq.get(), SetOfDatabaseID):
-        obj = protocol.inputSeq.get().getFirstItem()
-        createLink(obj._uniprotFile.get(), outFileName)
-    record = SeqIO.read(outFileName, "fasta")
-    return str(record.seq)
-
-def checkInputHasFasta(protocol):
-    errors = []
-    if isinstance(protocol.inputSeq.get(), SetOfDatabaseID):
-        if len(protocol.inputSeq.get()) != 1:
-            errors.append("The input list can only have a single sequence")
-        obj = protocol.inputSeq.get().getFirstItem()
-        if not hasattr(obj, "_uniprotFile"):
-            errors.append("The input list does not have a sequence file")
-    return errors
 
 def writeRawPDB(pdbFile, outFile, ter=True):
     '''Creates a new pdb with only the ATOM and HETATM lines'''
@@ -85,6 +58,26 @@ def writePDBLine(j):
     j[12] = j[12].rjust(2)  # elname
     return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
            (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
+
+def splitPDBLine(line):
+    if line.startswith(("ATOM", "HETATM")):
+        atomType = line[0:6].strip()
+        atomSerialNumber = line[6:11].strip()
+        atomName = line[12:16].strip()
+        resName = line[17:20].strip()
+        chain = line[21].strip()
+        resNumber = line[22:26].strip()
+        coorX = line[30:38].strip()
+        coorY = line[38:46].strip()
+        coorZ = line[46:54].strip()
+        occupancy = line[54:60].strip()
+        temperatureFact = line[60:66].strip()
+        segmentIdentifier = line[72:76].strip()
+        elementSymbol = line[76:78].strip()
+        return [atomType, atomSerialNumber, atomName, resName, chain, resNumber,
+                coorX, coorY, coorZ, occupancy, temperatureFact, segmentIdentifier, elementSymbol]
+    else:
+        return None
 
 def getScipionObj(value):
     if isinstance(value, Object):

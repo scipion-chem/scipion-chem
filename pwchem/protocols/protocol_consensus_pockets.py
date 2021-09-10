@@ -278,7 +278,7 @@ class ProtocolConsensusPockets(EMProtocol):
         outStr = ''
         with open(pdbFile) as f:
             for line in f:
-                if line.startswith('HETATM') and int(line.split()[5]) == int(oldId):
+                if line.startswith('HETATM') and int(splitPDBLine(line)[5]) == int(oldId):
                     outStr += self.pdbLineReplacement(line, str(oldId), str(newId))
         return outStr
 
@@ -288,7 +288,7 @@ class ProtocolConsensusPockets(EMProtocol):
             for line in f:
                 if line.startswith('ATOM'):
                     outStr += line
-                elif line.startswith('HETATM') and line.split()[2] != 'APOL':
+                elif line.startswith('HETATM') and splitPDBLine(line)[2] != 'APOL':
                     outStr += line
         return outStr
 
