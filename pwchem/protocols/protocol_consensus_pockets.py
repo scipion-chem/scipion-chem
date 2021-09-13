@@ -78,7 +78,7 @@ class ProtocolConsensusPockets(EMProtocol):
         self.indepConsensusSets = self.getIndepConsensus(pocketClusters)
 
     def createOutputStep(self):
-        self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets, self.getAllPocketAttributes())
+        self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
         self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
         outPockets = SetOfPockets(filename=self._getPath('consensusPocketsAll.sqlite'))
@@ -225,18 +225,26 @@ class ProtocolConsensusPockets(EMProtocol):
         overlap = set(res1).intersection(set(res2))
         return len(overlap) / min(len(res1), len(res2))
 
-    def getAllPocketAttributes(self):
-        attrs = set([])
-        for pockSet in self.inputPocketSets:
-            attrs = attrs.union(set(pockSet.get().getFirstItem().getObjDict().keys()))
-        return attrs
+    def getAllPocketAttributes(self, pocketSets):
+        '''Return a dic with {attrName: ScipionObj=None}'''
+        attributes = {}
+        for pockSet in pocketSets:
+            item = pockSet.get().getFirstItem()
+            attrKeys = item.getObjDict().keys()
+            for attrK in attrKeys:
+                if not attrK in attributes:
+                    value = item.__getattribute__(attrK)
+                    attributes[attrK] = value.clone()
+                    attributes[attrK].set(None)
+        return attributes
 
-    def fillEmptyAttributes(self, inSet, attributes):
+    def fillEmptyAttributes(self, inSet):
         '''Fill all items with empty attributes'''
+        attributes = self.getAllPocketAttributes(self.inputPocketSets)
         for item in inSet:
             for attr in attributes:
                 if not hasattr(item, attr):
-                    setAttribute(item, attr, 'None')
+                    item.__setattr__(attr, attributes[attr])
         return inSet
 
     def reorderIds(self, inSet):

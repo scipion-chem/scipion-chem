@@ -385,11 +385,11 @@ class SetOfPockets(data.EMSet):
     ITEM_TYPE = ProteinPocket
 
     def __init__(self, **kwargs):
-        super().__init__(self, **kwargs)
-        self._pocketsClass = String(None)
+        data.EMSet.__init__(self, **kwargs)
+        self._pocketsClass = String('None')
 
     def __str__(self):
-      s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+      s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
       return s
 
     def getPmlFile(self):
@@ -401,23 +401,23 @@ class SetOfPockets(data.EMSet):
     def getProteinFile(self):
         return self.getFirstItem().getProteinFile()
 
-    def getpocketsClass(self):
+    def getPocketsClass(self):
         return self._pocketsClass.get()
 
     def updatePocketsClass(self):
-        pClass = ''
+        pClass = self.getPocketsClass()
         for pocket in self:
             if not pocket.getPocketClass() == pClass:
-                if pClass == '':
+                if pClass == 'None':
                     pClass = pocket.getPocketClass()
                 else:
-                    return 'Mixed'
+                    pClass = 'Mixed'
+                    break
         self._pocketsClass.set(pClass)
-        return pClass
 
     def append(self, item):
         super().append(item)
-        pClass = self.updatePocketsClass()
+        self.updatePocketsClass()
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
