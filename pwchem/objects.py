@@ -123,9 +123,10 @@ class SetOfBindingSites(data.EMSet):
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """
 
-    def __init__(self, filename=None, proteinFile=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, extraFile=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
         self._proteinFile = String(proteinFile)
+        self._extraFile = String(extraFile)
         self._nPoints = Integer(kwargs.get('nPoints', None))
         self._contactResidues = String(kwargs.get('contactResidues', None))
         self._contactAtoms = String(kwargs.get('contactAtoms', None))
@@ -360,12 +361,10 @@ class ProteinPocket(data.EMFile):
 
     def buildPocketPoints(self):
         pocketPoints = []
-        with open(self.getProteinFile()) as f:
+        with open(self.getFileName()) as f:
             for line in f:
-                if line.startswith('HETATM'):
-                    pocketId = int(splitPDBLine(line)[5])
-                    if pocketId == self.getObjId():
-                        pocketPoints += [ProteinAtom(line)]
+                if line.startswith('HETATM') or line.startswith('ATOM'):
+                    pocketPoints += [ProteinAtom(line)]
         return pocketPoints
 
     def getPointsCoords(self):
@@ -384,13 +383,22 @@ class ProteinPocket(data.EMFile):
 class SetOfPockets(data.EMSet):
     ITEM_TYPE = ProteinPocket
 
-    def __init__(self, **kwargs):
+    def __init__(self, proteinFile=None, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._pocketsClass = String('None')
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
       return s
+
+    def getSetPath(self):
+        return self._mapperPath
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath()[:-1])
+
+    def getProteinName(self):
+        return self.getProteinFile().split('/')[-1].split('.')[0]
 
     def getPmlFile(self):
         return self.getFirstItem().getPmlFile()
