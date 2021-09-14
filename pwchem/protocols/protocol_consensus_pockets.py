@@ -73,30 +73,33 @@ class ProtocolConsensusPockets(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def consensusStep(self):
+        pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
         self.consensusPockets = self.cluster2pocket(pocketClusters)
-        self.indepConsensusSets = self.getIndepConsensus(pocketClusters)
+        self.indepConsensusSets = self.getIndepConsensus(pocketClusters, pocketDic)
 
     def createOutputStep(self):
         self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
         self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
-        outPockets = SetOfPockets(filename=self._getPath('consensusPocketsAll.sqlite'))
-        outProtFile, outPmlFile = self.createOutPDB(idsDic)
+        outPockets = SetOfPockets(filename=self._getPath('consensusPockets_All.sqlite'))
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
-            newPock.setProteinFile(outProtFile)
-            newPock.setPmlFile(outPmlFile)
             outPockets.append(newPock)
         self._defineOutputs(outputPocketsAll=outPockets)
+        outPockets.buildPocketsFiles(suffix='_All')
 
         indepOutputs = self.createIndepOutputs()
-        for outSet in indepOutputs:
+        for setId in indepOutputs:
             #Index should be the same as in the input
-            i = self.getInpProteinFiles().index(outSet.getProteinFile())
-            outName = 'outputPockets{}'.format(i+1)
-            self._defineOutputs(**{outName:outSet})
-            self._defineSourceRelation(self.inputPocketSets[i].get(), outSet)
+            suffix = '_{:03d}'.format(setId+1)
+            outName = 'outputPockets' + suffix
+            outSet = indepOutputs[setId]
+            self._defineOutputs(**{outName: outSet})
+            self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
+
+            curPocketsAttr = getattr(self, outName)
+            curPocketsAttr.buildPocketsFiles(suffix=suffix)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -110,18 +113,31 @@ class ProtocolConsensusPockets(EMProtocol):
     def _warnings(self):
         """ Try to find warnings on define params. """
         warnings = []
+        inAtomStructs = set([])
+        for pSet in self.inputPocketSets:
+            inAtomStructs.add(pSet.get().getProteinFile())
+        if len(inAtomStructs) > 1:
+            warnings = ['The input Atom Structure files from the different sets of pockets are not'
+                        ' the same. It may not have sense to calculate the consensus.']
+
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def buildPocketDic(self):
+        dic = {}
+        for i, pSet in enumerate(self.inputPocketSets):
+            for pocket in pSet.get():
+                dic[pocket.getFileName()] = i
+        return dic
+
     def createIndepOutputs(self):
-        inputProteinFiles = self.getInpProteinFiles()
-        outSets = []
-        for proteinFile in self.indepConsensusSets:
-            i = inputProteinFiles.index(proteinFile)
-            newSet = SetOfPockets(filename=self._getPath('consensusPockets{}.sqlite'.format(i+1)))
-            for pock in self.indepConsensusSets[proteinFile]:
+        outSets = {}
+        for setId in self.indepConsensusSets:
+            suffix = '_{:03d}'.format(setId+1)
+            newSet = SetOfPockets(filename=self._getExtraPath('consensusPockets{}.sqlite'.format(suffix)))
+            for pock in self.indepConsensusSets[setId]:
                 newSet.append(pock.clone())
-            outSets.append(newSet)
+            outSets[setId] = newSet
         return outSets
 
     def getInpProteinFiles(self):
@@ -169,16 +185,17 @@ class ProtocolConsensusPockets(EMProtocol):
                     clusters = newClusters.copy()
         return clusters
 
-    def getIndepConsensus(self, clusters):
+    def getIndepConsensus(self, clusters, pocketDic):
         outSets = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
                 for pock in clust:
-                    curProtFile = pock.getProteinFile()
-                    if curProtFile in outSets:
-                        outSets[curProtFile] += [pock]
+                    curPocketFile = pock.getFileName()
+                    inSetId = pocketDic[curPocketFile]
+                    if inSetId in outSets:
+                        outSets[inSetId] += [pock]
                     else:
-                        outSets[curProtFile] = [pock]
+                        outSets[inSetId] = [pock]
         return outSets
 
 

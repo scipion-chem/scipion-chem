@@ -30,7 +30,8 @@ from pyworkflow.object import (Float, Integer, List, String)
 import numpy as np
 import os
 from scipy import spatial
-from .utils import splitPDBLine
+from .utils import *
+from .constants import *
 
 class DatabaseID(data.EMObject):
     """ Database identifier """
@@ -383,7 +384,7 @@ class ProteinPocket(data.EMFile):
 class SetOfPockets(data.EMSet):
     ITEM_TYPE = ProteinPocket
 
-    def __init__(self, proteinFile=None, **kwargs):
+    def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._pocketsClass = String('None')
 
@@ -392,10 +393,10 @@ class SetOfPockets(data.EMSet):
       return s
 
     def getSetPath(self):
-        return self._mapperPath
+        return os.path.abspath(self._mapperPath[0])
 
     def getSetDir(self):
-        return '/'.join(self.getSetPath()[:-1])
+        return '/'.join(self.getSetPath().split('/')[:-1])
 
     def getProteinName(self):
         return self.getProteinFile().split('/')[-1].split('.')[0]
@@ -426,6 +427,80 @@ class SetOfPockets(data.EMSet):
     def append(self, item):
         super().append(item)
         self.updatePocketsClass()
+
+    def buildPDBhetatmFile(self, suffix=''):
+        protName = self.getProteinName()
+        atmFile = self.getProteinFile()
+        outDir = self.getSetDir()
+        outFile = os.path.join(outDir, protName+'{}_out.pdb'.format(suffix))
+
+        with open(outFile, 'w') as f:
+            f.write(getRawPDBStr(atmFile, ter=False))
+            f.write(self.getPocketsPDBStr())
+
+        return outFile
+
+    def createPML(self, outHETMFile):
+        outHETMFile = os.path.abspath(outHETMFile)
+        pmlFile = outHETMFile.replace('_out.pdb', '.pml')
+
+        # Creates the pml for pymol visualization
+        with open(pmlFile, 'w') as f:
+            f.write(PML_STR.format(outHETMFile))
+        return pmlFile
+
+    def createSurfacePml(self, outHETMFile):
+        outHETMFile = os.path.abspath(outHETMFile)
+        pmlFile = outHETMFile.replace('_out.pdb', '_surf.pml')
+        colors = createColorVectors(len(self))
+        surfaceStr = ''
+        for i, pock in enumerate(self):
+            pId = pock.getObjId()
+            surfAtomIds = str(list(map(int, pock.getDecodedCAtoms()))).replace(' ', '')
+            surfaceStr += PML_SURF_EACH.format(pId, colors[i], pId, surfAtomIds, pId, pId)
+
+        # Creates the pml for pymol visualization
+        with open(pmlFile, 'w') as f:
+            f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
+        return
+
+    def buildPocketsFiles(self, suffix=''):
+        outHETMFile = self.buildPDBhetatmFile(suffix)
+        self.createPML(outHETMFile)
+        self.createSurfacePml(outHETMFile)
+        return outHETMFile
+
+    ######### Utils
+
+    def getPocketsPDBStr(self):
+        outStr = ''
+        for pocket in self:
+            outStr += self.formatPocketStr(pocket)
+        return outStr
+
+    def formatPocketStr(self, pocket):
+        outStr = ''
+        numId, pocketFile = pocket.getObjId(), pocket.getFileName()
+        rawStr = getRawPDBStr(pocketFile, ter=False).strip()
+        if pocket.getPocketClass() == 'AutoLigand':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', str(numId), *line[5:-1], 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        elif pocket.getPocketClass() == 'P2Rank':
+            #Already formated
+            outStr += rawStr
+
+        elif pocket.getPocketClass() == 'FPocket':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', str(numId), *line[5:], '', 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        return outStr
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):

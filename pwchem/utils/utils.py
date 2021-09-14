@@ -28,15 +28,20 @@ from pwem.objects.data import Sequence, Object, String, Integer, Float
 from ..constants import *
 import random as rd
 
+def getRawPDBStr(pdbFile, ter=True):
+    outStr=''
+    with open(pdbFile) as fIn:
+        for line in fIn:
+            if line.startswith('ATOM') or line.startswith('HETATM'):
+                outStr += line
+            elif ter and line.startswith('TER'):
+                outStr += line
+    return outStr
+
 def writeRawPDB(pdbFile, outFile, ter=True):
     '''Creates a new pdb with only the ATOM and HETATM lines'''
     with open(outFile, 'w') as f:
-        with open(pdbFile) as fIn:
-            for line in fIn:
-                if line.startswith('ATOM') or line.startswith('HETATM'):
-                    f.write(line)
-                elif ter and line.startswith('TER'):
-                    f.write(line)
+        getRawPDBStr(pdbFile)
 
 def writePDBLine(j):
     '''j: elements to write in the pdb'''
