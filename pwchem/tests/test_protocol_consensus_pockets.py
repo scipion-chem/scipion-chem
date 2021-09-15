@@ -63,7 +63,7 @@ class TestConsensusPockets(BaseTest):
       protImportPDB = cls.newProtocol(
         ProtImportPdb,
         inputPdbData=1,
-        pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
+        pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1_noHETATM.pdb'))
       cls.launchProtocol(protImportPDB)
       cls.protImportPDB = protImportPDB
 

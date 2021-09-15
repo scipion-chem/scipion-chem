@@ -86,8 +86,8 @@ class ProtocolConsensusPockets(EMProtocol):
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
             outPockets.append(newPock)
-        self._defineOutputs(outputPocketsAll=outPockets)
         outPockets.buildPocketsFiles(suffix='_All')
+        self._defineOutputs(outputPocketsAll=outPockets)
 
         indepOutputs = self.createIndepOutputs()
         for setId in indepOutputs:
@@ -95,11 +95,10 @@ class ProtocolConsensusPockets(EMProtocol):
             suffix = '_{:03d}'.format(setId+1)
             outName = 'outputPockets' + suffix
             outSet = indepOutputs[setId]
+            outSet.buildPocketsFiles(suffix=suffix, tcl=True)
+
             self._defineOutputs(**{outName: outSet})
             self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
-
-            curPocketsAttr = getattr(self, outName)
-            curPocketsAttr.buildPocketsFiles(suffix=suffix)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):

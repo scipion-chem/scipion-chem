@@ -2,4 +2,5 @@ from .viewer_protocol_dali import ProtChemDaliViewer
 from .viewer_protocol_ZL_predict import ProtChemZLPredictViewer
 from .viewer_protocol_raptorX import ProtChemRaptorXViewer
 from .viewers_data import BioinformaticsDataViewer
-from .viewer_pymol import PyMolViewer, PyMol, PyMolView, PocketPointsViewer, ContactSurfaceViewer
+from .viewer_pockets import PyMolViewer, PyMol, PyMolView, PocketPointsViewer, ContactSurfaceViewer, VmdViewFpocket
+from .viewer_protocol_consensus_pockets import ViewerConsensusPockets
