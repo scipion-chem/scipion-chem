@@ -66,3 +66,27 @@ set stick_color, magenta
 PML_SURF_EACH = '''set_color pcol{} = {}
 select surf_pocket{}, protein and id {} 
 set surface_color,  pcol{}, surf_pocket{}\n'''
+
+TCL_STR = '''proc highlighting { colorId representation id selection } {
+   puts "highlighting $id"
+   mol representation $representation
+   mol material "Diffuse" 
+    mol color $colorId
+   mol selection $selection
+   mol addrep $id
+}
+
+set id [mol new %s type pdb]
+mol delrep top $id
+highlighting Name "Lines" $id "protein"
+highlighting Name "Licorice" $id "not protein and not resname STP"
+highlighting Element "NewCartoon" $id "protein"
+set id [mol new %s type pqr]
+                        mol selection "all" 
+                         mol material "Glass3" 
+                         mol delrep top $id 
+                         mol representation "QuickSurf 0.3" 
+                         mol color ResId $id 
+                         mol addrep $id 
+highlighting Index "Points 1" $id "resname STP"
+display rendermode GLSL'''#.format(proteinHETATMFile, proteinPQRFile)

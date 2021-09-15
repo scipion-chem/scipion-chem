@@ -30,7 +30,8 @@ from pyworkflow.object import (Float, Integer, List, String)
 import numpy as np
 import os
 from scipy import spatial
-from .utils import splitPDBLine
+from .utils import *
+from .constants import *
 
 class DatabaseID(data.EMObject):
     """ Database identifier """
@@ -123,9 +124,10 @@ class SetOfBindingSites(data.EMSet):
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """
 
-    def __init__(self, filename=None, proteinFile=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, extraFile=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
         self._proteinFile = String(proteinFile)
+        self._extraFile = String(extraFile)
         self._nPoints = Integer(kwargs.get('nPoints', None))
         self._contactResidues = String(kwargs.get('contactResidues', None))
         self._contactAtoms = String(kwargs.get('contactAtoms', None))
@@ -133,22 +135,6 @@ class ProteinPocket(data.EMFile):
         self._score = Float(kwargs.get('score', None))
         self._energy = Float(kwargs.get('energy', None))
         self._class = String(kwargs.get('class', None))
-        self.guessPmlFiles()
-
-    def guessPmlFiles(self):
-        proteinFile = self.getProteinFile()
-        if proteinFile != None:
-            pmlFile = 'Runs' + proteinFile.split('Runs')[-1].split('_out.')[0] + '.pml'
-            if os.path.exists(pmlFile):
-                self._pmlFile = String(os.path.abspath(pmlFile))
-            else:
-                self._pmlFile = None
-
-            pmlFileSurf = 'Runs' + proteinFile.split('Runs')[-1].split('_out.')[0] + '_surf.pml'
-            if os.path.exists(pmlFile):
-                self._pmlFileSurf = String(os.path.abspath(pmlFileSurf))
-            else:
-                self._pmlFileSurf = None
 
     #Attributes functions
     def getPocketClass(self):
@@ -207,18 +193,6 @@ class ProteinPocket(data.EMFile):
 
     def getProteinFile(self):
         return str(self._proteinFile)
-
-    def getPmlFile(self):
-        return str(self._pmlFile)
-
-    def setPmlFile(self, value):
-        self._pmlFile.set(value)
-
-    def getPmlFileSurf(self):
-        return str(self._pmlFileSurf)
-
-    def setPmlFileSurf(self, value):
-        self._pmlFileSurf.set(value)
 
     def getKwargs(self, props, AM):
         nkwargs = {}
@@ -360,12 +334,10 @@ class ProteinPocket(data.EMFile):
 
     def buildPocketPoints(self):
         pocketPoints = []
-        with open(self.getProteinFile()) as f:
+        with open(self.getFileName()) as f:
             for line in f:
-                if line.startswith('HETATM'):
-                    pocketId = int(splitPDBLine(line)[5])
-                    if pocketId == self.getObjId():
-                        pocketPoints += [ProteinAtom(line)]
+                if line.startswith('HETATM') or line.startswith('ATOM'):
+                    pocketPoints += [ProteinAtom(line)]
         return pocketPoints
 
     def getPointsCoords(self):
@@ -387,19 +359,43 @@ class SetOfPockets(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._pocketsClass = String('None')
+        self._hetatmFile = String('None')
+        self._pmlFile = String('None')
+        self._pmlFileSurf = String('None')
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
       return s
 
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath().split('/')[:-1])
+
+    def getProteinName(self):
+        return self.getProteinFile().split('/')[-1].split('.')[0]
+
     def getPmlFile(self):
-        return self.getFirstItem().getPmlFile()
+        return self._pmlFile.get()
+
+    def setPmlFile(self, value):
+        self._pmlFile.set(value)
 
     def getPmlFileSurf(self):
-        return self.getFirstItem().getPmlFileSurf()
+        return self._pmlFileSurf.get()
+
+    def setPmlFileSurf(self, value):
+        self._pmlFileSurf.set(value)
 
     def getProteinFile(self):
         return self.getFirstItem().getProteinFile()
+
+    def getProteinHetatmFile(self):
+        return self._hetatmFile.get()
+
+    def setProteinHetatmFile(self, value):
+        self._hetatmFile.set(value)
 
     def getPocketsClass(self):
         return self._pocketsClass.get()
@@ -418,6 +414,98 @@ class SetOfPockets(data.EMSet):
     def append(self, item):
         super().append(item)
         self.updatePocketsClass()
+
+    def buildPDBhetatmFile(self, suffix=''):
+        protName = self.getProteinName()
+        atmFile = self.getProteinFile()
+        outDir = self.getSetDir()
+        outFile = os.path.join(outDir, protName+'{}_out.pdb'.format(suffix))
+
+        with open(outFile, 'w') as f:
+            f.write(getRawPDBStr(atmFile, ter=False))
+            f.write(self.getPocketsPDBStr())
+
+        self.setProteinHetatmFile(outFile)
+        return outFile
+
+    def createPML(self, outHETMFile):
+        outHETMFile = os.path.abspath(outHETMFile)
+        pmlFile = outHETMFile.replace('_out.pdb', '.pml')
+
+        # Creates the pml for pymol visualization
+        with open(pmlFile, 'w') as f:
+            f.write(PML_STR.format(outHETMFile))
+        self.setPmlFile(pmlFile)
+        return pmlFile
+
+    def createSurfacePml(self, outHETMFile):
+        outHETMFile = os.path.abspath(outHETMFile)
+        pmlFile = outHETMFile.replace('_out.pdb', '_surf.pml')
+        colors = createColorVectors(len(self))
+        surfaceStr = ''
+        for i, pock in enumerate(self):
+            pId = pock.getObjId()
+            surfAtomIds = str(list(map(int, pock.getDecodedCAtoms()))).replace(' ', '')
+            surfaceStr += PML_SURF_EACH.format(pId, colors[i], pId, surfAtomIds, pId, pId)
+
+        # Creates the pml for pymol visualization
+        with open(pmlFile, 'w') as f:
+            f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
+        self.setPmlFileSurf(pmlFile)
+        return pmlFile
+
+    def createTCL(self, outHETMFile):
+        pqrFile = outHETMFile.replace('_out.pdb', '.pqr')
+        tclFile = outHETMFile.replace('_out.pdb', '.tcl')
+        with open(pqrFile, 'w') as f:
+            for pocket in self:
+                pqrPocket = getRawPDBStr(pocket.getFileName(), ter=False).strip()
+                f.write(pqrPocket + '\n')
+            f.write('TER\nEND')
+        tclStr = TCL_STR % (outHETMFile, pqrFile)
+        with open(tclFile, 'w') as f:
+            f.write(tclStr)
+
+
+    def buildPocketsFiles(self, suffix='', tcl=False):
+        outHETMFile = self.buildPDBhetatmFile(suffix)
+        self.createPML(outHETMFile)
+        self.createSurfacePml(outHETMFile)
+        if self.getPocketsClass() == 'FPocket' and tcl==True:
+            self.createTCL(outHETMFile)
+        return outHETMFile
+
+    ######### Utils
+
+    def getPocketsPDBStr(self):
+        outStr = ''
+        for pocket in self:
+            outStr += self.formatPocketStr(pocket)
+        return outStr
+
+    def formatPocketStr(self, pocket):
+        outStr = ''
+        numId, pocketFile = pocket.getObjId(), pocket.getFileName()
+        rawStr = getRawPDBStr(pocketFile, ter=False).strip()
+        if pocket.getPocketClass() == 'AutoLigand':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', str(numId), *line[5:-1], 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        elif pocket.getPocketClass() == 'P2Rank':
+            #Already formated
+            outStr += rawStr
+
+        elif pocket.getPocketClass() == 'FPocket':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', str(numId), *line[5:], '', 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        return outStr
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
