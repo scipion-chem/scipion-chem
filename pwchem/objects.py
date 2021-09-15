@@ -479,7 +479,8 @@ class SetOfPockets(data.EMSet):
 
     def getPocketsPDBStr(self):
         outStr = ''
-        for pocket in self:
+        for i, pocket in enumerate(self):
+            pocket.setObjId(i+1)
             outStr += self.formatPocketStr(pocket)
         return outStr
 
@@ -495,8 +496,11 @@ class SetOfPockets(data.EMSet):
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'P2Rank':
-            #Already formated
-            outStr += rawStr
+            for line in rawStr.split('\n'):
+                line = splitPDBLine(line)
+                line[5] = str(numId)
+                pdbLine = writePDBLine(line)
+                outStr += pdbLine
 
         elif pocket.getPocketClass() == 'FPocket':
             for line in rawStr.split('\n'):
