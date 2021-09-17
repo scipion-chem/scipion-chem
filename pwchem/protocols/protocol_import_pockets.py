@@ -40,9 +40,18 @@ from ..constants import *
 from pwchem.utils import *
 import os, glob
 
-from fpocket.objects import FpocketPocket
-from p2rank.objects import P2RankPocket
-from autodock.objects import AutoLigandPocket
+try:
+  from fpocket.objects import FpocketPocket
+except:
+  print('Could not find fpocket plugin')
+try:
+    from p2rank.objects import P2RankPocket
+except:
+    print('Could not find p2rank plugin')
+try:
+    from autodock.objects import AutoLigandPocket
+except:
+    print('Could not find autodock plugin')
 
 
 FPOCKET, P2RANK, AUTOLIGAND = 0, 1, 2
