@@ -358,10 +358,10 @@ class SetOfPockets(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._pocketsClass = String('None')
-        self._hetatmFile = String('None')
-        self._pmlFile = String('None')
-        self._pmlFileSurf = String('None')
+        self._pocketsClass = String(kwargs.get('pocketsClass', None))
+        self._hetatmFile = String(kwargs.get('hetatmFile', None))
+        self._pmlFile = String(kwargs.get('pmlFile', None))
+        self._pmlFileSurf = String(kwargs.get('pmlFileSurf', None))
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
@@ -486,26 +486,33 @@ class SetOfPockets(data.EMSet):
 
     def formatPocketStr(self, pocket):
         outStr = ''
-        numId, pocketFile = pocket.getObjId(), pocket.getFileName()
+        numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
         rawStr = getRawPDBStr(pocketFile, ter=False).strip()
         if pocket.getPocketClass() == 'AutoLigand':
             for line in rawStr.split('\n'):
                 line = line.split()
-                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', str(numId), *line[5:-1], 'Ve']
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
                 pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'P2Rank':
             for line in rawStr.split('\n'):
                 line = splitPDBLine(line)
-                line[5] = str(numId)
+                line[5] = numId
                 pdbLine = writePDBLine(line)
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'FPocket':
             for line in rawStr.split('\n'):
                 line = line.split()
-                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', str(numId), *line[5:], '', 'Ve']
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:], '', 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        elif pocket.getPocketClass() == 'SiteMap':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
                 pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 

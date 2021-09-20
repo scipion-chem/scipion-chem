@@ -77,11 +77,12 @@ class PocketPointsViewer(pwviewer.Viewer):
 
   def _visualize(self, obj, **kwargs):
     pmlFile = obj.getPmlFile()
-    if pmlFile != None:
-      pymolV = PyMolViewer(project=self.getProject())
-      pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
-    else:
-      return
+    if pmlFile == None:
+      obj.buildPocketsFiles()
+      pmlFile = obj.getPmlFile()
+
+    pymolV = PyMolViewer(project=self.getProject())
+    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 class ContactSurfaceViewer(pwviewer.Viewer):
   _label = 'Viewer contact surface'
@@ -90,11 +91,13 @@ class ContactSurfaceViewer(pwviewer.Viewer):
 
   def _visualize(self, obj, **kwargs):
     pmlFile = obj.getPmlFileSurf()
-    if pmlFile != None:
-      pymolV = PyMolViewer(project=self.getProject())
-      pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
-    else:
-      return
+    if pmlFile == None:
+      obj.buildPocketsFiles()
+      pmlFile = obj.getPmlFileSurf()
+
+    pymolV = PyMolViewer(project=self.getProject())
+    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+
 
 class VmdViewFpocket(VmdView):
   def __init__(self, vmdArgs, **kwargs):
