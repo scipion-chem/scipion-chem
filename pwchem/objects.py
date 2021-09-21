@@ -404,7 +404,7 @@ class SetOfPockets(data.EMSet):
         pClass = self.getPocketsClass()
         for pocket in self:
             if not pocket.getPocketClass() == pClass:
-                if pClass == 'None':
+                if pClass == None:
                     pClass = pocket.getPocketClass()
                 else:
                     pClass = 'Mixed'

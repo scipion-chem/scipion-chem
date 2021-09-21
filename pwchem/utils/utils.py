@@ -84,6 +84,13 @@ def splitPDBLine(line):
     else:
         return None
 
+def mergePDBs(fn1, fn2, fnOut):
+    with open(fnOut, 'w') as f:
+        with open(fn1) as f1:
+            f.write('\n'.join(f1.readlines()[:-1]))
+        with open(fn2) as f2:
+            f.write(f2.read())
+
 def getScipionObj(value):
     if isinstance(value, Object):
         return value
