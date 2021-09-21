@@ -61,6 +61,7 @@ show sticks, ligands
 set stick_color, magenta
 
 {}
+zoom visible
 '''
 
 PML_SURF_EACH = '''set_color pcol{} = {}
