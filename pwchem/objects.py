@@ -102,6 +102,12 @@ class SetOfSmallMolecules(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath().split('/')[:-1])
+
 class BindingSite(data.EMObject):
     """ Binding site """
     def __init__(self, **kwargs):
