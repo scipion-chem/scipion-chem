@@ -27,7 +27,7 @@ import os
 
 from pyworkflow.protocol.params import (StringParam, PointerParam)
 from pwem.protocols import EMProtocol
-from pwchem.utils.utils import *
+from pwchem.utils.utilsFasta import *
 
 class ProtChemRaptorX(EMProtocol):
     """This is a wrapper to http://raptorx.uchicago.edu/StructPredV2/predict/. The underlying program

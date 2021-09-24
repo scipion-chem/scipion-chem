@@ -1,0 +1,1 @@
+from .wizard_consensus_viewer import SetOutputClass

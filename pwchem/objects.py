@@ -30,7 +30,8 @@ from pyworkflow.object import (Float, Integer, List, String)
 import numpy as np
 import os
 from scipy import spatial
-
+from .utils import *
+from .constants import *
 
 class DatabaseID(data.EMObject):
     """ Database identifier """
@@ -101,6 +102,12 @@ class SetOfSmallMolecules(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath().split('/')[:-1])
+
 class BindingSite(data.EMObject):
     """ Binding site """
     def __init__(self, **kwargs):
@@ -123,9 +130,10 @@ class SetOfBindingSites(data.EMSet):
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """
 
-    def __init__(self, filename=None, proteinFile=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, extraFile=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
         self._proteinFile = String(proteinFile)
+        self._extraFile = String(extraFile)
         self._nPoints = Integer(kwargs.get('nPoints', None))
         self._contactResidues = String(kwargs.get('contactResidues', None))
         self._contactAtoms = String(kwargs.get('contactAtoms', None))
@@ -133,22 +141,6 @@ class ProteinPocket(data.EMFile):
         self._score = Float(kwargs.get('score', None))
         self._energy = Float(kwargs.get('energy', None))
         self._class = String(kwargs.get('class', None))
-        self.guessPmlFiles()
-
-    def guessPmlFiles(self):
-        proteinFile = self.getProteinFile()
-        if proteinFile != None:
-            pmlFile = 'Runs' + proteinFile.split('Runs')[-1].split('_out.')[0] + '.pml'
-            if os.path.exists(pmlFile):
-                self._pmlFile = String(os.path.abspath(pmlFile))
-            else:
-                self._pmlFile = None
-
-            pmlFileSurf = 'Runs' + proteinFile.split('Runs')[-1].split('_out.')[0] + '_surf.pml'
-            if os.path.exists(pmlFile):
-                self._pmlFileSurf = String(os.path.abspath(pmlFileSurf))
-            else:
-                self._pmlFileSurf = None
 
     #Attributes functions
     def getPocketClass(self):
@@ -208,18 +200,6 @@ class ProteinPocket(data.EMFile):
     def getProteinFile(self):
         return str(self._proteinFile)
 
-    def getPmlFile(self):
-        return str(self._pmlFile)
-
-    def setPmlFile(self, value):
-        self._pmlFile.set(value)
-
-    def getPmlFileSurf(self):
-        return str(self._pmlFileSurf)
-
-    def setPmlFileSurf(self, value):
-        self._pmlFileSurf.set(value)
-
     def getKwargs(self, props, AM):
         nkwargs = {}
         for k in props:
@@ -238,7 +218,7 @@ class ProteinPocket(data.EMFile):
             with open(self.getProteinFile()) as f:
                 for line in f:
                     if line.startswith('ATOM'):
-                        atomId = line.split()[1]
+                        atomId = splitPDBLine(line)[1]
                         if atomId in contactsIds:
                             contactAtoms.append(ProteinAtom(line))
         else:
@@ -360,12 +340,10 @@ class ProteinPocket(data.EMFile):
 
     def buildPocketPoints(self):
         pocketPoints = []
-        with open(self.getProteinFile()) as f:
+        with open(self.getFileName()) as f:
             for line in f:
-                if line.startswith('HETATM'):
-                    pocketId = int(line.split()[5])
-                    if pocketId == self.getObjId():
-                        pocketPoints += [ProteinAtom(line)]
+                if line.startswith('HETATM') or line.startswith('ATOM'):
+                    pocketPoints += [ProteinAtom(line)]
         return pocketPoints
 
     def getPointsCoords(self):
@@ -384,18 +362,167 @@ class ProteinPocket(data.EMFile):
 class SetOfPockets(data.EMSet):
     ITEM_TYPE = ProteinPocket
 
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._pocketsClass = String(kwargs.get('pocketsClass', None))
+        self._hetatmFile = String(kwargs.get('hetatmFile', None))
+        self._pmlFile = String(kwargs.get('pmlFile', None))
+        self._pmlFileSurf = String(kwargs.get('pmlFileSurf', None))
+
     def __str__(self):
-      s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+      s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
       return s
 
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath().split('/')[:-1])
+
+    def getProteinName(self):
+        return self.getProteinFile().split('/')[-1].split('.')[0]
+
     def getPmlFile(self):
-        return self.getFirstItem().getPmlFile()
+        return self._pmlFile.get()
+
+    def setPmlFile(self, value):
+        self._pmlFile.set(value)
 
     def getPmlFileSurf(self):
-        return self.getFirstItem().getPmlFileSurf()
+        return self._pmlFileSurf.get()
+
+    def setPmlFileSurf(self, value):
+        self._pmlFileSurf.set(value)
 
     def getProteinFile(self):
         return self.getFirstItem().getProteinFile()
+
+    def getProteinHetatmFile(self):
+        return self._hetatmFile.get()
+
+    def setProteinHetatmFile(self, value):
+        self._hetatmFile.set(value)
+
+    def getPocketsClass(self):
+        return self._pocketsClass.get()
+
+    def updatePocketsClass(self):
+        pClass = self.getPocketsClass()
+        for pocket in self:
+            if not pocket.getPocketClass() == pClass:
+                if pClass == None:
+                    pClass = pocket.getPocketClass()
+                else:
+                    pClass = 'Mixed'
+                    break
+        self._pocketsClass.set(pClass)
+
+    def append(self, item):
+        super().append(item)
+        self.updatePocketsClass()
+
+    def buildPDBhetatmFile(self, suffix=''):
+        protName = self.getProteinName()
+        atmFile = self.getProteinFile()
+        outDir = self.getSetDir()
+        outFile = os.path.join(outDir, protName+'{}_out.pdb'.format(suffix))
+
+        with open(outFile, 'w') as f:
+            f.write(getRawPDBStr(atmFile, ter=False))
+            f.write(self.getPocketsPDBStr())
+
+        self.setProteinHetatmFile(outFile)
+        return outFile
+
+    def createPML(self, outHETMFile):
+        outHETMFile = os.path.abspath(outHETMFile)
+        pmlFile = outHETMFile.replace('_out.pdb', '.pml')
+
+        # Creates the pml for pymol visualization
+        with open(pmlFile, 'w') as f:
+            f.write(PML_STR.format(outHETMFile))
+        self.setPmlFile(pmlFile)
+        return pmlFile
+
+    def createSurfacePml(self, outHETMFile):
+        outHETMFile = os.path.abspath(outHETMFile)
+        pmlFile = outHETMFile.replace('_out.pdb', '_surf.pml')
+        colors = createColorVectors(len(self))
+        surfaceStr = ''
+        for i, pock in enumerate(self):
+            pId = pock.getObjId()
+            surfAtomIds = str(list(map(int, pock.getDecodedCAtoms()))).replace(' ', '')
+            surfaceStr += PML_SURF_EACH.format(pId, colors[i], pId, surfAtomIds, pId, pId)
+
+        # Creates the pml for pymol visualization
+        with open(pmlFile, 'w') as f:
+            f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
+        self.setPmlFileSurf(pmlFile)
+        return pmlFile
+
+    def createTCL(self, outHETMFile):
+        pqrFile = outHETMFile.replace('_out.pdb', '.pqr')
+        tclFile = outHETMFile.replace('_out.pdb', '.tcl')
+        with open(pqrFile, 'w') as f:
+            for pocket in self:
+                pqrPocket = getRawPDBStr(pocket.getFileName(), ter=False).strip()
+                f.write(pqrPocket + '\n')
+            f.write('TER\nEND')
+        tclStr = TCL_STR % (outHETMFile, pqrFile)
+        with open(tclFile, 'w') as f:
+            f.write(tclStr)
+
+
+    def buildPocketsFiles(self, suffix='', tcl=False):
+        outHETMFile = self.buildPDBhetatmFile(suffix)
+        self.createPML(outHETMFile)
+        self.createSurfacePml(outHETMFile)
+        if self.getPocketsClass() == 'FPocket' and tcl==True:
+            self.createTCL(outHETMFile)
+        return outHETMFile
+
+    ######### Utils
+
+    def getPocketsPDBStr(self):
+        outStr = ''
+        for i, pocket in enumerate(self):
+            pocket.setObjId(i+1)
+            outStr += self.formatPocketStr(pocket)
+        return outStr
+
+    def formatPocketStr(self, pocket):
+        outStr = ''
+        numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
+        rawStr = getRawPDBStr(pocketFile, ter=False).strip()
+        if pocket.getPocketClass() == 'AutoLigand':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        elif pocket.getPocketClass() == 'P2Rank':
+            for line in rawStr.split('\n'):
+                line = splitPDBLine(line)
+                line[5] = numId
+                pdbLine = writePDBLine(line)
+                outStr += pdbLine
+
+        elif pocket.getPocketClass() == 'FPocket':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:], '', 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        elif pocket.getPocketClass() == 'SiteMap':
+            for line in rawStr.split('\n'):
+                line = line.split()
+                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
+                pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        return outStr
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
@@ -410,7 +537,7 @@ class ProteinAtom(data.EMObject):
             print('Passed line does not seems like an pdb ATOM line')
         else:
             self.line = pdbLine
-            line = pdbLine.split()
+            line = splitPDBLine(pdbLine)
             self.atomId = line[1]
             self.atomType = line[2]
             self.residueType = line[3]
@@ -438,9 +565,8 @@ class ProteinResidue(data.EMObject):
         if not pdbLine.startswith('ATOM'):
             print('Passed line does not seems like an pdb ATOM line')
         else:
-            line = pdbLine.split()
+            line = splitPDBLine(pdbLine)
             self.residueType = line[3]
             self.proteinChain = line[4]
             self.residueNumber = line[5]
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
-

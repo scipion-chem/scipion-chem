@@ -31,6 +31,7 @@ from pwchem.objects import ProteinPocket, SetOfPockets
 from autodock.protocols import ProtChemAutoLigand
 import pyworkflow.utils as pwutils
 import pyworkflow.viewer as pwviewer
+from pwem.viewers import Vmd, VmdView
 
 class PyMol:
   """ Help class to run PyMol and manage its environment. """
@@ -72,25 +73,36 @@ class PyMolViewer(pwviewer.Viewer):
 class PocketPointsViewer(pwviewer.Viewer):
   _label = 'Viewer pocket points'
   _environments = [pwviewer.DESKTOP_TKINTER]
-  _targets = [ProteinPocket, SetOfPockets]
+  _targets = [SetOfPockets]
 
   def _visualize(self, obj, **kwargs):
     pmlFile = obj.getPmlFile()
-    if pmlFile != None:
-      pymolV = PyMolViewer(project=self.getProject())
-      pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
-    else:
-      return
+    if pmlFile == None:
+      obj.buildPocketsFiles()
+      pmlFile = obj.getPmlFile()
+
+    pymolV = PyMolViewer(project=self.getProject())
+    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 class ContactSurfaceViewer(pwviewer.Viewer):
   _label = 'Viewer contact surface'
   _environments = [pwviewer.DESKTOP_TKINTER]
-  _targets = [ProteinPocket, SetOfPockets]
+  _targets = [SetOfPockets]
 
   def _visualize(self, obj, **kwargs):
     pmlFile = obj.getPmlFileSurf()
-    if pmlFile != None:
-      pymolV = PyMolViewer(project=self.getProject())
-      pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
-    else:
-      return
+    if pmlFile == None:
+      obj.buildPocketsFiles()
+      pmlFile = obj.getPmlFileSurf()
+
+    pymolV = PyMolViewer(project=self.getProject())
+    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+
+
+class VmdViewFpocket(VmdView):
+  def __init__(self, vmdArgs, **kwargs):
+    pwviewer.CommandView.__init__(self, ['vmd', *vmdArgs.split()],
+                                  env=Vmd.getEnviron(), **kwargs)
+
+  def show(self):
+    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron())

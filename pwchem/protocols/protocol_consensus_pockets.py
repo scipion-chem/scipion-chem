@@ -73,30 +73,32 @@ class ProtocolConsensusPockets(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def consensusStep(self):
+        pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
         self.consensusPockets = self.cluster2pocket(pocketClusters)
-        self.indepConsensusSets = self.getIndepConsensus(pocketClusters)
+        self.indepConsensusSets = self.getIndepConsensus(pocketClusters, pocketDic)
 
     def createOutputStep(self):
-        self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets, self.getAllPocketAttributes())
+        self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
         self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
-        outPockets = SetOfPockets(filename=self._getPath('consensusPocketsAll.sqlite'))
-        outProtFile, outPmlFile = self.createOutPDB(idsDic)
+        outPockets = SetOfPockets(filename=self._getPath('consensusPockets_All.sqlite'))
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
-            newPock.setProteinFile(outProtFile)
-            newPock.setPmlFile(outPmlFile)
             outPockets.append(newPock)
+        outPockets.buildPocketsFiles(suffix='_All')
         self._defineOutputs(outputPocketsAll=outPockets)
 
         indepOutputs = self.createIndepOutputs()
-        for outSet in indepOutputs:
+        for setId in indepOutputs:
             #Index should be the same as in the input
-            i = self.getInpProteinFiles().index(outSet.getProteinFile())
-            outName = 'outputPockets{}'.format(i+1)
-            self._defineOutputs(**{outName:outSet})
-            self._defineSourceRelation(self.inputPocketSets[i].get(), outSet)
+            suffix = '_{:03d}'.format(setId+1)
+            outName = 'outputPockets' + suffix
+            outSet = indepOutputs[setId]
+            outSet.buildPocketsFiles(suffix=suffix, tcl=True)
+
+            self._defineOutputs(**{outName: outSet})
+            self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -110,18 +112,31 @@ class ProtocolConsensusPockets(EMProtocol):
     def _warnings(self):
         """ Try to find warnings on define params. """
         warnings = []
+        inAtomStructs = set([])
+        for pSet in self.inputPocketSets:
+            inAtomStructs.add(pSet.get().getProteinFile())
+        if len(inAtomStructs) > 1:
+            warnings = ['The input Atom Structure files from the different sets of pockets are not'
+                        ' the same. It may not have sense to calculate the consensus.']
+
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def buildPocketDic(self):
+        dic = {}
+        for i, pSet in enumerate(self.inputPocketSets):
+            for pocket in pSet.get():
+                dic[pocket.getFileName()] = i
+        return dic
+
     def createIndepOutputs(self):
-        inputProteinFiles = self.getInpProteinFiles()
-        outSets = []
-        for proteinFile in self.indepConsensusSets:
-            i = inputProteinFiles.index(proteinFile)
-            newSet = SetOfPockets(filename=self._getPath('consensusPockets{}.sqlite'.format(i+1)))
-            for pock in self.indepConsensusSets[proteinFile]:
+        outSets = {}
+        for setId in self.indepConsensusSets:
+            suffix = '_{:03d}'.format(setId+1)
+            newSet = SetOfPockets(filename=self._getExtraPath('consensusPockets{}.sqlite'.format(suffix)))
+            for pock in self.indepConsensusSets[setId]:
                 newSet.append(pock.clone())
-            outSets.append(newSet)
+            outSets[setId] = newSet
         return outSets
 
     def getInpProteinFiles(self):
@@ -169,16 +184,17 @@ class ProtocolConsensusPockets(EMProtocol):
                     clusters = newClusters.copy()
         return clusters
 
-    def getIndepConsensus(self, clusters):
+    def getIndepConsensus(self, clusters, pocketDic):
         outSets = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
                 for pock in clust:
-                    curProtFile = pock.getProteinFile()
-                    if curProtFile in outSets:
-                        outSets[curProtFile] += [pock]
+                    curPocketFile = pock.getFileName()
+                    inSetId = pocketDic[curPocketFile]
+                    if inSetId in outSets:
+                        outSets[inSetId] += [pock]
                     else:
-                        outSets[curProtFile] = [pock]
+                        outSets[inSetId] = [pock]
         return outSets
 
 
@@ -225,18 +241,26 @@ class ProtocolConsensusPockets(EMProtocol):
         overlap = set(res1).intersection(set(res2))
         return len(overlap) / min(len(res1), len(res2))
 
-    def getAllPocketAttributes(self):
-        attrs = set([])
-        for pockSet in self.inputPocketSets:
-            attrs = attrs.union(set(pockSet.get().getFirstItem().getObjDict().keys()))
-        return attrs
+    def getAllPocketAttributes(self, pocketSets):
+        '''Return a dic with {attrName: ScipionObj=None}'''
+        attributes = {}
+        for pockSet in pocketSets:
+            item = pockSet.get().getFirstItem()
+            attrKeys = item.getObjDict().keys()
+            for attrK in attrKeys:
+                if not attrK in attributes:
+                    value = item.__getattribute__(attrK)
+                    attributes[attrK] = value.clone()
+                    attributes[attrK].set(None)
+        return attributes
 
-    def fillEmptyAttributes(self, inSet, attributes):
+    def fillEmptyAttributes(self, inSet):
         '''Fill all items with empty attributes'''
+        attributes = self.getAllPocketAttributes(self.inputPocketSets)
         for item in inSet:
             for attr in attributes:
                 if not hasattr(item, attr):
-                    setAttribute(item, attr, 'None')
+                    item.__setattr__(attr, attributes[attr])
         return inSet
 
     def reorderIds(self, inSet):
@@ -278,7 +302,7 @@ class ProtocolConsensusPockets(EMProtocol):
         outStr = ''
         with open(pdbFile) as f:
             for line in f:
-                if line.startswith('HETATM') and int(line.split()[5]) == int(oldId):
+                if line.startswith('HETATM') and int(splitPDBLine(line)[5]) == int(oldId):
                     outStr += self.pdbLineReplacement(line, str(oldId), str(newId))
         return outStr
 
@@ -288,7 +312,7 @@ class ProtocolConsensusPockets(EMProtocol):
             for line in f:
                 if line.startswith('ATOM'):
                     outStr += line
-                elif line.startswith('HETATM') and line.split()[2] != 'APOL':
+                elif line.startswith('HETATM') and splitPDBLine(line)[2] != 'APOL':
                     outStr += line
         return outStr
 
