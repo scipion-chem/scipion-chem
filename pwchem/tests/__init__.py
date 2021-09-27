@@ -29,7 +29,3 @@ from .test_import_small_Molecules import TestImportSmallMolecules
 from .test_list_operate import TestListOperate
 from .test_export_csv import TestExportcsv
 
-DataSet(name='ligandLibraries',
-        folder='ligandLibraries',
-        files={}
-        )
