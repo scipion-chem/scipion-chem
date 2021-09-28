@@ -31,6 +31,7 @@ manipulation of atomic struct objects
 
 import os
 import pyworkflow.utils as pwutils
+from pyworkflow.tests import DataSet
 import pwem
 from .bibtex import _bibtexStr
 
@@ -99,3 +100,11 @@ class Plugin(pwem.Plugin):
         fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
+
+DataSet(name='smallMolecules', folder='smallMolecules',
+            files={
+              'mix': 'mix/',
+              'mol2': 'mol2/',
+              'pdb': 'pdb/',
+              'sdf': 'sdf/',
+              'smi': 'smi/'})

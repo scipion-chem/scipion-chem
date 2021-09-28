@@ -81,18 +81,42 @@ class SmallMolecule(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
+        self.poseFile = pwobj.String(kwargs.get('poseFile', None))
+        self.gridId = pwobj.Integer(kwargs.get('gridId', None))
 
     def getFileName(self):
         return self.smallMoleculeFile.get()
 
-    def getConformersFileName(self):
-        return self._ConformersFile.get()
+    def getMolName(self):
+        return self.getFileName().split('/')[-1].split('.')[0]
+
+    def getPoseFile(self):
+        return self.poseFile.get()
+
+    def getPoseId(self):
+        return self.poseFile.get().split('@')[0]
+
+    def getGridId(self):
+        return self.gridId.get()
+
+    def setGridId(self, gridId):
+        self.gridId.set(gridId)
 
     def getParamsFileName(self):
-        return self._ParamsFile.get()
+        if hasattr(self, '_ParamsFile'):
+            return self._ParamsFile.get()
+        return
 
     def getPDBFileName(self):
-        return self._PDBFile.get()
+        if hasattr(self, '_PDBFile'):
+            return self._PDBFile.get()
+        return
+
+    def getUniqueName(self):
+        if self.getGridId() != None:
+            return 'g{}_{}_{}'.format(self.getGridId(), self.getMolName(), self.getPoseId())
+        else:
+            return self.getMolName()
 
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
