@@ -94,7 +94,12 @@ class SmallMolecule(data.EMObject):
         return self.poseFile.get()
 
     def getPoseId(self):
-        return self.poseFile.get().split('@')[0]
+        if '@' in self.poseFile.get():
+            #Schrodinger
+            return self.poseFile.get().split('@')[0]
+        else:
+            #Autodock
+            return self.poseFile.get().split('_')[-1].split('.')[0]
 
     def getGridId(self):
         return self.gridId.get()
@@ -113,10 +118,12 @@ class SmallMolecule(data.EMObject):
         return
 
     def getUniqueName(self):
+        name = self.getMolName()
         if self.getGridId() != None:
-            return 'g{}_{}_{}'.format(self.getGridId(), self.getMolName(), self.getPoseId())
-        else:
-            return self.getMolName()
+            name = 'g{}_'.format(self.getGridId()) + name
+        if self.getPoseId() != None:
+            name += '_' + self.getPoseId()
+        return name
 
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
