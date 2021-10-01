@@ -64,7 +64,7 @@ def writePDBLine(j):
     return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
            (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
 
-def splitPDBLine(line):
+def splitPDBLine(line, rosetta=False):
     if line.startswith(("ATOM", "HETATM")):
         atomType = line[0:6].strip()
         atomSerialNumber = line[6:11].strip()
@@ -77,8 +77,12 @@ def splitPDBLine(line):
         coorZ = line[46:54].strip()
         occupancy = line[54:60].strip()
         temperatureFact = line[60:66].strip()
-        segmentIdentifier = line[72:76].strip()
-        elementSymbol = line[76:78].strip()
+        if rosetta:
+            segmentIdentifier = line[70:76].strip()
+            elementSymbol = line[76:79].strip()
+        else:
+            segmentIdentifier = line[72:76].strip()
+            elementSymbol = line[76:78].strip()
         return [atomType, atomSerialNumber, atomName, resName, chain, resNumber,
                 coorX, coorY, coorZ, occupancy, temperatureFact, segmentIdentifier, elementSymbol]
     else:
