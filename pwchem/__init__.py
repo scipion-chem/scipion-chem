@@ -44,6 +44,7 @@ class Plugin(pwem.Plugin):
         # CONDA_ACTIVATION_CMD=eval "$(path-to-conda shell.bash hook)"
         # in the .config/scipion/scipion.conf file
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addopenbabelPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
