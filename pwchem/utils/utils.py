@@ -26,6 +26,7 @@
 
 from pwem.objects.data import Sequence, Object, String, Integer, Float
 from ..constants import *
+from pwchem import Plugin as pwchemPlugin
 import random as rd
 
 def getRawPDBStr(pdbFile, ter=True):
@@ -140,3 +141,6 @@ def writeSurfPML(pockets, pmlFileName):
     with open(pmlFileName, 'w') as f:
         f.write(createSurfacePml(pockets))
 
+
+def runOpenBabel(protocol, args, cwd):
+    pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd)
