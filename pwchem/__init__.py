@@ -48,11 +48,48 @@ class Plugin(pwem.Plugin):
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
+        cls._defineVar("OPENBABEL_ENV_ACTIVATION", 'conda activate openbabel-env')
 
     @classmethod
     def getRDKitEnvActivation(cls):
         activation = cls.getVar("RDKIT_ENV_ACTIVATION")
         return activation
+
+    @classmethod
+    def getOpenbabelEnvActivation(cls):
+      activation = cls.getVar("OPENBABEL_ENV_ACTIVATION")
+      return activation
+
+    @classmethod
+    def addopenbabelPackage(cls, env, default=False):
+      OPENBABEL_INSTALLED = 'openbabel_installed'
+
+      # try to get CONDA activation command
+      installationCmd = cls.getCondaActivationCmd()
+
+      # Create the environment
+      installationCmd += ' conda install openbabel -c conda-forge &&'
+
+      # Flag installation finished
+      installationCmd += ' touch %s' % OPENBABEL_INSTALLED
+
+      openbabel_commands = [(installationCmd, OPENBABEL_INSTALLED)]
+
+      envPath = os.environ.get('PATH', "")
+      installEnvVars = {'PATH': envPath} if envPath else None
+      env.addPackage('openbabel',
+                     tar='void.tgz',
+                     commands=openbabel_commands,
+                     neededProgs=cls.getDependencies(),
+                     default=default,
+                     vars=installEnvVars)
+
+    @classmethod
+    def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None):
+      """ Run openbabel command from a given protocol. """
+      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
+      fullProgram = "obabel"
+      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 
     @classmethod
     def getDependencies(cls):
