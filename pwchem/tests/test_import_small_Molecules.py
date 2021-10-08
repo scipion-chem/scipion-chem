@@ -35,7 +35,7 @@ class TestImportBase(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        cls.dsModBuild = DataSet.getDataSet("ligandLibraries")
+        cls.dsModBuild = DataSet.getDataSet("smallMolecules")
 
 class TestImportSmallMolecules(TestImportBase):
     MULTIPLE_T = True

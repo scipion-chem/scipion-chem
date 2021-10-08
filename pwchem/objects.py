@@ -83,12 +83,16 @@ class SmallMolecule(data.EMObject):
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))
+        self._type = String(kwargs.get('type', 'Standard'))
 
     def getFileName(self):
         return self.smallMoleculeFile.get()
 
     def getMolName(self):
         return self.getFileName().split('/')[-1].split('.')[0]
+
+    def getMolBase(self):
+        return self.getMolName().split('-')[0]
 
     def getPoseFile(self):
         return self.poseFile.get()
@@ -117,11 +121,17 @@ class SmallMolecule(data.EMObject):
             return self._PDBFile.get()
         return
 
+    def getMolClass(self):
+        return self._type
+
+    def setMolClass(self, value):
+        self._type.set(value)
+
     def getUniqueName(self):
         name = self.getMolName()
         if self.getGridId() != None:
             name = 'g{}_'.format(self.getGridId()) + name
-        if self.getPoseId() != None:
+        if self.poseFile.get() != None:
             name += '_' + self.getPoseId()
         return name
 
@@ -132,6 +142,29 @@ class SetOfSmallMolecules(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+        self._molClass = String('Standard')
+
+    def __str__(self):
+      s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
+      return s
+
+    def getMolClass(self):
+        return self._molClass.get()
+
+    def updateMolClass(self):
+        mClass = self.getMolClass()
+        for mol in self:
+            if not mol.getMolClass() == mClass:
+                if mClass == 'Standard':
+                    mClass = mol.getMolClass()
+                else:
+                    mClass = 'Mixed'
+                    break
+        self._molClass.set(mClass)
+
+    def append(self, item):
+        super().append(item)
+        self.updateMolClass()
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])
