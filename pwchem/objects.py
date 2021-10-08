@@ -422,6 +422,42 @@ class ProteinPocket(data.EMFile):
             res.append(ProteinResidue(atom.line))
         return res
 
+    def getMostCentralResidues(self, n=2):
+        cMass = self.calculateMassCenter()
+        cAtoms = self.buildContactAtoms()
+
+        closerAtoms = self.getCloserAtoms(cMass, cAtoms)
+        closerResidues = list(set(self.getAtomResidues(closerAtoms)))
+
+        return closerResidues[:n]
+
+    def getCloserAtoms(self, refCoord, atoms):
+        '''Returns the atoms sorted as they are close to the reference coordinate'''
+        dists = []
+        closerAtom = None
+        for at in atoms:
+            dists += [self.calculateDistance(refCoord, at.getCoords())]
+
+        zipped_lists = sorted(zip(dists, atoms))
+        dists, atoms = zip(*zipped_lists)
+        print('CMass coord: ', refCoord)
+        print('Distances: ', dists[:4])
+        print('Atom coords: ', [at.getCoords() for at in atoms[:4]])
+        print('Far coords: ', [at.getCoords() for at in atoms[-4:]])
+        return atoms
+
+    def calculateDistance(self, c1, c2):
+        sum = 0
+        for i in range(len(c1)):
+            sum += (c1[i]-c2[i])**2
+        return sum ** (1/2)
+
+    def getAtomResidues(self, atoms):
+        residues = []
+        for at in atoms:
+            residues.append(at.residueId)
+        return residues
+
 
 class SetOfPockets(data.EMSet):
     ITEM_TYPE = ProteinPocket
