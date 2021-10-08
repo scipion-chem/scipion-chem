@@ -48,7 +48,7 @@ class TestImportSmallMolecules(TestImportBase):
         print("\nImport Experiment:  1 molecule smi format")
 
         args = {'multiple': self.MULTIPLE_F,
-                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000.smi"))
+                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000_smi.smi"))
                 }
 
         prot1 = self.newProtocol(PISmallM, **args)
@@ -65,24 +65,7 @@ class TestImportSmallMolecules(TestImportBase):
         print("\nImport Experiment:  1 molecule pdb format")
 
         args = {'multiple': self.MULTIPLE_F,
-                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000_noH.pdb"))
-                }
-
-        prot1 = self.newProtocol(PISmallM, **args)
-        self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMols
-        self.assertIsNotNone(small_1,
-                             "There was a problem with the import")
-        self.assertTrue(small_1.getSize()==1,
-                        "There was a problem with the import and the SetOfSmallMolecules is empty")
-
-    def testImport_one_mol_mae(self):
-        """ Import a single file of a small molecule provided by the user in mae format
-        """
-        print("\nImport Experiment:  1 molecule mae format")
-
-        args = {'multiple': self.MULTIPLE_F,
-                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000.mae"))
+                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000_pdb.pdb"))
                 }
 
         prot1 = self.newProtocol(PISmallM, **args)
@@ -99,7 +82,7 @@ class TestImportSmallMolecules(TestImportBase):
         print("\nImport Experiment:  1 molecule sdf format")
 
         args = {'multiple': self.MULTIPLE_F,
-                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000.sdf"))
+                'filePath': self.dsModBuild.getFile(os.path.join("mix", "2000_sdf.sdf"))
                 }
 
         prot1 = self.newProtocol(PISmallM, **args)
