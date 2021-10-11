@@ -111,6 +111,11 @@ class SmallMolecule(data.EMObject):
     def setGridId(self, gridId):
         self.gridId.set(gridId)
 
+    def getConformersFileName(self):
+        if hasattr(self, '_ConformersFile'):
+            return self._ConformersFile.get()
+        return
+
     def getParamsFileName(self):
         if hasattr(self, '_ParamsFile'):
             return self._ParamsFile.get()
@@ -440,10 +445,6 @@ class ProteinPocket(data.EMFile):
 
         zipped_lists = sorted(zip(dists, atoms))
         dists, atoms = zip(*zipped_lists)
-        print('CMass coord: ', refCoord)
-        print('Distances: ', dists[:4])
-        print('Atom coords: ', [at.getCoords() for at in atoms[:4]])
-        print('Far coords: ', [at.getCoords() for at in atoms[-4:]])
         return atoms
 
     def calculateDistance(self, c1, c2):

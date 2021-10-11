@@ -28,6 +28,11 @@ from pwem.objects.data import Sequence, Object, String, Integer, Float
 from ..constants import *
 from pwchem import Plugin as pwchemPlugin
 import random as rd
+import os
+
+confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
+                 '.mol2': '@<TRIPOS>MOLECULE'}
+
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
@@ -144,3 +149,30 @@ def writeSurfPML(pockets, pmlFileName):
 
 def runOpenBabel(protocol, args, cwd):
     pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd)
+
+
+def splitConformerFile(confFile, outDir):
+    _, ext = os.path.splitext(confFile)
+    fnRoot = os.path.split(confFile)[1].split('_')[0]
+    iConf, lastRemark, towrite = 2, True, ''
+    with open(confFile) as fConf:
+        for line in fConf:
+            if line.startswith(confFirstLine[ext]):
+                if lastRemark:
+                    towrite += line
+                else:
+                    newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
+                    writeFile(towrite, newFile)
+                    towrite, lastRemark = line, True
+                    iConf += 1
+            else:
+                towrite += line
+                lastRemark = False
+    newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
+    writeFile(towrite, newFile)
+    return outDir
+
+
+def writeFile(towrite, file):
+    with open(file, 'w') as f:
+        f.write(towrite)
