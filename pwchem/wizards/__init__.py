@@ -1,1 +1,2 @@
 from .wizard_consensus_viewer import SetOutputClass
+from .wizard_radius import GetRadiusProtein
