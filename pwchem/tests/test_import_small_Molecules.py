@@ -53,7 +53,7 @@ class TestImportSmallMolecules(TestImportBase):
 
         prot1 = self.newProtocol(PISmallM, **args)
         self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMols
+        small_1 = prot1.outputSmallMolecules
         self.assertIsNotNone(small_1,
                              "There was a problem with the import")
         self.assertTrue(small_1.getSize()==1,
@@ -70,7 +70,7 @@ class TestImportSmallMolecules(TestImportBase):
 
         prot1 = self.newProtocol(PISmallM, **args)
         self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMols
+        small_1 = prot1.outputSmallMolecules
         self.assertIsNotNone(small_1,
                              "There was a problem with the import")
         self.assertTrue(small_1.getSize()==1,
@@ -87,7 +87,7 @@ class TestImportSmallMolecules(TestImportBase):
 
         prot1 = self.newProtocol(PISmallM, **args)
         self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMols
+        small_1 = prot1.outputSmallMolecules
         self.assertIsNotNone(small_1,
                              "There was a problem with the import")
         self.assertTrue(small_1.getSize()==1,
@@ -106,7 +106,7 @@ class TestImportSmallMolecules(TestImportBase):
 
         prot1 = self.newProtocol(PISmallM, **args)
         self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMols
+        small_1 = prot1.outputSmallMolecules
         self.assertIsNotNone(small_1,
                              "There was a problem with the import")
         self.assertTrue(small_1.getSize()==4,

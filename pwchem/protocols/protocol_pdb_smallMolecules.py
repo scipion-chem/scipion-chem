@@ -136,5 +136,5 @@ class ProtChemPDBSmallMolecules(EMProtocol):
                 Plugin.runRDKit(self,"python3",args)
                 ligandDict[chemId]._PDBLigandImage = pwobj.String(fnOut)
             outputDatabaseID.append(ligandDict[chemId])
-        self._defineOutputs(outputSmallMols=outputDatabaseID)
+        self._defineOutputs(outputSmallMolecules=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)
