@@ -24,11 +24,13 @@
 # *
 # **************************************************************************
 
+from pwem.convert import AtomicStructHandler
 from pwem.objects.data import Sequence, Object, String, Integer, Float
 from ..constants import *
 from pwchem import Plugin as pwchemPlugin
 import random as rd
 import os
+import numpy as np
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -176,3 +178,100 @@ def splitConformerFile(confFile, outDir):
 def writeFile(towrite, file):
     with open(file, 'w') as f:
         f.write(towrite)
+
+
+def getProteinMaxDiameter(protFile):
+    protCoords = np.array(getPDBCoords(protFile))
+    minCoords, maxCoords = protCoords.min(axis=0), protCoords.max(axis=0)
+    return max(maxCoords - minCoords)
+
+def getPDBCoords(pdbFile):
+    coords = []
+    with open(pdbFile) as f:
+      for line in f:
+        if line.startswith('HETATM') or line.startswith('ATOM'):
+            line = splitPDBLine(line)
+            coords.append((float(line[6]), float(line[7]), float(line[8])))
+    return coords
+
+##################################################
+#ADT grids
+
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
+      """
+      Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
+      """
+
+      protName, protExt = os.path.splitext(os.path.basename(protFile))
+      gpf_file = os.path.join(outDir, protName + '.gpf')
+      npts = int(round(npts))
+
+      protAtomTypes = parseAtomTypes(protFile)
+      protAtomTypes = ' '.join(sortSet(protAtomTypes))
+
+      if ligandFns == None:
+          ligAtomTypes = 'A C HD N NA OA SA'
+      else:
+          ligAtomTypes = set([])
+          for ligFn in ligandFns:
+              ligAtomTypes = ligAtomTypes | parseAtomTypes(ligFn)
+
+          ligAtomTypes = ' '.join(sortSet(ligAtomTypes))
+
+
+
+      with open(os.path.abspath(gpf_file), "w") as file:
+        file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
+        file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
+        file.write("spacing %s                          # spacing(A)\n" % (spacing))
+        file.write("receptor_types %s     # receptor atom types\n" % (protAtomTypes))
+        file.write("ligand_types %s       # ligand atom types\n" % (ligAtomTypes))
+        file.write("receptor %s                  # macromolecule\n" % (os.path.abspath(protFile)))
+        file.write("gridcenter %s %s %s           # xyz-coordinates or auto\n" % (xc, yc, zc))
+        file.write("smooth 0.5                           # store minimum energy w/in rad(A)\n")
+        for ligType in ligAtomTypes.split():
+            file.write("map %s.%s.map                       # atom-specific affinity map\n" % (protName, ligType))
+        file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (protName))
+        file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (protName))
+        file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant")
+
+      return os.path.abspath(gpf_file)
+
+
+def calculate_centerMass(atomStructFile):
+    """
+    Returns the geometric center of mass of an Entity (anything with a get_atoms function in biopython).
+    Geometric assumes all masses are equal
+    """
+
+    try:
+        structureHandler = AtomicStructHandler()
+        structureHandler.read(atomStructFile)
+        center_coord = structureHandler.centerOfMass(geometric=True)
+        structure = structureHandler.getStructure()
+
+        return structure, center_coord[0], center_coord[1], center_coord[2]  # structure, x,y,z
+
+    except Exception as e:
+        print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
+        return
+
+def parseAtomTypes(pdbFile):
+    atomTypes = set([])
+    with open(pdbFile) as f:
+        for line in f:
+            if line.startswith('ATOM') or line.startswith('HETATM'):
+              pLine = line.split()
+              try:
+                  at = pLine[12]
+              except:
+                  at = splitPDBLine(line, rosetta=True)[12]
+
+              atomTypes.add(at)
+    return atomTypes
+
+
+def sortSet(seti):
+    seti = list(seti)
+    seti.sort()
+    return seti
