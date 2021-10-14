@@ -99,7 +99,8 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     pmlFile = os.path.join(outDir, '{}.pml'.format(ligandLabel))
     with open(pmlFile, 'w') as f:
         for mol in mols:
-            f.write('load {}\n'.format(os.path.abspath(mol.getFileName())))
+            molFile, molName = os.path.abspath(mol.getFileName()), mol.getUniqueName()
+            f.write('load {}, {}\nhide spheres, {}\nshow sticks, {}\n'.format(molFile, molName, molName, molName))
 
     pymolV = PyMolViewer(project=self.getProject())
     pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
