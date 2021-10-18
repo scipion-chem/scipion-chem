@@ -431,21 +431,26 @@ class ProteinPocket(data.EMFile):
         cMass = self.calculateMassCenter()
         cAtoms = self.buildContactAtoms()
 
-        closerAtoms = self.getCloserAtoms(cMass, cAtoms)
-        closerResidues = list(set(self.getAtomResidues(closerAtoms)))
+        closestResidues = self.getCloserResidues(cMass, cAtoms, n)
+        return closestResidues
 
-        return closerResidues[:n]
-
-    def getCloserAtoms(self, refCoord, atoms):
+    def getCloserResidues(self, refCoord, atoms, n=2):
         '''Returns the atoms sorted as they are close to the reference coordinate'''
         dists = []
-        closerAtom = None
         for at in atoms:
             dists += [self.calculateDistance(refCoord, at.getCoords())]
 
         zipped_lists = sorted(zip(dists, atoms))
         dists, atoms = zip(*zipped_lists)
-        return atoms
+        residues = self.getAtomResidues(atoms)
+
+        closestResidues = []
+        for r in residues:
+            if r not in closestResidues:
+                closestResidues.append(r)
+                if len(closestResidues) == n:
+                    return closestResidues
+        return closestResidues
 
     def calculateDistance(self, c1, c2):
         sum = 0
