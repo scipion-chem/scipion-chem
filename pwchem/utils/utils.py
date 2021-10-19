@@ -25,11 +25,12 @@
 # **************************************************************************
 
 from pwem.convert import AtomicStructHandler
+from pwem.convert.atom_struct import cifToPdb
 from pwem.objects.data import Sequence, Object, String, Integer, Float
 from ..constants import *
 from pwchem import Plugin as pwchemPlugin
 import random as rd
-import os
+import os, shutil
 import numpy as np
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
@@ -49,7 +50,8 @@ def getRawPDBStr(pdbFile, ter=True):
 def writeRawPDB(pdbFile, outFile, ter=True):
     '''Creates a new pdb with only the ATOM and HETATM lines'''
     with open(outFile, 'w') as f:
-        getRawPDBStr(pdbFile)
+        f.write(getRawPDBStr(pdbFile, ter))
+    return outFile
 
 def writePDBLine(j):
     '''j: elements to write in the pdb'''
@@ -303,3 +305,45 @@ def sortSet(seti):
     seti = list(seti)
     seti.sort()
     return seti
+
+
+def clean_PDB(inputStructure, outFn, waters=False, HETATM=False, chain_id=None):
+    """ Clean the pdb file from waters and ligands and redundant chains
+    waters: clean waters
+    HETATM: clean HETATM lines
+    rChains: chain id to keep
+    """
+
+    # Get a PDB format file to the protein structure
+    pdb_ini = inputStructure.getFileName()
+    auxPdb = os.path.join(os.path.dirname(outFn), 'aux.pdb')
+
+    # Convert cif to pdb since Rosetta DARC program only can use PDB files
+    if pdb_ini.endswith('.cif'):
+        cifToPdb(pdb_ini, auxPdb)  # Rosetta DARC program only can use PDB files
+    else:
+        shutil.copy(pdb_ini, auxPdb)
+
+    # Parse and select the pdb file to clean it
+    with open(auxPdb, "r") as pdb:
+        with open(outFn, "w+") as pdb_out:  # PDB where we write the cleaned atomic structure file
+            for line in pdb:
+                column = line.split()
+                try:
+                    id = column[0].strip()  # ATOM or HETATM
+                    molecule = column[3].strip()  # Water or not
+                    chain = column[4].strip()  # Name of chain
+
+                    #No chain selected or line from selected line
+                    if chain_id == None or chain_id == chain:
+                        #ATOM line or HETATM line and keep HETATM or water and keep water
+                        if id == 'ATOM' or (id == "HETATM" and not HETATM and molecule != "HOH") or \
+                                (molecule == "HOH" and not waters):
+                            pdb_out.write(line)
+
+                    elif id == "TER":
+                        pdb_out.write(line)
+
+                except:
+                    pass
+    return outFn
