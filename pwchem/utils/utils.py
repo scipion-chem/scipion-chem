@@ -156,7 +156,7 @@ def runOpenBabel(protocol, args, cwd):
 def splitConformerFile(confFile, outDir):
     _, ext = os.path.splitext(confFile)
     fnRoot = os.path.split(confFile)[1].split('_')[0]
-    iConf, lastRemark, towrite = 2, True, ''
+    iConf, lastRemark, towrite = 1, True, ''
     with open(confFile) as fConf:
         for line in fConf:
             if line.startswith(confFirstLine[ext]):
@@ -173,6 +173,34 @@ def splitConformerFile(confFile, outDir):
     newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
     writeFile(towrite, newFile)
     return outDir
+
+def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
+    '''Appends a molecule to a conformers file.
+    If outConfFile == None, the output conformers file path is the same as as the start'''
+    if outConfFile == None:
+        iName, iExt = os.path.splitext(confFile)
+        outConfFile = confFile.replace(iExt, '_aux'+iExt)
+        rename = True
+
+    with open(outConfFile, 'w') as f:
+        with open(newFile) as fNew:
+            newStr = fNew.read()
+        with open(confFile) as fConf:
+            confStr = fConf.read()
+
+        if beginning:
+            f.write(newStr)
+            f.write(confStr)
+        else:
+            f.write(confStr)
+            f.write(newStr)
+
+    if rename:
+        os.rename(outConfFile, confFile)
+        return confFile
+
+    return outConfFile
+
 
 
 def writeFile(towrite, file):
