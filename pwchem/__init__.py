@@ -69,7 +69,7 @@ class Plugin(pwem.Plugin):
       installationCmd = cls.getCondaActivationCmd()
 
       # Create the environment
-      installationCmd += ' conda install openbabel -c conda-forge &&'
+      installationCmd += ' conda create -y -c conda-forge -n openbabel-env openbabel &&'
 
       # Flag installation finished
       installationCmd += ' touch %s' % OPENBABEL_INSTALLED
@@ -89,7 +89,6 @@ class Plugin(pwem.Plugin):
     def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None):
       """ Run openbabel command from a given protocol. """
       fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
-      fullProgram = "obabel"
       protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 
     @classmethod
