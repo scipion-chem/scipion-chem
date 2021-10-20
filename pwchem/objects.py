@@ -85,6 +85,10 @@ class SmallMolecule(data.EMObject):
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))
         self._type = String(kwargs.get('type', 'Standard'))
 
+    def __str__(self):
+        s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
+        return s
+
     def getFileName(self):
         return self.smallMoleculeFile.get()
 
@@ -96,6 +100,9 @@ class SmallMolecule(data.EMObject):
 
     def getPoseFile(self):
         return self.poseFile.get()
+
+    def setPoseFile(self, value):
+        return self.poseFile.set(value)
 
     def getPoseId(self):
         if '@' in self.poseFile.get():
@@ -530,8 +537,9 @@ class SetOfPockets(data.EMSet):
     def buildPDBhetatmFile(self, suffix=''):
         protName = self.getProteinName()
         atmFile = self.getProteinFile()
+        atmExt = os.path.splitext(atmFile)[1]
         outDir = self.getSetDir()
-        outFile = os.path.join(outDir, protName+'{}_out.pdb'.format(suffix))
+        outFile = os.path.join(outDir, protName+'{}_out{}'.format(suffix, atmExt))
 
         with open(outFile, 'w') as f:
             f.write(getRawPDBStr(atmFile, ter=False))
@@ -542,7 +550,8 @@ class SetOfPockets(data.EMSet):
 
     def createPML(self, outHETMFile):
         outHETMFile = os.path.abspath(outHETMFile)
-        pmlFile = outHETMFile.replace('_out.pdb', '.pml')
+        outExt = os.path.splitext(outHETMFile)[1]
+        pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
         # Creates the pml for pymol visualization
         with open(pmlFile, 'w') as f:
@@ -552,7 +561,8 @@ class SetOfPockets(data.EMSet):
 
     def createSurfacePml(self, outHETMFile):
         outHETMFile = os.path.abspath(outHETMFile)
-        pmlFile = outHETMFile.replace('_out.pdb', '_surf.pml')
+        outExt = os.path.splitext(outHETMFile)[1]
+        pmlFile = outHETMFile.replace('_out{}'.format(outExt), '_surf.pml')
         colors = createColorVectors(len(self))
         surfaceStr = ''
         for i, pock in enumerate(self):
@@ -586,6 +596,11 @@ class SetOfPockets(data.EMSet):
         if self.getPocketsClass() == 'FPocket' and tcl==True:
             self.createTCL(outHETMFile)
         return outHETMFile
+
+    def getMAEFile(self):
+        pock = self.getFirstItem()
+        if hasattr(pock, 'structureFile'):
+            return pock.structureFile.get()
 
     ######### Utils
 
