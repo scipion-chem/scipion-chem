@@ -113,9 +113,10 @@ class DockingViewer(pwviewer.ProtocolViewer):
 
         mols = self.moleculeLigandsDic[ligandLabel]
         mols = sortMolsByUnique(mols)
-        pmlStr = ''
+        pmlStr, addTarget = '', True
         for mol in mols:
-          pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=True)
+          pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
+          addTarget = False
         writePmlFile(pmlFile, pmlStr)
 
         pymolV = PyMolViewer(project=self.getProject())
@@ -128,17 +129,21 @@ class DockingViewer(pwviewer.ProtocolViewer):
           pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
           mols = self.pocketLigandsDic[ligandLabel]
           mols, pmlStr = sortMolsByUnique(mols), ''
+          addTarget=True
           for mol in mols:
-            pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=True)
+            pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
+            addTarget = False
 
         else:
           pmlFile, pmlStr = os.path.join(pmlsDir, 'allDockedMolecules.pml'), ''
+          addTarget = True
           for ligandLabel in self.pocketLabels:
             if ligandLabel != 'All':
               mols = self.pocketLigandsDic[ligandLabel]
               mols = sortMolsByUnique(mols)
               for mol in mols:
-                pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=True)
+                pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
+                addTarget = False
         writePmlFile(pmlFile, pmlStr)
 
         pymolV = PyMolViewer(project=self.getProject())
