@@ -346,4 +346,5 @@ def clean_PDB(inputStructure, outFn, waters=False, HETATM=False, chain_id=None):
 
                 except:
                     pass
+    os.remove(auxPdb)
     return outFn
