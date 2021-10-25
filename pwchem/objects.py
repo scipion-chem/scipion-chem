@@ -26,9 +26,6 @@
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
-from pyworkflow.object import (Float, Integer, List, String)
-import numpy as np
-import os
 from scipy import spatial
 from .utils import *
 from .constants import *
@@ -147,6 +144,68 @@ class SmallMolecule(data.EMObject):
             name += '_' + self.getPoseId()
         return name
 
+    def getAtomsPosDic(self, onlyHeavy=True):
+        molFile = self.getFileName()
+        if self.getPoseFile() != None:
+            molFile = self.getPoseFile()
+
+        posDic = {}
+        if '.pdb' in molFile:
+            with open(molFile) as fIn:
+                for line in fIn:
+                    if line.startswith('ATOM') or line.startswith('HETATM'):
+                        elements = splitPDBLine(line)
+                        atomId, atomType, coords = elements[2], elements[-1], elements[6:9]
+                        if atomType != 'H' or not onlyHeavy:
+                            posDic[atomId] = list(map(float, coords))
+
+        elif molFile.endswith('.mol'):
+            with open(molFile) as fIn:
+                parse=False
+                for line in fIn:
+                    if line.startswith('@<TRIPOS>ATOM'):
+                        parse = True
+                    elif parse and line.startswith('@'):
+                        #finished
+                        return posDic
+
+                    if parse:
+                        elements = line.split()
+                        atomId, atomType, coords = elements[1], elements[5], elements[2:5]
+                        if atomType != 'H' or not onlyHeavy:
+                            posDic[atomId] = list(map(float, coords))
+
+        elif molFile.endswith('.sdf'):
+            numAtoms = {}
+            with open(molFile) as fIn:
+                for i, line in enumerate(fIn):
+                    if i>=4:
+                        if len(line.split()) == 10:
+                            elements = line.split()
+                            atomType, coords = elements[3], elements[:3]
+                            if atomType in numAtoms:
+                                numAtoms[atomType] += 1
+                            else:
+                                numAtoms[atomType] = 1
+
+                            atomId = '{}{}'.format(atomType, numAtoms[atomType])
+                            if atomType != 'H' or not onlyHeavy:
+                                posDic[atomId] = list(map(float, coords))
+                        else:
+                            break
+
+        return posDic
+
+    def getEnergy(self):
+        if hasattr(self, '_energy'):
+            return self._energy.get()
+
+    def getScore(self):
+        if hasattr(self, '_score'):
+            return self._score.get()
+
+
+
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
     ITEM_TYPE = SmallMolecule
@@ -155,6 +214,8 @@ class SetOfSmallMolecules(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._molClass = String('Standard')
+        self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
+        self._docked = pwobj.Boolean(False)
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
@@ -183,6 +244,15 @@ class SetOfSmallMolecules(data.EMSet):
 
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
+
+    def getProteinFile(self):
+        return self.proteinFile.get()
+
+    def isDocked(self):
+        return self._docked.get()
+
+    def setDocked(self, value):
+        self._docked.set(True)
 
 class BindingSite(data.EMObject):
     """ Binding site """

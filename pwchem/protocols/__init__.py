@@ -42,3 +42,4 @@ from .protocol_export_csv import ProtChemExportCSV
 from .protocol_consensus_pockets import ProtocolConsensusPockets
 from .protocol_import_pockets import ImportPockets
 from .protocol_ligand_preparation import ProtChemOBabelPrepareLigands
+from .protocol_consensus_docking import ProtocolConsensusDocking

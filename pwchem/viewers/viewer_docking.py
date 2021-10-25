@@ -24,12 +24,11 @@
 # *
 # **************************************************************************
 
-import os
-
-from pyworkflow.protocol.params import EnumParam, BooleanParam
+from pyworkflow.protocol.params import EnumParam
 import pyworkflow.viewer as pwviewer
-from pwchem.viewers import PyMolViewer
 from pwchem.utils.utilsViewer import *
+from pyworkflow.viewer import DESKTOP_TKINTER
+from pwchem.protocols import ProtocolConsensusDocking
 
 SINGLE, MOLECULE, POCKET = 'single', 'molecule', 'pocket'
 
@@ -150,4 +149,52 @@ class DockingViewer(pwviewer.ProtocolViewer):
         pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
 
+class ProtConsensusDockingViewer(DockingViewer):
+    """ Visualize the output of protocol autodock """
+    _label = 'Viewer autodock docking'
+    _targets = [ProtocolConsensusDocking]
+    _environments = [DESKTOP_TKINTER]
+
+    def __init__(self, **args):
+        DockingViewer.__init__(self, **args)
+
+    def getChoices(self, type=POCKET, pymol=True):
+        outputLigandsDic, oLabel = {}, None
+        for oAttr in self.protocol.iterOutputAttributes():
+          if 'outputSmallMolecules' in oAttr[0]:
+            if type == POCKET:
+              oLabel = oAttr[0]
+            molSet = getattr(self.protocol, oAttr[0])
+            for mol in molSet:
+              curMol = mol.clone()
+              if type == SINGLE:
+                oLabel = curMol.getUniqueName()
+              elif type == MOLECULE and oAttr[0] != 'outputSmallMoleculesAll':
+                oLabel = curMol.getMolBase()
+
+              if oLabel is not None:
+                if not oLabel in outputLigandsDic:
+                  outputLigandsDic[oLabel] = [curMol]
+                else:
+                  outputLigandsDic[oLabel] += [curMol]
+
+        outputLabels = list(outputLigandsDic.keys())
+        outputLabels.sort()
+        return outputLabels, outputLigandsDic
+
+    def _viewMoleculePymol(self, e=None):
+        ligandLabel = self.getEnumText('displayPymolMolecule')
+        pmlsDir = getPmlsDir(self.protocol)
+        pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
+
+        mols = self.moleculeLigandsDic[ligandLabel]
+        mols = sortMolsByUnique(mols)
+        pmlStr, addTarget = '', True
+        for mol in mols:
+          pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
+          addTarget = False
+        writePmlFile(pmlFile, pmlStr)
+
+        pymolV = PyMolViewer(project=self.getProject())
+        pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
