@@ -73,14 +73,22 @@ class ProtocolConsensusDocking(EMProtocol):
     def consensusStep(self):
         molDic = self.buildMolDic()
         molClusters = self.generateDockingClusters()
+        #Getting the representative of the clusters from any of the inputs
         self.consensusMols = self.cluster2representative(molClusters)
-        self.indepConsensusSets = self.getIndepConsensus(molClusters, molDic)
+
+        self.indepConsensusSets = {}
+        #Separating clusters by input set
+        indepClustersDic = self.getIndepClusters(molClusters, molDic)
+        for inSetId in indepClustersDic:
+            # Getting independent representative for each input set
+            self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+
 
     def createOutputStep(self):
+        self.relabelDic = {}
         self.consensusMols = self.fillEmptyAttributes(self.consensusMols)
         self.consensusMols, idsDic = self.reorderIds(self.consensusMols)
 
-        self.relabelDic = {}
         outDocked = SetOfSmallMolecules(filename=self._getPath('consensusDocked_All.sqlite'))
         for outDock in self.consensusMols:
             newDock = outDock.clone()
@@ -164,6 +172,7 @@ class ProtocolConsensusDocking(EMProtocol):
                     for cMol in clust:
                         if cMol.getMolBase() == newMol.getMolBase():
                             curRMSD = self.calculateMolsRMSD(newMol, cMol)
+
                             #If there is overlap with the new pocket from the set
                             if curRMSD > self.maxRMSD.get():
                                 append2Cluster = False
@@ -182,24 +191,33 @@ class ProtocolConsensusDocking(EMProtocol):
                 clusters = newClusters.copy()
         return clusters
 
-    def getIndepConsensus(self, clusters, molDic):
-        outSets = {}
+    def getIndepClusters(self, clusters, molDic):
+        indepClustersDic = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
+                curIndepCluster = {}
                 for mol in clust:
                     curMolFile = mol.getPoseFile()
                     inSetId = molDic[curMolFile]
-                    if inSetId in outSets:
-                        outSets[inSetId] += [mol]
+                    if inSetId in curIndepCluster:
+                        curIndepCluster[inSetId] += [mol]
                     else:
-                        outSets[inSetId] = [mol]
-        return outSets
+                        curIndepCluster[inSetId] = [mol]
 
+                for inSetId in curIndepCluster:
+                    if inSetId in indepClustersDic:
+                        indepClustersDic[inSetId] += [curIndepCluster[inSetId]]
+                    else:
+                        indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
+        return indepClustersDic
 
-    def cluster2representative(self, clusters):
+    def cluster2representative(self, clusters, minSize=None):
+        if minSize == None:
+            minSize = self.numOfOverlap.get()
+
         representatives = []
         for clust in clusters:
-            if len(clust) >= self.numOfOverlap.get():
+            if len(clust) >= minSize:
                 if self.action.get() == MAXSCORE:
                     repr = self.getMaxScoreMolecule(clust)
                 elif self.action.get() == MINENERGY:
@@ -225,7 +243,6 @@ class ProtocolConsensusDocking(EMProtocol):
             if molEnergy < minEnergy:
                 minEnergy = molEnergy
                 outMol = mol.clone()
-        print('Min energy: ', minEnergy)
         return outMol
 
     def calculateMolsRMSD(self, mol1, mol2):

@@ -75,30 +75,39 @@ class ProtocolConsensusPockets(EMProtocol):
     def consensusStep(self):
         pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
-        self.consensusPockets = self.cluster2pocket(pocketClusters)
-        self.indepConsensusSets = self.getIndepConsensus(pocketClusters, pocketDic)
+        # Getting the representative of the clusters from any of the inputs
+        self.consensusPockets = self.cluster2representative(pocketClusters)
+
+        self.indepConsensusSets = {}
+        # Separating clusters by input set
+        indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
+        for inSetId in indepClustersDic:
+            # Getting independent representative for each input set
+            self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+
 
     def createOutputStep(self):
-        self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
-        self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
+            self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
+            self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
-        outPockets = SetOfPockets(filename=self._getPath('consensusPockets_All.sqlite'))
-        for outPock in self.consensusPockets:
-            newPock = outPock.clone()
-            outPockets.append(newPock)
-        outPockets.buildPocketsFiles(suffix='_All')
-        self._defineOutputs(outputPocketsAll=outPockets)
+            outPockets = SetOfPockets(filename=self._getPath('consensusPockets_All.sqlite'))
+            for outPock in self.consensusPockets:
+                newPock = outPock.clone()
+                outPockets.append(newPock)
+            if outPockets.getSize() > 0:
+                outPockets.buildPocketsFiles(suffix='_All')
+                self._defineOutputs(outputPocketsAll=outPockets)
 
-        indepOutputs = self.createIndepOutputs()
-        for setId in indepOutputs:
-            #Index should be the same as in the input
-            suffix = '_{:03d}'.format(setId+1)
-            outName = 'outputPockets' + suffix
-            outSet = indepOutputs[setId]
-            outSet.buildPocketsFiles(suffix=suffix, tcl=True)
-
-            self._defineOutputs(**{outName: outSet})
-            self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
+            indepOutputs = self.createIndepOutputs()
+            for setId in indepOutputs:
+                #Index should be the same as in the input
+                suffix = '_{:03d}'.format(setId+1)
+                outName = 'outputPockets' + suffix
+                outSet = indepOutputs[setId]
+                if outSet.getSize() > 0:
+                    outSet.buildPocketsFiles(suffix=suffix, tcl=True)
+                    self._defineOutputs(**{outName: outSet})
+                    self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -157,57 +166,62 @@ class ProtocolConsensusPockets(EMProtocol):
         for i, pockSet in enumerate(self.inputPocketSets):
             #For each of the pockets in the set
             for newPock in pockSet.get():
-                if i == 0:
-                    #First, each cluster is formed by just one pocket
-                    clusters.append([newPock.clone()])
-                else:
-                    newClusters, newClust = [], [newPock.clone()]
-                    #Check for each of the clusters
-                    for clust in clusters:
-                        #Check for each of the pockets in the cluster
-                        overClust = False
-                        for cPocket in clust:
-                            propOverlap = self.calculateResiduesOverlap(newPock, cPocket)
-                            #If there is overlap with the new pocket from the set
-                            if propOverlap > self.overlap.get():
-                                overClust = True
-                                break
+                newClusters, newClust = [], [newPock.clone()]
+                #Check for each of the clusters
+                for clust in clusters:
+                    #Check for each of the pockets in the cluster
+                    overClust = False
+                    for cPocket in clust:
+                        propOverlap = self.calculateResiduesOverlap(newPock, cPocket)
+                        #If there is overlap with the new pocket from the set
+                        if propOverlap > self.overlap.get():
+                            overClust = True
+                            break
 
-                        #newClust: Init with only the newPocket, grow with each clust which overlaps with newPocket
-                        if overClust:
-                            newClust += clust
-                        #If no overlap, the clust keeps equal
-                        else:
-                            newClusters.append(clust)
-                    #Add new cluster containing newPocket + overlapping previous clusters
-                    newClusters.append(newClust)
-                    clusters = newClusters.copy()
+                    #newClust: Init with only the newPocket, grow with each clust which overlaps with newPocket
+                    if overClust:
+                        newClust += clust
+                    #If no overlap, the clust keeps equal
+                    else:
+                        newClusters.append(clust)
+                #Add new cluster containing newPocket + overlapping previous clusters
+                newClusters.append(newClust)
+                clusters = newClusters.copy()
         return clusters
 
-    def getIndepConsensus(self, clusters, pocketDic):
-        outSets = {}
+    def getIndepClusters(self, clusters, molDic):
+        indepClustersDic = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
+                curIndepCluster = {}
                 for pock in clust:
-                    curPocketFile = pock.getFileName()
-                    inSetId = pocketDic[curPocketFile]
-                    if inSetId in outSets:
-                        outSets[inSetId] += [pock]
+                    curPockFile = pock.getFileName()
+                    inSetId = molDic[curPockFile]
+                    if inSetId in curIndepCluster:
+                        curIndepCluster[inSetId] += [pock]
                     else:
-                        outSets[inSetId] = [pock]
-        return outSets
+                        curIndepCluster[inSetId] = [pock]
 
+                for inSetId in curIndepCluster:
+                    if inSetId in indepClustersDic:
+                        indepClustersDic[inSetId] += [curIndepCluster[inSetId]]
+                    else:
+                        indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
+        return indepClustersDic
 
-    def cluster2pocket(self, clusters):
-        pockets = []
+    def cluster2representative(self, clusters, minSize=None):
+        if minSize == None:
+            minSize = self.numOfOverlap.get()
+
+        representatives = []
         for clust in clusters:
-            if len(clust) >= self.numOfOverlap.get():
+            if len(clust) >= minSize:
                 if self.action.get() == MAXVOL:
                     outPocket = self.getMaxVolumePocket(clust)
                 elif self.action.get() == MAXSURF:
                     outPocket = self.getMaxVolumePocket(clust)
-                pockets.append(outPocket)
-        return pockets
+                representatives.append(outPocket)
+        return representatives
 
     def getMaxVolumePocket(self, cluster):
         '''Return the pocket with max volume in a cluster'''
