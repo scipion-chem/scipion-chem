@@ -43,7 +43,7 @@ import pyworkflow.object as pwobj
 import os, re, glob, shutil
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile
+from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):
@@ -178,7 +178,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                 args = " -isdf %s -h --partialcharge %s -O %s" % (os.path.abspath(filesdf), cmethod, oFile)
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
-            oFile = self.relabelAtomsMol2(os.path.abspath(self._getExtraPath(oFile)))
+            oFile = relabelAtomsMol2(os.path.abspath(self._getExtraPath(oFile)))
 
     def conformer_generation(self):
         """ Generate a number of conformers of the same small molecule in mol2 format with
@@ -257,32 +257,4 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
       with open(paramsFile) as f:
         code = f.readline().split()[1]
       return code
-
-    def relabelAtomsMol2(self, atomFile):
-        atomCount = {}
-        auxFile = atomFile.replace(os.path.basename(atomFile), 'aux.mol2')
-        atomLines = False
-        with open(auxFile, 'w') as fOut:
-            with open(atomFile) as fIn:
-                for line in fIn:
-                    if atomLines and line.startswith('@<TRIPOS>'):
-                        atomLines = False
-
-                    if atomLines:
-                        atom = line[8]
-                        if atom in atomCount:
-                            atomCount[atom] += 1
-                        else:
-                            atomCount[atom] = 1
-                        numSize = len(str(atomCount[atom]))
-                        line = line[:9] + str(atomCount[atom]) + line[9 + numSize:]
-
-                    if line.startswith('@<TRIPOS>ATOM'):
-                        atomLines = True
-
-                    fOut.write(line)
-
-        shutil.move(auxFile, atomFile)
-        return atomFile
-
 
