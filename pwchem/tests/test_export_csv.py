@@ -53,7 +53,7 @@ class TestImportData(TestImportBase):
 
         prot1 = self.newProtocol(PISmallM, **args)
         self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMols
+        small_1 = prot1.outputSmallMolecules
         return small_1
 
 class TestExportcsv(TestImportData):

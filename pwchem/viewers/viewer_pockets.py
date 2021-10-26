@@ -28,8 +28,8 @@ import os
 from subprocess import Popen
 
 from pwchem.objects import ProteinPocket, SetOfPockets
-from autodock.protocols import ProtChemAutoLigand
 import pyworkflow.utils as pwutils
+import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 from pwem.viewers import Vmd, VmdView
 
@@ -73,7 +73,7 @@ class PyMolViewer(pwviewer.Viewer):
 class PocketPointsViewer(pwviewer.Viewer):
   _label = 'Viewer pocket points'
   _environments = [pwviewer.DESKTOP_TKINTER]
-  _targets = [SetOfPockets]
+  #_targets = [SetOfPockets]
 
   def _visualize(self, obj, **kwargs):
     pmlFile = obj.getPmlFile()
@@ -87,7 +87,7 @@ class PocketPointsViewer(pwviewer.Viewer):
 class ContactSurfaceViewer(pwviewer.Viewer):
   _label = 'Viewer contact surface'
   _environments = [pwviewer.DESKTOP_TKINTER]
-  _targets = [SetOfPockets]
+  #_targets = [SetOfPockets]
 
   def _visualize(self, obj, **kwargs):
     pmlFile = obj.getPmlFileSurf()
@@ -106,3 +106,52 @@ class VmdViewFpocket(VmdView):
 
   def show(self):
     Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron())
+
+VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
+
+class viewerGeneralPockets(pwviewer.ProtocolViewer):
+  _label = 'Viewer pockets'
+  _targets = [SetOfPockets]
+
+  def __init__(self, **kwargs):
+    pwviewer.ProtocolViewer.__init__(self, **kwargs)
+
+  def _defineParams(self, form):
+    form.addSection(label='Visualization of predicted pockets')
+    form.addParam('displayAtomStruct', params.EnumParam,
+                  choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)'],
+                  default=VOLUME_PYMOL,
+                  display=params.EnumParam.DISPLAY_HLIST,
+                  label='Display output AtomStruct with',
+                  help='*PyMol*: display AtomStruct and pockets as points / surface.'
+                  )
+
+  def _getVisualizeDict(self):
+    return {
+      'displayAtomStruct': self._showAtomStruct,
+    }
+
+  def _validate(self):
+    return []
+
+  # =========================================================================
+  # ShowAtomStructs
+  # =========================================================================
+
+  def getOutputAtomStructFile(self):
+    return os.path.abspath(self.protocol.outputAtomStruct.getFileName())
+
+  def _showAtomStruct(self, paramName=None):
+    if self.displayAtomStruct == VOLUME_PYMOL:
+      return self._showAtomStructPyMol()
+
+    elif self.displayAtomStruct == VOLUME_PYMOL_SURF:
+      return self._showAtomStructPyMolSurf()
+
+  def _showAtomStructPyMol(self):
+    pymolV = PocketPointsViewer(project=self.getProject())
+    pymolV._visualize(self.protocol)
+
+  def _showAtomStructPyMolSurf(self):
+    pymolV = ContactSurfaceViewer(project=self.getProject())
+    pymolV._visualize(self.protocol)

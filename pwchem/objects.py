@@ -81,18 +81,71 @@ class SmallMolecule(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
+        self.poseFile = pwobj.String(kwargs.get('poseFile', None))
+        self.gridId = pwobj.Integer(kwargs.get('gridId', None))
+        self._type = String(kwargs.get('type', 'Standard'))
+
+    def __str__(self):
+        s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
+        return s
 
     def getFileName(self):
         return self.smallMoleculeFile.get()
 
+    def getMolName(self):
+        return self.getFileName().split('/')[-1].split('.')[0]
+
+    def getMolBase(self):
+        return self.getMolName().split('-')[0]
+
+    def getPoseFile(self):
+        return self.poseFile.get()
+
+    def setPoseFile(self, value):
+        return self.poseFile.set(value)
+
+    def getPoseId(self):
+        if '@' in self.poseFile.get():
+            #Schrodinger
+            return self.poseFile.get().split('@')[0]
+        else:
+            #Autodock
+            return self.poseFile.get().split('_')[-1].split('.')[0]
+
+    def getGridId(self):
+        return self.gridId.get()
+
+    def setGridId(self, gridId):
+        self.gridId.set(gridId)
+
     def getConformersFileName(self):
-        return self._ConformersFile.get()
+        if hasattr(self, '_ConformersFile'):
+            return self._ConformersFile.get()
+        return
 
     def getParamsFileName(self):
-        return self._ParamsFile.get()
+        if hasattr(self, '_ParamsFile'):
+            return self._ParamsFile.get()
+        return
 
     def getPDBFileName(self):
-        return self._PDBFile.get()
+        if hasattr(self, '_PDBFile'):
+            return self._PDBFile.get()
+        return
+
+    def getMolClass(self):
+        return self._type
+
+    def setMolClass(self, value):
+        self._type.set(value)
+
+    def getUniqueName(self):
+        name = self.getMolName()
+        if self.getGridId() != None:
+            name = 'g{}_'.format(self.getGridId()) + name
+        if self.poseFile.get() != None:
+            name += '_' + self.getPoseId()
+        return name
 
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
@@ -101,6 +154,29 @@ class SetOfSmallMolecules(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+        self._molClass = String('Standard')
+
+    def __str__(self):
+      s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
+      return s
+
+    def getMolClass(self):
+        return self._molClass.get()
+
+    def updateMolClass(self):
+        mClass = self.getMolClass()
+        for mol in self:
+            if not mol.getMolClass() == mClass:
+                if mClass == 'Standard':
+                    mClass = mol.getMolClass()
+                else:
+                    mClass = 'Mixed'
+                    break
+        self._molClass.set(mClass)
+
+    def append(self, item):
+        super().append(item)
+        self.updateMolClass()
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])
@@ -358,6 +434,43 @@ class ProteinPocket(data.EMFile):
             res.append(ProteinResidue(atom.line))
         return res
 
+    def getMostCentralResidues(self, n=2):
+        cMass = self.calculateMassCenter()
+        cAtoms = self.buildContactAtoms()
+
+        closestResidues = self.getCloserResidues(cMass, cAtoms, n)
+        return closestResidues
+
+    def getCloserResidues(self, refCoord, atoms, n=2):
+        '''Returns the atoms sorted as they are close to the reference coordinate'''
+        dists = []
+        for at in atoms:
+            dists += [self.calculateDistance(refCoord, at.getCoords())]
+
+        zipped_lists = sorted(zip(dists, atoms))
+        dists, atoms = zip(*zipped_lists)
+        residues = self.getAtomResidues(atoms)
+
+        closestResidues = []
+        for r in residues:
+            if r not in closestResidues:
+                closestResidues.append(r)
+                if len(closestResidues) == n:
+                    return closestResidues
+        return closestResidues
+
+    def calculateDistance(self, c1, c2):
+        sum = 0
+        for i in range(len(c1)):
+            sum += (c1[i]-c2[i])**2
+        return sum ** (1/2)
+
+    def getAtomResidues(self, atoms):
+        residues = []
+        for at in atoms:
+            residues.append(at.residueId)
+        return residues
+
 
 class SetOfPockets(data.EMSet):
     ITEM_TYPE = ProteinPocket
@@ -424,8 +537,9 @@ class SetOfPockets(data.EMSet):
     def buildPDBhetatmFile(self, suffix=''):
         protName = self.getProteinName()
         atmFile = self.getProteinFile()
+        atmExt = os.path.splitext(atmFile)[1]
         outDir = self.getSetDir()
-        outFile = os.path.join(outDir, protName+'{}_out.pdb'.format(suffix))
+        outFile = os.path.join(outDir, protName+'{}_out{}'.format(suffix, atmExt))
 
         with open(outFile, 'w') as f:
             f.write(getRawPDBStr(atmFile, ter=False))
@@ -436,7 +550,8 @@ class SetOfPockets(data.EMSet):
 
     def createPML(self, outHETMFile):
         outHETMFile = os.path.abspath(outHETMFile)
-        pmlFile = outHETMFile.replace('_out.pdb', '.pml')
+        outExt = os.path.splitext(outHETMFile)[1]
+        pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
         # Creates the pml for pymol visualization
         with open(pmlFile, 'w') as f:
@@ -446,7 +561,8 @@ class SetOfPockets(data.EMSet):
 
     def createSurfacePml(self, outHETMFile):
         outHETMFile = os.path.abspath(outHETMFile)
-        pmlFile = outHETMFile.replace('_out.pdb', '_surf.pml')
+        outExt = os.path.splitext(outHETMFile)[1]
+        pmlFile = outHETMFile.replace('_out{}'.format(outExt), '_surf.pml')
         colors = createColorVectors(len(self))
         surfaceStr = ''
         for i, pock in enumerate(self):
@@ -480,6 +596,11 @@ class SetOfPockets(data.EMSet):
         if self.getPocketsClass() == 'FPocket' and tcl==True:
             self.createTCL(outHETMFile)
         return outHETMFile
+
+    def getMAEFile(self):
+        pock = self.getFirstItem()
+        if hasattr(pock, 'structureFile'):
+            return pock.structureFile.get()
 
     ######### Utils
 

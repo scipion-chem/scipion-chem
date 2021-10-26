@@ -173,4 +173,4 @@ class ProtChemImportSmallMolecules(EMProtocol):
                         smallMolecule._PDBLigandImage = pwobj.String("Not available")
 
             outputSmallMolecules.append(smallMolecule)
-        self._defineOutputs(outputSmallMols=outputSmallMolecules)
+        self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
