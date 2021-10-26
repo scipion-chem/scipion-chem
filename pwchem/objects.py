@@ -159,13 +159,11 @@ class SmallMolecule(data.EMObject):
                         if atomType != 'H' or not onlyHeavy:
                             posDic[atomId] = list(map(float, coords))
 
-        elif molFile.endswith('.mol'):
+        elif molFile.endswith('.mol2'):
             with open(molFile) as fIn:
                 parse=False
                 for line in fIn:
-                    if line.startswith('@<TRIPOS>ATOM'):
-                        parse = True
-                    elif parse and line.startswith('@'):
+                    if parse and line.startswith('@'):
                         #finished
                         return posDic
 
@@ -175,20 +173,23 @@ class SmallMolecule(data.EMObject):
                         if atomType != 'H' or not onlyHeavy:
                             posDic[atomId] = list(map(float, coords))
 
+                    elif line.startswith('@<TRIPOS>ATOM'):
+                        parse = True
+
         elif molFile.endswith('.sdf'):
-            numAtoms = {}
             with open(molFile) as fIn:
+                numType = {}
                 for i, line in enumerate(fIn):
-                    if i>=4:
+                    if i >= 4:
                         if len(line.split()) == 10:
                             elements = line.split()
                             atomType, coords = elements[3], elements[:3]
-                            if atomType in numAtoms:
-                                numAtoms[atomType] += 1
+                            if atomType in numType:
+                                numType[atomType] += 1
                             else:
-                                numAtoms[atomType] = 1
+                                numType[atomType] = 1
 
-                            atomId = '{}{}'.format(atomType, numAtoms[atomType])
+                            atomId = '{}{}'.format(atomType, numType[atomType])
                             if atomType != 'H' or not onlyHeavy:
                                 posDic[atomId] = list(map(float, coords))
                         else:
