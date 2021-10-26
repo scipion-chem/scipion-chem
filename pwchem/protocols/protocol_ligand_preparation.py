@@ -132,18 +132,14 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             self._insertFunctionStep('conformer_generation')
         self._insertFunctionStep('createOutput')
 
-
-
     def addcharges(self):
         """ Assign the charges using a method available
             in the open-access and free program openbabel
         """
         for mol in self.inputSmallMols.get():
-            fnSmall = mol.smallMoleculeFile.get()  # File paths
+            fnSmall = mol.getFileName()
             fnMol = os.path.split(fnSmall)[1]      # Name of complete file
-            fnRoot = os.path.splitext(fnMol)[0]    # Molecule name: ID
-            fnFormat = os.path.splitext(fnMol)[1]  # Format file
-
+            fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
 
             # 0. Convert mol2 or pdb format to sdf to ensure the correct assignation of charges
             if fnFormat == ".mol2":
@@ -154,7 +150,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                 args = " -ipdb %s --partialcharge none -O %s.sdf" % (os.path.abspath(fnSmall), fnRoot)
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getTmpPath()))
             else:
-                raise Exception("Molecules must be in pdb or mol2 format")
+                shutil.copy(fnSmall, self._getTmpPath(fnMol))
 
 
         # Run over all sdf files generated
@@ -239,18 +235,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """ Validate if the inputs are in mol2 or pdb format
         """
         errors = []
-
-        if not self.inputSmallMols.get() is None:
-            for mol in self.inputSmallMols.get():
-                filename = mol.smallMoleculeFile.get()
-
-                if (filename.endswith(".pdb") or filename.endswith(".mol2")):
-                    pass
-                else:
-                    errors.append("The input %s format it is not correct. "
-                                  "Please convert it in pdb or mol2 format with the converter." % filename)
-
-
         return errors
 
     def getLigandCode(self, paramsFile):
