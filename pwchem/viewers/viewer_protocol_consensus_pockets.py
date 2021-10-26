@@ -32,7 +32,7 @@ from ..viewers import PyMolViewer, PocketPointsViewer, ContactSurfaceViewer, Vmd
 
 from subprocess import Popen
 
-MIXED, FPOCKET, P2RANK, AUTOLIGAND = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand'
+MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'
 VOLUME_VMD, VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1, 2
 
 class ViewerConsensusPockets(pwviewer.ProtocolViewer):
@@ -64,7 +64,7 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
 
     form.addParam('displayPyMol', params.EnumParam,
                   choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)'],
-                  default=0, condition='setClass in ["{}", "{}", "{}"]'.format(MIXED, AUTOLIGAND, P2RANK),
+                  default=0, condition='setClass!="{}"'.format(FPOCKET),
                   display=params.EnumParam.DISPLAY_HLIST,
                   label='Display output Set of Pockets with: ',
                   help='*PyMol*: display Set of Pockets and pockets as points / surface'
