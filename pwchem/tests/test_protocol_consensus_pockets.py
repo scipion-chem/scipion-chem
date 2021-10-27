@@ -102,6 +102,7 @@ class TestConsensusPockets(BaseTest):
     def _runAutoLigandFind(self, protGrid):
         protAutoLigand = self.newProtocol(
             ProtChemAutoLigand,
+            prevGrid=True,
             inputGrid=protGrid.outputGrid,
             nFillPoints=10)
 
