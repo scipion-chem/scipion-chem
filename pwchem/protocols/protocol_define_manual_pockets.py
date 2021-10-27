@@ -57,43 +57,45 @@ class ProtDefinePockets(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
+        group = form.addGroup('Input')
+        group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                       allowsNull=False, label="Input AtomStruct: ",
                       help='Select the AtomStruct object where the pockets will be defined')
-        form.addParam('origin', params.EnumParam, default=RESIDUES,
+        group.addParam('origin', params.EnumParam, default=RESIDUES,
                       label='Extract pockets from: ', choices=self.typeChoices,
                       help='The pockets will be defined from a set of elements of this type')
 
-        form.addParam('inCoords', params.TextParam, default='', width=70,
+        group.addParam('inCoords', params.TextParam, default='', width=70,
                       condition='origin=={}'.format(COORDS), label='Input coordinates: ',
                       help='Input coordinates to define the pocket. '
                            'The coordinates will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket.'
                            '\nCoordinates in format: (1,2,3);(4,5,6);...')
 
-        form.addParam('chain_name', params.StringParam,
+        group.addParam('chain_name', params.StringParam,
                       allowsNull=False, label='Chain of interest', condition='origin=={}'.format(RESIDUES),
                       help='Specify the chain of the residue of interest')
-        form.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
+        group.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
                       allowsNull=False, label='Residues of interest',
                       help='Specify the residue position to define a pocket')
-        form.addParam('addResidue', params.LabelParam,
+        group.addParam('addResidue', params.LabelParam,
                       label='Add defined residue', condition='origin=={}'.format(RESIDUES),
                       help='Here you can define a residue which will be added to the list of residues below.')
-        form.addParam('inResidues', params.TextParam, width=70, default='',
+        group.addParam('inResidues', params.TextParam, width=70, default='',
                       condition='origin=={}'.format(RESIDUES), label='Input residues: ',
                       help='Input residues to define the pocket. '
                            'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket')
 
-        form.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
+        group.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
                       condition='origin=={}'.format(LIGANDS),
                       label='Input molecules: ', help='Predocked molecules which will define the protein pockets')
 
-        form.addParam('maxDepth', params.FloatParam, default='3.0',
+        group = form.addGroup('Distances')
+        group.addParam('maxDepth', params.FloatParam, default='3.0',
                       label='Maximum atom depth (A): ',
-                      help='Maximum atom depth to be considered and mapped to the surface')
-        form.addParam('maxIntraDistance', params.FloatParam, default='2.0',
+                      help='Maximum atom distance to the surface to be considered and mapped')
+        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
                       label='Maximum distance between pocket points (A): ',
                       help='Maximum distance between two pocket atoms to considered them same pocket')
 
