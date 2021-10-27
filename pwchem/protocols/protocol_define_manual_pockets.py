@@ -32,13 +32,13 @@ This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand
 """
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message, weakImport
-from pyworkflow.utils.path import copyFile
+from pyworkflow.utils import Message
 from pwchem.objects import SetOfPockets, ProteinPocket
 from pwchem.utils import *
+from pwchem import Plugin
 from pwem.convert import cifToPdb
 
-import os, glob
+import os
 from scipy.spatial import distance
 
 from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
@@ -111,7 +111,7 @@ class ProtDefinePockets(EMProtocol):
         structure = parser.get_structure(self.getProteinName(), self.getProteinFileName())
         self.structModel = structure[0]
         self.structSurface = get_surface(self.structModel,
-                                         MSMS='/home/danieldh/i2pc/software/em/mgltools_x86_64Linux2_1.5.6/MGLToolsPckgs/binaries/msms')
+                                         MSMS='{}/MGLToolsPckgs/binaries/msms'.format(Plugin.getMGLPath()))
 
     def definePocketsStep(self):
         originCoords = self.getOriginCoords()
