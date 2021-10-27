@@ -90,11 +90,11 @@ class ProtDefinePockets(EMProtocol):
                       condition='origin=={}'.format(LIGANDS),
                       label='Input molecules: ', help='Predocked molecules which will define the protein pockets')
 
-        form.addParam('maxDepth', params.FloatParam, default='2.0',
-                      label='Maximum atom depth: ', expertLevel=params.LEVEL_ADVANCED,
+        form.addParam('maxDepth', params.FloatParam, default='3.0',
+                      label='Maximum atom depth (A): ',
                       help='Maximum atom depth to be considered and mapped to the surface')
-        form.addParam('maxIntraDistance', params.FloatParam, default='1.0',
-                      label='Maximum distance between pocket points: ', expertLevel=params.LEVEL_ADVANCED,
+        form.addParam('maxIntraDistance', params.FloatParam, default='2.0',
+                      label='Maximum distance between pocket points (A): ',
                       help='Maximum distance between two pocket atoms to considered them same pocket')
 
 
