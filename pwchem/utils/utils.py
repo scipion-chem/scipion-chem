@@ -375,3 +375,15 @@ def relabelAtomsMol2(atomFile):
 
     shutil.move(auxFile, atomFile)
     return atomFile
+
+
+def calculateDistance(coord1, coord2):
+    dist = 0
+    if len(coord1) != len(coord2):
+        print('ERROR: coordinates of different size')
+        return None
+    for c1, c2 in zip(coord1, coord2):
+        dist += (c1-c2) ** 2
+    return dist ** (1/2)
+
+

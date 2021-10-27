@@ -250,7 +250,7 @@ class ProtocolConsensusDocking(EMProtocol):
         if self.checkSameKeys(posDic1, posDic2):
             rmsd=0
             for atomId in posDic1:
-                rmsd += self.calculateDistance(posDic1[atomId], posDic2[atomId])
+                rmsd += calculateDistance(posDic1[atomId], posDic2[atomId])
             return rmsd / len(posDic2)
         else:
             print('Atom ids of the molecules are different and cannot be compared')
@@ -258,15 +258,6 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def checkSameKeys(self, d1, d2):
         return set(d1.keys()) == set(d2.keys())
-
-    def calculateDistance(self, coord1, coord2):
-        dist = 0
-        if len(coord1) != len(coord2):
-            print('ERROR: coordinates of different size')
-            return None
-        for c1, c2 in zip(coord1, coord2):
-            dist += (c1-c2) ** 2
-        return dist ** (1/2)
 
     def getAllPocketAttributes(self, pocketSets):
         '''Return a dic with {attrName: ScipionObj=None}'''
