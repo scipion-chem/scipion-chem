@@ -307,7 +307,7 @@ def sortSet(seti):
     return seti
 
 
-def clean_PDB(inputStructure, outFn, waters=False, HETATM=False, chain_id=None):
+def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
     """ Clean the pdb file from waters and ligands and redundant chains
     waters: clean waters
     HETATM: clean HETATM lines
@@ -315,14 +315,13 @@ def clean_PDB(inputStructure, outFn, waters=False, HETATM=False, chain_id=None):
     """
 
     # Get a PDB format file to the protein structure
-    pdb_ini = inputStructure.getFileName()
     auxPdb = os.path.join(os.path.dirname(outFn), 'aux.pdb')
 
     # Convert cif to pdb since Rosetta DARC program only can use PDB files
-    if pdb_ini.endswith('.cif'):
-        cifToPdb(pdb_ini, auxPdb)  # Rosetta DARC program only can use PDB files
+    if inputPDB.endswith('.cif'):
+        cifToPdb(inputPDB, auxPdb)  # Rosetta DARC program only can use PDB files
     else:
-        shutil.copy(pdb_ini, auxPdb)
+        shutil.copy(inputPDB, auxPdb)
 
     # Parse and select the pdb file to clean it
     with open(auxPdb, "r") as pdb:
@@ -348,3 +347,43 @@ def clean_PDB(inputStructure, outFn, waters=False, HETATM=False, chain_id=None):
                     pass
     os.remove(auxPdb)
     return outFn
+
+
+def relabelAtomsMol2(atomFile):
+    atomCount = {}
+    auxFile = atomFile.replace(os.path.basename(atomFile), 'aux.mol2')
+    atomLines = False
+    with open(auxFile, 'w') as fOut:
+        with open(atomFile) as fIn:
+            for line in fIn:
+                if atomLines and line.startswith('@<TRIPOS>'):
+                    atomLines = False
+
+                if atomLines:
+                    atom = line[8]
+                    if atom in atomCount:
+                        atomCount[atom] += 1
+                    else:
+                        atomCount[atom] = 1
+                    numSize = len(str(atomCount[atom]))
+                    line = line[:9] + str(atomCount[atom]).ljust(10) + line[18:]
+
+                if line.startswith('@<TRIPOS>ATOM'):
+                    atomLines = True
+
+                fOut.write(line)
+
+    shutil.move(auxFile, atomFile)
+    return atomFile
+
+
+def calculateDistance(coord1, coord2):
+    dist = 0
+    if len(coord1) != len(coord2):
+        print('ERROR: coordinates of different size')
+        return None
+    for c1, c2 in zip(coord1, coord2):
+        dist += (c1-c2) ** 2
+    return dist ** (1/2)
+
+

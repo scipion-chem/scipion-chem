@@ -26,9 +26,6 @@
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
-from pyworkflow.object import (Float, Integer, List, String)
-import numpy as np
-import os
 from scipy import spatial
 from .utils import *
 from .constants import *
@@ -147,6 +144,71 @@ class SmallMolecule(data.EMObject):
             name += '_' + self.getPoseId()
         return name
 
+    def getAtomsPosDic(self, onlyHeavy=True):
+        '''Returns a dictionary with the atoms coordinates:
+        {atomId: [c1, c2, c3], ...}'''
+        molFile = self.getFileName()
+        if self.getPoseFile() != None:
+            molFile = self.getPoseFile()
+
+        posDic = {}
+        if '.pdb' in molFile:
+            with open(molFile) as fIn:
+                for line in fIn:
+                    if line.startswith('ATOM') or line.startswith('HETATM'):
+                        elements = splitPDBLine(line)
+                        atomId, atomType, coords = elements[2], elements[-1], elements[6:9]
+                        if atomType != 'H' or not onlyHeavy:
+                            posDic[atomId] = list(map(float, coords))
+
+        elif molFile.endswith('.mol2'):
+            with open(molFile) as fIn:
+                parse=False
+                for line in fIn:
+                    if parse and line.startswith('@'):
+                        #finished
+                        return posDic
+
+                    if parse:
+                        elements = line.split()
+                        atomId, atomType, coords = elements[1], elements[5], elements[2:5]
+                        if atomType != 'H' or not onlyHeavy:
+                            posDic[atomId] = list(map(float, coords))
+
+                    elif line.startswith('@<TRIPOS>ATOM'):
+                        parse = True
+
+        elif molFile.endswith('.sdf'):
+            with open(molFile) as fIn:
+                numType = {}
+                for i, line in enumerate(fIn):
+                    if i >= 4:
+                        if len(line.split()) == 10:
+                            elements = line.split()
+                            atomType, coords = elements[3], elements[:3]
+                            if atomType in numType:
+                                numType[atomType] += 1
+                            else:
+                                numType[atomType] = 1
+
+                            atomId = '{}{}'.format(atomType, numType[atomType])
+                            if atomType != 'H' or not onlyHeavy:
+                                posDic[atomId] = list(map(float, coords))
+                        else:
+                            break
+
+        return posDic
+
+    def getEnergy(self):
+        if hasattr(self, '_energy'):
+            return self._energy.get()
+
+    def getScore(self):
+        if hasattr(self, '_score'):
+            return self._score.get()
+
+
+
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
     ITEM_TYPE = SmallMolecule
@@ -155,6 +217,8 @@ class SetOfSmallMolecules(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
         self._molClass = String('Standard')
+        self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
+        self._docked = pwobj.Boolean(False)
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
@@ -183,6 +247,15 @@ class SetOfSmallMolecules(data.EMSet):
 
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
+
+    def getProteinFile(self):
+        return self.proteinFile.get()
+
+    def isDocked(self):
+        return self._docked.get()
+
+    def setDocked(self, value):
+        self._docked.set(True)
 
 class BindingSite(data.EMObject):
     """ Binding site """
@@ -216,7 +289,7 @@ class ProteinPocket(data.EMFile):
         self._volume = Float(kwargs.get('volume', None))
         self._score = Float(kwargs.get('score', None))
         self._energy = Float(kwargs.get('energy', None))
-        self._class = String(kwargs.get('class', None))
+        self._class = String(kwargs.get('class', 'Standard'))
 
     #Attributes functions
     def getPocketClass(self):
@@ -282,6 +355,12 @@ class ProteinPocket(data.EMFile):
             if k in AM:
                 nkwargs[AM[k]] = props[k]
         return nkwargs
+
+    def calculateContacts(self):
+        cAtoms = self.buildContactAtoms(calculate=True)
+        self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
+        cResidues = self.getResiduesFromAtoms(cAtoms)
+        self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
 
     #Complex pocket attributes functions
     def buildContactAtoms(self, calculate=False, maxDistance=4):
@@ -445,7 +524,7 @@ class ProteinPocket(data.EMFile):
         '''Returns the atoms sorted as they are close to the reference coordinate'''
         dists = []
         for at in atoms:
-            dists += [self.calculateDistance(refCoord, at.getCoords())]
+            dists += [calculateDistance(refCoord, at.getCoords())]
 
         zipped_lists = sorted(zip(dists, atoms))
         dists, atoms = zip(*zipped_lists)
@@ -458,12 +537,6 @@ class ProteinPocket(data.EMFile):
                 if len(closestResidues) == n:
                     return closestResidues
         return closestResidues
-
-    def calculateDistance(self, c1, c2):
-        sum = 0
-        for i in range(len(c1)):
-            sum += (c1[i]-c2[i])**2
-        return sum ** (1/2)
 
     def getAtomResidues(self, atoms):
         residues = []
@@ -622,7 +695,7 @@ class SetOfPockets(data.EMSet):
                 pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
-        elif pocket.getPocketClass() == 'P2Rank':
+        elif pocket.getPocketClass() == 'P2Rank' or pocket.getPocketClass() == 'Standard':
             for line in rawStr.split('\n'):
                 line = splitPDBLine(line)
                 line[5] = numId
