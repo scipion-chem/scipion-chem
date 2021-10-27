@@ -45,11 +45,13 @@ class Plugin(pwem.Plugin):
         # in the .config/scipion/scipion.conf file
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addopenbabelPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
         cls._defineVar("OPENBABEL_ENV_ACTIVATION", 'conda activate openbabel-env')
+        cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
 
     @classmethod
     def getRDKitEnvActivation(cls):
@@ -60,6 +62,25 @@ class Plugin(pwem.Plugin):
     def getOpenbabelEnvActivation(cls):
       activation = cls.getVar("OPENBABEL_ENV_ACTIVATION")
       return activation
+
+    @classmethod
+    def addMGLToolsPackage(cls, env, default=False):
+      MGL_INSTALLED = 'MGLTools_installed'
+
+      # try to get CONDA activation command
+      installationCmd = cls.getCondaActivationCmd()
+
+      # Create the environment
+      installationCmd += ' conda create -y -c conda-forge -n openbabel-env openbabel &&'
+
+      # Flag installation finished
+      installationCmd += ' touch %s' % MGL_INSTALLED
+
+      env.addPackage('mgltools', version='1.5.6',
+                     url='http://mgltools.scripps.edu/downloads/downloads/tars/releases/REL1.5.6/mgltools_x86_64Linux2_1.5.6.tar.gz',
+                     buildDir='mgltools_x86_64Linux2_1.5.6',
+                     commands=[("./install.sh", "initMGLtools.sh")],
+                     default=True)
 
     @classmethod
     def addopenbabelPackage(cls, env, default=False):
@@ -136,6 +157,20 @@ class Plugin(pwem.Plugin):
         """ Run rdkit command from a given protocol. """
         fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def getMGLPath(cls, path=''):
+      return os.path.join(cls.getVar('MGL_HOME'), path)
+
+    @classmethod
+    def getMGLEnviron(cls):
+      """ Create the needed environment for MGL Tools programs. """
+      environ = pwutils.Environ(os.environ)
+      pos = pwutils.Environ.BEGIN
+      environ.update({
+        'PATH': cls.getMGLPath('bin')
+      }, position=pos)
+      return environ
 
 
 DataSet(name='smallMolecules', folder='smallMolecules',
