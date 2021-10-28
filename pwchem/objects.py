@@ -552,8 +552,6 @@ class SetOfPockets(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._pocketsClass = String(kwargs.get('pocketsClass', None))
         self._hetatmFile = String(kwargs.get('hetatmFile', None))
-        self._pmlFile = String(kwargs.get('pmlFile', None))
-        self._pmlFileSurf = String(kwargs.get('pmlFileSurf', None))
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
@@ -567,18 +565,6 @@ class SetOfPockets(data.EMSet):
 
     def getProteinName(self):
         return self.getProteinFile().split('/')[-1].split('.')[0]
-
-    def getPmlFile(self):
-        return self._pmlFile.get()
-
-    def setPmlFile(self, value):
-        self._pmlFile.set(value)
-
-    def getPmlFileSurf(self):
-        return self._pmlFileSurf.get()
-
-    def setPmlFileSurf(self, value):
-        self._pmlFileSurf.set(value)
 
     def getProteinFile(self):
         return self.getFirstItem().getProteinFile()
@@ -621,19 +607,28 @@ class SetOfPockets(data.EMSet):
         self.setProteinHetatmFile(outFile)
         return outFile
 
-    def createPML(self, outHETMFile):
-        outHETMFile = os.path.abspath(outHETMFile)
+    def createPML(self, bBox=False):
+        outHETMFile = os.path.abspath(self.getProteinHetatmFile())
         outExt = os.path.splitext(outHETMFile)[1]
         pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
         # Creates the pml for pymol visualization
         with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outHETMFile))
-        self.setPmlFile(pmlFile)
+            if bBox:
+                toWrite = FUNCTION_BOUNDING_BOX
+                for pocket in self:
+                    pDia = pocket.getDiameter()
+                    toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
+                                                        [pDia*bBox]*3,
+                                                        'BoundingBox_' + str(pocket.getObjId()))
+                f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, toWrite))
+            else:
+                f.write(PML_STR.format(outHETMFile))
+
         return pmlFile
 
-    def createSurfacePml(self, outHETMFile):
-        outHETMFile = os.path.abspath(outHETMFile)
+    def createSurfacePml(self, bBox=False):
+        outHETMFile = os.path.abspath(self.getProteinHetatmFile())
         outExt = os.path.splitext(outHETMFile)[1]
         pmlFile = outHETMFile.replace('_out{}'.format(outExt), '_surf.pml')
         colors = createColorVectors(len(self))
@@ -645,11 +640,20 @@ class SetOfPockets(data.EMSet):
 
         # Creates the pml for pymol visualization
         with open(pmlFile, 'w') as f:
-            f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
-        self.setPmlFileSurf(pmlFile)
+            if bBox:
+                toWrite = FUNCTION_BOUNDING_BOX
+                for pocket in self:
+                    pDia = pocket.getDiameter()
+                    toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
+                                                        [pDia*bBox]*3,
+                                                        'BoundingBox_' + str(pocket.getObjId()))
+                f.write(PML_BBOX_STR_POCKSURF.format(outHETMFile, surfaceStr, toWrite))
+            else:
+                f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
         return pmlFile
 
-    def createTCL(self, outHETMFile):
+    def createTCL(self):
+        outHETMFile = os.path.abspath(self.getProteinHetatmFile())
         pqrFile = outHETMFile.replace('_out.pdb', '.pqr')
         tclFile = outHETMFile.replace('_out.pdb', '.tcl')
         with open(pqrFile, 'w') as f:
@@ -660,15 +664,15 @@ class SetOfPockets(data.EMSet):
         tclStr = TCL_STR % (outHETMFile, pqrFile)
         with open(tclFile, 'w') as f:
             f.write(tclStr)
+        return tclFile
 
-
-    def buildPocketsFiles(self, suffix='', tcl=False):
+    def buildPocketsFiles(self, suffix='', tcl=False, bBox=False):
         outHETMFile = self.buildPDBhetatmFile(suffix)
-        self.createPML(outHETMFile)
-        self.createSurfacePml(outHETMFile)
+        pmlFile = self.createPML(bBox=bBox)
+        pmlFileSurf = self.createSurfacePml(bBox=bBox)
         if self.getPocketsClass() == 'FPocket' and tcl==True:
-            self.createTCL(outHETMFile)
-        return outHETMFile
+            self.createTCL()
+        return outHETMFile, pmlFile, pmlFileSurf
 
     def getMAEFile(self):
         pock = self.getFirstItem()

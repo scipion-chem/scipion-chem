@@ -75,11 +75,8 @@ class PocketPointsViewer(pwviewer.Viewer):
   _environments = [pwviewer.DESKTOP_TKINTER]
   #_targets = [SetOfPockets]
 
-  def _visualize(self, obj, **kwargs):
-    pmlFile = obj.getPmlFile()
-    if pmlFile == None:
-      obj.buildPocketsFiles()
-      pmlFile = obj.getPmlFile()
+  def _visualize(self, obj, bBox=False, **kwargs):
+    pmlFile = obj.createPML(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
     pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
@@ -89,11 +86,8 @@ class ContactSurfaceViewer(pwviewer.Viewer):
   _environments = [pwviewer.DESKTOP_TKINTER]
   #_targets = [SetOfPockets]
 
-  def _visualize(self, obj, **kwargs):
-    pmlFile = obj.getPmlFileSurf()
-    if pmlFile == None:
-      obj.buildPocketsFiles()
-      pmlFile = obj.getPmlFileSurf()
+  def _visualize(self, obj, bBox=False, **kwargs):
+    pmlFile = obj.createSurfacePml(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
     pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
@@ -125,6 +119,13 @@ class viewerGeneralPockets(pwviewer.ProtocolViewer):
                   label='Display output AtomStruct with',
                   help='*PyMol*: display AtomStruct and pockets as points / surface.'
                   )
+    form.addParam('displayBBoxes', params.BooleanParam,
+                  default=False, label='Display pocket bounding boxes',
+                  help='Display the bounding boxes in pymol to check the size for the localized docking')
+    form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
+                  default=1.1, condition='displayBBoxes',
+                  help='The radius * n of each pocket will be used as grid radius')
+
 
   def _getVisualizeDict(self):
     return {
@@ -149,9 +150,17 @@ class viewerGeneralPockets(pwviewer.ProtocolViewer):
       return self._showAtomStructPyMolSurf()
 
   def _showAtomStructPyMol(self):
+    bBox = self.displayBBoxes.get()
+    if bBox:
+        bBox = self.pocketRadiusN.get()
+
     pymolV = PocketPointsViewer(project=self.getProject())
-    pymolV._visualize(self.protocol)
+    pymolV._visualize(self.protocol, bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
+    bBox = self.displayBBoxes.get()
+    if bBox:
+      bBox = self.pocketRadiusN.get()
+
     pymolV = ContactSurfaceViewer(project=self.getProject())
-    pymolV._visualize(self.protocol)
+    pymolV._visualize(self.protocol, bBox=bBox)

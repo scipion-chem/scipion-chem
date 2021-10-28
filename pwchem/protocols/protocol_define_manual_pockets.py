@@ -130,7 +130,7 @@ class ProtDefinePockets(EMProtocol):
             outPockets.append(pocket)
 
         if len(outPockets) > 0:
-            outHETMFile = outPockets.buildPocketsFiles()
+            outPockets.buildPDBhetatmFile()
             self._defineOutputs(outputPockets=outPockets)
 
 
