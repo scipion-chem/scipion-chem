@@ -136,7 +136,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """ Assign the charges using a method available
             in the open-access and free program openbabel
         """
-        for mol in self.inputSmallMols.get():
+        inMols = self.inputSmallMols.get()
+        for mol in inMols:
             fnSmall = mol.getFileName()
             fnMol = os.path.split(fnSmall)[1]      # Name of complete file
             fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
@@ -163,7 +164,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             cmethod = self._dic_method[index_method]
 
             # With a given pH
-            oFile = "{}-prep.mol2".format(fnRoot)
+            oFile = "{}_prep.mol2".format(fnRoot)
             if self.ph.get():
                 args = " -isdf %s -p %s --partialcharge %s -O %s" % (os.path.abspath(filesdf), str(self.phvalue.get()),
                                                                      cmethod, oFile)
@@ -183,8 +184,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
         # 3. Generate mol2 conformers file for each molecule with OpenBabel
 
-        for file in glob.glob(self._getExtraPath("*-prep.mol2")):
-            fnRoot = re.split("-", os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
+        for file in glob.glob(self._getExtraPath("*_prep.mol2")):
+            fnRoot = re.split("_", os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
 
             if self.method_conf.get() == 0:  # Genetic algorithm
                 args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.mol2" %\
@@ -204,9 +205,10 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
 
-        for fnSmall in glob.glob(self._getExtraPath("*-prep.mol2")):
+        for mol in self.inputSmallMols.get():
+            fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
             if self.doConformers:
-                fnRoot = re.split("-", os.path.split(fnSmall)[1])[0]
+                fnRoot = re.split("_", os.path.split(fnSmall)[1])[0]
                 outDir = self._getExtraPath(fnRoot)
                 os.mkdir(outDir)
                 firstConfFile = self._getTmpPath('{}-{}.mol2'.format(fnRoot, 1))
@@ -223,7 +225,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             else:
                 newSmallMol = SmallMolecule(smallMolFilename=fnSmall)
                 outputSmallMolecules.append(newSmallMol)
-
 
         if outputSmallMolecules is not None:
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)

@@ -94,23 +94,6 @@ class TestLigandPreparation(TestImportBase):
                                 "Something was wrong in column of _ConformessFile")
 
 
-            try:
-                self.assertTrue((mol.getParamsFileName()).endswith(".params"),
-                                "The format of params file is wrong. It must be in params format")
-            except:
-                self.assertTrue((mol.getParamsFileName()).endswith("Not available"),
-                                "Something was wrong in column of _ParamsFile")
-
-            try:
-                self.assertTrue((mol.getPDBFileName()).endswith(".pdb"),
-                                "The format of pdb file is wrong. It must be in pdb format")
-            except:
-                self.assertTrue((mol.getPDBFileName()).endswith("Not available"),
-                                "Something was wrong in column of _PDBFile")
-
-
-
-
     def test_2(self):
         """ Prepare a set of 4 ligands with conformer generation (confab algotithm)
         """
@@ -150,17 +133,3 @@ class TestLigandPreparation(TestImportBase):
             except:
                 self.assertTrue((mol.getConformersFileName()).endswith("Not available"),
                                 "Something was wrong in column of _ConformersFile")
-
-            try:
-                self.assertTrue((mol.getParamsFileName()).endswith(".params"),
-                                "The format of params file is wrong. It must be in params format")
-            except:
-                self.assertTrue((mol.getParamsFileName()).endswith("Not available"),
-                                "Something was wrong in column of _ParamsFile")
-
-            try:
-                self.assertTrue((mol.getPDBFileName()).endswith(".pdb"),
-                                "The format of pdb file is wrong. It must be in pdb format")
-            except:
-                self.assertTrue((mol.getPDBFileName()).endswith("Not available"),
-                                "Something was wrong in column of _PDBFile")
