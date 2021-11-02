@@ -80,13 +80,17 @@ class SmallMolecule(data.EMObject):
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))
-        self._type = String(kwargs.get('type', 'Standard'))
+        self._type = pwobj.String(kwargs.get('type', 'Standard'))
+
+        self._parentsIdxs = pwobj.String('')
+        self._targetFile = pwobj.String(None)
 
     def __str__(self):
         s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
         return s
 
     def getFileName(self):
+        '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()
 
     def getMolName(self):
@@ -96,6 +100,7 @@ class SmallMolecule(data.EMObject):
         return self.getMolName().split('-')[0]
 
     def getPoseFile(self):
+        '''Filename of the molecule after docking'''
         return self.poseFile.get()
 
     def setPoseFile(self, value):
@@ -106,7 +111,7 @@ class SmallMolecule(data.EMObject):
             #Schrodinger
             return self.poseFile.get().split('@')[0]
         else:
-            #Autodock
+            #Others
             return self.poseFile.get().split('_')[-1].split('.')[0]
 
     def getGridId(self):
@@ -118,16 +123,6 @@ class SmallMolecule(data.EMObject):
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
             return self._ConformersFile.get()
-        return
-
-    def getParamsFileName(self):
-        if hasattr(self, '_ParamsFile'):
-            return self._ParamsFile.get()
-        return
-
-    def getPDBFileName(self):
-        if hasattr(self, '_PDBFile'):
-            return self._PDBFile.get()
         return
 
     def getMolClass(self):
@@ -203,10 +198,33 @@ class SmallMolecule(data.EMObject):
         if hasattr(self, '_energy'):
             return self._energy.get()
 
-    def getScore(self):
-        if hasattr(self, '_score'):
-            return self._score.get()
+    ##### Fragment-based
 
+    def addParentLoc(self, parentPointerIdx, parentId):
+        '''Add the parent molecule location to the codified string which sets the pointer index among the
+        sets of parents and the parent Id in this set corresponding to the list of parent molecules
+        e.g: "0|1;2|3;  defines that this molecule has two parent molecules: the one in parent set 0 with Id 1,
+        and the one in parent set 2 with Id 3'''
+        newStr = self._parentsIdxs.get() + '{}|{};'.format(parentPointerIdx, parentId)
+        self._parentsIdxs.set(newStr)
+
+    def decodeParentLoc(self):
+        '''Return a dic with {parentIdx: [parentIds]} corresponding to the parents of the self molecule'''
+        dic = {}
+        parentCodes = self._parentsIdxs.get().split(';')[:-1]
+        for pCode in parentCodes:
+            parentIdx, pId = pCode.split('|')
+            if parentIdx in dic:
+                dic[int(parentIdx)].append(int(pId))
+            else:
+                dic[int(parentIdx)] = [int(pId)]
+        return dic
+
+    def getTargetFile(self):
+        return self._targetFile.get()
+
+    def setTargetFile(self, value):
+        self._targetFile.set(value)
 
 
 class SetOfSmallMolecules(data.EMSet):
@@ -216,9 +234,11 @@ class SetOfSmallMolecules(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._molClass = String('Standard')
+        self._molClass = pwobj.String('Standard')
         self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
         self._docked = pwobj.Boolean(False)
+
+        self._parentPointers = pwobj.PointerList()
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
@@ -255,7 +275,48 @@ class SetOfSmallMolecules(data.EMSet):
         return self._docked.get()
 
     def setDocked(self, value):
-        self._docked.set(True)
+        self._docked.set(value)
+
+    ### Fragment-based
+    def getParentPointers(self):
+        return self._parentPointers
+
+    def appendSetOfParentPointer(self, setOfMols):
+        '''Append a Pointer of class SetOfSmallMolecules to the multipointer of parents molecules
+        Returns the index of the Pointer in the list of pointers'''
+        if type(setOfMols) == SetOfSmallMolecules or \
+            (type(setOfMols) == pwobj.Pointer and type(setOfMols.get()) == SetOfSmallMolecules):
+
+            pointerIdx = len(self._parentPointers)
+            self._parentPointers.append(setOfMols)
+            return pointerIdx
+        else:
+            print('The parent of a smallMolecule must be another smallMolecule')
+            return
+
+    def getParentSetIndex(self, setOfMols):
+        '''Return the index of a set of mols in the PointerList of parents'''
+        parentPointers = self.getParentPointers()
+        if type(setOfMols) == pwobj.Pointer:
+            setOfMols = setOfMols.get()
+        for i, parentPointer in enumerate(parentPointers):
+            if setOfMols == parentPointer.get():
+                return i
+        print('The setOfMols has not been found in the parent sets')
+        return None
+
+    def getParents(self, mol):
+        parentMols = []
+        parentsDic = mol.decodeParentLoc()
+        parentPointers = self.getParentPointers()
+        #For each parent Pointer with parent Molecules
+        for pIdx in parentsDic:
+            pSet = parentPointers[pIdx]
+            #For each molecule Id corresponding to a parent molecule
+            for pId in parentsDic[pIdx]:
+                parentMols.append(pSet.get().__getitem__(pId))
+        return parentMols
+
 
 class BindingSite(data.EMObject):
     """ Binding site """

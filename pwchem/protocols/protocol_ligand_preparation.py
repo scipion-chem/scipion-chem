@@ -204,6 +204,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
+        parentIdx = outputSmallMolecules.appendSetOfParentPointer(self.inputSmallMols.get())
 
         for mol in self.inputSmallMols.get():
             fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
@@ -221,6 +222,9 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                     molFile = os.path.abspath(os.path.join(confDir, molFile))
                     newSmallMol = SmallMolecule(smallMolFilename=molFile)
                     newSmallMol._ConformersFile = pwobj.String(confFile)
+
+                    newSmallMol.addParentLoc(parentIdx, mol.getObjId())
+
                     outputSmallMolecules.append(newSmallMol)
             else:
                 newSmallMol = SmallMolecule(smallMolFilename=fnSmall)
