@@ -80,13 +80,14 @@ class SmallMolecule(data.EMObject):
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))
-        self._type = String(kwargs.get('type', 'Standard'))
+        self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
     def __str__(self):
         s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
         return s
 
     def getFileName(self):
+        '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()
 
     def getMolName(self):
@@ -96,6 +97,7 @@ class SmallMolecule(data.EMObject):
         return self.getMolName().split('-')[0]
 
     def getPoseFile(self):
+        '''Filename of the molecule after docking'''
         return self.poseFile.get()
 
     def setPoseFile(self, value):
@@ -106,7 +108,7 @@ class SmallMolecule(data.EMObject):
             #Schrodinger
             return self.poseFile.get().split('@')[0]
         else:
-            #Autodock
+            #Others
             return self.poseFile.get().split('_')[-1].split('.')[0]
 
     def getGridId(self):
@@ -203,11 +205,6 @@ class SmallMolecule(data.EMObject):
         if hasattr(self, '_energy'):
             return self._energy.get()
 
-    def getScore(self):
-        if hasattr(self, '_score'):
-            return self._score.get()
-
-
 
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
@@ -216,7 +213,7 @@ class SetOfSmallMolecules(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._molClass = String('Standard')
+        self._molClass = pwobj.String('Standard')
         self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
         self._docked = pwobj.Boolean(False)
 
