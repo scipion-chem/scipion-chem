@@ -68,6 +68,44 @@ class ProteinSequenceFile(data.EMFile):
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
+#
+class Variants(data.EMFile):
+    """A file with a list of natural variants for a protein"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+#
+
+class SequenceFasta(data.EMFile):
+    """A fasta file for a Protein ID"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+#
+
+class ClustalAln(data.EMFile):
+    """A fasta file for a Protein ID"""
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+#
+#
+
+class SequenceVariants(data.Sequence):
+    """A fasta file for a Protein ID"""
+    def __init__(self, **kwargs):
+        data.Sequence.__init__(self, **kwargs)
+        self.variantsFile = pwobj.String('')
+
+    def __str__(self):
+        return ("{} (id={}, name={})".format(self.getClassName(), self.getId(), self.getSeqName()))
+
+    def setVariantsFileName(self, fnVars):
+        self.variantsFile.set(fnVars)
+
+    def getVariantsFileName(self):
+        return self.variantsFile.get()
+
+#
+
+
 class NucleotideSequenceFile(data.EMFile):
     """A file with a list of nucleotide sequences"""
     def __init__(self, **kwargs):
