@@ -33,19 +33,20 @@
 from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
+from pyworkflow.object import String
 from pwchem.protocols import InsertVariants
 
 class SelectVariant(EmWizard):
-  _targets = [(InsertVariants, ['selectVariant'])]    #Apply...: protocol object / 'selectVariant': StringParam for variant choose
+  _targets = [(InsertVariants, ['selectVariant'])]
 
   def getVariants(self, protocol):
-    if hasattr(protocol, 'inputSequence'):  #'inputVariants': PointerParam for natural variants object
+    if hasattr(protocol, 'inputSequence'):
       vars = []
       inputVarObj = protocol.inputSequence.get()
       varFile = inputVarObj.getVariantsFileName()
       with open(varFile) as f:
         for line in f:
-          vars.append(line.strip())
+          vars.append(String(line.strip()))
       return vars
 
   def show(self, form, *params):
@@ -56,12 +57,15 @@ class SelectVariant(EmWizard):
                             "Select one variant (prevResidue-residueNumber-postResidue)")
     form.setVar('selectVariant', dlg.values[0].get())
 
-class AddMutationWizard(EmWizard):
-  _targets = [(InsertVariants, ['addVariant'])]   #addVariant: LabelParam: 'Add variant to list of mutations'
+class AddVariantWizard(EmWizard):
+  _targets = [(InsertVariants, ['addVariant'])]
 
   def show(self, form, *params):
     protocol = form.protocol
-    form.setVar('toMutateList', protocol.toMutateList.get() +   #toMutateList: TextParam: List of variants to apply
-                '{}\n'.format(protocol.selectVariant.get()))
+    if protocol.toMutateList.get() == None:
+        written = ''
+    else:
+        written = protocol.toMutateList.get()
+    form.setVar('toMutateList', written + '{}\n'.format(protocol.selectVariant.get()))
 
 

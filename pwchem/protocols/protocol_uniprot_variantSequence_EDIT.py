@@ -53,7 +53,7 @@ class InsertVariants(EMProtocol):
                       label='Add variant to list of variants: ')
 
         form.addParam('toMutateList', TextParam, width=70,
-                      label='List of variants: ',
+                      default='', label='List of variants: ',
                       help="Variants to be applied into the sequence")
 
     def _insertAllSteps(self):
