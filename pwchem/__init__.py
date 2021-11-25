@@ -74,8 +74,12 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=False):
+        jchem_commands = 'wget https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar -O {} && '.\
+          format(cls.getJChemPath())
+        jchem_commands += 'chmod +x {}'.format(cls.getJChemPath())
+
         env.addPackage('jchempaint', version='3.3',
-                       url='https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar',
+                       commands=jchem_commands,
                        default=True)
 
     @classmethod
@@ -157,6 +161,10 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getMGLPath(cls, path=''):
       return os.path.join(cls.getVar('MGL_HOME'), path)
+
+    @classmethod
+    def getJChemPath(cls):
+      return cls.getPluginHome('jChemPaint_3.3.jar')
 
     @classmethod
     def getMGLEnviron(cls):
