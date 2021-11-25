@@ -65,17 +65,6 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=False):
-      MGL_INSTALLED = 'MGLTools_installed'
-
-      # try to get CONDA activation command
-      installationCmd = cls.getCondaActivationCmd()
-
-      # Create the environment
-      installationCmd += ' conda create -y -c conda-forge -n openbabel-env openbabel &&'
-
-      # Flag installation finished
-      installationCmd += ' touch %s' % MGL_INSTALLED
-
       env.addPackage('mgltools', version='1.5.6',
                      url='http://mgltools.scripps.edu/downloads/downloads/tars/releases/REL1.5.6/mgltools_x86_64Linux2_1.5.6.tar.gz',
                      buildDir='mgltools_x86_64Linux2_1.5.6',

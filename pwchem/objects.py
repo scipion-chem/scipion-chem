@@ -90,6 +90,9 @@ class SmallMolecule(data.EMObject):
         '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()
 
+    def setFileName(self, value):
+        self.smallMoleculeFile.set(value)
+
     def getMolName(self):
         return self.getFileName().split('/')[-1].split('.')[0]
 

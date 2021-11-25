@@ -44,7 +44,6 @@ class ProtChemZINCFilter(EMProtocol):
                        label='Set to filter:', allowsNull=False)
         form.addParam('mode', EnumParam, choices=["Remove if included", "Remove if not included"],
                       label='Mode', default=0)
-        form.addParam('notForSale', BooleanParam, label='Nor for sale', default=True)
         form.addParam('agent', BooleanParam, label='Agent', default=False)
         form.addParam('forSale', BooleanParam, label='For sale', default=False)
 
@@ -72,14 +71,13 @@ class ProtChemZINCFilter(EMProtocol):
                         mybytes = fp.read()
                         mystr = mybytes.decode("utf8")
                         fp.close()
-                    notForSale=False
                     agent=False
                     forSale=False
                     inTitle = False
                     title = ""
                     for line in mystr.split('\n'):
                         if "/substances/subsets/not-for-sale/" in line:
-                            notForSale = True
+                            forSale = False
                         elif "/substances/subsets/agent/" in line:
                             agent = True
                         elif "/substances/subsets/for-sale/" in line:
@@ -91,22 +89,13 @@ class ProtChemZINCFilter(EMProtocol):
                         if "<title>" in line:
                             inTitle = True
                     print("  Title: %s"%title)
-                    print("  Not for sale: %s"%str(notForSale))
                     print("  Agent: %s"%str(agent))
                     print("  For sale: %s"%str(forSale))
                     if self.mode.get()==0:
-                        if notForSale and self.notForSale.get():
-                            add=False
-                        if agent and self.agent.get():
-                            add=False
-                        if forSale and self.forSale.get():
+                        if (agent and self.agent.get()) or (forSale and self.forSale.get()):
                             add=False
                     else:
-                        if not notForSale and self.notForSale.get():
-                            add=False
-                        if not agent and self.agent.get():
-                            add=False
-                        if not forSale and self.forSale.get():
+                        if (not agent and self.agent.get()) or (not forSale and self.forSale.get()):
                             add=False
                 except:
                     add = True
