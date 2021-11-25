@@ -36,6 +36,7 @@ import pwem
 from .bibtex import _bibtexStr
 
 _logo = 'tool.png'
+JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
 
 class Plugin(pwem.Plugin):
     @classmethod
@@ -74,11 +75,16 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=False):
+        JCHEM_INSTALLED = 'jchem_installed'
         jchem_commands = 'wget https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar -O {} && '.\
           format(cls.getJChemPath())
-        jchem_commands += 'chmod +x {}'.format(cls.getJChemPath())
+        jchem_commands += 'chmod +x {} && '.format(cls.getJChemPath())
+        jchem_commands += ' touch %s' % JCHEM_INSTALLED
+
+        jchem_commands = [(jchem_commands, JCHEM_INSTALLED)]
 
         env.addPackage('jchempaint', version='3.3',
+                       tar='void.tgz',
                        commands=jchem_commands,
                        default=True)
 
@@ -159,12 +165,18 @@ class Plugin(pwem.Plugin):
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
+    def runJChemPaint(cls, protocol, cwd=None):
+      """ Run jchempaint command from a given protocol. """
+      protocol.runJob('java -jar {}'.format(cls.getJChemPath()), arguments='', env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
     def getMGLPath(cls, path=''):
       return os.path.join(cls.getVar('MGL_HOME'), path)
 
     @classmethod
     def getJChemPath(cls):
-      return cls.getPluginHome('jChemPaint_3.3.jar')
+        softwareHome = os.path.join(pwem.Config.EM_ROOT, JCHEM + '-' + JCHEM_DEFAULT_VERSION)
+        return softwareHome + '/' + JCHEM + '-' + JCHEM_DEFAULT_VERSION + '.jar'
 
     @classmethod
     def getMGLEnviron(cls):
