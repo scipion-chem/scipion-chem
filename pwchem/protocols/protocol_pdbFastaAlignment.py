@@ -33,10 +33,13 @@ import Bio
 from Bio.Align.Applications import ClustalwCommandline
 from Bio import AlignIO
 
+from pwem.convert import AtomicStructHandler
+from pwem.objects import Sequence, AtomStruct, PdbFile
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
-from pyworkflow.protocol.params import StringParam, EnumParam, FileParam, PointerParam
-from pwchem.objects import DatabaseID, SetOfDatabaseID, SequenceFasta, ClustalAln
+from pyworkflow.protocol.params import StringParam, EnumParam, FileParam, PointerParam, BooleanParam
+from pwchem.objects import DatabaseID, SetOfDatabaseID, SequenceFasta, SequenceVariants
+
 
 class ProtChemPdbFastaAlignment(EMProtocol):
     """Download a fasta from Uniprot and insert variants"""
@@ -45,142 +48,52 @@ class ProtChemPdbFastaAlignment(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
-        # form.addParam('inputPDB', PointerParam, pointerClass="AtomStruct",
-        #                label='PDB:', allowsNull=False)
 
-        form.addParam('inputPDBid', StringParam,
-                      label='PDB ID:', allowsNull=False,
-                      help="PDB ID for the protein")
+        form.addParam('inputOtherFile', PointerParam, pointerClass='Sequence, AtomStruct',
+                      label='Input file:', allowsNull=False, help="File where a sequence is extracted")
 
-        form.addParam('inputchain', StringParam,
-                      label='PDB Chain Id:', allowsNull=False,
-                      help="chain ID for the query sequence in the PDB")
 
-        form.addParam('inputProtName', StringParam,
-                      label='Protein Name:', allowsNull=False,
-                      help="Protein Name")
+        form.addParam('inputOtherFile_class', BooleanParam,
+                      label='Chain Selected: ', default=True,
+                      help="Chain from PDB selected")
 
-        form.addParam('fastaFile', FileParam,
-                    label='FASTA sequence:', allowsNull=False,
-                    help="Subject sequence")
+
+        form.addParam('inputchain', StringParam, condition='inputOtherFile_class',
+                      label='Chain:', allowsNull=False,
+                      help="chain selected")
+
+        form.addParam('inputSequence', PointerParam, pointerClass='Sequence',
+                      label='Input Sequence:', allowsNull=False, help="Original Sequence")
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('downLoadPdb')
         self._insertFunctionStep('alignmentFasta')
 
-    def downLoadPdb(self):
-        outputDatabaseID = SetOfDatabaseID().create(outputPath=self._getPath())
-        pdbId = self.inputPDBid.get().lower()
-        urlPdb = "https://files.rcsb.org/download/%s.pdb" % pdbId
-        self.fnPdb = self._getPath("%s.pdb" % pdbId)
-
-        if not os.path.exists(self.fnPdb):
-            print("Fetching pdb: %s"%urlPdb)
-
-            try:
-                urllib.request.urlretrieve(urlPdb,self.fnPdb)
-            except: # The library raises an exception when the web is not found
-                pass
-
-        chain = self.inputchain.get()
-        f_pdb = open(self.fnPdb, "r")
-
-        pos_residue = 1
-        aa_sequence = []
-        for linePDB in f_pdb:
-            rst_lineaPDB = linePDB.rstrip()
-            palabras = rst_lineaPDB.split()
-            for posi_palabra in range(0, len(palabras)):
-                if palabras[posi_palabra] == 'ATOM':
-                    if posi_palabra == 0 and palabras[posi_palabra + 4] == chain and palabras[
-                        posi_palabra + 5] != pos_residue:
-                        pos_residue = palabras[posi_palabra + 5]
-                        aa_sequence.append(palabras[posi_palabra + 3])
-                        # print(palabras[posi_palabra + 3])
-
-        aa_code = dict()
-        aa_code['ALA'] = 'A'
-        aa_code['ARG'] = 'R'
-        aa_code['ASN'] = 'N'
-        aa_code['ASP'] = 'D'
-        aa_code['CYS'] = 'C'
-        aa_code['GLN'] = 'Q'
-        aa_code['GLU'] = 'E'
-        aa_code['GLY'] = 'G'
-        aa_code['HIS'] = 'H'
-        aa_code['ILE'] = 'I'
-        aa_code['LEU'] = 'L'
-        aa_code['LYS'] = 'K'
-        aa_code['MET'] = 'M'
-        aa_code['PHE'] = 'F'
-        aa_code['PRO'] = 'P'
-        aa_code['SER'] = 'S'
-        aa_code['THR'] = 'T'
-        aa_code['TRP'] = 'W'
-        aa_code['TYR'] = 'Y'
-        aa_code['VAL'] = 'V'
-
-        # Make file to write sequence
-        self.seqExtractedPdb = self._getPath("sequenceFromPDB_%s.fasta" % pdbId)
-        file = open(self.seqExtractedPdb, "w")
-        file.close()
-
-        aa_sequence_code1 = ''
-        for aminoacid in range(0, len(aa_sequence)):
-            for aa3, aa1 in aa_code.items():
-                if aa_sequence[aminoacid] == aa3:
-                    aa_sequence_code1 = aa_sequence_code1 + aa1
-
-        file = open(self.seqExtractedPdb, 'a')
-        file.write(('>SequencePDB_%s.fasta' % pdbId) + "\n")
-        file.write(aa_sequence_code1)
-        file.close()
-
-        seqPdb = SequenceFasta()
-        seqPdb.setFileName(self.seqExtractedPdb)
-
-        self._defineOutputs(outputSeqPDB=seqPdb)
-
     def alignmentFasta(self):
-        pdbId = self.inputPDBid.get().lower()
-        fastaName = self.inputProtName.get()
-        fn_fasta = self.fastaFile.get()
 
-        # Fasta file should have 2 lines, header and sequence
-        pair_fasta = self._getPath('pair_' + pdbId + fastaName + '.fasta')
-        total_fasta = open(pair_fasta, "w")
+        inputOtherFile_class = self.inputOtherFile.get()
+        # print('inputOtherFile_class: ', inputOtherFile_class)
 
-        fasta_1 = open(self.seqExtractedPdb, "r")
-        for ele1 in fasta_1:
-            linea_ele1 = ele1.rstrip()
-            total_fasta.write(linea_ele1 + "\n")
+        inputSequence = self.inputSequence.get()
 
-        fasta_2 = open(fn_fasta, "r")
-        for ele2 in fasta_2:
-            linea_ele2 = ele2.rstrip()
-            total_fasta.write(linea_ele2 + "\n")
+        if issubclass(type(inputOtherFile_class), AtomStruct):
+            inputSequence.pairWiseAlignment(self.inputOtherFile.get(), chainID=self.inputchain.get())
 
-        total_fasta.close()
+        if not self.fromTypeID:
+            inputSequence.pairWiseAlignment(self.inputOtherFile.get())
 
-        # Alignment
-        in_file = pair_fasta
-        out_file = self._getPath("clustalw_" + pdbId + fastaName + ".aln")
+        aln_file = open(os.getcwd() + '/' + 'clustalw_pairWise.aln', "r")
 
-        clustalw_cline = ClustalwCommandline("clustalw", infile=in_file, outfile=out_file)
-        print(clustalw_cline)
+        fn_clustal = self._getPath('clustalw_pairWise.aln')
+        clustal_file = open(fn_clustal, "w")
 
-        stdout, stderr = clustalw_cline()
-        print(stdout)
-        print(stderr)
+        for line in aln_file:
+            clustal_file.write(line)
 
-        pairFasta = SequenceFasta()
-        pairFasta.setFileName(pairFasta)
-        alnClustal = ClustalAln()
-        alnClustal.setFileName(out_file)
+        aln_file.close()
+        clustal_file.close()
 
-        self._defineOutputs(outputPairFasta=pairFasta)
-        self._defineOutputs(outputClustalw=alnClustal)
+        self._defineOutputs(outputAlignment=inputSequence)
 
     def _validate(self):
-        errors=[]
+        errors = []
         return errors
