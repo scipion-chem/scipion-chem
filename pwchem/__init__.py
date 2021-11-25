@@ -46,6 +46,7 @@ class Plugin(pwem.Plugin):
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addopenbabelPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
@@ -70,6 +71,12 @@ class Plugin(pwem.Plugin):
                      buildDir='mgltools_x86_64Linux2_1.5.6',
                      commands=[("./install.sh", "initMGLtools.sh")],
                      default=True)
+
+    @classmethod
+    def addJChemPaintPackage(cls, env, default=False):
+        env.addPackage('jchempaint', version='3.3',
+                       url='https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar',
+                       default=True)
 
     @classmethod
     def addopenbabelPackage(cls, env, default=False):
