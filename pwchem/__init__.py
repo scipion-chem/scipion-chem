@@ -47,7 +47,7 @@ class Plugin(pwem.Plugin):
         # in the .config/scipion/scipion.conf file
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addopenbabelPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addOpenBabelPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
@@ -106,20 +106,7 @@ class Plugin(pwem.Plugin):
                        default=True)
 
     @classmethod
-    def addPLIPPackage(cls, env, default=False):
-        PLIP_INSTALLED = 'plip_installed'
-        plip_commands = 'git clone https://github.com/pharmai/plip.git && cd plip && '
-        plip_commands += 'python setup.py install --prefix ./ && '
-        plip_commands += 'pip install plip==2.2 && cd .. && touch {}'.format(PLIP_INSTALLED)
-
-        plip_commands = [(plip_commands, PLIP_INSTALLED)]
-        env.addPackage('plip', version='2.2',
-                       tar='void.tgz',
-                       commands=plip_commands,
-                       default=True)
-
-    @classmethod
-    def addopenbabelPackage(cls, env, default=False):
+    def addOpenBabelPackage(cls, env, default=False):
       OPENBABEL_INSTALLED = 'openbabel_installed'
 
       # try to get CONDA activation command
@@ -141,6 +128,20 @@ class Plugin(pwem.Plugin):
                      neededProgs=cls.getDependencies(),
                      default=default,
                      vars=installEnvVars)
+
+    @classmethod
+    def addPLIPPackage(cls, env, default=False):
+        PLIP_INSTALLED = 'plip_installed'
+        plip_commands = 'pip install plip==2.2 && git clone https://github.com/pharmai/plip.git && cd plip && '
+        plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
+        plip_commands += 'python setup.py install && '
+        plip_commands += 'cd .. && touch {}'.format(PLIP_INSTALLED)
+
+        plip_commands = [(plip_commands, PLIP_INSTALLED)]
+        env.addPackage('plip', version='2.2',
+                       tar='void.tgz',
+                       commands=plip_commands,
+                       default=True)
 
     @classmethod
     def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None):
