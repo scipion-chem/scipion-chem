@@ -37,6 +37,7 @@ from .bibtex import _bibtexStr
 
 _logo = 'tool.png'
 JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
+PYMOL, PYMOL_DEFAULT_VERSION = 'pymol', '2.5'
 
 class Plugin(pwem.Plugin):
     @classmethod
@@ -44,10 +45,12 @@ class Plugin(pwem.Plugin):
         # The activation command should be something like
         # CONDA_ACTIVATION_CMD=eval "$(path-to-conda shell.bash hook)"
         # in the .config/scipion/scipion.conf file
+        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addopenbabelPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
@@ -57,13 +60,27 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getRDKitEnvActivation(cls):
-        activation = cls.getVar("RDKIT_ENV_ACTIVATION")
-        return activation
+      activation = cls.getVar("RDKIT_ENV_ACTIVATION")
+      return activation
 
     @classmethod
     def getOpenbabelEnvActivation(cls):
       activation = cls.getVar("OPENBABEL_ENV_ACTIVATION")
       return activation
+
+    @classmethod
+    def addPyMolPackage(cls, env, default=False):
+        PYMOL_INSTALLED = 'pymol_installed'
+        pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
+          format(cls.getPyMolTar())
+        pymol_commands += 'tar -jxf {} --strip-components 1 && '.format(cls.getPyMolTar())
+        pymol_commands += 'conda install -c schrodinger pymol-bundle && touch ' + PYMOL_INSTALLED
+
+        pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
+        env.addPackage(PYMOL, version=PYMOL_DEFAULT_VERSION,
+                       tar='void.tgz',
+                       commands=pymol_commands,
+                       default=True)
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=False):
@@ -86,6 +103,19 @@ class Plugin(pwem.Plugin):
         env.addPackage('jchempaint', version='3.3',
                        tar='void.tgz',
                        commands=jchem_commands,
+                       default=True)
+
+    @classmethod
+    def addPLIPPackage(cls, env, default=False):
+        PLIP_INSTALLED = 'plip_installed'
+        plip_commands = 'git clone https://github.com/pharmai/plip.git && cd plip && '
+        plip_commands += 'python setup.py install --prefix ./ && '
+        plip_commands += 'pip install plip==2.2 && cd .. && touch {}'.format(PLIP_INSTALLED)
+
+        plip_commands = [(plip_commands, PLIP_INSTALLED)]
+        env.addPackage('plip', version='2.2',
+                       tar='void.tgz',
+                       commands=plip_commands,
                        default=True)
 
     @classmethod
@@ -177,6 +207,19 @@ class Plugin(pwem.Plugin):
     def getJChemPath(cls):
         softwareHome = os.path.join(pwem.Config.EM_ROOT, JCHEM + '-' + JCHEM_DEFAULT_VERSION)
         return softwareHome + '/' + JCHEM + '-' + JCHEM_DEFAULT_VERSION + '.jar'
+
+    @classmethod
+    def getPyMolDir(cls):
+      softwareHome = os.path.join(pwem.Config.EM_ROOT, PYMOL + '-' + PYMOL_DEFAULT_VERSION)
+      return softwareHome
+
+    @classmethod
+    def getPyMolTar(cls):
+        return cls.getPyMolDir() + '/' + PYMOL + '-' + PYMOL_DEFAULT_VERSION + '.tar.bz2'
+
+    @classmethod
+    def getPyMolPath(cls):
+      return cls.getPyMolDir() + '/' + 'pymol'
 
     @classmethod
     def getMGLEnviron(cls):

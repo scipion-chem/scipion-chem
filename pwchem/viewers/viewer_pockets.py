@@ -28,6 +28,7 @@ import os
 from subprocess import Popen
 
 from pwchem.objects import ProteinPocket, SetOfPockets
+from pwchem import Plugin as pwchem_plugin
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
@@ -51,7 +52,7 @@ class PyMolView(pwviewer.CommandView):
   """ View for calling an external command. """
 
   def __init__(self, pymolArgs, cwd, **kwargs):
-    pwviewer.CommandView.__init__(self, ['pymol', *pymolArgs.split()],
+    pwviewer.CommandView.__init__(self, [pwchem_plugin.getPyMolPath(), *pymolArgs.split()],
                                   cwd=cwd,
                                   env=PyMol.getEnviron(), **kwargs)
 
