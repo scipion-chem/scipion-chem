@@ -47,7 +47,9 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         pwchem.objects.ProteinSequenceFile,
         pwchem.objects.NucleotideSequenceFile,
         pwchem.objects.SetOfSmallMolecules,
-        pwchem.objects.SetOfBindingSites
+        pwchem.objects.SetOfBindingSites,
+        pwchem.objects.Sequence,
+        pwchem.objects.SequenceVariants
     ]
 
     def __init__(self, **kwargs):
@@ -71,6 +73,11 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.ProteinSequenceFile):
             views.append(self.textView([obj.getFileName()]))
+        elif issubclass(cls, pwchem.objects.Sequence):
+            textFile = '/tmp/sequence{}.txt'.format(obj.getObjId())
+            with open(textFile, 'w') as f:
+                f.write(obj.getSequence())
+            views.append(self.textView([textFile]))
         elif issubclass(cls, pwchem.objects.NucleotideSequenceFile):
             views.append(self.textView([obj.getFileName()]))
 

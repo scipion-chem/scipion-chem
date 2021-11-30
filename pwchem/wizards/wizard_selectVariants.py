@@ -36,29 +36,55 @@ from pyworkflow.gui import dialog
 from pyworkflow.object import String
 from pwchem.protocols import InsertVariants
 
+
+def getMutations(protocol):
+  if hasattr(protocol, 'inputSequence'):
+    vars = []
+    inputVarObj = protocol.inputSequence.get()
+    varFile = inputVarObj.getVariantsFileName()
+    with open(varFile) as f:
+      for line in f:
+        vars.append(String(line.strip()))
+    return vars
+
 class SelectVariant(EmWizard):
   _targets = [(InsertVariants, ['selectVariant'])]
 
-  def getVariants(self, protocol):
-    if hasattr(protocol, 'inputSequence'):
-      vars = []
-      inputVarObj = protocol.inputSequence.get()
-      varFile = inputVarObj.getVariantsFileName()
-      with open(varFile) as f:
-        for line in f:
-          vars.append(String(line.strip()))
-      return vars
+  def show(self, form, *params):
+    protocol = form.protocol
+    mutList = getMutations(protocol)
+    auxList, varsList = [], []
+    for mut in mutList:
+        doubleVars = ' '.join(str(mut).split()[1:]).split(',')
+        for dVar in doubleVars:
+            if '/' in dVar:
+                for var in dVar.split('/'):
+                    auxList.append(var.strip())
+            else:
+                auxList.append(dVar.strip())
+    auxList = list(set(auxList))
+    auxList.sort()
+    for var in auxList:
+        varsList.append(String(var.strip()))
+
+    provider = ListTreeProviderString(varsList)
+    dlg = dialog.ListDialog(form.root, "Sequence Variants", provider,
+                            "Select one Variant")
+    form.setVar('selectVariant', dlg.values[0].get())
+
+class SelectMutation(EmWizard):
+  _targets = [(InsertVariants, ['selectMutation'])]
 
   def show(self, form, *params):
     protocol = form.protocol
-    varsList = self.getVariants(protocol)
-    provider = ListTreeProviderString(varsList)
-    dlg = dialog.ListDialog(form.root, "Sequence variants", provider,
-                            "Select one variant (prevResidue-residueNumber-postResidue)")
-    form.setVar('selectVariant', dlg.values[0].get())
+    mutList = getMutations(protocol)
+    provider = ListTreeProviderString(mutList)
+    dlg = dialog.ListDialog(form.root, "Sequence Mutations", provider,
+                            "Select one Mutation (prevResidue-residueNumber-postResidue)")
+    form.setVar('selectMutation', dlg.values[0].get())
 
-class AddVariantWizard(EmWizard):
-  _targets = [(InsertVariants, ['addVariant'])]
+class AddVarMutationWizard(EmWizard):
+  _targets = [(InsertVariants, ['addMutation'])]
 
   def show(self, form, *params):
     protocol = form.protocol
@@ -66,6 +92,6 @@ class AddVariantWizard(EmWizard):
         written = ''
     else:
         written = protocol.toMutateList.get()
-    form.setVar('toMutateList', written + '{}\n'.format(protocol.selectVariant.get()))
+    form.setVar('toMutateList', written + '{}\n'.format(protocol.selectMutation.get()))
 
 

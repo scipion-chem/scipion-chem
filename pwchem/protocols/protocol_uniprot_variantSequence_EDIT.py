@@ -36,43 +36,48 @@ from pyworkflow.protocol.params import *
 from pwchem.objects import DatabaseID, SetOfDatabaseID, SequenceFasta, SequenceVariants
 
 class InsertVariants(EMProtocol):
-    """Download a fasta from Uniprot and insert variants"""
-    _label = 'insert variants in a sequence'
+    """Generates a variant for a given sequence and information about its variants"""
+    _label = 'Generate a variant sequence'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
+        form.addParam('inputSequence', PointerParam, pointerClass='SequenceVariants',
+                      label='Input Sequence:', allowsNull=False,
+                      help="Input sequence containing the information about the variants "
+                           "and their corresponding mutations")
 
-        form.addParam('inputSequence', PointerParam, pointerClass='Sequence',
-                      label='Input Sequence:', allowsNull=False, help="Original Sequence")
+        form.addParam('fromVariant', BooleanParam, label='Generate predefined variant: ',
+                      default='True',
+                      help='Generates a variant which has been defined in the database '
+                           'where the information comes from')
+        form.addParam('selectMutation', StringParam,
+                      label='Select a mutation: ', condition='not fromVariant',
+                      help="Mutations to be insert into a sequence")
+
+        form.addParam('addMutation', LabelParam, condition='not fromVariant',
+                      label='Add mutation to list of mutations: ',
+                      help='Add mutation to list of mutations in the generated sequence')
+
+        form.addParam('toMutateList', TextParam, width=70, condition='not fromVariant',
+                      default='', label='List of mutations: ',
+                      help="Mutations to be applied into the sequence")
 
         form.addParam('selectVariant', StringParam,
-                      label='Select a variant: ',
-                      help="Variants to be insert into a sequence")
-
-        form.addParam('addVariant', LabelParam,
-                      label='Add variant to list of variants: ')
-
-        form.addParam('toMutateList', TextParam, width=70,
-                      default='', label='List of variants: ',
-                      help="Variants to be applied into the sequence")
+                      label='Select a variant: ', condition='fromVariant',
+                      help="Variant to generate, obtained from the information in the input")
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('insertVariants')
+        if not self.fromVariant:
+            self._insertFunctionStep('insertMutationsStep')
+        else:
+            self._insertFunctionStep('generateVariantStep')
 
-    def insertVariants(self):
-        # llamar al objeto SequenceVariants
-
+    def insertMutationsStep(self):
         fnVars = self.inputSequence.get().getVariantsFileName()
-        print('fnVars: ' , fnVars)
         fnSeq = self.inputSequence.get().getSequence()
         posSelected_input = self.toMutateList.get()
-        print('posSelected_input: ', posSelected_input)
 
-        middle_variants = posSelected_input.rstrip().split('\n')
-        print('middle_variants: ', middle_variants)
-
-        fileVariants  = middle_variants
-        print('fileVariants: ', fileVariants)
+        fileVariants = posSelected_input.rstrip().split('\n')
 
         aminoacid_original = []
         aminoacid_exchanged = []
@@ -98,9 +103,16 @@ class InsertVariants(EMProtocol):
         seqMutant.setSequence(mutatedSequence)
 
         lineage = SequenceVariants()
-        lineage.getMutationsInLineage(fnVars)
+        #lineage.getMutationsInLineage(fnVars)
 
         self._defineOutputs(outputSequence=seqMutant)
+
+    def generateVariantStep(self):
+        selectedVariant = self.selectVariant.get()
+        print('Selected variant: ', selectedVariant)
+        inputSequenceVar = self.inputSequence.get()
+        #TODO: add this line when the method is available in the sequenceVariants object
+        #variantSequence = inputSequenceVar.generateVariant(selectedVariant)
 
     def _validate(self):
         errors=[]
