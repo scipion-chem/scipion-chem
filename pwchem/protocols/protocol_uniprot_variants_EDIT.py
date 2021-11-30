@@ -122,15 +122,21 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
 
         for child in tree.getroot().iter():
             positionDescription = []
+            strainDescription = []
             if child.tag.endswith("feature"):
+
                 if child.attrib['type'] == 'sequence variant':
                     for childChild in child:
                         if childChild.tag.endswith("location"):
                             # print(childChild)
                             for childChildChild in childChild:
                                 if childChildChild.tag.endswith("position"):
-                                    # print(childChildChild.attrib['position'])
+                                    print('position: ', childChildChild.attrib['position'])
                                     positionDescription.append(childChildChild.attrib['position'])
+
+                    if child.attrib['description']:
+                        # print('description: ', child.attrib['description'])
+                        strainDescription.append(child.attrib['description'])
 
                     for childChild in child:
                         if childChild.tag.endswith("original"):
@@ -141,15 +147,53 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
                         if childChild.tag.endswith("variation"):
                             # print(childChild.text)
                             positionDescription.append(childChild.text)
+            if len(positionDescription) >= 3:
+            # if len(positionDescription) != 0 and len(positionDescription) != 1:
+                print('positionDescription', positionDescription)
+                print('description: ', child.attrib['description'])
+                descriptionLinage = child.attrib['description'].split(',')
+                identifiedVariants = []
+                for elementDescription in range(len(descriptionLinage)):
+                    # print('element: ', descriptionLinage[elementDescription])
 
-            if len(positionDescription) != 0 and len(positionDescription) != 1:
-                print(positionDescription)
+                    if 'In strain: ' in descriptionLinage[elementDescription]:
+                        strainline = descriptionLinage[elementDescription]
+                        inStrain = strainline.split(':')
+                        # print('inStrain: ', inStrain[1])
+                        # identifiedVariants = inStrain[1]
+                        identifiedVariants.append(inStrain[1])
+
+                    if 'strain' not in descriptionLinage[elementDescription]:
+                        if ';' in descriptionLinage[elementDescription]:
+                            strainline = descriptionLinage[elementDescription]
+                            inStrain = strainline.split(';')
+                            # print('inStrain: ', inStrain[0])
+                            # identifiedVariants = identifiedVariants + inStrain[0]
+                            identifiedVariants.append((inStrain[0] + '.'))
+                        else:
+                            inStrain = descriptionLinage[elementDescription]
+                            # print('inStrain: ', inStrain)
+                            # identifiedVariants = identifiedVariants + inStrain
+                            identifiedVariants.append(inStrain)
+
+                    if 'in strain' in descriptionLinage[elementDescription]:
+                        strainline = descriptionLinage[elementDescription]
+                        inStrain = strainline.split(' ')
+                        # print('inStrain: ', inStrain[3])
+                        # identifiedVariants = identifiedVariants + inStrain[3]
+                        identifiedVariants.append(inStrain[3])
+
+                # print('identifiedVariants: ', identifiedVariants)
+
+                mutantString = identifiedVariants[0].lstrip()
+                for mutantIndex in range(1, (len(identifiedVariants))):
+                    mutantString = mutantString + ', ' + identifiedVariants[mutantIndex].lstrip()
+                print('mutantString: ', mutantString)
+
                 # Crear un archivo con las variantes
-                # fnAll = self._getPath("NaturalVariantsUniprot.txt")
-
                 file = open(fnOut, "a")
-                snv = file.write(positionDescription[1] + positionDescription[0] + positionDescription[2] + '\n')
-                # snv = file.write(positionDescription[0] + ' ' + positionDescription[1] + '>' + positionDescription[2] + '\n')
+                snv = file.write(positionDescription[1] + positionDescription[0] + positionDescription[2] + ' ' + mutantString +'\n')
+                # snv = file.write(positionDescription[1] + positionDescription[0] + positionDescription[2] + '\n')
                 file.close()
         return fnOut
 
@@ -161,5 +205,6 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
             seq += line.strip()
         file.close()
         return seq
+
 
 
