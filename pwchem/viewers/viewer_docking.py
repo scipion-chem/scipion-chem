@@ -24,11 +24,14 @@
 # *
 # **************************************************************************
 
-from pyworkflow.protocol.params import EnumParam
+from pyworkflow.protocol.params import EnumParam, StringParam
 import pyworkflow.viewer as pwviewer
 from pwchem.utils.utilsViewer import *
+from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
 from pyworkflow.viewer import DESKTOP_TKINTER
 from pwchem.protocols import ProtocolConsensusDocking
+from pwchem import Plugin as pwchemPlugin
+from pyworkflow.gui.dialog import showError
 
 SINGLE, MOLECULE, POCKET = 'single', 'molecule', 'pocket'
 
@@ -64,6 +67,13 @@ class DockingViewer(pwviewer.ProtocolViewer):
                        label='Display single ligand: ',
                        help='Display this single ligand with the target')
 
+        form.addSection(label='Visualize with PLIP')
+        form.addParam('displayPymolPLIP', EnumParam,
+                       choices=self.getChoices(type=SINGLE)[0], default=0,
+                       label='Display ligand interactions: ',
+                       help='Display this single ligand with the binding site and interactions')
+
+
     def getChoices(self, type=POCKET, pymol=True):
         outputLigandsDic = {}
         for oAttr in self.protocol.iterOutputAttributes():
@@ -92,6 +102,7 @@ class DockingViewer(pwviewer.ProtocolViewer):
         return {'displayPymolSingle': self._viewSinglePymol,
                 'displayPymolMolecule': self._viewMoleculePymol,
                 'displayPymolPocket': self._viewPocketPymol,
+                'displayPymolPLIP': self._viewPLIPPymol
                 }
 
     def _viewSinglePymol(self, e=None):
@@ -147,6 +158,58 @@ class DockingViewer(pwviewer.ProtocolViewer):
 
         pymolV = PyMolViewer(project=self.getProject())
         pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+
+    def _viewPLIPPymol(self, e=None):
+      ligandLabel = self.getEnumText('displayPymolPLIP')
+      pmlsDir = getPmlsDir(self.protocol)
+      mol = self.singleLigandsDic[ligandLabel][0].clone()
+
+      mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
+                                        os.path.join(pmlsDir, ligandLabel+'.pdb'))
+
+      pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
+                           cwd=os.path.abspath(pmlsDir))
+
+      pmlFile = ''
+      for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
+          if file.endswith('.pse') and self.typicalLigNames(file):
+              pmlFile = file
+
+      if pmlFile != '':
+          pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
+          pymolV = PyMolViewer(project=self.getProject())
+          pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+      else:
+          showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
+          print('PLIP found no interactions in the docking position')
+
+    def typicalLigNames(self, file):
+        ligNames = ['UNK', 'UNL', 'LIG', 'X']
+        for ln in ligNames:
+            if ln in file:
+                return True
+        return False
+
+    def createComplexPDB(self, receptorFile, molFile, outPath):
+        outBase, ext = os.path.splitext(molFile)
+        auxPath = '/tmp/{}.pdb'.format(os.path.basename(outBase))
+        if not molFile.endswith('.pdb'):
+            outFile = os.path.abspath(outBase + '.pdb')
+            runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], molFile, outFile),
+                         cwd=self.protocol._getExtraPath(), popen=True)
+            molFile = outFile
+
+        if not receptorFile.endswith('.pdb'):
+            outBase, ext = os.path.splitext(receptorFile)
+            outFile = os.path.abspath(outBase + '.pdb')
+            runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], receptorFile, outFile),
+                         cwd=self.protocol._getExtraPath(), popen=True)
+            receptorFile = outFile
+
+        mergePDBs(receptorFile, molFile, auxPath, hetatm2=True)
+        clean_PDB(auxPath, outPath, waters=True, HETATM=False)
+        return outPath
+
 
 
 class ProtConsensusDockingViewer(DockingViewer):

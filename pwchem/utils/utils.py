@@ -98,12 +98,19 @@ def splitPDBLine(line, rosetta=False):
     else:
         return None
 
-def mergePDBs(fn1, fn2, fnOut):
+def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
     with open(fnOut, 'w') as f:
         with open(fn1) as f1:
-            f.write('\n'.join(f1.readlines()[:-1]))
+            for line in f1:
+                f.write(line)
         with open(fn2) as f2:
-            f.write(f2.read())
+            for line in f2:
+                if hetatm2 and line.startswith('ATOM'):
+                    sLine = splitPDBLine(line)
+                    sLine[0] = 'HETATM'
+                    line = writePDBLine(sLine)
+                f.write(line)
+
 
 def getScipionObj(value):
     if isinstance(value, Object):
@@ -151,8 +158,8 @@ def writeSurfPML(pockets, pmlFileName):
         f.write(createSurfacePml(pockets))
 
 
-def runOpenBabel(protocol, args, cwd):
-    pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd)
+def runOpenBabel(protocol, args, cwd, popen=False):
+    pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
 
 
 def splitConformerFile(confFile, outDir):

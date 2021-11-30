@@ -30,6 +30,7 @@ manipulation of atomic struct objects
 """
 
 import os
+from subprocess import check_call
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 import pwem
@@ -132,8 +133,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addPLIPPackage(cls, env, default=False):
         PLIP_INSTALLED = 'plip_installed'
-        plip_commands = 'pip install plip==2.2 && git clone https://github.com/pharmai/plip.git && cd plip && '
-        plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
+        plip_commands = 'git clone https://github.com/pharmai/plip.git && cd plip && '
         plip_commands += 'python setup.py install && '
         plip_commands += 'cd .. && touch {}'.format(PLIP_INSTALLED)
 
@@ -142,12 +142,6 @@ class Plugin(pwem.Plugin):
                        tar='void.tgz',
                        commands=plip_commands,
                        default=True)
-
-    @classmethod
-    def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None):
-      """ Run openbabel command from a given protocol. """
-      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
-      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 
     @classmethod
     def getDependencies(cls):
@@ -199,6 +193,22 @@ class Plugin(pwem.Plugin):
     def runJChemPaint(cls, protocol, cwd=None):
       """ Run jchempaint command from a given protocol. """
       protocol.runJob('java -jar {}'.format(cls.getJChemPath()), arguments='', env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None, popen=False):
+      """ Run openbabel command from a given protocol. """
+      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
+      if not popen:
+        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+      else:
+        print(['obabel', *args.split()])
+        check_call(['obabel', *args.split()], env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def runPLIP(cls, args, cwd=None):
+        """ Run rdkit command from a given protocol. """
+        check_call(['plip', *args.split()], env=cls.getEnviron(), cwd=cwd)
+
 
     @classmethod
     def getMGLPath(cls, path=''):
