@@ -60,56 +60,36 @@ class InsertVariants(EMProtocol):
         self._insertFunctionStep('insertVariants')
 
     def insertVariants(self):
+        # llamar al objeto SequenceVariants
+
         fnVars = self.inputSequence.get().getVariantsFileName()
+        print('fnVars: ' , fnVars)
         fnSeq = self.inputSequence.get().getSequence()
-        posSelected_input = self.variantsSelected.get()
+        posSelected_input = self.toMutateList.get()
+        print('posSelected_input: ', posSelected_input)
 
-        posSelected = posSelected_input.split(',')
-        # print(posSelected)
+        middle_variants = posSelected_input.rstrip().split('\n')
+        print('middle_variants: ', middle_variants)
 
-        #
-        posfixInput = []
-        for posSel in posSelected:
-            posSelCorrected = int(posSel) -1
-            posfixInput.append(posSelCorrected)
-        #
-        numVariants = len(posSelected)
-        # print(numVariants)
-
-        letters_fnSeq = list(fnSeq)
-        # print(letters_fnSeq)
-
-        fileVariants = open(fnVars)
+        fileVariants  = middle_variants
+        print('fileVariants: ', fileVariants)
 
         aminoacid_original = []
         aminoacid_exchanged = []
         position_inSequence = []
         for mutation in fileVariants:
-            mutation = mutation.strip()
+            mutation = mutation.split()[0]
             aminoacid_original.append(mutation[0])
-
             aminoacid_exchanged.append(mutation[-1])
             position_inSequence.append(mutation[1:-1])
 
-        print('Letters: ', letters_fnSeq)
-        print('aminoacid_exchanged: ', aminoacid_exchanged)
-        print('posSelected: ', posSelected)
-        print('position_inSequence', position_inSequence)
-        print('posfixInput: ', posfixInput)
-        for ele_posfixInput in range(0, len(posfixInput)):
-            for ele_position_inSequence in range(0, len(position_inSequence)):
-                if posfixInput[ele_posfixInput] == ele_position_inSequence:
-                    letters_fnSeq[int(position_inSequence[ele_position_inSequence])-1] = aminoacid_exchanged[int(posfixInput[ele_posfixInput])]
-                    print(letters_fnSeq[int(position_inSequence[ele_position_inSequence])-1], aminoacid_exchanged[int(posfixInput[ele_posfixInput])])
-
-        # Dani's code
-        # for i, position in enumerate(position_inSequence):
-        #     if str(i) in posSelected:
-        #         print('Mutation number: ', i)
-        #         print('Position: ', position)
-        #         print('Exchanged: ', aminoacid_exchanged[i])
-        #         letters_fnSeq[int(position) - 1] = aminoacid_exchanged[i]
-        #         print('Con el -1', int(position) - 1) # Sale posicion 12 no 13
+        # print('aminoacid_original: ', aminoacid_original)
+        # print('aminoacid_exchanged: ', aminoacid_exchanged)
+        # print('position_inSequence: ', position_inSequence)
+        letters_fnSeq = list(fnSeq)
+        # print('letters_fnSeq: ', letters_fnSeq)
+        for ele_position_inSequence in range(0, len(position_inSequence)):
+            letters_fnSeq[int(position_inSequence[ele_position_inSequence]) - 1] = aminoacid_exchanged[int(ele_position_inSequence)]
 
         mutatedSequence = ''.join(letters_fnSeq)
         print(mutatedSequence)
@@ -117,8 +97,13 @@ class InsertVariants(EMProtocol):
         seqMutant = Sequence()
         seqMutant.setSequence(mutatedSequence)
 
+        lineage = SequenceVariants()
+        lineage.getMutationsInLineage(fnVars)
+
         self._defineOutputs(outputSequence=seqMutant)
 
     def _validate(self):
         errors=[]
         return errors
+
+
