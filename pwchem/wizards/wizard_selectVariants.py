@@ -38,9 +38,9 @@ from pwchem.protocols import InsertVariants
 
 
 def getMutations(protocol):
-  if hasattr(protocol, 'inputSequence'):
+  if hasattr(protocol, 'inputSequenceVariants'):
     vars = []
-    inputVarObj = protocol.inputSequence.get()
+    inputVarObj = protocol.inputSequenceVariants.get()
     varFile = inputVarObj.getVariantsFileName()
     with open(varFile) as f:
       for line in f:
