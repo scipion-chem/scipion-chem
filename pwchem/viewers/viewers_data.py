@@ -26,6 +26,8 @@ import pyworkflow.viewer as pwviewer
 import pwem.viewers.views as views
 import pwem.viewers.showj as showj
 import pwchem.objects
+from pwem.viewers import SequenceViewer
+from pwchem.objects import SequenceVariants
 
 class SetOfDatabaseIDView(views.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
@@ -36,6 +38,11 @@ class SetOfDatabaseIDView(views.ObjectView):
         defaultViewParams.update(viewParams)
         views.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)
+
+class ViewerSequenceVariants(SequenceViewer):
+    _targets = [SequenceVariants]
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 class BioinformaticsDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
@@ -48,8 +55,6 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         pwchem.objects.NucleotideSequenceFile,
         pwchem.objects.SetOfSmallMolecules,
         pwchem.objects.SetOfBindingSites,
-        pwchem.objects.Sequence,
-        pwchem.objects.SequenceVariants
     ]
 
     def __init__(self, **kwargs):
@@ -73,11 +78,6 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.ProteinSequenceFile):
             views.append(self.textView([obj.getFileName()]))
-        elif issubclass(cls, pwchem.objects.Sequence):
-            textFile = '/tmp/sequence{}.txt'.format(obj.getObjId())
-            with open(textFile, 'w') as f:
-                f.write(obj.getSequence())
-            views.append(self.textView([textFile]))
         elif issubclass(cls, pwchem.objects.NucleotideSequenceFile):
             views.append(self.textView([obj.getFileName()]))
 
