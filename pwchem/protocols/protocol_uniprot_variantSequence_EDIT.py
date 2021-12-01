@@ -41,7 +41,7 @@ class InsertVariants(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSequence', PointerParam, pointerClass='SequenceVariants',
+        form.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
                       label='Input Sequence:', allowsNull=False,
                       help="Input sequence containing the information about the variants "
                            "and their corresponding mutations")
@@ -73,16 +73,16 @@ class InsertVariants(EMProtocol):
             self._insertFunctionStep('generateVariantStep')
 
     def insertMutationsStep(self):
-        fnVars = self.inputSequence.get().getVariantsFileName()
-        fnSeq = self.inputSequence.get().getSequence()
+        fnVars = self.inputSequenceVariants.get().getVariantsFileName()
+        fnSeq = self.inputSequenceVariants.get().getSequence()
         posSelected_input = self.toMutateList.get()
 
-        fileVariants = posSelected_input.rstrip().split('\n')
-
+        listVariants = posSelected_input.rstrip().split('\n')
+        print('listVariants: ', listVariants)
         aminoacid_original = []
         aminoacid_exchanged = []
         position_inSequence = []
-        for mutation in fileVariants:
+        for mutation in listVariants:
             mutation = mutation.split()[0]
             aminoacid_original.append(mutation[0])
             aminoacid_exchanged.append(mutation[-1])
@@ -101,18 +101,29 @@ class InsertVariants(EMProtocol):
 
         seqMutant = Sequence()
         seqMutant.setSequence(mutatedSequence)
-
-        lineage = SequenceVariants()
-        #lineage.getMutationsInLineage(fnVars)
+        # lineage = SequenceVariants()
+        # lineage.getMutationsInLineage(fnVars)
+        # self.varDic = lineage.getMutationsInLineage(fnVars)
 
         self._defineOutputs(outputSequence=seqMutant)
+
 
     def generateVariantStep(self):
         selectedVariant = self.selectVariant.get()
         print('Selected variant: ', selectedVariant)
-        inputSequenceVar = self.inputSequence.get()
+        inputSequenceVar = self.inputSequenceVariants.get()
         #TODO: add this line when the method is available in the sequenceVariants object
-        #variantSequence = inputSequenceVar.generateVariant(selectedVariant)
+        #Dani: variantSequence = inputSequenceVar.generateVariant(selectedVariant)
+        #
+        lineage = self.inputSequenceVariants.get()
+        varDic = lineage.getMutationsInLineage()
+        print(selectedVariant , varDic[selectedVariant])
+
+        variantSequence = inputSequenceVar.generateVariantLineage(selectedVariant)
+        variantSequence = Sequence()
+        # print('variantSequence: ', variantSequence)
+
+        self._defineOutputs(outputVariantSequence=variantSequence)
 
     def _validate(self):
         errors=[]

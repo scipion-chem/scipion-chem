@@ -94,6 +94,7 @@ class SequenceVariants(data.Sequence):
         data.Sequence.__init__(self, **kwargs)
         self.variantsFile = pwobj.String('')
 
+
     def __str__(self):
         return ("{} (id={}, name={})".format(self.getClassName(), self.getId(), self.getSeqName()))
 
@@ -103,8 +104,67 @@ class SequenceVariants(data.Sequence):
     def getVariantsFileName(self):
         return self.variantsFile.get()
 
-#
+#   metodo para construir el diccionario donde las key son las variantes y los valores una lista con todas las mutaciones de esa variante
 
+    def getMutationsInLineage(self):
+        fnVars = self.getVariantsFileName()
+        file = open(fnVars)
+        lineagesMutationsDictionary = {}
+
+        for line in file:
+            # print('line_obj: ', line.rstrip())
+            # print('line_len: ', len(line))
+            line_list = list(line.rstrip().split())
+            # print('line_list: ', line_list)
+            mutation = line_list[0]
+            # print('mutation: ', mutation)
+            # print('line_list_len: ', len(line_list))
+            for lineages in range(1, len(line_list)):
+                lineage = line_list[lineages][:-1]
+                if '/' in lineage:
+                    nomenclatures = lineage.split('/')
+                    lineage1 = nomenclatures[0]
+                    lineage2 = nomenclatures[1]
+                    if lineage1 in lineagesMutationsDictionary:
+                        lineagesMutationsDictionary[lineage1] += [mutation]
+                    else:
+                        lineagesMutationsDictionary[lineage1] = [mutation]
+                    if lineage2 in lineagesMutationsDictionary:
+                        lineagesMutationsDictionary[lineage2] += [mutation]
+                    else:
+                        lineagesMutationsDictionary[lineage2] = [mutation]
+                if '/' not in lineage:
+                    if lineage in lineagesMutationsDictionary:
+                        lineagesMutationsDictionary[lineage] += [mutation]
+                    else:
+                        lineagesMutationsDictionary[lineage] = [mutation]
+
+        # print(lineagesMutationsDictionary)
+        return lineagesMutationsDictionary
+#   otro metodo que te devuelva la seq de la variante elegida con todas sus mutaciones
+
+    def generateVariantLineage(self, selectedVariant):
+        varDic = self.getMutationsInLineage()
+        sequence = self.getSequence()
+        listVariants = varDic[selectedVariant]
+        aminoacid_original = []
+        aminoacid_exchanged = []
+        position_inSequence = []
+        for mutation in listVariants:
+            mutation = mutation.split()[0]
+            aminoacid_original.append(mutation[0])
+            aminoacid_exchanged.append(mutation[-1])
+            position_inSequence.append(mutation[1:-1])
+
+        letters_sequence = list(sequence)
+        for ele_position_inSequence in range(0, len(position_inSequence)):
+            letters_sequence[int(position_inSequence[ele_position_inSequence]) - 1] = aminoacid_exchanged[int(ele_position_inSequence)]
+
+        mutatedSequence = ''.join(letters_sequence)
+        # print('mutatedSequence', mutatedSequence)
+        return mutatedSequence
+
+# metodo de alineamiento multiple con un objeto other que pueda ser una seq o un atomStruct
 
 class NucleotideSequenceFile(data.EMFile):
     """A file with a list of nucleotide sequences"""
