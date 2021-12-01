@@ -66,12 +66,10 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         if issubclass(cls, pwchem.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfSmallMolecules):
-            print('Mols Obj: ', obj, obj.getFileName())
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         if issubclass(cls, pwchem.objects.SetOfPockets):
-            print('Pockets Obj: ', obj, obj.getFileName())
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.ProteinSequenceFile):
             views.append(self.textView([obj.getFileName()]))
