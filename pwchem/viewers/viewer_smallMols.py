@@ -25,13 +25,11 @@
 # **************************************************************************
 
 import os
-from subprocess import Popen
 
 from pwchem.objects import SetOfSmallMolecules
-import pyworkflow.utils as pwutils
-from pyworkflow.protocol.params import EnumParam, BooleanParam
+from pyworkflow.protocol.params import EnumParam, LabelParam
 import pyworkflow.viewer as pwviewer
-from pwchem.viewers import PyMolViewer
+from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 
 class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'
@@ -51,6 +49,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                   choices=self.getChoicesSingle(), default=0,
                   label='Display single ligand: ',
                   help='Display this single ligand with the target')
+
+    form.addSection(label='Table view')
+    form.addParam('displayTable', LabelParam,
+                  label='Display ligands set and attributes in table format: ',
+                  help='Display the ligands set in the set in table format with their respective attributes')
 
   def getChoicesSingle(self):
     self.outputLigands = {}
@@ -81,7 +84,15 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     return {
       'displayPymolSingle': self._viewSinglePymol,
       'displayPymolConformers': self._viewConformersPymol,
+      'displayTable': self._viewSet,
     }
+
+  def _viewSet(self, e=None):
+    molSet = self.protocol
+
+    setV = BioinformaticsDataViewer(project=self.getProject())
+    views = setV._visualize(molSet)
+    views[0].show()
 
   def _viewSinglePymol(self, e=None):
     ligandLabel = self.getEnumText('displayPymolSingle')

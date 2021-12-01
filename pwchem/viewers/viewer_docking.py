@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from pyworkflow.protocol.params import EnumParam, StringParam
+from pyworkflow.protocol.params import EnumParam, LabelParam
 import pyworkflow.viewer as pwviewer
 from pwchem.utils.utilsViewer import *
 from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
@@ -32,8 +32,9 @@ from pyworkflow.viewer import DESKTOP_TKINTER
 from pwchem.protocols import ProtocolConsensusDocking
 from pwchem import Plugin as pwchemPlugin
 from pyworkflow.gui.dialog import showError
+from pwchem.viewers import BioinformaticsDataViewer
 
-SINGLE, MOLECULE, POCKET = 'single', 'molecule', 'pocket'
+SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
 class DockingViewer(pwviewer.ProtocolViewer):
     """ Visualize the output of protocol autodock """
@@ -43,58 +44,68 @@ class DockingViewer(pwviewer.ProtocolViewer):
 
     def __init__(self, **args):
         pwviewer.ProtocolViewer.__init__(self, **args)
-        self.singleLabels, self.singleLigandsDic = self.getChoices(type=SINGLE)
-        self.moleculeLabels, self.moleculeLigandsDic = self.getChoices(type=MOLECULE)
-        self.pocketLabels, self.pocketLigandsDic = self.getChoices(type=POCKET)
+        self.singleLabels, self.singleLigandsDic = self.getChoices(vType=SINGLE)
+        self.moleculeLabels, self.moleculeLigandsDic = self.getChoices(vType=MOLECULE)
+        self.pocketLabels, self.pocketLigandsDic = self.getChoices(vType=POCKET)
+        self.setLabels, self.setLigandsDic = self.getChoices(vType=SET)
 
     def _defineParams(self, form):
         form.addSection(label='Visualize with Pymol')
         group = form.addGroup('Pocket ligands')
         group.addParam('displayPymolPocket', EnumParam,
-                       choices=self.getChoices(type=POCKET)[0], default=0,
+                       choices=self.getChoices(vType=POCKET)[0], default=0,
                        label='Display docking on pocket result: ',
                        help='Display all ligands docked in this pocket')
 
         group = form.addGroup('Each molecule')
         group.addParam('displayPymolMolecule', EnumParam,
-                       choices=self.getChoices(type=MOLECULE)[0], default=0,
-                       label='Display one ligand type: ',
+                       choices=self.getChoices(vType=MOLECULE)[0], default=0,
+                       label='Display one ligand vType: ',
                        help='Display all conformers and positions of this molecule')
 
         group = form.addGroup('Single Ligand')
         group.addParam('displayPymolSingle', EnumParam,
-                       choices=self.getChoices(type=SINGLE)[0], default=0,
+                       choices=self.getChoices(vType=SINGLE)[0], default=0,
                        label='Display single ligand: ',
                        help='Display this single ligand with the target')
 
         form.addSection(label='Visualize with PLIP')
         form.addParam('displayPymolPLIP', EnumParam,
-                       choices=self.getChoices(type=SINGLE)[0], default=0,
+                       choices=self.getChoices(vType=SINGLE)[0], default=0,
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
 
+        form.addSection(label='Table view')
+        form.addParam('displayTable', EnumParam,
+                      choices=self.getChoices(vType=SET)[0], default=0,
+                      label='Display ligands set and attributes in table format: ',
+                      help='Display the chosen ligands set in the set in table format with their respective attributes')
 
-    def getChoices(self, type=POCKET, pymol=True):
+
+    def getChoices(self, vType=POCKET, pymol=True):
         outputLigandsDic = {}
         for oAttr in self.protocol.iterOutputAttributes():
           if 'outputSmallMolecules' in oAttr[0]:
-            if type == POCKET:
+            if vType == POCKET or vType == SET:
               oLabel = oAttr[0]
             molSet = getattr(self.protocol, oAttr[0])
-            for mol in molSet:
-              curMol = mol.clone()
-              if type == SINGLE:
-                oLabel = curMol.getUniqueName()
-              elif type == MOLECULE:
-                oLabel = curMol.getMolBase()
-              if not oLabel in outputLigandsDic:
-                outputLigandsDic[oLabel] = [curMol]
-              else:
-                outputLigandsDic[oLabel] += [curMol]
+            if vType == SET:
+              outputLigandsDic[oLabel] = molSet
+            else:
+              for mol in molSet:
+                curMol = mol.clone()
+                if vType == SINGLE:
+                  oLabel = curMol.getUniqueName()
+                elif vType == MOLECULE:
+                  oLabel = curMol.getMolBase()
+                if not oLabel in outputLigandsDic:
+                  outputLigandsDic[oLabel] = [curMol]
+                else:
+                  outputLigandsDic[oLabel] += [curMol]
 
         outputLabels = list(outputLigandsDic.keys())
         outputLabels.sort()
-        if type == POCKET and pymol and len(outputLabels) > 1:
+        if vType == POCKET and pymol and len(outputLabels) > 1:
           outputLabels = ['All'] + outputLabels
         return outputLabels, outputLigandsDic
 
@@ -102,8 +113,17 @@ class DockingViewer(pwviewer.ProtocolViewer):
         return {'displayPymolSingle': self._viewSinglePymol,
                 'displayPymolMolecule': self._viewMoleculePymol,
                 'displayPymolPocket': self._viewPocketPymol,
-                'displayPymolPLIP': self._viewPLIPPymol
+                'displayPymolPLIP': self._viewPLIPPymol,
+                'displayTable': self._viewSet,
                 }
+
+    def _viewSet(self, e=None):
+        ligandLabel = self.getEnumText('displayTable')
+        mols = self.setLigandsDic[ligandLabel]
+
+        setV = BioinformaticsDataViewer(project=self.getProject())
+        views = setV._visualize(mols)
+        views[0].show()
 
     def _viewSinglePymol(self, e=None):
         ligandLabel = self.getEnumText('displayPymolSingle')
@@ -221,18 +241,18 @@ class ProtConsensusDockingViewer(DockingViewer):
     def __init__(self, **args):
         DockingViewer.__init__(self, **args)
 
-    def getChoices(self, type=POCKET, pymol=True):
+    def getChoices(self, vType=POCKET, pymol=True):
         outputLigandsDic, oLabel = {}, None
         for oAttr in self.protocol.iterOutputAttributes():
           if 'outputSmallMolecules' in oAttr[0]:
-            if type == POCKET:
+            if vType == POCKET:
               oLabel = oAttr[0]
             molSet = getattr(self.protocol, oAttr[0])
             for mol in molSet:
               curMol = mol.clone()
-              if type == SINGLE:
+              if vType == SINGLE:
                 oLabel = curMol.getUniqueName()
-              elif type == MOLECULE and oAttr[0] != 'outputSmallMoleculesAll':
+              elif vType == MOLECULE and oAttr[0] != 'outputSmallMoleculesAll':
                 oLabel = curMol.getMolBase()
 
               if oLabel is not None:
