@@ -257,7 +257,11 @@ class SetOfSmallMolecules(data.EMSet):
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
 
+    def setProteinFile(self, value):
+        self.proteinFile.set(value)
     def getProteinFile(self):
+        return self.proteinFile.get()
+    def getOriginalReceptorFile(self):
         return self.proteinFile.get()
 
     def isDocked(self):

@@ -158,7 +158,7 @@ def writeSurfPML(pockets, pmlFileName):
         f.write(createSurfacePml(pockets))
 
 
-def runOpenBabel(protocol, args, cwd, popen=False):
+def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
     pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
 
 
