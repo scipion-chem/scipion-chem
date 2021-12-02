@@ -78,7 +78,7 @@ class Plugin(pwem.Plugin):
       OPENBABEL_INSTALLED = 'openbabel_installed'
 
       # Create the environment
-      installationCmd = ' conda create -y -c conda-forge/label/cf202003 python=3.6 -n openbabel-env openbabel &&'
+      installationCmd = ' conda create -y -c conda-forge/label/cf202003 python=3.6 -n openbabel-env &&'
 
       # Flag installation finished
       installationCmd += ' touch %s' % OPENBABEL_INSTALLED
