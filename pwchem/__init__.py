@@ -168,7 +168,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
       """ Run openbabel command from a given protocol. """
-      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
+      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), program)
       if not popen:
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
       else:
@@ -177,7 +177,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def runPLIP(cls, args, cwd=None):
         """ Run rdkit command from a given protocol. """
-        fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), 'plip')
+        fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
 
