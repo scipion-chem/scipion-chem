@@ -208,8 +208,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def runPLIP(cls, args, cwd=None):
         """ Run rdkit command from a given protocol. """
-        fullProgram = '%s %s && python %s ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(),
-                                              cls.getPlipScript())
+        fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
 
@@ -234,11 +233,6 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getMGLPath(cls, path=''):
       return os.path.join(cls.getVar('MGL_HOME'), path)
-
-    @classmethod
-    def getPlipScript(cls):
-      softwareHome = os.path.join(pwem.Config.EM_ROOT, PLIP + '-' + PLIP_DEFAULT_VERSION)
-      return os.path.join(softwareHome, 'plip/plip/plipcmd.py')
 
     @classmethod
     def getJChemPath(cls):
