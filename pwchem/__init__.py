@@ -77,9 +77,6 @@ class Plugin(pwem.Plugin):
     def addOpenBabelPackage(cls, env, default=False):
       OPENBABEL_INSTALLED = 'openbabel_installed'
 
-      # try to get CONDA activation command
-      #installationCmd = cls.getCondaActivationCmd()
-
       # Create the environment
       installationCmd = ' conda create -y -c conda-forge/label/cf202003 -n openbabel-env openbabel &&'
 
@@ -113,12 +110,11 @@ class Plugin(pwem.Plugin):
     def addPLIPPackage(cls, env, default=False):
       PLIP_INSTALLED = 'plip_installed'
       plip_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
-      plip_commands += 'git clone https://github.com/pharmai/plip.git && cd plip && '
-      plip_commands += 'conda install -c anaconda swig && '
+      #plip_commands += 'git clone https://github.com/pharmai/plip.git && '
+      plip_commands += 'conda install -c anaconda swig && touch {} && '.format(PLIP_INSTALLED)
       # Complains about openbabel in installation but can be called through the script plipcmd.py
       #plip_commands += 'python setup.py install && '
-      plip_commands += 'pip install plip 2>/dev/null && '
-      plip_commands += 'cd .. && touch {}'.format(PLIP_INSTALLED)
+      plip_commands += 'pip install plip'
 
       plip_commands = [(plip_commands, PLIP_INSTALLED)]
       env.addPackage('plip', version='2.2',
