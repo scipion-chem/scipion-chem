@@ -318,7 +318,6 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       return molSet.isDocked()
 
   def checkIfProtocol(self):
-      print('Self.protocol: ', self.protocol)
       if issubclass(type(self.protocol), SetOfSmallMolecules):
           return False
       else:

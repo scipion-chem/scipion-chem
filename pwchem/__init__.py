@@ -30,7 +30,7 @@ manipulation of atomic struct objects
 """
 
 import os
-from subprocess import check_call
+from subprocess import run
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 import pwem
@@ -43,15 +43,15 @@ PYMOL, PYMOL_DEFAULT_VERSION = 'pymol', '2.5'
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
-        # The activation command should be something like
-        # CONDA_ACTIVATION_CMD=eval "$(path-to-conda shell.bash hook)"
-        # in the .config/scipion/scipion.conf file
-        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #OPENBABEL + PLIP environment (with pymol bundle)
         cls.addOpenBabelPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addPyMolBundle(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
+
+        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
@@ -69,19 +69,72 @@ class Plugin(pwem.Plugin):
       activation = cls.getVar("OPENBABEL_ENV_ACTIVATION")
       return activation
 
+
+######################## PACKAGES #########################
+
     @classmethod
-    def addPyMolPackage(cls, env, default=False):
+    def addOpenBabelPackage(cls, env, default=False):
+      OPENBABEL_INSTALLED = 'openbabel_installed'
+
+      # try to get CONDA activation command
+      #installationCmd = cls.getCondaActivationCmd()
+
+      # Create the environment
+      installationCmd = ' conda create -y -c conda-forge/label/cf202003 -n openbabel-env openbabel &&'
+
+      # Flag installation finished
+      installationCmd += ' touch %s' % OPENBABEL_INSTALLED
+
+      openbabel_commands = [(installationCmd, OPENBABEL_INSTALLED)]
+
+      envPath = os.environ.get('PATH', "")
+      installEnvVars = {'PATH': envPath} if envPath else None
+      env.addPackage('openbabel',
+                     tar='void.tgz',
+                     commands=openbabel_commands,
+                     neededProgs=cls.getDependencies(),
+                     default=default,
+                     vars=installEnvVars)
+
+    @classmethod
+    def addPyMolBundle(cls, env, default=False):
         PYMOL_INSTALLED = 'pymol_installed'
-        pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
-          format(cls.getPyMolTar())
-        pymol_commands += 'tar -jxf {} --strip-components 1 && '.format(cls.getPyMolTar())
-        pymol_commands += 'conda install -c schrodinger pymol-bundle && touch ' + PYMOL_INSTALLED
+        pymol_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
+        pymol_commands += 'conda install -c schrodinger -c conda-forge pymol && touch ' + PYMOL_INSTALLED
 
         pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
-        env.addPackage(PYMOL, version=PYMOL_DEFAULT_VERSION,
+        env.addPackage(PYMOL, version='2.4',
                        tar='void.tgz',
                        commands=pymol_commands,
                        default=True)
+
+    @classmethod
+    def addPLIPPackage(cls, env, default=False):
+      PLIP_INSTALLED = 'plip_installed'
+      plip_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
+      plip_commands += 'git clone https://github.com/pharmai/plip.git && cd plip && '
+      plip_commands += 'python setup.py install && '
+      plip_commands += 'pip install plip && '
+      plip_commands += 'cd .. && touch {}'.format(PLIP_INSTALLED)
+
+      plip_commands = [(plip_commands, PLIP_INSTALLED)]
+      env.addPackage('plip', version='2.2',
+                     tar='void.tgz',
+                     commands=plip_commands,
+                     default=True)
+
+    @classmethod
+    def addPyMolPackage(cls, env, default=False):
+      PYMOL_INSTALLED = 'pymol_installed'
+      pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
+        format(cls.getPyMolTar())
+      pymol_commands += 'tar -jxf {} --strip-components 1 && '.format(cls.getPyMolTar())
+      pymol_commands += 'touch ' + PYMOL_INSTALLED
+      pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
+      env.addPackage(PYMOL, version=PYMOL_DEFAULT_VERSION,
+                     tar='void.tgz',
+                     commands=pymol_commands,
+                     default=True)
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=False):
@@ -107,53 +160,6 @@ class Plugin(pwem.Plugin):
                        default=True)
 
     @classmethod
-    def addOpenBabelPackage(cls, env, default=False):
-      OPENBABEL_INSTALLED = 'openbabel_installed'
-
-      # try to get CONDA activation command
-      installationCmd = cls.getCondaActivationCmd()
-
-      # Create the environment
-      installationCmd += ' conda create -y -c conda-forge -n openbabel-env openbabel &&'
-
-      # Flag installation finished
-      installationCmd += ' touch %s' % OPENBABEL_INSTALLED
-
-      openbabel_commands = [(installationCmd, OPENBABEL_INSTALLED)]
-
-      envPath = os.environ.get('PATH', "")
-      installEnvVars = {'PATH': envPath} if envPath else None
-      env.addPackage('openbabel',
-                     tar='void.tgz',
-                     commands=openbabel_commands,
-                     neededProgs=cls.getDependencies(),
-                     default=default,
-                     vars=installEnvVars)
-
-    @classmethod
-    def addPLIPPackage(cls, env, default=False):
-        PLIP_INSTALLED = 'plip_installed'
-        plip_commands = 'git clone https://github.com/pharmai/plip.git && cd plip && '
-        plip_commands += 'python setup.py install && '
-        plip_commands += 'cd .. && touch {}'.format(PLIP_INSTALLED)
-
-        plip_commands = [(plip_commands, PLIP_INSTALLED)]
-        env.addPackage('plip', version='2.2',
-                       tar='void.tgz',
-                       commands=plip_commands,
-                       default=True)
-
-    @classmethod
-    def getDependencies(cls):
-        # try to get CONDA activation command
-        condaActivationCmd = cls.getCondaActivationCmd()
-        neededProgs = []
-        if not condaActivationCmd:
-            neededProgs.append('conda')
-
-        return neededProgs
-
-    @classmethod
     def addRDKitPackage(cls, env, default=False):
         RDKIT_INSTALLED = 'rdkit_installed'
 
@@ -177,11 +183,8 @@ class Plugin(pwem.Plugin):
                        default=default,
                        vars=installEnvVars)
 
-    @classmethod
-    def getPluginHome(cls, path=""):
-        import pwchem
-        fnDir = os.path.split(pwchem.__file__)[0]
-        return os.path.join(fnDir,path)
+
+    ##################### RUN CALLS #################33333
 
     @classmethod
     def runRDKit(cls, protocol, program, args, cwd=None):
@@ -195,20 +198,38 @@ class Plugin(pwem.Plugin):
       protocol.runJob('java -jar {}'.format(cls.getJChemPath()), arguments='', env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
-    def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None, popen=False):
+    def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
       """ Run openbabel command from a given protocol. """
       fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
       if not popen:
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
       else:
-        print(['obabel', *args.split()])
-        check_call(['obabel', *args.split()], env=cls.getEnviron(), cwd=cwd)
+        run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
     @classmethod
     def runPLIP(cls, args, cwd=None):
         """ Run rdkit command from a given protocol. """
-        check_call(['plip', *args.split()], env=cls.getEnviron(), cwd=cwd)
+        fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), 'plip ')
+        run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
+
+  ##################### UTILS ###########################
+
+    @classmethod
+    def getDependencies(cls):
+      # try to get CONDA activation command
+      condaActivationCmd = cls.getCondaActivationCmd()
+      neededProgs = []
+      if not condaActivationCmd:
+        neededProgs.append('conda')
+
+      return neededProgs
+
+    @classmethod
+    def getPluginHome(cls, path=""):
+      import pwchem
+      fnDir = os.path.split(pwchem.__file__)[0]
+      return os.path.join(fnDir, path)
 
     @classmethod
     def getMGLPath(cls, path=''):
