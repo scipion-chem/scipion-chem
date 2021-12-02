@@ -114,9 +114,10 @@ class Plugin(pwem.Plugin):
       PLIP_INSTALLED = 'plip_installed'
       plip_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
       plip_commands += 'git clone https://github.com/pharmai/plip.git && cd plip && '
+      plip_commands += 'conda install -c anaconda swig && '
       # Complains about openbabel in installation but can be called through the script plipcmd.py
       #plip_commands += 'python setup.py install && '
-      #plip_commands += 'pip install plip && '
+      plip_commands += 'pip install plip 2>/dev/null && '
       plip_commands += 'cd .. && touch {}'.format(PLIP_INSTALLED)
 
       plip_commands = [(plip_commands, PLIP_INSTALLED)]
