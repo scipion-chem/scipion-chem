@@ -98,7 +98,7 @@ class Plugin(pwem.Plugin):
     def addPyMolBundle(cls, env, default=False):
         PYMOL_INSTALLED = 'pymol_installed'
         pymol_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
-        pymol_commands += 'conda install -c schrodinger -c conda-forge pymol && touch ' + PYMOL_INSTALLED
+        pymol_commands += 'conda install -y -c schrodinger -c conda-forge pymol && touch ' + PYMOL_INSTALLED
 
         pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
         env.addPackage(PYMOL, version='2.4',
@@ -111,7 +111,7 @@ class Plugin(pwem.Plugin):
       PLIP_INSTALLED = 'plip_installed'
       plip_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
       #plip_commands += 'git clone https://github.com/pharmai/plip.git && '
-      plip_commands += 'conda install -c -y anaconda swig && '
+      plip_commands += 'conda install -c anaconda -y swig && '
       # Complains about openbabel in installation but can be called through the script plipcmd.py
       #plip_commands += 'python setup.py install && '
       plip_commands += 'conda install plip -y && touch {}'.format(PLIP_INSTALLED)
