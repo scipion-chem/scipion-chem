@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# *              Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -44,9 +45,7 @@ PLIP, PLIP_DEFAULT_VERSION = 'plip', '2.2'
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
-        #OPENBABEL + PLIP environment (with pymol bundle)
-        cls.addOpenBabelPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addPyMolBundle(env, default=bool(cls.getCondaActivationCmd()))
+        #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
 
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
@@ -57,7 +56,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
-        cls._defineVar("OPENBABEL_ENV_ACTIVATION", 'conda activate openbabel-env')
+        cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
         cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
 
     @classmethod
@@ -66,55 +65,25 @@ class Plugin(pwem.Plugin):
       return activation
 
     @classmethod
-    def getOpenbabelEnvActivation(cls):
-      activation = cls.getVar("OPENBABEL_ENV_ACTIVATION")
+    def getPLIPEnvActivation(cls):
+      activation = cls.getVar("PLIP_ENV_ACTIVATION")
       return activation
 
 
 ######################## PACKAGES #########################
-
-    @classmethod
-    def addOpenBabelPackage(cls, env, default=False):
-      OPENBABEL_INSTALLED = 'openbabel_installed'
-
-      # Create the environment
-      installationCmd = ' conda create -y -n openbabel-env -c conda-forge/label/cf202003 openbabel python=3.6 &&'
-
-      # Flag installation finished
-      installationCmd += ' touch %s' % OPENBABEL_INSTALLED
-
-      openbabel_commands = [(installationCmd, OPENBABEL_INSTALLED)]
-
-      envPath = os.environ.get('PATH', "")
-      installEnvVars = {'PATH': envPath} if envPath else None
-      env.addPackage('openbabel',
-                     tar='void.tgz',
-                     commands=openbabel_commands,
-                     neededProgs=cls.getDependencies(),
-                     default=default,
-                     vars=installEnvVars)
-
-    @classmethod
-    def addPyMolBundle(cls, env, default=False):
-        PYMOL_INSTALLED = 'pymol_installed'
-        pymol_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
-        pymol_commands += 'conda install -y -c schrodinger -c conda-forge pymol && touch ' + PYMOL_INSTALLED
-
-        pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
-        env.addPackage(PYMOL, version='2.4',
-                       tar='void.tgz',
-                       commands=pymol_commands,
-                       default=True)
-
     @classmethod
     def addPLIPPackage(cls, env, default=False):
       PLIP_INSTALLED = 'plip_installed'
-      plip_commands = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation())
-      #plip_commands += 'git clone https://github.com/pharmai/plip.git && '
-      plip_commands += 'conda install -c anaconda -y swig && '
-      # Complains about openbabel in installation but can be called through the script plipcmd.py
-      #plip_commands += 'python setup.py install && '
-      plip_commands += 'conda install -c conda-forge plip -y && touch {}'.format(PLIP_INSTALLED)
+      plip_commands = 'conda create -y -n plip-env python=3.6 && '
+      plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation())
+      #Installing openbabel
+      plip_commands += 'conda install -y -c conda-forge/label/cf202003 openbabel && '
+      #Installing swig
+      plip_commands += 'conda install -y -c anaconda swig && '
+      #Installing Pymol
+      plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol &&'
+      #Installing PLIP
+      plip_commands += 'conda install -y -c conda-forge plip && touch {}'.format(PLIP_INSTALLED)
 
       plip_commands = [(plip_commands, PLIP_INSTALLED)]
       env.addPackage('plip', version='2.2',
