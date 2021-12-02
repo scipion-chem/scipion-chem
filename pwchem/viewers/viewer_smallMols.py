@@ -340,6 +340,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     return pmlsDir
 
   def createComplexPDB(self, receptorFile, molFile, outPath):
+    receptorFile = os.path.abspath(receptorFile)
     outBase, ext = os.path.splitext(molFile)
     auxPath = '/tmp/{}.pdb'.format(os.path.basename(outBase))
     if not molFile.endswith('.pdb'):
