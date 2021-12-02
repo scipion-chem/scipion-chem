@@ -114,7 +114,7 @@ class Plugin(pwem.Plugin):
       plip_commands += 'conda install -c anaconda -y swig && '
       # Complains about openbabel in installation but can be called through the script plipcmd.py
       #plip_commands += 'python setup.py install && '
-      plip_commands += 'conda install plip -y && touch {}'.format(PLIP_INSTALLED)
+      plip_commands += 'conda install -c conda-forge plip -y && touch {}'.format(PLIP_INSTALLED)
 
       plip_commands = [(plip_commands, PLIP_INSTALLED)]
       env.addPackage('plip', version='2.2',
