@@ -78,8 +78,9 @@ class SmallMolecule(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
-        self.poseFile = pwobj.String(kwargs.get('poseFile', None))
-        self.gridId = pwobj.Integer(kwargs.get('gridId', None))
+        self.poseFile = pwobj.String(kwargs.get('poseFile', None))  #File of position
+        self.gridId = pwobj.Integer(kwargs.get('gridId', None))     #pocketID
+        self.dockId = pwobj.Integer(kwargs.get('dockId', None))     #dockProtocol ID
         self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
     def __str__(self):
@@ -89,6 +90,9 @@ class SmallMolecule(data.EMObject):
     def getFileName(self):
         '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()
+
+    def setFileName(self, value):
+        self.smallMoleculeFile.set(value)
 
     def getMolName(self):
         return self.getFileName().split('/')[-1].split('.')[0]
@@ -117,6 +121,12 @@ class SmallMolecule(data.EMObject):
     def setGridId(self, gridId):
         self.gridId.set(gridId)
 
+    def getDockId(self):
+        return self.dockId.get()
+
+    def setDockId(self, value):
+        self.dockId.set(value)
+
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
             return self._ConformersFile.get()
@@ -144,6 +154,8 @@ class SmallMolecule(data.EMObject):
             name = 'g{}_'.format(self.getGridId()) + name
         if self.poseFile.get() != None:
             name += '_' + self.getPoseId()
+        if self.getDockId() != None:
+            name += '_{}'.format(self.getDockId())
         return name
 
     def getAtomsPosDic(self, onlyHeavy=True):
@@ -245,7 +257,11 @@ class SetOfSmallMolecules(data.EMSet):
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
 
+    def setProteinFile(self, value):
+        self.proteinFile.set(value)
     def getProteinFile(self):
+        return self.proteinFile.get()
+    def getOriginalReceptorFile(self):
         return self.proteinFile.get()
 
     def isDocked(self):

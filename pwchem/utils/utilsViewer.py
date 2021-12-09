@@ -48,11 +48,14 @@ def writePmlFile(pmlFile, pmlStr):
     return pmlFile, pmlStr
 
 def sortMolsByUnique(mols):
-    uniques = []
+    uniques, newMols = [], []
     for mol in mols:
-        uniques.append(mol.clone().getUniqueName())
+        uniq = mol.clone().getUniqueName()
+        if not uniq in uniques:
+            uniques.append(uniq)
+            newMols.append(mol.clone())
 
-    zipped_lists = sorted(zip(uniques, mols))
+    zipped_lists = sorted(zip(uniques, newMols))
     uniques, mols = zip(*zipped_lists)
     return mols
 
