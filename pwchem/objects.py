@@ -570,6 +570,10 @@ class SetOfPockets(data.EMSet):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
       return s
 
+    def copyInfo(self, other):
+        self._hetatmFile = other._hetatmFile
+        self._pocketsClass = other._pocketsClass
+
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])
 

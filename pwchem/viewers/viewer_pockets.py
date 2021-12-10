@@ -78,6 +78,7 @@ class PocketPointsViewer(pwviewer.Viewer):
   #_targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
+    outHETMFile = obj.buildPDBhetatmFile()
     pmlFile = obj.createPML(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
