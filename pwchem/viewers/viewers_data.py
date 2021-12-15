@@ -26,6 +26,7 @@ import pyworkflow.viewer as pwviewer
 import pwem.viewers.views as pwemViews
 import pwem.viewers.showj as showj
 import pwchem.objects
+from pwem.objects import SetOfSequences
 
 class SetOfDatabaseIDView(pwemViews.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
@@ -43,6 +44,7 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
+        SetOfSequences,
         pwchem.objects.SetOfDatabaseID,
         pwchem.objects.ProteinSequenceFile,
         pwchem.objects.NucleotideSequenceFile,
@@ -65,6 +67,8 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, pwchem.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
+        elif issubclass(cls, SetOfSequences):
+            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfSmallMolecules):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
