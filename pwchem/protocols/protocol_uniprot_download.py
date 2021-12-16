@@ -86,7 +86,7 @@ class ProtChemUniprotDownload(EMProtocol):
 
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
         for seqId in fastaDic:
-            newSeq = Sequence(name=seqId, sequence=fastaDic[seqId], id=seqId)
+            newSeq = Sequence(name=fastaDic[seqId]['name'], sequence=fastaDic[seqId]['sequence'], id=seqId)
             outputSequences.append(newSeq)
 
         self._defineOutputs(outputSequences=outputSequences)

@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from pwem.convert import AtomicStructHandler
+from pwem.convert import AtomicStructHandler, SequenceHandler
 from pwem.convert.atom_struct import cifToPdb
 from pwem.objects.data import Sequence, Object, String, Integer, Float
 from ..constants import *
@@ -393,22 +393,72 @@ def calculateDistance(coord1, coord2):
         dist += (c1-c2) ** 2
     return dist ** (1/2)
 
+######################## FASTA UTILS ######################
+
 def parseFasta(fastaFn, combined=True):
-  '''Parses a combined fasta file and returns a dictionary {seqId: sequence}'''
+  '''Parses a combined fasta file and returns a dictionary {seqId: {'sequence': sequence, 'name': seqName}'''
   fastaDic = {}
   seqId, seq = '', ''
   with open(fastaFn) as f:
     for line in f:
       if line.startswith('>'):
         if seqId != '':
-          fastaDic[seqId] = seq
+          fastaDic[seqId]= {'sequence': seq, 'name': seqName}
           if not combined:
             # Return just the first sequence if asked for a single fasta
             return fastaDic
-        seqId = line.strip()[1:]
+        seqId = guessFastaID(line)
+        seqName = line.strip()[1:]
       elif line.strip() != '':
         seq += line.strip()
-  fastaDic[seqId] = seq
+  fastaDic[seqId]= {'sequence': seq, 'name': seqName}
   return fastaDic
 
+def guessFastaID(fastaNameLine):
+    '''Return a guessed ID from the line with > of a fasta'''
+    seqId = fastaNameLine.strip().split()[0][1:]
+    if '|' in seqId:
+        seqId = seqId.split('|')[1]
+    return seqId
 
+
+################3 UTILS Sequence Object ################
+
+def guessIsAminoacids(sequence):
+    '''Try to guess if a sequence is DNA/RNA checking the elements
+    For nucleotides, checks if elements are in ['A', 'C', 'G', 'T', 'U']'''
+    for element in sequence:
+        if not element.upper() in ['A', 'C', 'G', 'T', 'U']:
+            return True
+    return False
+
+def getSequenceFastaName(sequence):
+    '''Return a fasta name for the sequence.
+    Priorizes the Id; if None, just "sequence"'''
+    return sequence.getId() if sequence.getId() is not None else 'sequence'
+
+def getFastaText(sequence):
+    '''Returns the fasta of the sequence in string format'''
+    with open(writeFasta(sequence, '/tmp')) as f:
+        text = f.read()
+    return text
+
+def writeFasta(sequence, outDir):
+    '''Writes a fasta file with the sequence in the specified directory'''
+    inName = getSequenceFastaName(sequence)
+    outFasta = os.path.join(outDir, inName + '.fasta')
+    desc = sequence.getDescription() if sequence.getDescription() is not None else ''
+
+    seqHandler = SequenceHandler(sequence=sequence.getSequence(), isAminoacid=sequence.getIsAminoacids())
+    seqHandler.saveFile(outFasta, sequence.getId(), name=inName,
+                        seqDescription=desc, type="fasta")
+    return outFasta
+
+def writeCombinedFasta(sequenceSet, outPath):
+    '''Writes a single fasta file with all the sequences included in the set'''
+    fastaStr = ''
+    for seqItem in sequenceSet:
+        fastaStr += getFastaText(seqItem)
+    with open(outPath, 'w') as f:
+        f.write(fastaStr)
+    return outPath

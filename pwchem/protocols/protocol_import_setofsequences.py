@@ -34,7 +34,7 @@ from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
 from pwchem import Plugin
 from pwem.objects import Sequence, SetOfSequences
-from pwchem.utils import parseFasta
+from pwchem.utils import parseFasta, guessIsAminoacids
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory
@@ -87,7 +87,6 @@ class ProtChemImportSetOfSequences(EMProtocol):
             copyFile(self.filePath.get(), fnFasta)
 
             fastaDic = parseFasta(fnFasta)
-
         else:
             fastaDic = {}
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
@@ -97,7 +96,9 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
         for seqId in fastaDic:
-            newSeq = Sequence(name=seqId, sequence=fastaDic[seqId], id=seqId)
+            isAmino = guessIsAminoacids(fastaDic[seqId]['sequence'])
+            newSeq = Sequence(name=fastaDic[seqId]['name'], sequence=fastaDic[seqId]['sequence'], id=seqId,
+                              isAminoacids=isAmino)
             outputSequences.append(newSeq)
 
         self._defineOutputs(outputSequences=outputSequences)
