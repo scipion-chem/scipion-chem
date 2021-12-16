@@ -52,3 +52,21 @@ def checkInputHasFasta(protocol):
     if not hasattr(obj, "_uniprotFile"):
       errors.append("The input list does not have a sequence file")
   return errors
+
+def parseFasta(fastaFn, combined=True):
+  '''Parses a combined fasta file and returns a dictionary {seqId: sequence}'''
+  fastaDic = {}
+  seqId, seq = '', ''
+  with open(fastaFn) as f:
+    for line in f:
+      if line.startswith('>'):
+        if seqId != '':
+          fastaDic[seqId] = seq
+          if not combined:
+            # Return just the first sequence if asked for a single fasta
+            return fastaDic
+        seqId = line.strip()[1:]
+      elif line.strip() != '':
+        seq += line.strip()
+  fastaDic[seqId] = seq
+  return fastaDic

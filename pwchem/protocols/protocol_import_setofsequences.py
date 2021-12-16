@@ -34,6 +34,7 @@ from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
 from pwchem import Plugin
 from pwem.objects import Sequence, SetOfSequences
+from pwchem.utils import parseFasta
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory
@@ -85,15 +86,14 @@ class ProtChemImportSetOfSequences(EMProtocol):
             fnFasta = self._getExtraPath(os.path.split(self.filePath.get())[1])
             copyFile(self.filePath.get(), fnFasta)
 
-            fastaDic = self.parseFasta(fnFasta)
+            fastaDic = parseFasta(fnFasta)
 
         else:
             fastaDic = {}
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
                 fnFasta = self._getExtraPath(os.path.split(filename)[1])
                 copyFile(filename, fnFasta)
-                fastaDic.update(self.parseFasta(fnFasta, combined=False))
-
+                fastaDic.update(parseFasta(fnFasta, combined=False))
 
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
         for seqId in fastaDic:
@@ -102,21 +102,3 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
         self._defineOutputs(outputSequences=outputSequences)
 
-
-    def parseFasta(self, fastaFn, combined=True):
-        '''Parses a combined fasta file and returns a dictionary {seqId: sequence}'''
-        fastaDic = {}
-        seqId, seq = '', ''
-        with open(fastaFn) as f:
-            for line in f:
-                if line.startswith('>'):
-                    if seqId != '':
-                        fastaDic[seqId] = seq
-                        if not combined:
-                            #Return just the first sequence if asked for a single fasta
-                            return fastaDic
-                    seqId = line.strip()[1:]
-                elif line.strip() != '':
-                    seq += line.strip()
-        fastaDic[seqId] = seq
-        return fastaDic

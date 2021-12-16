@@ -46,8 +46,6 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
     _targets = [
         SetOfSequences,
         pwchem.objects.SetOfDatabaseID,
-        pwchem.objects.ProteinSequenceFile,
-        pwchem.objects.NucleotideSequenceFile,
         pwchem.objects.SetOfSmallMolecules,
         pwchem.objects.SetOfBindingSites
     ]
@@ -75,9 +73,5 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
         if issubclass(cls, pwchem.objects.SetOfPockets):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, pwchem.objects.ProteinSequenceFile):
-            views.append(self.textView([obj.getFileName()]))
-        elif issubclass(cls, pwchem.objects.NucleotideSequenceFile):
-            views.append(self.textView([obj.getFileName()]))
 
         return views

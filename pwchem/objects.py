@@ -63,16 +63,6 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
-class ProteinSequenceFile(data.EMFile):
-    """A file with a list of protein sequences"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-
-class NucleotideSequenceFile(data.EMFile):
-    """A file with a list of nucleotide sequences"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-
 class SmallMolecule(data.EMObject):
     """ Small molecule """
     def __init__(self, **kwargs):
