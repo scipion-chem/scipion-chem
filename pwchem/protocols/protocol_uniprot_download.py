@@ -33,7 +33,6 @@ from pwem.convert.sequence import sequenceLength
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam
 from pwchem.objects import DatabaseID, SetOfDatabaseID
-from pwchem.utils import parseFasta
 
 class ProtChemUniprotDownload(EMProtocol):
     """Download the Fasta files of a set of uniprotId's"""
@@ -80,13 +79,10 @@ class ProtChemUniprotDownload(EMProtocol):
 
             outputDatabaseID.append(newItem)
 
-        fastaDic = {}
-        for fname in fnList:
-            fastaDic.update(parseFasta(fname, combined=False))
-
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
-        for seqId in fastaDic:
-            newSeq = Sequence(name=fastaDic[seqId]['name'], sequence=fastaDic[seqId]['sequence'], id=seqId)
+        for fnFasta in fnList:
+            newSeq = Sequence()
+            newSeq.importFromFile(fnFasta, isAmino=True)
             outputSequences.append(newSeq)
 
         self._defineOutputs(outputSequences=outputSequences)

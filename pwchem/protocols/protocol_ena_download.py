@@ -78,14 +78,10 @@ class ProtChemEnaDownload(EMProtocol):
 
             outputDatabaseID.append(newItem)
 
-        fastaDic = {}
-        for fname in fnList:
-            fastaDic.update(parseFasta(fname, combined=False))
-
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
-        for seqId in fastaDic:
-            newSeq = Sequence(name=fastaDic[seqId]['name'], sequence=fastaDic[seqId]['sequence'], id=seqId,
-                              isAminoacids=False)
+        for fname in fnList:
+            newSeq = Sequence()
+            newSeq.importFromFile(isAmino=False)
             outputSequences.append(newSeq)
 
         self._defineOutputs(outputSequences=outputSequences)

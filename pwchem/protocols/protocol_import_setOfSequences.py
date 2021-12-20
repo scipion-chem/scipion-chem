@@ -31,10 +31,9 @@ import os
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
+from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, EnumParam
 from pwchem import Plugin
 from pwem.objects import Sequence, SetOfSequences
-from pwchem.utils import parseFasta, guessIsAminoacids
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory
@@ -77,29 +76,26 @@ class ProtChemImportSetOfSequences(EMProtocol):
                       label='Sequences file: ',
                       help='Fasta file containing a set of sequences to import')
 
+        form.addParam('seqType', EnumParam, default=0,
+                       choices=['Protein', 'Nucleotide'], display=EnumParam.DISPLAY_HLIST,
+                       label='Type of sequences: ')
+
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
+        outputSequences = SetOfSequences().create(outputPath=self._getPath())
         if not self.multiple.get():
             fnFasta = self._getExtraPath(os.path.split(self.filePath.get())[1])
             copyFile(self.filePath.get(), fnFasta)
 
-            fastaDic = parseFasta(fnFasta)
+            outputSequences.importFromFile(fnFasta, isAmino=self.seqType.get() == 0)
         else:
-            fastaDic = {}
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
                 fnFasta = self._getExtraPath(os.path.split(filename)[1])
                 copyFile(filename, fnFasta)
-                fastaDic.update(parseFasta(fnFasta, combined=False))
-
-        outputSequences = SetOfSequences().create(outputPath=self._getPath())
-        for seqId in fastaDic:
-            isAmino = guessIsAminoacids(fastaDic[seqId]['sequence'])
-            newSeq = Sequence(name=fastaDic[seqId]['name'], sequence=fastaDic[seqId]['sequence'], id=seqId,
-                              isAminoacids=isAmino)
-            outputSequences.append(newSeq)
+                outputSequences.importFromFile(fnFasta, isAmino=self.seqType.get() == 0)
 
         self._defineOutputs(outputSequences=outputSequences)
 
