@@ -59,8 +59,12 @@ class SelectVariant(EmWizard):
         for dVar in doubleVars:
             if '/' in dVar:
                 for var in dVar.split('/'):
+                    if var.endswith('.'):
+                        var = var[:-1]
                     auxList.append(var.strip())
             else:
+                if dVar.endswith('.'):
+                    dVar = dVar[:-1]
                 auxList.append(dVar.strip())
     auxList = list(set(auxList))
     auxList.sort()
