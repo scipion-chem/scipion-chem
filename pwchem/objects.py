@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+import enum
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
@@ -775,3 +776,14 @@ class ProteinResidue(data.EMObject):
             self.proteinChain = line[4]
             self.residueNumber = line[5]
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
+
+
+############################################################
+##############  POSSIBLE OUTPUTS OBJECTS ###################
+############################################################
+
+class PredictPocketsOutput(enum.Enum):
+    outputPockets = SetOfPockets
+
+#class ImportMicsOutput(enum.Enum):
+ #   outputMicrographs = SetOfMicrographs
