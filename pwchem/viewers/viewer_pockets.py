@@ -68,8 +68,9 @@ class PyMolViewer(pwviewer.Viewer):
   def __init__(self, **args):
     pwviewer.Viewer.__init__(self, **args)
 
-  def visualize(self, pymolFile, cwd, **args):
-    PyMolView(pymolFile, cwd).show()
+  def _visualize(self, pymolFile, cwd, **args):
+    view = PyMolView(pymolFile, cwd)
+    return [view]
 
 
 class PocketPointsViewer(pwviewer.Viewer):
@@ -82,7 +83,7 @@ class PocketPointsViewer(pwviewer.Viewer):
     pmlFile = obj.createPML(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 class ContactSurfaceViewer(pwviewer.Viewer):
   _label = 'Viewer contact surface'
@@ -93,7 +94,7 @@ class ContactSurfaceViewer(pwviewer.Viewer):
     pmlFile = obj.createSurfacePml(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 
 class VmdViewFpocket(VmdView):
@@ -149,8 +150,7 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
         print('Cannot find outputPockets')
 
     setV = BioinformaticsDataViewer(project=self.getProject())
-    views = setV._visualize(molSet)
-    views[0].show()
+    return setV._visualize(molSet)
 
   def _validate(self):
     return []
@@ -176,9 +176,9 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
 
     pymolV = PocketPointsViewer(project=self.getProject())
     if type(self.protocol) == SetOfPockets:
-        pymolV._visualize(self.protocol, bBox=bBox)
+        return pymolV._visualize(self.protocol, bBox=bBox)
     elif hasattr(self.protocol, 'outputPockets'):
-        pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
+        return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
     bBox = self.displayBBoxes.get()
@@ -187,10 +187,10 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
 
     pymolV = ContactSurfaceViewer(project=self.getProject())
     if type(self.protocol) == SetOfPockets:
-        pymolV._visualize(self.protocol, bBox=bBox)
+        return pymolV._visualize(self.protocol, bBox=bBox)
     elif hasattr(self.protocol, 'outputPockets'):
-        pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
+        return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
     
   def _showAtomStructPyMol(self, pmlFile, outDir):
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(pmlFile, cwd=outDir)
+    return pymolV._visualize(pmlFile, cwd=outDir)

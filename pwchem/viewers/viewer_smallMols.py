@@ -210,7 +210,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     writePmlFile(pmlFile, pmlStr)
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
   def _viewMoleculePymolDock(self, e=None):
     pmlsDir = self.getPmlsDir()
@@ -227,7 +227,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     writePmlFile(pmlFile, pmlStr)
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
   def _viewSinglePymolDock(self, e=None):
     pmlsDir = self.getPmlsDir()
@@ -239,7 +239,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     writePmlFile(pmlFile, buildPMLDockingSingleStr(self, mol, ligandLabel, addTarget=True, disable=False))
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
   def _viewPLIPPymol(self, e=None):
     pmlsDir = self.getPmlsDir()
@@ -261,7 +261,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     if pmlFile != '':
       pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
       pymolV = PyMolViewer(project=self.getProject())
-      pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+      return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
     else:
       showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
       print('PLIP found no interactions in the docking position')
@@ -278,7 +278,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     setV = BioinformaticsDataViewer(project=self.getProject())
     views = setV._visualize(molSet)
-    views[0].show()
+    return views
 
 
 ################### LIGANDS VIEWS #################
@@ -289,7 +289,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     pmlFile = mol.getFileName()
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
   def _viewMoleculesPymol(self, e=None):
     ligandLabel = self.getEnumText('displayPymolMolecules')
@@ -303,7 +303,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
             f.write('load {}, {}\nhide spheres, {}\nshow sticks, {}\n'.format(molFile, molName, molName, molName))
 
     pymolV = PyMolViewer(project=self.getProject())
-    pymolV.visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
 
 #################### UTILS ###########################33
