@@ -406,3 +406,9 @@ def cleanPipeIds(idStr):
     if '|' in seqId:
         seqId = seqId.split('|')[1]
     return seqId
+
+def natural_sort(listi, rev=False):
+    import re
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+    return sorted(listi, key=alphanum_key, reverse=rev)
