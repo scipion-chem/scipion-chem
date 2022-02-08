@@ -31,6 +31,7 @@ This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand
 
 """
 from pyworkflow.protocol import params
+from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwchem.objects import SetOfPockets, ProteinPocket
@@ -122,10 +123,13 @@ class ProtDefinePockets(EMProtocol):
         self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
 
     def defineOutputStep(self):
+        inpStruct = self.inputAtomStruct.get()
         outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
             pocketFile = self.createPocketFile(clust, i)
             pocket = ProteinPocket(pocketFile, self.getProteinFileName())
+            if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+                pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
             pocket.calculateContacts()
             outPockets.append(pocket)
 
@@ -150,14 +154,20 @@ class ProtDefinePockets(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
 
-
     def getProteinFileName(self):
-        inpFile = self.inputAtomStruct.get().getFileName()
+        inpStruct = self.inputAtomStruct.get()
+        inpFile = inpStruct.getFileName()
         if inpFile.endswith('.cif'):
           inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
           cifToPdb(inpFile, inpPDBFile)
+
+        elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace(inpStruct.getExtension(), '.pdb'))
+            inpStruct.convert2PDB(outPDB=inpPDBFile)
+
         else:
           inpPDBFile = inpFile
+
         return inpPDBFile
 
     def getProteinName(self):

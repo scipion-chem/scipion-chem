@@ -684,8 +684,8 @@ class SetOfPockets(data.EMSet):
 
     def getMAEFile(self):
         pock = self.getFirstItem()
-        if hasattr(pock, 'structureFile'):
-            return pock.structureFile.get()
+        if hasattr(pock, '_maeFile'):
+            return pock._maeFile.get()
 
     ######### Utils
 

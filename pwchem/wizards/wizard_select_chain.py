@@ -131,9 +131,12 @@ class SelectChainWizard(GetStructureChainsWizard):
           else:
             fileName = protocol.pdbFile.get()
         else:
-          if protocol.inputAtomStruct.get() is not None:
-            fileName = os.path.abspath(protocol.inputAtomStruct.get(
-            ).getFileName())
+          inpStruct = protocol.inputAtomStruct.get()
+          if inpStruct is not None:
+              if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+                  fileName = os.path.abspath(inpStruct.convert2PDB())
+              else:
+                  fileName = os.path.abspath(inpStruct.getFileName())
 
         structureHandler.read(fileName)
         structureHandler.getStructure()
