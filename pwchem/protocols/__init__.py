@@ -43,3 +43,7 @@ from .protocol_consensus_pockets import ProtocolConsensusPockets
 from .protocol_ligand_preparation import ProtChemOBabelPrepareLigands
 from .protocol_consensus_docking import ProtocolConsensusDocking
 from .protocol_define_manual_pockets import ProtDefinePockets
+from .protocol_converter import ConvertStructures
+from .protocol_drawSmallMol import ProtDrawMolecules
+from .protocol_import_setOfSequences import ProtChemImportSetOfSequences
+from .protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs

@@ -95,7 +95,7 @@ class ProtocolConsensusPockets(EMProtocol):
                 newPock = outPock.clone()
                 outPockets.append(newPock)
             if outPockets.getSize() > 0:
-                outPockets.buildPocketsFiles(suffix='_All')
+                outPockets.buildPDBhetatmFile(suffix='_All')
                 self._defineOutputs(outputPocketsAll=outPockets)
 
             indepOutputs = self.createIndepOutputs()
@@ -105,7 +105,7 @@ class ProtocolConsensusPockets(EMProtocol):
                 outName = 'outputPockets' + suffix
                 outSet = indepOutputs[setId]
                 if outSet.getSize() > 0:
-                    outSet.buildPocketsFiles(suffix=suffix, tcl=True)
+                    outSet.buildPDBhetatmFile(suffix=suffix)
                     self._defineOutputs(**{outName: outSet})
                     self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
 

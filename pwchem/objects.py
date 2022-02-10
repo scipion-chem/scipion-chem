@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 
+import enum
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
@@ -63,31 +64,26 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
-class ProteinSequenceFile(data.EMFile):
-    """A file with a list of protein sequences"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-
-class NucleotideSequenceFile(data.EMFile):
-    """A file with a list of nucleotide sequences"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-
 class SmallMolecule(data.EMObject):
     """ Small molecule """
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
-        self.poseFile = pwobj.String(kwargs.get('poseFile', None))
-        self.gridId = pwobj.Integer(kwargs.get('gridId', None))
-        self._type = String(kwargs.get('type', 'Standard'))
+        self.poseFile = pwobj.String(kwargs.get('poseFile', None))  #File of position
+        self.gridId = pwobj.Integer(kwargs.get('gridId', None))     #pocketID
+        self.dockId = pwobj.Integer(kwargs.get('dockId', None))     #dockProtocol ID
+        self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
     def __str__(self):
         s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
         return s
 
     def getFileName(self):
+        '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()
+
+    def setFileName(self, value):
+        self.smallMoleculeFile.set(value)
 
     def getMolName(self):
         return self.getFileName().split('/')[-1].split('.')[0]
@@ -96,6 +92,7 @@ class SmallMolecule(data.EMObject):
         return self.getMolName().split('-')[0]
 
     def getPoseFile(self):
+        '''Filename of the molecule after docking'''
         return self.poseFile.get()
 
     def setPoseFile(self, value):
@@ -106,7 +103,7 @@ class SmallMolecule(data.EMObject):
             #Schrodinger
             return self.poseFile.get().split('@')[0]
         else:
-            #Autodock
+            #Others
             return self.poseFile.get().split('_')[-1].split('.')[0]
 
     def getGridId(self):
@@ -114,6 +111,12 @@ class SmallMolecule(data.EMObject):
 
     def setGridId(self, gridId):
         self.gridId.set(gridId)
+
+    def getDockId(self):
+        return self.dockId.get()
+
+    def setDockId(self, value):
+        self.dockId.set(value)
 
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
@@ -142,6 +145,8 @@ class SmallMolecule(data.EMObject):
             name = 'g{}_'.format(self.getGridId()) + name
         if self.poseFile.get() != None:
             name += '_' + self.getPoseId()
+        if self.getDockId() != None:
+            name += '_{}'.format(self.getDockId())
         return name
 
     def getAtomsPosDic(self, onlyHeavy=True):
@@ -203,11 +208,6 @@ class SmallMolecule(data.EMObject):
         if hasattr(self, '_energy'):
             return self._energy.get()
 
-    def getScore(self):
-        if hasattr(self, '_score'):
-            return self._score.get()
-
-
 
 class SetOfSmallMolecules(data.EMSet):
     """ Set of Small molecules """
@@ -216,7 +216,7 @@ class SetOfSmallMolecules(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
-        self._molClass = String('Standard')
+        self._molClass = pwobj.String('Standard')
         self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
         self._docked = pwobj.Boolean(False)
 
@@ -248,7 +248,11 @@ class SetOfSmallMolecules(data.EMSet):
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
 
+    def setProteinFile(self, value):
+        self.proteinFile.set(value)
     def getProteinFile(self):
+        return self.proteinFile.get()
+    def getOriginalReceptorFile(self):
         return self.proteinFile.get()
 
     def isDocked(self):
@@ -552,12 +556,14 @@ class SetOfPockets(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
         self._pocketsClass = String(kwargs.get('pocketsClass', None))
         self._hetatmFile = String(kwargs.get('hetatmFile', None))
-        self._pmlFile = String(kwargs.get('pmlFile', None))
-        self._pmlFileSurf = String(kwargs.get('pmlFileSurf', None))
 
     def __str__(self):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
       return s
+
+    def copyInfo(self, other):
+        self._hetatmFile = other._hetatmFile
+        self._pocketsClass = other._pocketsClass
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])
@@ -567,18 +573,6 @@ class SetOfPockets(data.EMSet):
 
     def getProteinName(self):
         return self.getProteinFile().split('/')[-1].split('.')[0]
-
-    def getPmlFile(self):
-        return self._pmlFile.get()
-
-    def setPmlFile(self, value):
-        self._pmlFile.set(value)
-
-    def getPmlFileSurf(self):
-        return self._pmlFileSurf.get()
-
-    def setPmlFileSurf(self, value):
-        self._pmlFileSurf.set(value)
 
     def getProteinFile(self):
         return self.getFirstItem().getProteinFile()
@@ -621,19 +615,28 @@ class SetOfPockets(data.EMSet):
         self.setProteinHetatmFile(outFile)
         return outFile
 
-    def createPML(self, outHETMFile):
-        outHETMFile = os.path.abspath(outHETMFile)
+    def createPML(self, bBox=False):
+        outHETMFile = os.path.abspath(self.getProteinHetatmFile())
         outExt = os.path.splitext(outHETMFile)[1]
         pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
         # Creates the pml for pymol visualization
         with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outHETMFile))
-        self.setPmlFile(pmlFile)
+            if bBox:
+                toWrite = FUNCTION_BOUNDING_BOX
+                for pocket in self:
+                    pDia = pocket.getDiameter()
+                    toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
+                                                        [pDia*bBox]*3,
+                                                        'BoundingBox_' + str(pocket.getObjId()))
+                f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, toWrite))
+            else:
+                f.write(PML_STR.format(outHETMFile))
+
         return pmlFile
 
-    def createSurfacePml(self, outHETMFile):
-        outHETMFile = os.path.abspath(outHETMFile)
+    def createSurfacePml(self, bBox=False):
+        outHETMFile = os.path.abspath(self.getProteinHetatmFile())
         outExt = os.path.splitext(outHETMFile)[1]
         pmlFile = outHETMFile.replace('_out{}'.format(outExt), '_surf.pml')
         colors = createColorVectors(len(self))
@@ -645,11 +648,20 @@ class SetOfPockets(data.EMSet):
 
         # Creates the pml for pymol visualization
         with open(pmlFile, 'w') as f:
-            f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
-        self.setPmlFileSurf(pmlFile)
+            if bBox:
+                toWrite = FUNCTION_BOUNDING_BOX
+                for pocket in self:
+                    pDia = pocket.getDiameter()
+                    toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
+                                                        [pDia*bBox]*3,
+                                                        'BoundingBox_' + str(pocket.getObjId()))
+                f.write(PML_BBOX_STR_POCKSURF.format(outHETMFile, surfaceStr, toWrite))
+            else:
+                f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
         return pmlFile
 
-    def createTCL(self, outHETMFile):
+    def createTCL(self):
+        outHETMFile = os.path.abspath(self.getProteinHetatmFile())
         pqrFile = outHETMFile.replace('_out.pdb', '.pqr')
         tclFile = outHETMFile.replace('_out.pdb', '.tcl')
         with open(pqrFile, 'w') as f:
@@ -660,20 +672,20 @@ class SetOfPockets(data.EMSet):
         tclStr = TCL_STR % (outHETMFile, pqrFile)
         with open(tclFile, 'w') as f:
             f.write(tclStr)
+        return tclFile
 
-
-    def buildPocketsFiles(self, suffix='', tcl=False):
+    def buildPocketsFiles(self, suffix='', tcl=False, bBox=False):
         outHETMFile = self.buildPDBhetatmFile(suffix)
-        self.createPML(outHETMFile)
-        self.createSurfacePml(outHETMFile)
+        pmlFile = self.createPML(bBox=bBox)
+        pmlFileSurf = self.createSurfacePml(bBox=bBox)
         if self.getPocketsClass() == 'FPocket' and tcl==True:
-            self.createTCL(outHETMFile)
-        return outHETMFile
+            self.createTCL()
+        return outHETMFile, pmlFile, pmlFileSurf
 
     def getMAEFile(self):
         pock = self.getFirstItem()
-        if hasattr(pock, 'structureFile'):
-            return pock.structureFile.get()
+        if hasattr(pock, '_maeFile'):
+            return pock._maeFile.get()
 
     ######### Utils
 
@@ -764,3 +776,14 @@ class ProteinResidue(data.EMObject):
             self.proteinChain = line[4]
             self.residueNumber = line[5]
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
+
+
+############################################################
+##############  POSSIBLE OUTPUTS OBJECTS ###################
+############################################################
+
+class PredictPocketsOutput(enum.Enum):
+    outputPockets = SetOfPockets
+
+#class ImportMicsOutput(enum.Enum):
+ #   outputMicrographs = SetOfMicrographs

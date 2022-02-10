@@ -69,6 +69,13 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
                   label='Display output Set of Pockets with: ',
                   help='*PyMol*: display Set of Pockets and pockets as points / surface'
                   )
+    form.addParam('displayBBoxes', params.BooleanParam,
+                  default=False, label='Display pocket bounding boxes',
+                  condition='not (setClass=="{}" and displayFPocket==0)'.format(FPOCKET),
+                  help='Display the bounding boxes in pymol to check the size for the localized docking')
+    form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
+                  default=1.1, condition='displayBBoxes and not (setClass=="{}" and displayFPocket==0)'.format(FPOCKET),
+                  help='The radius * n of each pocket will be used as grid radius')
 
   def getChoices(self):
       outputLabels = []
@@ -112,14 +119,22 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
 
   #Display functions
   def _showAtomStructPyMolPoints(self):
+    bBox = self.displayBBoxes.get()
+    if bBox:
+      bBox = self.pocketRadiusN.get()
+
     outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
     pymolV = PocketPointsViewer(project=self.getProject())
-    pymolV._visualize(outPockets)
+    return pymolV._visualize(outPockets, bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
+    bBox = self.displayBBoxes.get()
+    if bBox:
+      bBox = self.pocketRadiusN.get()
+
     outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
     pymolV = ContactSurfaceViewer(project=self.getProject())
-    pymolV._visualize(outPockets)
+    return pymolV._visualize(outPockets, bBox=bBox)
 
   def _showAtomStructVMD(self):
     outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
@@ -128,4 +143,4 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
     outDir = os.path.abspath(outPockets.getSetDir())
     args = '{} -e {}'.format(outFile, tclFile)
 
-    viewer = VmdViewFpocket(args, cwd=outDir).show()
+    return [VmdViewFpocket(args, cwd=outDir)]

@@ -85,11 +85,15 @@ class ProtocolConsensusDocking(EMProtocol):
 
 
     def createOutputStep(self):
+        inputProteinFile = self.inputMoleculesSets[0].get().getProteinFile()
+
         self.relabelDic = {}
         self.consensusMols = self.fillEmptyAttributes(self.consensusMols)
         self.consensusMols, idsDic = self.reorderIds(self.consensusMols)
 
         outDocked = SetOfSmallMolecules(filename=self._getPath('consensusDocked_All.sqlite'))
+        outDocked.setDocked(True)
+        outDocked.setProteinFile(inputProteinFile)
         for outDock in self.consensusMols:
             newDock = outDock.clone()
             newDock = self.relabelPosId(newDock)
@@ -102,6 +106,8 @@ class ProtocolConsensusDocking(EMProtocol):
             suffix = '_{:03d}'.format(setId+1)
             outName = 'outputSmallMolecules' + suffix
             outSet = indepOutputs[setId]
+            outSet.setDocked(True)
+            outSet.setProteinFile(inputProteinFile)
 
             self._defineOutputs(**{outName: outSet})
             self._defineSourceRelation(self.inputMoleculesSets[setId].get(), outSet)

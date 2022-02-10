@@ -31,6 +31,7 @@ This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand
 
 """
 from pyworkflow.protocol import params
+from pyworkflow.object import String
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwchem.objects import SetOfPockets, ProteinPocket
@@ -57,44 +58,46 @@ class ProtDefinePockets(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
+        group = form.addGroup('Input')
+        group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                       allowsNull=False, label="Input AtomStruct: ",
                       help='Select the AtomStruct object where the pockets will be defined')
-        form.addParam('origin', params.EnumParam, default=RESIDUES,
+        group.addParam('origin', params.EnumParam, default=RESIDUES,
                       label='Extract pockets from: ', choices=self.typeChoices,
                       help='The pockets will be defined from a set of elements of this type')
 
-        form.addParam('inCoords', params.TextParam, default='', width=70,
+        group.addParam('inCoords', params.TextParam, default='', width=70,
                       condition='origin=={}'.format(COORDS), label='Input coordinates: ',
                       help='Input coordinates to define the pocket. '
                            'The coordinates will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket.'
                            '\nCoordinates in format: (1,2,3);(4,5,6);...')
 
-        form.addParam('chain_name', params.StringParam,
+        group.addParam('chain_name', params.StringParam,
                       allowsNull=False, label='Chain of interest', condition='origin=={}'.format(RESIDUES),
                       help='Specify the chain of the residue of interest')
-        form.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
+        group.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
                       allowsNull=False, label='Residues of interest',
                       help='Specify the residue position to define a pocket')
-        form.addParam('addResidue', params.LabelParam,
+        group.addParam('addResidue', params.LabelParam,
                       label='Add defined residue', condition='origin=={}'.format(RESIDUES),
                       help='Here you can define a residue which will be added to the list of residues below.')
-        form.addParam('inResidues', params.TextParam, width=70, default='',
+        group.addParam('inResidues', params.TextParam, width=70, default='',
                       condition='origin=={}'.format(RESIDUES), label='Input residues: ',
                       help='Input residues to define the pocket. '
                            'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket')
 
-        form.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
+        group.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
                       condition='origin=={}'.format(LIGANDS),
                       label='Input molecules: ', help='Predocked molecules which will define the protein pockets')
 
-        form.addParam('maxDepth', params.FloatParam, default='2.0',
-                      label='Maximum atom depth: ', expertLevel=params.LEVEL_ADVANCED,
-                      help='Maximum atom depth to be considered and mapped to the surface')
-        form.addParam('maxIntraDistance', params.FloatParam, default='1.0',
-                      label='Maximum distance between pocket points: ', expertLevel=params.LEVEL_ADVANCED,
+        group = form.addGroup('Distances')
+        group.addParam('maxDepth', params.FloatParam, default='3.0',
+                      label='Maximum atom depth (A): ',
+                      help='Maximum atom distance to the surface to be considered and mapped')
+        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
+                      label='Maximum distance between pocket points (A): ',
                       help='Maximum distance between two pocket atoms to considered them same pocket')
 
 
@@ -120,15 +123,18 @@ class ProtDefinePockets(EMProtocol):
         self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
 
     def defineOutputStep(self):
+        inpStruct = self.inputAtomStruct.get()
         outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
             pocketFile = self.createPocketFile(clust, i)
             pocket = ProteinPocket(pocketFile, self.getProteinFileName())
+            if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+                pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
             pocket.calculateContacts()
             outPockets.append(pocket)
 
         if len(outPockets) > 0:
-            outHETMFile = outPockets.buildPocketsFiles()
+            outPockets.buildPDBhetatmFile()
             self._defineOutputs(outputPockets=outPockets)
 
 
@@ -148,14 +154,20 @@ class ProtDefinePockets(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
 
-
     def getProteinFileName(self):
-        inpFile = self.inputAtomStruct.get().getFileName()
+        inpStruct = self.inputAtomStruct.get()
+        inpFile = inpStruct.getFileName()
         if inpFile.endswith('.cif'):
           inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
           cifToPdb(inpFile, inpPDBFile)
+
+        elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace(inpStruct.getExtension(), '.pdb'))
+            inpStruct.convert2PDB(outPDB=inpPDBFile)
+
         else:
           inpPDBFile = inpFile
+
         return inpPDBFile
 
     def getProteinName(self):
