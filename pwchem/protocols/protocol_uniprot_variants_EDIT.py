@@ -38,7 +38,7 @@ from pwchem.objects import DatabaseID, SetOfDatabaseID, Variants, SequenceFasta,
 class ProtChemUniprotSequenceVariants(EMProtocol):
 # class ProtChemUniprotCrossRef(EMProtocol):
     """Extract natural variants from uniprot"""
-    _label = 'extract variants from uniprot'
+    _label = 'extract natural variants from uniprot'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -105,12 +105,11 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
         if os.path.exists(fnXML):
             fnAll = self.parseXML(fnXML, fnAll)
 
-        varsSeq = SequenceVariants(sequence=sequence, id=uniprotId)
-        varsSeq.setVariantsFileName(fnAll)
+        seqObj =Sequence(sequence=sequence, id=uniprotId, name=uniprotId)
+        varsSeq = SequenceVariants(filename=fnAll)
+        varsSeq.setSequence(seqObj)
 
         self._defineOutputs(outputVariants=varsSeq)
-
-
 
 
     def _validate(self):

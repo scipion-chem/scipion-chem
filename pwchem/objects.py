@@ -80,29 +80,48 @@ class SequenceFasta(data.EMFile):
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 #
-
-class ClustalAln(data.EMFile):
+class SequencesAlignment(data.EMFile):
     """A fasta file for a Protein ID"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-#
+    def __init__(self, filename=None, alignmentFileName=None, **kwargs):
+        data.EMFile.__init__(self, filename, **kwargs)
+        self._alignmentFileName = String(alignmentFileName)
+
+    def getAlignmentFileName(self):
+        return self._alignmentFileName.get()
+
+    def __str__(self):
+        return ("{} (filename={})".format(self.getClassName(), self.getAlignmentFileName()))
 #
 
-class SequenceVariants(data.Sequence):
+class SequenceVariants(data.EMFile):
     """A fasta file for a Protein ID"""
-    def __init__(self, **kwargs):
-        data.Sequence.__init__(self, **kwargs)
-        self.variantsFile = pwobj.String('')
-
+    def __init__(self, filename=None, **kwargs):
+        data.EMFile.__init__(self, filename, **kwargs)
+        self._sequence = None
 
     def __str__(self):
         return ("{} (id={}, name={})".format(self.getClassName(), self.getId(), self.getSeqName()))
 
+    def setSequence(self, sequenceObj):
+        self._sequence = sequenceObj
+
+    def getId(self):
+        if type(self._sequence) == Sequence:
+            return self._sequence.getId()
+
+    def getSeqName(self):
+        if type(self._sequence) == Sequence:
+            return self._sequence.getSeqName()
+
     def setVariantsFileName(self, fnVars):
-        self.variantsFile.set(fnVars)
+        self.setFileName(fnVars)
 
     def getVariantsFileName(self):
-        return self.variantsFile.get()
+        return self.getFileName()
+
+    def getSequence(self):
+        if type(self._sequence) == Sequence:
+            return self._sequence.getSequence()
 
 #   metodo para construir el diccionario donde las key son las variantes y los valores una lista con todas las mutaciones de esa variante
 

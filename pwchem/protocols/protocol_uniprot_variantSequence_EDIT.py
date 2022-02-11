@@ -64,7 +64,7 @@ class InsertVariants(EMProtocol):
 
         form.addParam('selectVariant', StringParam,
                       label='Select a variant: ', condition='fromVariant',
-                      help="Variant to generate, obtained from the information in the input")
+                      help="Variant to be generated or mutations to be inserted from or into a input")
 
     def _insertAllSteps(self):
         if not self.fromVariant:
@@ -104,10 +104,12 @@ class InsertVariants(EMProtocol):
         inputSequenceVar = self.inputSequenceVariants.get()
         lineage = self.inputSequenceVariants.get()
         varDic = lineage.getMutationsInLineage()
-        print(selectedVariant, varDic[selectedVariant])
+        print('List of mutations: ', varDic[selectedVariant])
+
+        id_sequence = self.inputSequenceVariants.get().getId()
 
         variantSequence = inputSequenceVar.generateVariantLineage(selectedVariant)
-        variantSequence = Sequence(sequence=variantSequence)
+        variantSequence = Sequence(sequence=variantSequence, name=(id_sequence + '_VariantSequence'))
         self._defineOutputs(outputVariantSequence=variantSequence)
 
     def _validate(self):

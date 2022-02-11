@@ -39,7 +39,7 @@ from pyworkflow.wizard import Wizard
 from pwem.wizards import GetStructureChainsWizard, EmWizard
 from pwem.convert import AtomicStructHandler
 import os, requests
-from pwchem.protocols import ProtDefinePockets
+from pwchem.protocols import ProtDefinePockets, ProtChemPdbFastaAlignment
 
 class GetChainsWizard(Wizard):
     """
@@ -106,10 +106,12 @@ class GetChainsWizard(Wizard):
 
 
 class SelectChainWizard(GetStructureChainsWizard):
-      _targets = [(ProtDefinePockets, ['chain_name'])]
+
+      _targets = [(ProtDefinePockets, ['chain_name']),
+                  (ProtChemPdbFastaAlignment, ['chain_name'])]
 
       @classmethod
-      def getModelsChainsStep(cls, protocol):
+      def getModelsChainsStep(cls, protocol, atomStructName='inputAtomStruct'):
         """ Returns (1) list with the information
            {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
            (2) list with residues, position and chain (modelsFirstResidue)"""
@@ -131,9 +133,9 @@ class SelectChainWizard(GetStructureChainsWizard):
           else:
             fileName = protocol.pdbFile.get()
         else:
-          if protocol.inputAtomStruct.get() is not None:
-            fileName = os.path.abspath(protocol.inputAtomStruct.get(
-            ).getFileName())
+          AS = getattr(protocol, atomStructName).get()
+          if AS is not None:
+            fileName = os.path.abspath(AS.getFileName())
 
         structureHandler.read(fileName)
         structureHandler.getStructure()
@@ -157,6 +159,28 @@ class SelectChainWizard(GetStructureChainsWizard):
                                 "Select one of the chains (model, chain, "
                                 "number of chain residues)")
         form.setVar('chain_name', dlg.values[0].get())
+
+
+class SelectChainWizard2(SelectChainWizard):
+    _targets = [(ProtChemPdbFastaAlignment, ['chain_name2'])]
+
+    def show(self, form, *params):
+        protocol = form.protocol
+        try:
+            listOfChains, listOfResidues = self.getModelsChainsStep(protocol, atomStructName='inputAtomStruct2')
+        except Exception as e:
+            print("ERROR: ", e)
+            return
+
+        self.editionListOfChains(listOfChains)
+        finalChainList = []
+        for i in self.chainList:
+            finalChainList.append(String(i))
+        provider = ListTreeProviderString(finalChainList)
+        dlg = dialog.ListDialog(form.root, "Model chains", provider,
+                                "Select one of the chains (model, chain, "
+                                "number of chain residues)")
+        form.setVar('chain_name2', dlg.values[0].get())
 
 
 class SelectResidueWizard(SelectChainWizard):

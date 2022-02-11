@@ -46,5 +46,5 @@ from .protocol_define_manual_pockets import ProtDefinePockets
 from .protocol_pdbFastaAlignment import ProtChemPdbFastaAlignment
 from .protocol_uniprot_variants_EDIT import ProtChemUniprotSequenceVariants
 from .protocol_uniprot_variantSequence_EDIT import InsertVariants
-
-
+from .protocol_SetOfSequence import InsertSequences 
+from. protocol_multipleSequence_alignment import MultipleSequenceAlignment

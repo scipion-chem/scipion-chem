@@ -34,7 +34,7 @@ from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
-from pwchem.protocols import InsertVariants
+from pwchem.protocols import InsertVariants, InsertSequences
 
 
 def getMutations(protocol):
@@ -48,7 +48,7 @@ def getMutations(protocol):
     return vars
 
 class SelectVariant(EmWizard):
-  _targets = [(InsertVariants, ['selectVariant'])]
+  _targets = [(InsertVariants, ['selectVariant']), (InsertSequences,['selectVariant'])]
 
   def show(self, form, *params):
     protocol = form.protocol
@@ -98,4 +98,13 @@ class AddVarMutationWizard(EmWizard):
         written = protocol.toMutateList.get()
     form.setVar('toMutateList', written + '{}\n'.format(protocol.selectMutation.get()))
 
+class AddVariantToListWizard(EmWizard):
+  _targets = [(InsertSequences, ['addVariant'])]
 
+  def show(self, form, *params):
+    protocol = form.protocol
+    if protocol.toMutateList.get() == None:
+        written = ''
+    else:
+        written = protocol.toMutateList.get()
+    form.setVar('toMutateList', written + '{}\n'.format(protocol.selectVariant.get()))
