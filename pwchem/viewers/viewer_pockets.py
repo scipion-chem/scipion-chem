@@ -100,11 +100,11 @@ class ContactSurfaceViewer(pwviewer.Viewer):
 
 class VmdViewFpocket(VmdView):
   def __init__(self, vmdArgs, **kwargs):
-    pwviewer.CommandView.__init__(self, ['vmd', *vmdArgs.split()],
+    pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs,
                                   env=Vmd.getEnviron(), **kwargs)
 
   def show(self):
-    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron())
+    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron(), shell=True)
 
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
