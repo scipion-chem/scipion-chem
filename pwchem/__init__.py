@@ -37,6 +37,8 @@ from pyworkflow.tests import DataSet
 import pwem
 from .bibtex import _bibtexStr
 
+from constants import *
+
 _logo = 'tool.png'
 JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
 PYMOL, PYMOL_DEFAULT_VERSION = 'pymol', '2.5'
@@ -58,6 +60,7 @@ class Plugin(pwem.Plugin):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
         cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
+        cls._defineEmVar(PYMOL_HOME, 'pymol-2.5')
 
     @classmethod
     def getRDKitEnvActivation(cls):
