@@ -37,7 +37,7 @@ from pyworkflow.tests import DataSet
 import pwem
 from .bibtex import _bibtexStr
 
-from constants import *
+from .constants import *
 
 _logo = 'tool.png'
 JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
