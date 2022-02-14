@@ -45,7 +45,7 @@ class PyMol:
     PyMol_HOME variable is read from the ~/.config/scipion.conf file.
     """
     environ = pwutils.Environ(os.environ)
-    environ.set('PATH', os.path.join(os.environ[PYMOL_HOME], 'bin'),
+    environ.set('PATH', os.path.join(pwchem_plugin.getVar(PYMOL_HOME), 'bin'),
                 position=pwutils.Environ.BEGIN)
     return environ
 
