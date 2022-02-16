@@ -2,7 +2,7 @@
 CHEM scipion plugin
 ================================
 
-Base Scipion plugin defining objects and protocols for CHEMoinformatics with atomic model utilties on the web
+Base Scipion plugin defining objects and protocols for CHEMoinformatics and virtual drug screening
 
 ===================
 Install this plugin
