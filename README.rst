@@ -11,11 +11,11 @@ Install this plugin
 You will need to use `3.0.0 <https://github.com/I2PC/scipion/releases/tag/v3.0>`_ version of Scipion
 to run these protocols. To install the plugin, you have two options:
 
-- **Stable version**  
+- **Stable version (Currently not available)**
 
 .. code-block:: 
 
-      scipion installp -p scipion-chem
+      scipion3 installp -p scipion-chem
       
 OR
 
@@ -33,15 +33,17 @@ OR
 
 .. code-block::
 
-            scipion installp -p path_to_scipion-chem --devel
+            scipion3 installp -p path_to_scipion-chem --devel
 
-- **Binary files** 
+- **External software**
 
-Atom_struct_utils plugin is a pure Python module, no binary files are required. 
-
-- **Tests**
-
-To check the installation, simply run the following Scipion test:
+External software currently installed by scipion-chem:
+    - PLIP: Docking visualization in PyMol
+    - OpenBabel: utils for small molecules
+    - RDKIT: utils for small molecules
+    - MGLTools: utils for small molecules, docking... (includes AutodockTools)
+    - JChemPaint: Java program to manually draw small molecules
+    - Pymol: installed as the main viewer of Scipion-chem
 
 ===============
 Buildbot status
