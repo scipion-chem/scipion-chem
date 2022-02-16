@@ -34,6 +34,7 @@ import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 from pwem.viewers import Vmd, VmdView
 from pwchem.viewers import BioinformaticsDataViewer
+from ..constants import *
 
 class PyMol:
   """ Help class to run PyMol and manage its environment. """
@@ -44,7 +45,7 @@ class PyMol:
     PyMol_HOME variable is read from the ~/.config/scipion.conf file.
     """
     environ = pwutils.Environ(os.environ)
-    environ.set('PATH', os.path.join(os.environ['PYMOL_HOME'], 'bin'),
+    environ.set('PATH', os.path.join(pwchem_plugin.getVar(PYMOL_HOME), 'bin'),
                 position=pwutils.Environ.BEGIN)
     return environ
 
@@ -99,11 +100,11 @@ class ContactSurfaceViewer(pwviewer.Viewer):
 
 class VmdViewFpocket(VmdView):
   def __init__(self, vmdArgs, **kwargs):
-    pwviewer.CommandView.__init__(self, ['vmd', *vmdArgs.split()],
+    pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs,
                                   env=Vmd.getEnviron(), **kwargs)
 
   def show(self):
-    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron())
+    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron(), shell=True)
 
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 

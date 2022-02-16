@@ -25,6 +25,8 @@
 # *
 # **************************************************************************
 
+PYMOL_HOME = 'PYMOL_HOME'
+
 PML_STR = '''from pymol import cmd,stored
 load {}
 #select pockets, resn STP
