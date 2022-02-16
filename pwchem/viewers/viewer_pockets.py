@@ -98,7 +98,7 @@ class ContactSurfaceViewer(pwviewer.Viewer):
     return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 
-class VmdViewFpocket(VmdView):
+class VmdViewPopen(VmdView):
   def __init__(self, vmdArgs, **kwargs):
     pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs,
                                   env=Vmd.getEnviron(), **kwargs)

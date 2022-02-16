@@ -28,7 +28,7 @@ import os
 from ..protocols import ProtocolConsensusPockets
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
-from ..viewers import PyMolViewer, PocketPointsViewer, ContactSurfaceViewer, VmdViewFpocket
+from ..viewers import PyMolViewer, PocketPointsViewer, ContactSurfaceViewer, VmdViewPopen
 
 from subprocess import Popen
 
@@ -143,4 +143,4 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
     outDir = os.path.abspath(outPockets.getSetDir())
     args = '{} -e {}'.format(outFile, tclFile)
 
-    return [VmdViewFpocket(args, cwd=outDir)]
+    return [VmdViewPopen(args, cwd=outDir)]
