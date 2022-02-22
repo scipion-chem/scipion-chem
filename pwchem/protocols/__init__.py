@@ -47,3 +47,4 @@ from .protocol_converter import ConvertStructures
 from .protocol_drawSmallMol import ProtDrawMolecules
 from .protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from .protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
+from .protocol_score_dockings import ProtocolScoreDocking

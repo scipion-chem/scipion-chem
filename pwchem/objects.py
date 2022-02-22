@@ -224,6 +224,11 @@ class SetOfSmallMolecules(data.EMSet):
       s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
       return s
 
+    def copyInfo(self, other):
+        self._molClass = other._molClass
+        self.proteinFile = other.proteinFile
+        self._docked = other._docked
+
     def getMolClass(self):
         return self._molClass.get()
 
