@@ -85,7 +85,7 @@ class Plugin(pwem.Plugin):
       #Installing openbabel
       plip_commands += 'conda install -y -c conda-forge/label/cf202003 openbabel && '
       #Installing swig
-      plip_commands += 'conda install -y -c anaconda swig && '
+      plip_commands += 'conda install -y -c conda-forge swig && '
       #Installing Pymol
       plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol &&'
       #Installing PLIP
