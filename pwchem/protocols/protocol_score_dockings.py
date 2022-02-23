@@ -159,7 +159,8 @@ class ProtocolScoreDocking(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def getInputMoleculesList(self):
         mols = []
-        for molSet in self.inputSmallMoleculesSets:
+        inputSets = self.fillEmptyAttributes(self.inputSmallMoleculesSets)
+        for molSet in inputSets:
           for mol in molSet.get():
               mols.append(mol.clone())
         return mols
@@ -225,6 +226,29 @@ class ProtocolScoreDocking(EMProtocol):
             f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
         return paramsFile
+
+    def fillEmptyAttributes(self, inputSets):
+        '''Fill all items with empty attributes'''
+        attributes = self.getAllAttributes(inputSets)
+        for inSet in inputSets:
+            for item in inSet.get():
+                for attr in attributes:
+                    if not hasattr(item, attr):
+                        item.__setattr__(attr, attributes[attr])
+        return inputSets
+
+    def getAllAttributes(self, inputSets):
+        '''Return a dic with {attrName: ScipionObj=None}'''
+        attributes = {}
+        for inpSet in inputSets:
+            item = inpSet.get().getFirstItem()
+            attrKeys = item.getObjDict().keys()
+            for attrK in attrKeys:
+                if not attrK in attributes:
+                    value = item.__getattribute__(attrK)
+                    attributes[attrK] = value.clone()
+                    attributes[attrK].set(None)
+        return attributes
 
 
 
