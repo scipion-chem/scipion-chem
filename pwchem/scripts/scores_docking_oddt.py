@@ -40,16 +40,16 @@ def oddt_vina_score(paramsDic):
     molFiles = paramsDic['ligandFiles']
     mols = preprocessLigands(molFiles)
     rec = preprocessReceptor(paramsDic['receptorFile'])
-    vina_scores = ['vina_affinity',
-                   'vina_gauss1',
-                   'vina_gauss2',
-                   'vina_repulsion',
-                   'vina_hydrophobic',
-                   'vina_hydrogen']
+    vina_scores = ['vina_affinity', 'vina_gauss1', 'vina_gauss2', 'vina_repulsion', 'vina_hydrophobic', 'vina_hydrogen',
+                   # intra-molecular interactions
+                   'vina_intra_gauss1', 'vina_intra_gauss2', 'vina_intra_repulsion', 'vina_intra_hydrophobic',
+                   'vina_intra_hydrogen', 'vina_num_rotors'
+                   ]
 
     print('Running ODDT Vina scoring')
     oddt_vina_results = oddt_vina_descriptor(protein=rec, vina_scores=vina_scores).build(mols)
-    return oddt_vina_results, molFiles
+    #We return only the score (first column, affinity, and negative to resemble an score)
+    return -oddt_vina_results[:,0] , molFiles
 
 
 def oddt_rfscore_score(paramsDic, v):
@@ -147,7 +147,6 @@ if __name__ == "__main__":
     function = paramsDic['function']
     if 'vina' in function.lower():
         results, mols = oddt_vina_score(paramsDic)
-        results = -results[:,0]         #"energy" to score (now the higher the better), as the others
     elif 'rfscore' in function.lower():
         version = function.split('_')[1]
         results, mols = oddt_rfscore_score(paramsDic, int(version))

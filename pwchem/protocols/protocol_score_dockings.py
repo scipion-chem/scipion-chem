@@ -39,6 +39,7 @@ from pwchem.utils import *
 import os, re
 
 from pwchem import Plugin
+from pwchem.utils import fillEmptyAttributes
 
 scriptName = 'scores_docking_oddt.py'
 VINA, RFSCORE, NNSCORE, PLECSCORE = 0, 1, 2, 3
@@ -47,7 +48,7 @@ class ProtocolScoreDocking(EMProtocol):
     """
     Executes the scoring of a set of molecules which have been previously docked.
     """
-    _label = 'Score docking'
+    _label = 'ODDT score docking'
     actionChoices = ['MaxScore', 'MinEnergy']
 
     # -------------------------- DEFINE param functions ----------------------
@@ -95,7 +96,6 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        # Insert processing steps
         self._insertFunctionStep('scoringStep')
         self._insertFunctionStep('createOutputStep')
 
@@ -137,15 +137,10 @@ class ProtocolScoreDocking(EMProtocol):
 
     def _validate(self):
         validations = []
-        protFile = ''
         for molSet in self.inputSmallMoleculesSets:
             molSet = molSet.get()
             if not molSet.isDocked():
                 validations += ['{} is not docked yet'.format(molSet)]
-            if protFile == '':
-                protFile = os.path.abspath(molSet.getProteinFile())
-            elif not protFile == os.path.abspath(molSet.getProteinFile()):
-                validations += ['All sets of small molecules must be docked to the same protein']
 
         return validations
 
@@ -154,12 +149,20 @@ class ProtocolScoreDocking(EMProtocol):
         if len(self.inputSmallMoleculesSets) > 1:
             warnings.append("The ids of the molecules will be rewritten so they don't collide with those of the "
                             "other input sets")
+        protFile = ''
+        for molSet in self.inputSmallMoleculesSets:
+            molSet = molSet.get()
+            if protFile == '':
+                protFile = os.path.abspath(molSet.getProteinFile())
+            elif not protFile == os.path.abspath(molSet.getProteinFile()):
+                validations += ['These sets of small molecules are docked to different proteins.\n'
+                                'Be aware that their results might not be comparable']
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
     def getInputMoleculesList(self):
         mols = []
-        inputSets = self.fillEmptyAttributes(self.inputSmallMoleculesSets)
+        inputSets = fillEmptyAttributes(self.inputSmallMoleculesSets)
         for molSet in inputSets:
           for mol in molSet.get():
               mols.append(mol.clone())
@@ -226,29 +229,6 @@ class ProtocolScoreDocking(EMProtocol):
             f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
         return paramsFile
-
-    def fillEmptyAttributes(self, inputSets):
-        '''Fill all items with empty attributes'''
-        attributes = self.getAllAttributes(inputSets)
-        for inSet in inputSets:
-            for item in inSet.get():
-                for attr in attributes:
-                    if not hasattr(item, attr):
-                        item.__setattr__(attr, attributes[attr])
-        return inputSets
-
-    def getAllAttributes(self, inputSets):
-        '''Return a dic with {attrName: ScipionObj=None}'''
-        attributes = {}
-        for inpSet in inputSets:
-            item = inpSet.get().getFirstItem()
-            attrKeys = item.getObjDict().keys()
-            for attrK in attrKeys:
-                if not attrK in attributes:
-                    value = item.__getattribute__(attrK)
-                    attributes[attrK] = value.clone()
-                    attributes[attrK].set(None)
-        return attributes
 
 
 

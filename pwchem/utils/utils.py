@@ -412,3 +412,26 @@ def natural_sort(listi, rev=False):
     convert = lambda text: int(text) if text.isdigit() else text.lower()
     alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
     return sorted(listi, key=alphanum_key, reverse=rev)
+
+def fillEmptyAttributes(inputSets):
+    '''Fill all items with empty attributes'''
+    attributes = getAllAttributes(inputSets)
+    for inSet in inputSets:
+        for item in inSet.get():
+            for attr in attributes:
+                if not hasattr(item, attr):
+                    item.__setattr__(attr, attributes[attr])
+    return inputSets
+
+def getAllAttributes(inputSets):
+    '''Return a dic with {attrName: ScipionObj=None}'''
+    attributes = {}
+    for inpSet in inputSets:
+        item = inpSet.get().getFirstItem()
+        attrKeys = item.getObjDict().keys()
+        for attrK in attrKeys:
+            if not attrK in attributes:
+                value = item.__getattribute__(attrK)
+                attributes[attrK] = value.clone()
+                attributes[attrK].set(None)
+    return attributes
