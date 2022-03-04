@@ -156,7 +156,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
         # Run over all sdf files generated
         for filesdf in glob.glob(self._getTmpPath("*")):
-            fnRoot = re.split(".s", os.path.split(filesdf)[1])[0]
+            fnRoot = os.path.splitext(os.path.split(filesdf)[1])[0]
 
             # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
             # 2. Add and calculate partial charges with different methods
@@ -185,7 +185,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         # 3. Generate mol2 conformers file for each molecule with OpenBabel
 
         for file in glob.glob(self._getExtraPath("*_prep.mol2")):
-            fnRoot = re.split("_", os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
+            fnRoot = os.path.splitext(os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
 
             if self.method_conf.get() == 0:  # Genetic algorithm
                 args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.mol2" %\
@@ -208,7 +208,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         for mol in self.inputSmallMols.get():
             fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
             if self.doConformers:
-                fnRoot = re.split("_", os.path.split(fnSmall)[1])[0]
+                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                 outDir = self._getExtraPath(fnRoot)
                 os.mkdir(outDir)
                 firstConfFile = self._getTmpPath('{}-{}.mol2'.format(fnRoot, 1))
