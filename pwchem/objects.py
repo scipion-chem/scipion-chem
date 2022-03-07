@@ -288,8 +288,15 @@ class SetOfBindingSites(data.EMSet):
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """
 
-    def __init__(self, filename=None, proteinFile=None, extraFile=None, **kwargs):
+    def __init__(self, filename=None, proteinFile=None, extraFile=None, pClass='Standard', **kwargs):
+        self._class = String(pClass)
+        if filename != None and extraFile != None:
+            self.properties, self.pocketId = self.parseFile(extraFile, filename)
+            kwargs.update(self.getKwargs(self.properties, POCKET_ATTRIBUTES_MAPPING))
+
         data.EMFile.__init__(self, filename, **kwargs)
+        if hasattr(self, 'pocketId'):
+            self.setObjId(self.pocketId)
         self._proteinFile = String(proteinFile)
         self._extraFile = String(extraFile)
         self._nPoints = Integer(kwargs.get('nPoints', None))
@@ -298,7 +305,13 @@ class ProteinPocket(data.EMFile):
         self._volume = Float(kwargs.get('volume', None))
         self._score = Float(kwargs.get('score', None))
         self._energy = Float(kwargs.get('energy', None))
-        self._class = String(kwargs.get('class', 'Standard'))
+
+        if proteinFile != None:
+            self.calculateContacts()
+
+    def __str__(self):
+        s = 'Protein pocket {}, {} class\nFile: {}'.format(self.getObjId(), self.getPocketClass(), self.getFileName())
+        return s
 
     #Attributes functions
     def getPocketClass(self):
@@ -399,6 +412,10 @@ class ProteinPocket(data.EMFile):
     def calculateMassCenter(self, weights=None):
         '''Calculates the center of mass of a set of points: [(x,y,z), (x,y,z),...]
         A weight for each point can be specified'''
+        if weights == None:
+            weights = self.getSpheresRadius()
+            if weights == []:
+                weights = None
         coords = self.getPointsCoords()
         return list(np.average(coords, axis=0, weights=weights))
 
@@ -406,12 +423,14 @@ class ProteinPocket(data.EMFile):
         '''Returning max distance of points found in the convex hull
         Possibility of adding radius to each row and column to calculate the diameter
         on spheres instead of points'''
+        if radius == []:
+            radius = self.getSpheresRadius()
         coords = np.array(self.getPointsCoords())
         cHullIndex = spatial.ConvexHull(coords).vertices
         candidates = coords[cHullIndex]
         dist_mat = spatial.distance_matrix(candidates, candidates)
-        if radius!=[]:
-            dist_mat = self.addRadius(dist_mat, radius[cHullIndex])
+        if radius != []:
+            dist_mat = self.addRadius(dist_mat, np.array(radius)[cHullIndex])
         i, j = np.unravel_index(dist_mat.argmax(), dist_mat.shape)
 
         return dist_mat[i, j]
@@ -552,6 +571,136 @@ class ProteinPocket(data.EMFile):
         for at in atoms:
             residues.append(at.residueId)
         return residues
+
+    def parseFile(self, extraFile, filename):
+        if self.getPocketClass() == 'FPocket':
+            props, atoms, residues = {}, [], []
+            atomsIds, residuesIds = [], []
+            ini, parse = 'HEADER Information', False
+            with open(extraFile) as f:
+                for line in f:
+                    if line.startswith(ini):
+                        parse = True
+                        pocketId = int(line.split()[-1].replace(':', ''))
+                    elif line.startswith('HEADER') and parse:
+                        name = line.split('-')[1].split(':')[0]
+                        val = line.split(':')[-1]
+                        props[name.strip()] = float(val.strip())
+
+                    elif line.startswith('ATOM') and parse:
+                        atoms.append(ProteinAtom(line))
+                        atomsIds.append(atoms[-1].atomId)
+                        newResidue = ProteinResidue(line)
+                        if not newResidue.residueId in residuesIds:
+                            residues.append(newResidue)
+                            residuesIds.append(newResidue.residueId)
+            props['contactAtoms'] = self.encodeIds(atomsIds)
+            props['contactResidues'] = self.encodeIds(residuesIds)
+
+        elif self.getPocketClass() == 'P2Rank':
+            props = {}
+            pocketId = int(filename.split('/')[-1].split('_')[1].split('.')[0])
+            with open(extraFile) as f:
+                keys = f.readline().split(',')
+                for line in f:
+                    if int(line.split(',')[1]) == pocketId:
+                        values = line.split(',')
+
+            for i, k in enumerate(keys):
+                props[k.strip()] = values[i]
+
+            props['residue_ids'] = props['residue_ids'].strip().replace(' ', '-')
+            props['surf_atom_ids'] = props['surf_atom_ids'].strip().replace(' ', '-')
+            pocketId = int(values[1])
+
+        elif self.getPocketClass() == 'AutoLigand':
+            props, i = {}, 1
+            pocketId = int(filename.split('out')[1].split('.')[0])
+            with open(extraFile) as f:
+                for line in f:
+                    if i == pocketId:
+                        sline = line.split(',')
+                        # Volume
+                        props[sline[1].split('=')[0].strip()] = float(sline[1].split('=')[1].strip())
+                        # Energy/vol
+                        props[sline[2].strip()] = float(sline[3].split('=')[1].strip())
+                        if 'NumberOfClusters' in line:
+                            print(int(sline[4].split('=')[1].strip()))
+                            self.setNClusters(int(sline[4].split('=')[1].strip()))
+                    i += 1
+            with open(filename) as f:
+                npts, points = 0, []
+                for line in f:
+                    line = line.split()
+                    points += [tuple(map(float, line[5:8]))]
+                    npts += 1
+                props['nPoints'] = npts
+                self.setAutoLigandPoints(points)
+
+        elif self.getPocketClass() == 'SiteMap':
+            props, pId = {}, 1
+            pocketId = int(filename.split('-')[1].split('.')[0])
+            with open(extraFile) as fh:
+                for line in fh:
+                    if line.startswith("SiteScore"):
+                        # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
+                        if pocketId == pId:
+                            keys = line.split()
+                            values = [float(x) for x in fh.readline().split()]
+                            props = dict(zip(keys, values))
+                        pId += 1
+
+
+        return props, pocketId
+
+    def getStructureMaeFile(self):
+        if hasattr(self, '_maeFile'):
+            return self._maeFile.get()
+        else:
+            return None
+
+    def setStructureMaeFile(self, value):
+        if hasattr(self, '_maeFile'):
+            self._maeFile.set(value)
+        else:
+            self._maeFile = String(value)
+
+    def getAutoLigandPoints(self):
+        if hasattr(self, '_adPoints'):
+            return self._adPoints
+        else:
+            return None
+
+    def setAutoLigandPoints(self, value):
+        if hasattr(self, '_adPoints'):
+            self._adPoints.set(value)
+        else:
+            self._adPoints = String(value)
+
+    def incrNClusters(self):
+        '''Increase in 1 the number of clusters which support a autoligand pocket'''
+        self._nClusters.set(self.getNClusters()+1)
+
+    def getNClusters(self):
+        if hasattr(self, '_nClusters'):
+            return self._nClusters.get()
+        else:
+            return None
+
+    def setNClusters(self, value):
+        if hasattr(self, '_nClusters'):
+            self._nClusters.set(value)
+        else:
+            self._nClusters = Integer(value)
+
+    def getSpheresRadius(self):
+        radius = []
+        if self.getPocketClass() == 'FPocket':
+            with open(str(self.getFileName())) as f:
+                for line in f:
+                    if line.startswith('ATOM'):
+                        radius.append(float(line.split()[-1]))
+        return radius
 
 
 class SetOfPockets(data.EMSet):
