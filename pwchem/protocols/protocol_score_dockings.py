@@ -225,7 +225,7 @@ class ProtocolScoreDocking(EMProtocol):
                     f.write('depthLig: {}\n'.format(self.depthLig.get()))
                     f.write('fingerSize: {}\n'.format(self.fingerSize.get()))
 
-            f.write('receptorFile: {}\n'.format(recFile))
+            f.write('receptorFile: {}\n'.format(os.path.abspath(recFile)))
             f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
         return paramsFile

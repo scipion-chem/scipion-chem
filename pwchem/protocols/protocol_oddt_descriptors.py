@@ -93,9 +93,8 @@ class ProtocolODDTDescriptors(EMProtocol):
                 i += 1
             else:
                 newId = mol.getObjId()
-                usedIds.append(newId)
                 i = newId + 1
-
+            usedIds.append(newId)
             mol.setObjId(newId)
             newMols.append(mol)
 
@@ -163,7 +162,7 @@ class ProtocolODDTDescriptors(EMProtocol):
             # if self.getDescriptor() == 'Fingerprint':
             #     f.write('version: {}\n'.format(self.getEnumText('fpChoice')))
 
-            f.write('receptorFile: {}\n'.format(recFile))
+            f.write('receptorFile: {}\n'.format(os.path.abspath(recFile)))
             f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
         return paramsFile

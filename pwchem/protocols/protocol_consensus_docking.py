@@ -230,7 +230,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
-        maxScore = 0
+        maxScore = -100000 if self.maxmin.get() else 100000
         for mol in cluster:
             molScore = getattr(mol, self.action.get())
             if (molScore > maxScore and self.maxmin.get()) or \
