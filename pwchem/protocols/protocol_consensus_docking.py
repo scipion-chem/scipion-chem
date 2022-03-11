@@ -98,7 +98,7 @@ class ProtocolConsensusDocking(EMProtocol):
             newDock = outDock.clone()
             newDock = self.relabelPosId(newDock)
             outDocked.append(newDock)
-        self._defineOutputs(outputSmallMoleculesAll=outDocked)
+        self._defineOutputs(outputSmallMolecules=outDocked)
 
         indepOutputs = self.createIndepOutputs()
         for setId in indepOutputs:
