@@ -28,7 +28,7 @@
 '''Script to score a SetOfSmallMolecules docked using the Open Drug Discovery Toolkit
 (ODDT, https://github.com/oddt/oddt). It must be launch with the conda environment with rdkit and oddt'''
 
-import sys, os
+import sys, os, shutil
 
 import oddt
 from oddt.scoring.descriptors import (autodock_vina_descriptor, fingerprints, oddt_vina_descriptor)
@@ -111,11 +111,23 @@ def oddt_PLECscore_score(paramsDic, v):
     PLECScoreModel.set_protein(rec)
     return PLECScoreModel.predict(mols), molFiles
 
+def cleanPDB(pdbFile):
+    auxFile = pdbFile.replace('.pdb', '_aux.pdb')
+    with open(auxFile, 'w') as f:
+        with open(pdbFile) as fIn:
+            for line in fIn:
+                if line.strip() != '' and \
+                        line.split()[0] in ['HEADER', 'EXPDTA', 'REMARK', 'ATOM', 'HETATM', 'TER', 'CONECT']:
+                    f.write(line)
+    shutil.move(auxFile, pdbFile)
+    return pdbFile
 
 def preprocessLigands(ligandsFiles):
     mols = []
     for molFile in ligandsFiles:
         molExt = os.path.splitext(molFile)[1][1:]
+        if molExt == 'pdb':
+            molFile = cleanPDB(molFile)
         mols += list(oddt.toolkit.readfile(molExt, molFile))
     list(map(lambda x: x.addh(), mols))
     return mols
