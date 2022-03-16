@@ -156,7 +156,6 @@ if __name__ == "__main__":
     ParamsFile must include:
         <Function_version> <PDBBind_train> <outputPath> <receptorFile> <molFile1> <molFile2> ...'''
     paramsDic = parseParams(sys.argv[1])
-    print(paramsDic.keys())
     function = paramsDic['function']
     if 'vina' in function.lower():
         results, mols = oddt_vina_score(paramsDic)
