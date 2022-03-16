@@ -105,7 +105,7 @@ def oddt_PLECscore_score(paramsDic, v):
         PLECScoreModel.train(pdbbind_version=int(paramsDic['pdbbind']))
         PLECScoreModel.save(paramsDic['saveModel'])
     else:
-        print('Loading PLECScore model: ', paramsDic['saveModel'])
+        print('Loading PLECScore model: ', paramsDic['model'])
         PLECScoreModel = PLECscore().load(paramsDic['model'])
 
     PLECScoreModel.set_protein(rec)
@@ -156,6 +156,7 @@ if __name__ == "__main__":
     ParamsFile must include:
         <Function_version> <PDBBind_train> <outputPath> <receptorFile> <molFile1> <molFile2> ...'''
     paramsDic = parseParams(sys.argv[1])
+    print(paramsDic.keys())
     function = paramsDic['function']
     if 'vina' in function.lower():
         results, mols = oddt_vina_score(paramsDic)
