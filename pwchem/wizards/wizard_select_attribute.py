@@ -40,24 +40,57 @@ import pyworkflow.object as pwobj
 
 import pwchem.protocols as chemprot
 
-class SelectAttributeWizard(pwizard.Wizard):
-  """Assist in the creation of python formula to be evaluated. In Steps"""
-  _targets = [(chemprot.ProtocolConsensusDocking, ['action'])]
+class SelectAttributeWizardBase(pwizard.Wizard):
+  """Base wizard for selecting an attribute from those contained in the items of a given input
+  inputParam: Name of the input parameter where the items are stored
+  outputParam:
+  """
+  _targets = []
+  def getFirstItem(self, form, inputParam):
+      inputPointer = getattr(form.protocol, inputParam)
+      if issubclass(inputPointer.__class__, pwobj.PointerList):
+          inputPointer = inputPointer[0]
 
-  def getInputAttributes(self, form):
+      inputSet = inputPointer.get()
+      if issubclass(inputSet.__class__, pwobj.Set):
+          item = inputSet.getFirstItem()
+      elif issubclass(inputSet.__class__, pwobj.Object):
+          item = inputSet
+      return item
+
+  def getInputAttributes(self, form, inputParam):
     attrNames = []
-    item = form.protocol.inputMoleculesSets[0].get().getFirstItem()
+    item = self.getFirstItem(form, inputParam)
     for key, attr in item.getAttributesToStore():
       attrNames.append(key)
     return attrNames
 
-  def show(self, form, *params):
-    attrsList = self.getInputAttributes(form)
+  def show(self, form, inputParam, outputParam, *params):
+    attrsList = self.getInputAttributes(form, inputParam)
     finalAttrsList = []
     for i in attrsList:
       finalAttrsList.append(pwobj.String(i))
     provider = ListTreeProviderString(finalAttrsList)
-
     dlg = dialog.ListDialog(form.root, "Filter set", provider,
                             "Select one of the attributes")
-    form.setVar('action', dlg.values[0].get())
+    form.setVar(outputParam, dlg.values[0].get())
+
+
+class SelectAttributeWizard(SelectAttributeWizardBase):
+  """Assist in the creation of python formula to be evaluated. In Steps"""
+  _targets = [(chemprot.ProtocolConsensusDocking, ['action']),
+              (chemprot.ProtocolScoreDocking, ['corrAttribute'])]
+  _inputs = {chemprot.ProtocolConsensusDocking: 'inputMoleculesSets',
+             chemprot.ProtocolScoreDocking: 'inputSmallMolecules'}
+
+  def show(self, form, *params):
+      outParam = ''
+      # Retreiving the output parameter of the protocol used (the one that was clicked)
+      # Determining the name of the input parameter whose attributes will be displayed
+      for target in self._targets:
+          if form.protocol.__class__ == target[0]:
+              inParam = self._inputs[target[0]]
+              outParam = target[1][0]   #Only first param in the list of targets
+
+      if outParam:
+          super().show(form, inputParam=inParam, outputParam=outParam, *params)
