@@ -50,24 +50,16 @@ def getMutations(protocol):
 class SelectVariant(EmWizard):
   _targets = [(InsertVariants, ['selectVariant'])]
 
+  def getInputSeqVar(self, protocol):
+      return protocol.inputSequenceVariants.get()
+
   def show(self, form, *params):
     protocol = form.protocol
-    mutList = getMutations(protocol)
-    auxList, varsList = [], []
-    for mut in mutList:
-        doubleVars = ' '.join(str(mut).split()[1:]).split(',')
-        for dVar in doubleVars:
-            if '/' in dVar:
-                for var in dVar.split('/'):
-                    if var.endswith('.'):
-                        var = var[:-1]
-                    auxList.append(var.strip())
-            else:
-                if dVar.endswith('.'):
-                    dVar = dVar[:-1]
-                auxList.append(dVar.strip())
-    auxList = list(set(auxList))
+    inpObj = self.getInputSeqVar(protocol)
+
+    auxList = list(inpObj.getMutationsInLineage().keys())
     auxList.sort()
+    varsList = []
     for var in auxList:
         varsList.append(String(var.strip()))
 

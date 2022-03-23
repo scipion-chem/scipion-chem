@@ -108,39 +108,21 @@ class SequenceVariants(data.Sequence):
 
     def getMutationsInLineage(self):
         fnVars = self.getVariantsFileName()
-        file = open(fnVars)
-        lineagesMutationsDictionary = {}
+        var2mutDic = {}
+        with open(fnVars) as f:
+            for line in f:
+                lineInfo = line.split(';')[0].strip()
+                mut, varGroups = lineInfo.split()[0], lineInfo.split()[1:]
+                for vGroup in varGroups:
+                    if vGroup.endswith(',') or vGroup.endswith('.'):
+                        vGroup = vGroup[:-1]
+                    for variant in vGroup.split('/'):
+                        if variant in var2mutDic:
+                            var2mutDic[variant] += [mut]
+                        else:
+                            var2mutDic[variant] = [mut]
 
-        for line in file:
-            # print('line_obj: ', line.rstrip())
-            # print('line_len: ', len(line))
-            line_list = list(line.rstrip().split())
-            # print('line_list: ', line_list)
-            mutation = line_list[0]
-            # print('mutation: ', mutation)
-            # print('line_list_len: ', len(line_list))
-            for lineages in range(1, len(line_list)):
-                lineage = line_list[lineages][:-1]
-                if '/' in lineage:
-                    nomenclatures = lineage.split('/')
-                    lineage1 = nomenclatures[0]
-                    lineage2 = nomenclatures[1]
-                    if lineage1 in lineagesMutationsDictionary:
-                        lineagesMutationsDictionary[lineage1] += [mutation]
-                    else:
-                        lineagesMutationsDictionary[lineage1] = [mutation]
-                    if lineage2 in lineagesMutationsDictionary:
-                        lineagesMutationsDictionary[lineage2] += [mutation]
-                    else:
-                        lineagesMutationsDictionary[lineage2] = [mutation]
-                if '/' not in lineage:
-                    if lineage in lineagesMutationsDictionary:
-                        lineagesMutationsDictionary[lineage] += [mutation]
-                    else:
-                        lineagesMutationsDictionary[lineage] = [mutation]
-
-        # print(lineagesMutationsDictionary)
-        return lineagesMutationsDictionary
+        return var2mutDic
 #   otro metodo que te devuelva la seq de la variante elegida con todas sus mutaciones
 
     def generateVariantLineage(self, selectedVariant):

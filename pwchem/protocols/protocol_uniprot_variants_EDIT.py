@@ -73,8 +73,8 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
             except: # The library raises an exception when the web is not found
                 pass
 
-        sequence = self.readFasta(fnFasta)
-        self.downloadedSequence = Sequence(id=uniprotId, sequence=sequence)
+        self.downloadedSequence = Sequence(id=uniprotId)
+        self.downloadedSequence.importFromFile(os.path.abspath(fnFasta))
 
 
     def extractStep(self):
