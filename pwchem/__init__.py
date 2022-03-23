@@ -44,6 +44,7 @@ JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
 PYMOL, PYMOL_DEFAULT_VERSION = 'pymol', '2.5'
 PLIP, PLIP_DEFAULT_VERSION = 'plip', '2.2'
 RDKIT = 'rdkit'
+ALIVIEW, ALIVIEW_DEFAULT_VERSION = 'aliview',  '1.28'
 
 class Plugin(pwem.Plugin):
     _rdkitHome = os.path.join(pwem.Config.EM_ROOT, RDKIT)
@@ -57,6 +58,7 @@ class Plugin(pwem.Plugin):
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
@@ -159,6 +161,21 @@ class Plugin(pwem.Plugin):
                        default=default,
                        vars=installEnvVars)
 
+    @classmethod
+    def addAliViewPackage(cls, env, default=False):
+      SEQS_INSTALLED = 'aliview_installed'
+      seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} && '. \
+        format(cls.getAliViewTar())
+      seqs_commands += 'tar -xf {} && '.format(cls.getAliViewTar())
+      seqs_commands += ' touch %s' % SEQS_INSTALLED
+
+      seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
+
+      env.addPackage(ALIVIEW, version=ALIVIEW_DEFAULT_VERSION,
+                     tar='void.tgz',
+                     commands=seqs_commands,
+                     default=True)
+
 
     ##################### RUN CALLS #################33333
 
@@ -222,6 +239,15 @@ class Plugin(pwem.Plugin):
     def getJChemPath(cls):
         softwareHome = os.path.join(pwem.Config.EM_ROOT, JCHEM + '-' + JCHEM_DEFAULT_VERSION)
         return softwareHome + '/' + JCHEM + '-' + JCHEM_DEFAULT_VERSION + '.jar'
+
+    @classmethod
+    def getAliViewPath(cls):
+      softwareHome = os.path.join(pwem.Config.EM_ROOT, ALIVIEW + '-' + ALIVIEW_DEFAULT_VERSION)
+      return softwareHome
+
+    @classmethod
+    def getAliViewTar(cls):
+      return cls.getAliViewPath() + '/' + ALIVIEW + '-' + ALIVIEW_DEFAULT_VERSION + '.tgz'
 
     @classmethod
     def getPyMolDir(cls):
