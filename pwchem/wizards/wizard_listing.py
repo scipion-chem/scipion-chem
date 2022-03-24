@@ -34,55 +34,68 @@ information such as name and number of residues.
 
 # Imports
 import pwchem.protocols as chemprot
-import pyworkflow.wizard as pwizard
+from pwchem.wizards import VariableWizard
 
-class AddRelaxStepWizard(pwizard.Wizard):
+class AddElementWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""
-    _targets = [(chemprot.ProtocolScoreDocking, ['insertStep'])]
+    _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
         numSteps = protocol.countSteps()
 
-        if protocol.insertStep.get().strip() != '':
-            index = int(protocol.insertStep.get())
+        if getattr(protocol, inputParam[0]).get().strip() != '':
+            index = int(getattr(protocol, inputParam[0]).get())
         else:
             index = numSteps + 1
         msjDic = protocol.createMSJDic()
         if index > numSteps:
-            prevStr = protocol.workFlowSteps.get() if protocol.workFlowSteps.get() is not None else ''
-            form.setVar('workFlowSteps', prevStr + str(msjDic) + '\n')
+            prevStr = getattr(protocol, outputParam[0]).get() \
+                if getattr(protocol, outputParam[0]).get() is not None else ''
+            form.setVar(outputParam[0], prevStr + str(msjDic) + '\n')
 
             newSum = protocol.createSummary()
-            form.setVar('summarySteps', newSum)
+            form.setVar(outputParam[1], newSum)
 
         elif numSteps >= index > 0:
-            workSteps = protocol.workFlowSteps.get().split('\n')
+            workSteps = getattr(protocol, outputParam[0]).get().split('\n')
             workSteps.insert(index-1, str(msjDic))
-            form.setVar('workFlowSteps', '\n'.join(workSteps))
+            form.setVar(outputParam[0], '\n'.join(workSteps))
 
             newSum = protocol.createSummary()
-            form.setVar('summarySteps', newSum)
+            form.setVar(outputParam[1], newSum)
 
-
-class DeleteRelaxStepWizard(pwizard.Wizard):
+class DeleteElementWizard(VariableWizard):
     """Delete the step of the workflow defined by the index"""
-    _targets = [(chemprot.ProtocolScoreDocking, ['deleteStep'])]
+    _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
         try:
-            index = int(protocol.deleteStep.get().strip())
+            index = int(getattr(protocol, inputParam[0]).get().strip())
             if protocol.countSteps() >= index > 0:
-                workSteps = protocol.workFlowSteps.get().split('\n')
+                workSteps = getattr(protocol, outputParam[0]).get().split('\n')
                 del workSteps[index - 1]
                 workSteps.remove('')
 
                 if workSteps != []:
-                    form.setVar('workFlowSteps', '\n'.join(workSteps) + '\n')
+                    form.setVar(outputParam[0], '\n'.join(workSteps) + '\n')
                 else:
-                    form.setVar('workFlowSteps', '')
+                    form.setVar(outputParam[0], '')
                 newSum = protocol.createSummary()
-                form.setVar('summarySteps', newSum)
+                form.setVar(outputParam[1], newSum)
         except:
             print('Incorrect index')
+
+
+AddElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+                             targets=['insertStep'],
+                             inputs=['insertStep'],
+                             outputs=['workFlowSteps', 'summarySteps'])
+
+DeleteElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+                                targets=['deleteStep'],
+                                inputs=['deleteStep'],
+                                outputs=['workFlowSteps', 'summarySteps'])
