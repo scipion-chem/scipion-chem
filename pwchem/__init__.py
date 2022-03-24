@@ -166,7 +166,7 @@ class Plugin(pwem.Plugin):
       SEQS_INSTALLED = 'aliview_installed'
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} && '. \
         format(cls.getAliViewTar())
-      seqs_commands += 'tar -xf {} && '.format(cls.getAliViewTar())
+      seqs_commands += 'tar -xf {} && rm {} &&'.format(cls.getAliViewTar(), cls.getAliViewTar())
       seqs_commands += ' touch %s' % SEQS_INSTALLED
 
       seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
