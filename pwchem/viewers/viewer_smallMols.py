@@ -255,7 +255,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     pmlFile = ''
     for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-      if file.endswith('.pse') and self.typicalLigNames(file):
+      if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
         pmlFile = file
 
     if pmlFile != '':
@@ -324,7 +324,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           return True
 
   def typicalLigNames(self, file):
-    ligNames = ['UNK', 'UNL', 'LIG', 'X']
+    ligNames = ['UNK', 'UNL', 'LIG', 'X', 'LG']
     for ln in ligNames:
       if ln in file:
         return True
