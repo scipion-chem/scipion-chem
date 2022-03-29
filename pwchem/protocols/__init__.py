@@ -49,3 +49,4 @@ from .protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from .protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from .protocol_score_dockings import ProtocolScoreDocking
 from .protocol_oddt_descriptors import ProtocolODDTDescriptors
+from .protocol_rmsd_dockings import ProtocolRMSDDocking
