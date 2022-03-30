@@ -125,7 +125,7 @@ class ProtocolScoreDocking(EMProtocol):
 
         group = form.addGroup('Summary')
         group.addParam('insertStep', params.StringParam, default='',
-                       label='Insert relaxation score number: ',
+                       label='Insert score number: ',
                        help='Insert the defined score into the workflow.\n'
                             'The default (when empty) is the last position')
         group.addParam('summarySteps', params.TextParam, width=120, readOnly=True,
@@ -133,7 +133,7 @@ class ProtocolScoreDocking(EMProtocol):
                        help='Summary of the defined score. \nManual modification will have no '
                             'effect, use the wizards to add / delete the scores')
         group.addParam('deleteStep', params.StringParam, default='',
-                       label='Delete relaxation score number: ',
+                       label='Delete score number: ',
                        help='Delete the score of the specified index from the workflow.')
         group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='False')
         form.addParallelSection(threads=4, mpi=1)
