@@ -39,7 +39,7 @@ from pyworkflow.wizard import Wizard
 from pwem.wizards import GetStructureChainsWizard, EmWizard
 from pwem.convert import AtomicStructHandler
 import os, requests
-from pwchem.protocols import ProtDefinePockets, ProtChemPdbFastaAlignment
+from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment
 
 class GetChainsWizard(Wizard):
     """
@@ -108,7 +108,7 @@ class GetChainsWizard(Wizard):
 class SelectChainWizard(GetStructureChainsWizard):
 
       _targets = [(ProtDefinePockets, ['chain_name']),
-                  (ProtChemPdbFastaAlignment, ['chain_name'])]
+                  (ProtChemPairWiseAlignment, ['chain_name'])]
 
       @classmethod
       def getModelsChainsStep(cls, protocol, atomStructName='inputAtomStruct'):
@@ -135,7 +135,13 @@ class SelectChainWizard(GetStructureChainsWizard):
         else:
           AS = getattr(protocol, atomStructName).get()
           if AS is not None:
-            fileName = os.path.abspath(AS.getFileName())
+              fileName = os.path.abspath(AS.getFileName())
+              if str(type(AS).__name__) == 'SchrodingerAtomStruct':
+                  fileName = os.path.abspath(AS.convert2PDB())
+              else:
+                  fileName = os.path.abspath(AS.getFileName())
+
+
 
         structureHandler.read(fileName)
         structureHandler.getStructure()
@@ -162,7 +168,7 @@ class SelectChainWizard(GetStructureChainsWizard):
 
 
 class SelectChainWizard2(SelectChainWizard):
-    _targets = [(ProtChemPdbFastaAlignment, ['chain_name2'])]
+    _targets = [(ProtChemPairWiseAlignment, ['chain_name2'])]
 
     def show(self, form, *params):
         protocol = form.protocol

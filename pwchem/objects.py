@@ -24,14 +24,17 @@
 # *
 # **************************************************************************
 
+import enum
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
 from .utils import *
 from .constants import *
 
+
 class DatabaseID(data.EMObject):
     """ Database identifier """
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.database = pwobj.String(kwargs.get('database', None))
@@ -55,6 +58,7 @@ class DatabaseID(data.EMObject):
         if copyId:
             self.copyObjId(other)
 
+
 class SetOfDatabaseID(data.EMSet):
     """ Set of DatabaseIDs """
     ITEM_TYPE = DatabaseID
@@ -63,25 +67,31 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
+
 class ProteinSequenceFile(data.EMFile):
     """A file with a list of protein sequences"""
+
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
-#
+
 class Variants(data.EMFile):
     """A file with a list of natural variants for a protein"""
+
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
-#
+
 
 class SequenceFasta(data.EMFile):
     """A fasta file for a Protein ID"""
+
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
-#
+
+
 class SequencesAlignment(data.EMFile):
     """A fasta file for a Protein ID"""
+
     def __init__(self, filename=None, alignmentFileName=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
         self._alignmentFileName = String(alignmentFileName)
@@ -89,12 +99,17 @@ class SequencesAlignment(data.EMFile):
     def getAlignmentFileName(self):
         return self._alignmentFileName.get()
 
+    def convertEMBOSSformat(self, outputProgramAlignment, embossFormat, outputStandardFormat):
+        cl_run = 'seqret -sequence ' + outputProgramAlignment + ' -osformat2 ' + embossFormat + ' ' + outputStandardFormat
+        return cl_run
+
     def __str__(self):
         return ("{} (filename={})".format(self.getClassName(), self.getAlignmentFileName()))
-#
+
 
 class SequenceVariants(data.EMFile):
     """A fasta file for a Protein ID"""
+
     def __init__(self, filename=None, **kwargs):
         data.EMFile.__init__(self, filename, **kwargs)
         self._sequence = None
@@ -123,44 +138,26 @@ class SequenceVariants(data.EMFile):
         if type(self._sequence) == Sequence:
             return self._sequence.getSequence()
 
-#   metodo para construir el diccionario donde las key son las variantes y los valores una lista con todas las mutaciones de esa variante
-
     def getMutationsInLineage(self):
         fnVars = self.getVariantsFileName()
         file = open(fnVars)
         lineagesMutationsDictionary = {}
-
         for line in file:
-            # print('line_obj: ', line.rstrip())
-            # print('line_len: ', len(line))
-            line_list = list(line.rstrip().split())
-            # print('line_list: ', line_list)
-            mutation = line_list[0]
-            # print('mutation: ', mutation)
-            # print('line_list_len: ', len(line_list))
-            for lineages in range(1, len(line_list)):
-                lineage = line_list[lineages][:-1]
-                if '/' in lineage:
-                    nomenclatures = lineage.split('/')
-                    lineage1 = nomenclatures[0]
-                    lineage2 = nomenclatures[1]
-                    if lineage1 in lineagesMutationsDictionary:
-                        lineagesMutationsDictionary[lineage1] += [mutation]
-                    else:
-                        lineagesMutationsDictionary[lineage1] = [mutation]
-                    if lineage2 in lineagesMutationsDictionary:
-                        lineagesMutationsDictionary[lineage2] += [mutation]
-                    else:
-                        lineagesMutationsDictionary[lineage2] = [mutation]
-                if '/' not in lineage:
+            lineFiltered = line.rstrip().split(';')
+            lineFiltered_list = lineFiltered[0].split(' ')
+            mutation = lineFiltered_list[0]
+            variantName = lineFiltered_list[1:]
+            for lineages in range(len(variantName)):
+                nomenclatures = variantName[lineages].split('/')
+                for num_nomenclatures in range(len(nomenclatures)):
+                    lineage = nomenclatures[num_nomenclatures]
+                    if lineage[-1] == '.' or lineage[-1] == ',':
+                        lineage = lineage[:-1]
                     if lineage in lineagesMutationsDictionary:
                         lineagesMutationsDictionary[lineage] += [mutation]
                     else:
                         lineagesMutationsDictionary[lineage] = [mutation]
-
-        # print(lineagesMutationsDictionary)
         return lineagesMutationsDictionary
-#   otro metodo que te devuelva la seq de la variante elegida con todas sus mutaciones
 
     def generateVariantLineage(self, selectedVariant):
         varDic = self.getMutationsInLineage()
@@ -177,26 +174,29 @@ class SequenceVariants(data.EMFile):
 
         letters_sequence = list(sequence)
         for ele_position_inSequence in range(0, len(position_inSequence)):
-            letters_sequence[int(position_inSequence[ele_position_inSequence]) - 1] = aminoacid_exchanged[int(ele_position_inSequence)]
+            letters_sequence[int(position_inSequence[ele_position_inSequence]) - 1] = aminoacid_exchanged[
+                int(ele_position_inSequence)]
 
         mutatedSequence = ''.join(letters_sequence)
-        # print('mutatedSequence', mutatedSequence)
         return mutatedSequence
 
-# metodo de alineamiento multiple con un objeto other que pueda ser una seq o un atomStruct
 
 class NucleotideSequenceFile(data.EMFile):
     """A file with a list of nucleotide sequences"""
+
     def __init__(self, **kwargs):
         data.EMFile.__init__(self, **kwargs)
 
+
 class SmallMolecule(data.EMObject):
     """ Small molecule """
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
-        self.poseFile = pwobj.String(kwargs.get('poseFile', None))
-        self.gridId = pwobj.Integer(kwargs.get('gridId', None))
+        self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
+        self.gridId = pwobj.Integer(kwargs.get('gridId', None))  # pocketID
+        self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
         self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
     def __str__(self):
@@ -206,6 +206,9 @@ class SmallMolecule(data.EMObject):
     def getFileName(self):
         '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()
+
+    def setFileName(self, value):
+        self.smallMoleculeFile.set(value)
 
     def getMolName(self):
         return self.getFileName().split('/')[-1].split('.')[0]
@@ -222,10 +225,10 @@ class SmallMolecule(data.EMObject):
 
     def getPoseId(self):
         if '@' in self.poseFile.get():
-            #Schrodinger
+            # Schrodinger
             return self.poseFile.get().split('@')[0]
         else:
-            #Others
+            # Others
             return self.poseFile.get().split('_')[-1].split('.')[0]
 
     def getGridId(self):
@@ -233,6 +236,12 @@ class SmallMolecule(data.EMObject):
 
     def setGridId(self, gridId):
         self.gridId.set(gridId)
+
+    def getDockId(self):
+        return self.dockId.get()
+
+    def setDockId(self, value):
+        self.dockId.set(value)
 
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
@@ -261,6 +270,8 @@ class SmallMolecule(data.EMObject):
             name = 'g{}_'.format(self.getGridId()) + name
         if self.poseFile.get() != None:
             name += '_' + self.getPoseId()
+        if self.getDockId() != None:
+            name += '_{}'.format(self.getDockId())
         return name
 
     def getAtomsPosDic(self, onlyHeavy=True):
@@ -282,10 +293,10 @@ class SmallMolecule(data.EMObject):
 
         elif molFile.endswith('.mol2'):
             with open(molFile) as fIn:
-                parse=False
+                parse = False
                 for line in fIn:
                     if parse and line.startswith('@'):
-                        #finished
+                        # finished
                         return posDic
 
                     if parse:
@@ -335,8 +346,8 @@ class SetOfSmallMolecules(data.EMSet):
         self._docked = pwobj.Boolean(False)
 
     def __str__(self):
-      s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
-      return s
+        s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
+        return s
 
     def getMolClass(self):
         return self._molClass.get()
@@ -362,7 +373,13 @@ class SetOfSmallMolecules(data.EMSet):
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
 
+    def setProteinFile(self, value):
+        self.proteinFile.set(value)
+
     def getProteinFile(self):
+        return self.proteinFile.get()
+
+    def getOriginalReceptorFile(self):
         return self.proteinFile.get()
 
     def isDocked(self):
@@ -371,8 +388,10 @@ class SetOfSmallMolecules(data.EMSet):
     def setDocked(self, value):
         self._docked.set(True)
 
+
 class BindingSite(data.EMObject):
     """ Binding site """
+
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.bindingSiteFile = pwobj.String(kwargs.get('bindingSiteFilename', None))
@@ -380,6 +399,7 @@ class BindingSite(data.EMObject):
 
     def getFileName(self):
         return self.bindingSiteFile.get()
+
 
 class SetOfBindingSites(data.EMSet):
     """ Set of Binding sites """
@@ -389,6 +409,7 @@ class SetOfBindingSites(data.EMSet):
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
+
 
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """
@@ -405,7 +426,7 @@ class ProteinPocket(data.EMFile):
         self._energy = Float(kwargs.get('energy', None))
         self._class = String(kwargs.get('class', 'Standard'))
 
-    #Attributes functions
+    # Attributes functions
     def getPocketClass(self):
         return str(self._class)
 
@@ -476,7 +497,7 @@ class ProteinPocket(data.EMFile):
         cResidues = self.getResiduesFromAtoms(cAtoms)
         self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
 
-    #Complex pocket attributes functions
+    # Complex pocket attributes functions
     def buildContactAtoms(self, calculate=False, maxDistance=4):
         '''Return the reported proteins atoms in contact with the pocket.
         If not reported, returns the protein atoms at less than 4A than any pocket point'''
@@ -491,13 +512,13 @@ class ProteinPocket(data.EMFile):
                         if atomId in contactsIds:
                             contactAtoms.append(ProteinAtom(line))
         else:
-            #Manually calculate the contacts
+            # Manually calculate the contacts
             pocketCoords = self.getPointsCoords()
             proteinAtoms = self.getProteinAtoms()
             proteinCoords = self.getAtomsCoords(proteinAtoms)
             dists = spatial.distance.cdist(proteinCoords, pocketCoords)
             for i in range(len(proteinCoords)):
-                if min(dists[i,:]) < maxDistance:
+                if min(dists[i, :]) < maxDistance:
                     contactAtoms.append(proteinAtoms[i])
         return contactAtoms
 
@@ -515,7 +536,7 @@ class ProteinPocket(data.EMFile):
         cHullIndex = spatial.ConvexHull(coords).vertices
         candidates = coords[cHullIndex]
         dist_mat = spatial.distance_matrix(candidates, candidates)
-        if radius!=[]:
+        if radius != []:
             dist_mat = self.addRadius(dist_mat, radius[cHullIndex])
         i, j = np.unravel_index(dist_mat.argmax(), dist_mat.shape)
 
@@ -525,7 +546,7 @@ class ProteinPocket(data.EMFile):
         '''Add the radius of each alpha sphere to their corresponding row and column in the distances
         matrix'''
         for i in range(dMat.shape[0]):
-            dMat[i,:] += radius[i]
+            dMat[i, :] += radius[i]
             dMat[:, i] += radius[i]
         return dMat
 
@@ -535,9 +556,9 @@ class ProteinPocket(data.EMFile):
         1: reported volume
         2: getConvexVolume (over pocket points)
         '''
-        if mode==2:
+        if mode == 2:
             return self.getConvexVolume()
-        elif mode==1 and float(self.getVolume()) != None:
+        elif mode == 1 and float(self.getVolume()) != None:
             return self.getVolume()
         else:
             return self.getSurfaceConvexVolume()
@@ -561,7 +582,7 @@ class ProteinPocket(data.EMFile):
         coords = np.array(self.getPointsCoords())
         return coords.min(axis=0), coords.max(axis=0)
 
-    #Utils functions
+    # Utils functions
     def encodeIds(self, idList):
         return '-'.join(idList)
 
@@ -585,7 +606,7 @@ class ProteinPocket(data.EMFile):
         return coords
 
     def getAtomsCoords(self, atoms):
-        coords=[]
+        coords = []
         for atom in atoms:
             coords.append(atom.getCoords())
         return coords
@@ -668,8 +689,12 @@ class SetOfPockets(data.EMSet):
         self._hetatmFile = String(kwargs.get('hetatmFile', None))
 
     def __str__(self):
-      s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
-      return s
+        s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
+        return s
+
+    def copyInfo(self, other):
+        self._hetatmFile = other._hetatmFile
+        self._pocketsClass = other._pocketsClass
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])
@@ -712,7 +737,7 @@ class SetOfPockets(data.EMSet):
         atmFile = self.getProteinFile()
         atmExt = os.path.splitext(atmFile)[1]
         outDir = self.getSetDir()
-        outFile = os.path.join(outDir, protName+'{}_out{}'.format(suffix, atmExt))
+        outFile = os.path.join(outDir, protName + '{}_out{}'.format(suffix, atmExt))
 
         with open(outFile, 'w') as f:
             f.write(getRawPDBStr(atmFile, ter=False))
@@ -733,7 +758,7 @@ class SetOfPockets(data.EMSet):
                 for pocket in self:
                     pDia = pocket.getDiameter()
                     toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
-                                                        [pDia*bBox]*3,
+                                                        [pDia * bBox] * 3,
                                                         'BoundingBox_' + str(pocket.getObjId()))
                 f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, toWrite))
             else:
@@ -759,7 +784,7 @@ class SetOfPockets(data.EMSet):
                 for pocket in self:
                     pDia = pocket.getDiameter()
                     toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
-                                                        [pDia*bBox]*3,
+                                                        [pDia * bBox] * 3,
                                                         'BoundingBox_' + str(pocket.getObjId()))
                 f.write(PML_BBOX_STR_POCKSURF.format(outHETMFile, surfaceStr, toWrite))
             else:
@@ -784,21 +809,21 @@ class SetOfPockets(data.EMSet):
         outHETMFile = self.buildPDBhetatmFile(suffix)
         pmlFile = self.createPML(bBox=bBox)
         pmlFileSurf = self.createSurfacePml(bBox=bBox)
-        if self.getPocketsClass() == 'FPocket' and tcl==True:
+        if self.getPocketsClass() == 'FPocket' and tcl == True:
             self.createTCL()
         return outHETMFile, pmlFile, pmlFileSurf
 
     def getMAEFile(self):
         pock = self.getFirstItem()
-        if hasattr(pock, 'structureFile'):
-            return pock.structureFile.get()
+        if hasattr(pock, '_maeFile'):
+            return pock._maeFile.get()
 
     ######### Utils
 
     def getPocketsPDBStr(self):
         outStr = ''
         for i, pocket in enumerate(self):
-            pocket.setObjId(i+1)
+            pocket.setObjId(i + 1)
             outStr += self.formatPocketStr(pocket)
         return outStr
 
@@ -835,6 +860,7 @@ class SetOfPockets(data.EMSet):
                 outStr += pdbLine
 
         return outStr
+
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
@@ -882,3 +908,14 @@ class ProteinResidue(data.EMObject):
             self.proteinChain = line[4]
             self.residueNumber = line[5]
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
+
+
+############################################################
+##############  POSSIBLE OUTPUTS OBJECTS ###################
+############################################################
+
+class PredictPocketsOutput(enum.Enum):
+    outputPockets = SetOfPockets
+
+# class ImportMicsOutput(enum.Enum):
+#   outputMicrographs = SetOfMicrographs
