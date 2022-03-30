@@ -79,10 +79,10 @@ class ProtocolRMSDDocking(EMProtocol):
             k1, k2 = list(posDic1.keys()), list(posDic2.keys())
             k1.sort(), k2.sort()
             if self.checkSameKeys(posDic1, posDic2):
-                rmsd = 0
-                for atomId in posDic1:
-                    rmsd += calculateDistance(posDic1[atomId], posDic2[atomId])
-                rmsd = rmsd / len(posDic2)
+                print('Coords1: ', posDic1.values())
+                print('Coords2: ', posDic2.values())
+                rmsd = calculateRMSD(posDic1.values(), posDic2.values())
+                print('RMSD: ', rmsd)
                 rmsdDic[os.path.abspath(mol.getPoseFile())] = rmsd
                 print('Mol: {}. RMSD: {}'.format(os.path.basename(mol.getPoseFile()), rmsd))
             else:
