@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os
+import os, json
 
 from pyworkflow.object import Pointer
 from pwem.objects import Sequence, AtomStruct
@@ -43,124 +43,76 @@ class ProtChemPairWiseAlignment(EMProtocol):
         form.addSection(label='Input')
 
         group = form.addGroup('Sequence 1')
-        group.addParam('CondAtomStruct1', BooleanParam,
+        group.addParam('condAtomStruct1', BooleanParam,
                        label='Is it a PDB file?: ', default=True, help="PDB for alignment")
-        group.addParam('inputAtomStruct', PointerParam, pointerClass='AtomStruct', condition='CondAtomStruct1',
-                       label='Input first PBD file:', allowsNull=False,
+        group.addParam('inputAtomStruct1', PointerParam, pointerClass='AtomStruct', condition='condAtomStruct1',
+                       label='Input first PBD file:',
                        help="Atomic structure where a sequence is extracted")
-        group.addParam('chain_name', StringParam, condition='CondAtomStruct1',
+        group.addParam('chain_name1', StringParam, condition='condAtomStruct1',
                        default='', label='PDB chains:',
                        help="Chains in the PDB")
-        group.addParam('inputOtherFileSequence1', PointerParam, pointerClass='Sequence',
-                       condition='not CondAtomStruct1',
-                       label='Input first sequence:', allowsNull=False, help="Sequence for alignment")
+        group.addParam('inputSequence1', PointerParam, pointerClass='Sequence',
+                       condition='not condAtomStruct1',
+                       label='Input first sequence:', help="Sequence for alignment")
 
 
         group = form.addGroup('Sequence 2')
-        group.addParam('CondAtomStruct2', BooleanParam,
+        group.addParam('condAtomStruct2', BooleanParam,
                        label='Is it a PDB file?:', default=True, help="PDB for sequence alignment")
-        group.addParam('inputAtomStruct2', PointerParam, pointerClass='AtomStruct', condition='CondAtomStruct2',
-                       label='Input second PBD file:', allowsNull=False,
+        group.addParam('inputAtomStruct2', PointerParam, pointerClass='AtomStruct', condition='condAtomStruct2',
+                       label='Input second PBD file:',
                        help="Atomic Structure where a sequence is extracted")
-        group.addParam('chain_name2', StringParam, condition='CondAtomStruct2',
+        group.addParam('chain_name2', StringParam, condition='condAtomStruct2',
                        default='', label='List of chains:',
                        help="Chains in the PDB input file")
-        group.addParam('inputOtherFileSequence2', PointerParam, pointerClass='Sequence',
-                       condition='not CondAtomStruct2',
-                       label='Input second sequence:', allowsNull=False, help="Sequence for alignment")
+        group.addParam('inputSequence2', PointerParam, pointerClass='Sequence',
+                       condition='not condAtomStruct2',
+                       label='Input second sequence:', help="Sequence for alignment")
 
 
     def _insertAllSteps(self):
         self._insertFunctionStep('alignmentFasta')
 
     def alignmentFasta(self):
-
-        # Sequemce 1
-        conditionTypeFile = self.CondAtomStruct1.get()
-        if conditionTypeFile == True:
-            inputOtherFile_class = self.inputAtomStruct.get()
-        if conditionTypeFile == False:
-            inputOtherFile_class = self.inputOtherFileSequence1.get()
-
-        if type(inputOtherFile_class) == Pointer:
-            inputOtherFile_class = inputOtherFile_class.get()
-
-        if issubclass(type(inputOtherFile_class), Sequence):
-            seq1 = inputOtherFile_class.getSequence()
-            seq1_name = inputOtherFile_class.getId()
-        elif issubclass(type(inputOtherFile_class), AtomStruct):
-            seq1_name = os.path.basename(inputOtherFile_class.getFileName())
-            from pwem.convert.atom_struct import AtomicStructHandler
-            handler = AtomicStructHandler(inputOtherFile_class.getFileName())
-            chainName = self.chain_name.get()
-
-            # Parse chainName for model and chain selection
-            split_chainName = chainName.split(':')
-            modelID = split_chainName[1]
-            chainID = split_chainName[2]
-            value_modelID = int(modelID.split(',')[0])
-            prevalue_chainID = str(chainID.split(',')[0])
-            split_prevalue_chainID = prevalue_chainID.split('"')
-            value_chainID = split_prevalue_chainID[1]
-
-            seq1 = str(handler.getSequenceFromChain(modelID=value_modelID, chainID=value_chainID))
-
-        # Sequence 2
-        conditionTypeFile = self.CondAtomStruct2.get()
-        if conditionTypeFile == True:
-            inputOtherFile_class = self.inputAtomStruct2.get()
-        if conditionTypeFile == False:
-            inputOtherFile_class = self.inputOtherFileSequence2.get()
-
-        if type(inputOtherFile_class) == Pointer:
-            inputOtherFile_class = inputOtherFile_class.get()
-
-        if issubclass(type(inputOtherFile_class), Sequence):
-            seq2 = inputOtherFile_class.getSequence()
-            seq2_name = inputOtherFile_class.getSeqName()
-        elif issubclass(type(inputOtherFile_class), AtomStruct):
-            seq2_name = os.path.basename(inputOtherFile_class.getFileName())
-            from pwem.convert.atom_struct import AtomicStructHandler
-            handler = AtomicStructHandler(inputOtherFile_class.getFileName())
-            chainName = self.chain_name2.get()
-
-            # Parse chainName for model and chain selection
-            split_chainName = chainName.split(':')
-            modelID = split_chainName[1]
-            chainID = split_chainName[2]
-            value_modelID = int(modelID.split(',')[0])
-            prevalue_chainID = str(chainID.split(',')[0])
-            split_prevalue_chainID = prevalue_chainID.split('"')
-            value_chainID = split_prevalue_chainID[1]
-
-            seq2 = str(handler.getSequenceFromChain(modelID=value_modelID, chainID=value_chainID))
-
         # Fasta file with sequences
-        pairWaise_fasta = 'pairWaise' + '.fasta'
-        fn_pairWaise = open(pairWaise_fasta, "w")
-
-        fn_pairWaise.write(('>' + seq1_name) + "\n")
-        fn_pairWaise.write(seq1 + "\n")
-        fn_pairWaise.write(('>' + seq2_name) + "\n")
-        fn_pairWaise.write(seq2)
-
-        fn_pairWaise = open(pairWaise_fasta, "r")
-        for linePair in fn_pairWaise:
-               print(linePair)
+        seq1, seq_name1 = self.getInputSequence(1)
+        seq2, seq_name2 = self.getInputSequence(2)
+        pairWaise_fasta = 'pairWaise.fasta'
+        with open(pairWaise_fasta, "w") as f:
+            f.write(('>{}\n{}\n>{}\n{}\n'.format(seq_name1, seq1, seq_name2, seq2)))
 
         # Alignment
-        in_file = pairWaise_fasta
-        out_file = self._getPath("clustalo_pairWise.aln")
-        cline = alignClustalSequences(in_file, out_file)
+        out_file = os.path.abspath(self._getPath("clustalo_pairWise.aln"))
+        cline = alignClustalSequences(pairWaise_fasta, out_file)
         args = ' --outfmt=clu'
         self.runJob(cline, args)
 
-        outputName = os.path.basename(out_file)
-        out_fileClustal=SequencesAlignment(alignmentFileName=outputName)
-
+        out_fileClustal=SequencesAlignment(alignmentFileName=out_file)
         self._defineOutputs(outputVariants=out_fileClustal)
-
 
     def _validate(self):
         errors = []
         return errors
+
+    def getInputSequence(self, idx):
+        condAS = getattr(self, 'condAtomStruct{}'.format(idx))
+        if condAS:
+            from pwem.convert.atom_struct import AtomicStructHandler
+            inputObj = getattr(self, 'inputAtomStruct{}'.format(idx)).get()
+            seq_name = os.path.basename(inputObj.getFileName())
+            handler = AtomicStructHandler(inputObj.getFileName())
+            chainName = getattr(self, 'chain_name{}'.format(idx))
+
+            # Parse chainName for model and chain selection
+            struct = json.loads(self.chain_name.get())  # From wizard dictionary
+            chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
+
+            seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
+
+        else:
+            inputObj = getattr(self, 'inputSequence{}'.format(idx)).get()
+            seq = inputObj.getSequence()
+            seq_name = inputObj.getId()
+            if not seq_name:
+                seq_name = inputObj.getSeqName()
+        return seq, seq_name

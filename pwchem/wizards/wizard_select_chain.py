@@ -117,9 +117,9 @@ SelectChainWizard().addTarget(protocol=ProtDefinePockets,
                               outputs=['chain_name'])
 
 SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
-                              targets=['chain_name'],
-                              inputs=['inputAtomStruct'],
-                              outputs=['chain_name'])
+                              targets=['chain_name1'],
+                              inputs=['inputAtomStruct1'],
+                              outputs=['chain_name1'])
 
 #There cannot be 2 VariableWizards of same type in the same protocol
 #because we cannot know which target was clicked

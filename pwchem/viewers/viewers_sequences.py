@@ -29,15 +29,15 @@ import pyworkflow.viewer as pwviewer
 from pwem.objects import SetOfSequences, Sequence
 
 from pwchem import Plugin as pwchem_plugin
+from pwchem.objects import SequencesAlignment, SequenceVariants
 
 
 class SequenceAliView(pwviewer.CommandView):
     """ View for calling an external command. """
 
     def __init__(self, seqFiles, cwd, **kwargs):
-        sBases = [os.path.basename(x) for x in seqFiles]
         pwviewer.CommandView.__init__(self, '{}/aliview/aliview {}'.
-                                      format(pwchem_plugin.getAliViewPath(), ' '.join(sBases)),
+                                      format(pwchem_plugin.getAliViewPath(), ' '.join(seqFiles)),
                                       cwd=cwd, **kwargs)
 
     def show(self):
@@ -48,7 +48,7 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [Sequence, SetOfSequences]
+    _targets = [Sequence, SetOfSequences, SequencesAlignment, SequenceVariants]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -65,6 +65,16 @@ class SequenceAliViewer(pwviewer.Viewer):
             if os.path.exists(outPath):
                 os.remove(outPath)
             obj.exportToFile(outPath)
+
+        elif issubclass(cls, SequencesAlignment):
+            seqFiles += [obj.getAlignmentFileName()]
+
+        elif issubclass(cls, SequenceVariants):
+            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
+            seqFiles += [outPath]
+            if os.path.exists(outPath):
+                os.remove(outPath)
+            obj._sequence.exportToFile(outPath)
 
         views.append(SequenceAliView(seqFiles, cwd=self.protocol._getExtraPath()))
 

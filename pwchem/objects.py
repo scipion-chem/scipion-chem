@@ -97,7 +97,7 @@ class SequencesAlignment(data.EMFile):
         return cl_run
 
     def __str__(self):
-        return ("{} (filename={})".format(self.getClassName(), self.getAlignmentFileName()))
+        return ("{} (Alignment={})".format(self.getClassName(), os.path.basename(self.getAlignmentFileName())))
 
 
 class SequenceVariants(data.EMFile):
