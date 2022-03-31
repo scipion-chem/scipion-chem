@@ -142,10 +142,11 @@ class SequenceVariants(data.EMFile):
                     if vGroup.endswith(',') or vGroup.endswith('.'):
                         vGroup = vGroup[:-1]
                     for variant in vGroup.split('/'):
-                        if variant in var2mutDic:
-                            var2mutDic[variant] += [mut]
-                        else:
-                            var2mutDic[variant] = [mut]
+                        if variant != 'and':
+                            if variant in var2mutDic:
+                                var2mutDic[variant] += [mut]
+                            else:
+                                var2mutDic[variant] = [mut]
 
         return var2mutDic
 
