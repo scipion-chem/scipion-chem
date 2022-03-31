@@ -31,7 +31,8 @@ import urllib.request
 
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam
+from pyworkflow.protocol.params import PointerParam
+from pwchem.utils import runOpenBabel
 
 class ProtChemPubChemSearch(EMProtocol):
     """Add the best batching entry from Pubchem https://pubchem.ncbi.nlm.nih.gov/"""
@@ -44,12 +45,25 @@ class ProtChemPubChemSearch(EMProtocol):
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
+        self._insertFunctionStep('convertInputStep')
         self._insertFunctionStep('operateStep')
+
+    def convertInputStep(self):
+        self.convMols = []
+        for mol in self.inputSet.get():
+            fnSmall = mol.getFileName()
+            fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
+            if ext != '.smi':
+                args = " -i%s %s --partialcharge none -O %s.smi" % (ext[1:], os.path.abspath(fnSmall), fnRoot)
+                runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+                mol.setFileName(self._getExtraPath(fnRoot + '.smi'))
+            self.convMols.append(mol.clone())
+
 
     def operateStep(self):
         outputSet = self.inputSet.get().create(self._getPath())
-        for oldEntry in self.inputSet.get():
-            fnSmall = oldEntry.smallMoleculeFile.get()
+        for mol in self.convMols:
+            fnSmall = mol.smallMoleculeFile.get()
             fnBase = os.path.splitext(os.path.split(fnSmall)[1])[0]
             fnName = self._getExtraPath(fnBase+".txt")
             cid = None
@@ -71,7 +85,7 @@ class ProtChemPubChemSearch(EMProtocol):
                     if cid!="0":
                         url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/%s/XML/?response_type=save&response_basename=compound_CID_%s"%(cid,cid)
                         print(url)
-                        fnXml = self._getTmpPath("compound.xml")
+                        fnXml = self._getTmpPath("compound_{}.xml".format(cid))
                         urllib.request.urlretrieve(url, fnXml)
                         if os.path.exists(fnXml):
                             tree = ET.parse(fnXml)
@@ -95,15 +109,14 @@ class ProtChemPubChemSearch(EMProtocol):
                 cid = tokens[1].strip()
                 fh.close()
 
-            newEntry = self.inputSet.get().ITEM_TYPE()
-            newEntry.copy(oldEntry)
-            newEntry.pubChemName = pwobj.String(pubChemName)
+
+            mol.pubChemName = pwobj.String(pubChemName)
             if cid is not None and cid!="0":
                 url = "https://pubchem.ncbi.nlm.nih.gov/compound/%s"%cid
             else:
                 url = ""
-            newEntry.pubChemURL = pwobj.String(url)
-            outputSet.append(newEntry)
+            mol.pubChemURL = pwobj.String(url)
+            outputSet.append(mol)
 
         if len(outputSet)>0:
             self._defineOutputs(output=outputSet)
@@ -112,6 +125,6 @@ class ProtChemPubChemSearch(EMProtocol):
     def _validate(self):
         errors = []
         firstItem = self.inputSet.get().getFirstItem()
-        if not hasattr(firstItem,"smallMoleculeFile"):
+        if not hasattr(firstItem, "smallMoleculeFile"):
             errors.append("The input set does not contain small molecules")
         return errors

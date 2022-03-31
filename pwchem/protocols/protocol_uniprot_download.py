@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pwem.convert.sequence import sequenceLength
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import PointerParam
-from pwchem.objects import DatabaseID, SetOfDatabaseID, ProteinSequenceFile
+from pwchem.objects import DatabaseID, SetOfDatabaseID
 
 class ProtChemUniprotDownload(EMProtocol):
     """Download the Fasta files of a set of uniprotId's"""
@@ -79,20 +79,17 @@ class ProtChemUniprotDownload(EMProtocol):
 
             outputDatabaseID.append(newItem)
 
-        fnAll = self._getPath("sequences.fasta")
-        with open(fnAll, 'w') as outfile:
-            for fname in fnList:
-                with open(fname) as infile:
-                    for line in infile:
-                        outfile.write(line)
-                    outfile.write('\n\n')
-        seqFile=ProteinSequenceFile()
-        seqFile.setFileName(fnAll)
+        outputSequences = SetOfSequences().create(outputPath=self._getPath())
+        for fnFasta in fnList:
+            newSeq = Sequence()
+            newSeq.importFromFile(fnFasta, isAmino=True)
+            outputSequences.append(newSeq)
+
+        self._defineOutputs(outputSequences=outputSequences)
+        self._defineSourceRelation(self.inputListID, outputSequences)
 
         self._defineOutputs(outputUniprot=outputDatabaseID)
         self._defineSourceRelation(self.inputListID, outputDatabaseID)
-        self._defineOutputs(outputSequence=seqFile)
-        self._defineSourceRelation(self.inputListID, seqFile)
 
     def _validate(self):
         errors=[]
