@@ -139,7 +139,7 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
 
     outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
     pymolV = PocketPointsViewer(project=self.getProject())
-    pymolV._visualize(outPockets, bBox=bBox)
+    return pymolV._visualize(outPockets, bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
     bBox = self.displayBBoxes.get()
@@ -148,7 +148,7 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
 
     outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
     pymolV = ContactSurfaceViewer(project=self.getProject())
-    pymolV._visualize(outPockets, bBox=bBox)
+    return pymolV._visualize(outPockets, bBox=bBox)
 
   def _showAtomStructVMD(self):
     outPockets = getattr(self.protocol, self.getEnumText('outputSet'))

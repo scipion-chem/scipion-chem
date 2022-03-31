@@ -23,26 +23,20 @@
 # **************************************************************************
 
 import pyworkflow.viewer as pwviewer
-import pwem.viewers.views as views
+import pwem.viewers.views as pwemViews
 import pwem.viewers.showj as showj
 import pwchem.objects
-from pwem.viewers import SequenceViewer
-from pwchem.objects import SequenceVariants
+from pwem.objects import SetOfSequences
 
-class SetOfDatabaseIDView(views.ObjectView):
+class SetOfDatabaseIDView(pwemViews.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
     def __init__(self, project, inputid, path, other='',
                  viewParams={}, **kwargs):
         defaultViewParams = {showj.MODE: 'metadata',
                              showj.RENDER: '_PDBLigandImage'}
         defaultViewParams.update(viewParams)
-        views.ObjectView.__init__(self, project, inputid, path, other,
+        pwemViews.ObjectView.__init__(self, project, inputid, path, other,
                                   defaultViewParams, **kwargs)
-
-class ViewerSequenceVariants(SequenceViewer):
-    _targets = [SequenceVariants]
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
 class BioinformaticsDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
@@ -50,11 +44,10 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [
+        SetOfSequences,
         pwchem.objects.SetOfDatabaseID,
-        pwchem.objects.ProteinSequenceFile,
-        pwchem.objects.NucleotideSequenceFile,
         pwchem.objects.SetOfSmallMolecules,
-        pwchem.objects.SetOfBindingSites,
+        pwchem.objects.SetOfBindingSites
     ]
 
     def __init__(self, **kwargs):
@@ -62,7 +55,7 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         self._views = []
 
     def _getObjView(self, obj, fn, viewParams={}):
-        return ObjectView(
+        return pwemViews.ObjectView(
             self._project, obj.strId(), fn, viewParams=viewParams)
 
     def _visualize(self, obj, **kwargs):
@@ -72,13 +65,13 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, pwchem.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
+        elif issubclass(cls, SetOfSequences):
+            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfSmallMolecules):
-            views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
+            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, pwchem.objects.ProteinSequenceFile):
-            views.append(self.textView([obj.getFileName()]))
-        elif issubclass(cls, pwchem.objects.NucleotideSequenceFile):
-            views.append(self.textView([obj.getFileName()]))
+        if issubclass(cls, pwchem.objects.SetOfPockets):
+            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
 
         return views
