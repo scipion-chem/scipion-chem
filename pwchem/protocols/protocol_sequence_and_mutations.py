@@ -25,36 +25,41 @@
 # **************************************************************************
 
 import lxml.etree as ET
-import os
-import sys
 import urllib.request
 
 from pwem.objects import Sequence
 from pwem.protocols import EMProtocol
-import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import *
-from pwchem.objects import DatabaseID, SetOfDatabaseID, Variants, SequenceFasta, SequenceVariants
+from pwchem.objects import SequenceVariants
 
-class ProtChemUniprotSequenceVariants(EMProtocol):
-# class ProtChemUniprotCrossRef(EMProtocol):
-    """Extract natural variants from uniprot"""
-    _label = 'extract variants from uniprot'
+
+class ProtChemSequenceMutations(EMProtocol):
+    """Extract natural variants from uniprot or associates a mutation list to a sequence """
+    _label = 'Associates mutations list to sequence'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
 
         form.addParam('fromID', BooleanParam,
-                      label='Import from Id:', default = True,
-                      help="Where from Uniprot or sequence is downloaded")
+                      label='Import from Id:', default=True,
+                      help="Where sequence and natural variant list are downloaded")
+
         form.addParam('inputUniProtKB', StringParam, condition='fromID',
-                       label='Uniprot Id:', allowsNull=False,
-                       help="UniProtKB ID for the variants query")
+                      label='Uniprot Id:', allowsNull=False,
+                      help="Uniprot entry for the protein")
+
         form.addParam('inputSequence', PointerParam, pointerClass='Sequence',
                       condition='not fromID',
                       label='Input Sequence:', allowsNull=False,
-                      help="Original Sequence")
+                      help="Original sequence")
 
-    # --------------------------- INSERT steps functions --------------------
+        form.addParam('inputMutaList', PathParam,
+                      condition='not fromID',
+                      label='Input Mutations List:', allowsNull=False,
+                      help="Customized list of mutations. A mutation as amino acid in position is replaced by other, "
+                           "e.g. leucine (L) in 5 is replaced by phenylalanine (F): L5F, also mutation and variant "
+                           "such as L5F Iota is accepted even if linage if available L5F Iota/B.1.526 ")
+
     def _insertAllSteps(self):
         if self.fromID:
             self._insertFunctionStep('downLoadFasta')
@@ -66,134 +71,127 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
         fnFasta = self._getPath("%s.fasta" % uniprotId)
 
         if not os.path.exists(fnFasta):
-            print("Fetching uniprot: %s"%urlFasta)
-
+            print("Fetching uniprot: %s" % urlFasta)
             try:
-                urllib.request.urlretrieve(urlFasta,fnFasta)
-            except: # The library raises an exception when the web is not found
+                urllib.request.urlretrieve(urlFasta, fnFasta)
+            except:  # The library raises an exception when the web is not found
                 pass
 
         self.downloadedSequence = Sequence(id=uniprotId)
         self.downloadedSequence.importFromFile(os.path.abspath(fnFasta))
 
-
     def extractStep(self):
         if self.fromID:
             uniprotId = self.inputUniProtKB.get()
             sequence = self.downloadedSequence.getSequence()
+            print("Processing %s" % uniprotId)
+            urlId = "https://www.uniprot.org/uniprot/%s.xml" % uniprotId
+            fnXML = self._getExtraPath("%s.xml" % uniprotId)
+            fnAll = self._getPath("NaturalVariantsUniprot.txt")
+            file = open(fnAll, "w")
+            file.close()
+
+            if not os.path.exists(fnXML):
+                print("Fetching uniprot: %s" % urlId)
+                try:
+                    urllib.request.urlretrieve(urlId, fnXML)
+                except:  # The library raises an exception when the web is not found
+                    pass
+
+            if os.path.exists(fnXML):
+                fnAll = self.parseXML(fnXML, fnAll)
+            seqObj = Sequence(sequence=sequence, id=uniprotId, name=uniprotId)
+            varsSeq = SequenceVariants(filename=fnAll)
+            varsSeq.setSequence(seqObj)
         else:
-            uniprotId = self.inputSequence.get().getId()
+            uniprotId = self.inputSequence.get().getSeqName()
             sequence = self.inputSequence.get().getSequence()
+            mutListCustom = self.inputMutaList.get()
+            fileList = open(mutListCustom, 'r')
+            typeList = ''
+            for line_mutListCustom in fileList:
+                line_mutListCustom_list = line_mutListCustom.rstrip().split(' ')
+                length_list = len(line_mutListCustom_list)
+                if length_list >= 2:
+                    typeList = 'Complete'
+                else:
+                    typeList = 'Simple'
+                break
+            fileList.close()
 
-        # uniprotId = item._uniprotId.get()
-        print("Processing %s"%uniprotId)
+            if typeList == 'Simple':
+                fileList = open(mutListCustom, 'r')
+                mutListCustomSimple = self._getPath("NaturalVariantsCustomized.txt")
+                file_mutListCustomSimple = open(mutListCustomSimple, 'w')
+                for line_mutListCustom in fileList:
+                    newFileList = line_mutListCustom.rstrip() + ' ' + line_mutListCustom
+                    file_mutListCustomSimple.write(newFileList)
+                fileList.close()
+                file_mutListCustomSimple.close()
 
-        urlId = "https://www.uniprot.org/uniprot/%s.xml" % uniprotId
-
-        fnXML=self._getExtraPath("%s.xml"%uniprotId)
-
-        fnAll = self._getPath("NaturalVariantsUniprot.txt")
-        file = open(fnAll, "w")
-        file.close()
-        if not os.path.exists(fnXML):
-            print("Fetching uniprot: %s"%urlId)
-            # for i in range(3):
-            try:
-                urllib.request.urlretrieve(urlId,fnXML)
-            except: # The library raises an exception when the web is not found
-                pass
-        if os.path.exists(fnXML):
-            fnAll = self.parseXML(fnXML, fnAll)
-
-        varsSeq = SequenceVariants(sequence=sequence, id=uniprotId)
-        varsSeq.setVariantsFileName(fnAll)
+                seqObj = Sequence(sequence=sequence, id=uniprotId, name=uniprotId)
+                varsSeq = SequenceVariants(filename=mutListCustomSimple)
+                varsSeq.setSequence(seqObj)
+            else:
+                seqObj = Sequence(sequence=sequence, id=uniprotId, name=uniprotId)
+                varsSeq = SequenceVariants(filename=mutListCustom)
+                varsSeq.setSequence(seqObj)
 
         self._defineOutputs(outputVariants=varsSeq)
 
-
-
-
     def _validate(self):
-        errors=[]
+        errors = []
         return errors
 
     def parseXML(self, fnXML, fnOut):
         tree = ET.parse(fnXML)
-
         for child in tree.getroot().iter():
             positionDescription = []
             strainDescription = []
             if child.tag.endswith("feature"):
-
                 if child.attrib['type'] == 'sequence variant':
                     for childChild in child:
                         if childChild.tag.endswith("location"):
-                            # print(childChild)
                             for childChildChild in childChild:
                                 if childChildChild.tag.endswith("position"):
-                                    print('position: ', childChildChild.attrib['position'])
                                     positionDescription.append(childChildChild.attrib['position'])
-
                     if child.attrib['description']:
-                        # print('description: ', child.attrib['description'])
                         strainDescription.append(child.attrib['description'])
-
                     for childChild in child:
                         if childChild.tag.endswith("original"):
-                            # print(childChild.text)
                             positionDescription.append(childChild.text)
-
                     for childChild in child:
                         if childChild.tag.endswith("variation"):
-                            # print(childChild.text)
                             positionDescription.append(childChild.text)
             if len(positionDescription) >= 3:
-            # if len(positionDescription) != 0 and len(positionDescription) != 1:
-                print('positionDescription', positionDescription)
-                print('description: ', child.attrib['description'])
                 descriptionLinage = child.attrib['description'].split(',')
                 identifiedVariants = []
                 for elementDescription in range(len(descriptionLinage)):
-                    # print('element: ', descriptionLinage[elementDescription])
-
                     if 'In strain: ' in descriptionLinage[elementDescription]:
                         strainline = descriptionLinage[elementDescription]
                         inStrain = strainline.split(':')
-                        # print('inStrain: ', inStrain[1])
-                        # identifiedVariants = inStrain[1]
                         identifiedVariants.append(inStrain[1])
-
                     if 'strain' not in descriptionLinage[elementDescription]:
                         if ';' in descriptionLinage[elementDescription]:
                             strainline = descriptionLinage[elementDescription]
                             inStrain = strainline.split(';')
-                            # print('inStrain: ', inStrain[0])
-                            # identifiedVariants = identifiedVariants + inStrain[0]
                             identifiedVariants.append((inStrain[0] + '.'))
                         else:
                             inStrain = descriptionLinage[elementDescription]
-                            # print('inStrain: ', inStrain)
-                            # identifiedVariants = identifiedVariants + inStrain
                             identifiedVariants.append(inStrain)
-
                     if 'in strain' in descriptionLinage[elementDescription]:
                         strainline = descriptionLinage[elementDescription]
                         inStrain = strainline.split(' ')
-                        # print('inStrain: ', inStrain[3])
-                        # identifiedVariants = identifiedVariants + inStrain[3]
                         identifiedVariants.append(inStrain[3])
-
-                # print('identifiedVariants: ', identifiedVariants)
 
                 mutantString = identifiedVariants[0].lstrip()
                 for mutantIndex in range(1, (len(identifiedVariants))):
                     mutantString = mutantString + ', ' + identifiedVariants[mutantIndex].lstrip()
-                print('mutantString: ', mutantString)
 
-                # Crear un archivo con las variantes
+                # Make file with variants
                 file = open(fnOut, "a")
-                snv = file.write(positionDescription[1] + positionDescription[0] + positionDescription[2] + ' ' + mutantString +'\n')
-                # snv = file.write(positionDescription[1] + positionDescription[0] + positionDescription[2] + '\n')
+                snv = file.write(positionDescription[1] + positionDescription[0] + positionDescription[
+                    2] + ' ' + mutantString + '\n')
                 file.close()
         return fnOut
 
@@ -205,6 +203,3 @@ class ProtChemUniprotSequenceVariants(EMProtocol):
             seq += line.strip()
         file.close()
         return seq
-
-
-
