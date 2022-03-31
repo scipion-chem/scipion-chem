@@ -38,15 +38,12 @@ from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 import os, re
 
-MAXSCORE, MINENERGY = 0, 1
-
 class ProtocolConsensusDocking(EMProtocol):
     """
     Executes the consensus on the sets of SmallMolecules. The poses of the different molecules are clustered
     with respect to their RMSD
     """
     _label = 'Consensus docking'
-    actionChoices = ['MaxScore', 'MinEnergy']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -60,9 +57,12 @@ class ProtocolConsensusDocking(EMProtocol):
                       help="Maximum RMSD for clustering different docked molecules")
         form.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings',
                       help="Min number of docked molecules to be considered consensus docking")
-        form.addParam('action', params.EnumParam, default=MAXSCORE,
-                      label='Criteria to choose cluster representative', choices=self.actionChoices,
+        form.addParam('action', params.StringParam, default='',
+                      label='Criteria to choose cluster representative: ',
                       help='Criteria to follow on docking clusters to choose a representative')
+        form.addParam('maxmin', params.BooleanParam, default=True,
+                      label='Keep maximum values: ',
+                      help='True to keep the maximum values. False to get the minimum')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -94,7 +94,7 @@ class ProtocolConsensusDocking(EMProtocol):
             newDock = outDock.clone()
             newDock = self.relabelPosId(newDock)
             outDocked.append(newDock)
-        self._defineOutputs(outputSmallMoleculesAll=outDocked)
+        self._defineOutputs(outputSmallMolecules=outDocked)
 
         indepOutputs = self.createIndepOutputs()
         for setId in indepOutputs:
@@ -218,19 +218,17 @@ class ProtocolConsensusDocking(EMProtocol):
         representatives = []
         for clust in clusters:
             if len(clust) >= minSize:
-                if self.action.get() == MAXSCORE:
-                    repr = self.getMaxScoreMolecule(clust)
-                elif self.action.get() == MINENERGY:
-                    repr = self.getMinEnergyMolecule(clust)
+                repr = self.getRepresentativeMolecule(clust)
                 representatives.append(repr)
         return representatives
 
-    def getMaxScoreMolecule(self, cluster):
+    def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
-        maxScore = 0
+        maxScore = -100000 if self.maxmin.get() else 100000
         for mol in cluster:
-            molScore = mol.getScore()
-            if molScore > maxScore:
+            molScore = getattr(mol, self.action.get())
+            if (molScore > maxScore and self.maxmin.get()) or \
+                    (molScore < maxScore and not self.maxmin.get()):
                 maxScore = molScore
                 outMol = mol.clone()
         return outMol

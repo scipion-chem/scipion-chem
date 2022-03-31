@@ -142,22 +142,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             fnMol = os.path.split(fnSmall)[1]      # Name of complete file
             fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
 
-            # 0. Convert mol2 or pdb format to sdf to ensure the correct assignation of charges
-            if fnFormat == ".mol2":
-                args = " -imol2 %s --partialcharge none -O %s.sdf" % (os.path.abspath(fnSmall), fnRoot)
-                runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getTmpPath()))
-
-            elif fnFormat == ".pdb":
-                args = " -ipdb %s --partialcharge none -O %s.sdf" % (os.path.abspath(fnSmall), fnRoot)
-                runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getTmpPath()))
-            else:
-                shutil.copy(fnSmall, self._getTmpPath(fnMol))
-
-
-        # Run over all sdf files generated
-        for filesdf in glob.glob(self._getTmpPath("*")):
-            fnRoot = re.split(".s", os.path.split(filesdf)[1])[0]
-
             # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
             # 2. Add and calculate partial charges with different methods
             index_method = self.method_charges.get()
@@ -166,13 +150,13 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             # With a given pH
             oFile = "{}_prep.mol2".format(fnRoot)
             if self.ph.get():
-                args = " -isdf %s -p %s --partialcharge %s -O %s" % (os.path.abspath(filesdf), str(self.phvalue.get()),
-                                                                     cmethod, oFile)
+                args = " -i%s %s -p %s --partialcharge %s -O %s" % (fnFormat[1:], os.path.abspath(fnSmall),
+                                                                    str(self.phvalue.get()), cmethod, oFile)
 
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
             else:
-                args = " -isdf %s -h --partialcharge %s -O %s" % (os.path.abspath(filesdf), cmethod, oFile)
+                args = " -i%s %s -h --partialcharge %s -O %s" % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
             oFile = relabelAtomsMol2(os.path.abspath(self._getExtraPath(oFile)))
@@ -185,7 +169,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         # 3. Generate mol2 conformers file for each molecule with OpenBabel
 
         for file in glob.glob(self._getExtraPath("*_prep.mol2")):
-            fnRoot = re.split("_", os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
+            fnRoot = os.path.splitext(os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
 
             if self.method_conf.get() == 0:  # Genetic algorithm
                 args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.mol2" %\
@@ -208,7 +192,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         for mol in self.inputSmallMols.get():
             fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
             if self.doConformers:
-                fnRoot = re.split("_", os.path.split(fnSmall)[1])[0]
+                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                 outDir = self._getExtraPath(fnRoot)
                 os.mkdir(outDir)
                 firstConfFile = self._getTmpPath('{}-{}.mol2'.format(fnRoot, 1))

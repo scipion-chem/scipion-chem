@@ -156,8 +156,11 @@ def runOpenBabel(protocol, args, cwd):
 
 
 def splitConformerFile(confFile, outDir):
-    _, ext = os.path.splitext(confFile)
-    fnRoot = os.path.split(confFile)[1].split('_')[0]
+    fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
+    if '_prep_' in fnRoot:
+        fnRoot = fnRoot.split('_prep')[0]
+    elif '_conformers' in fnRoot:
+        fnRoot = fnRoot.split('_conformers')[0]
     iConf, lastRemark, towrite = 1, True, ''
     with open(confFile) as fConf:
         for line in fConf:
@@ -360,13 +363,13 @@ def relabelAtomsMol2(atomFile):
                     atomLines = False
 
                 if atomLines:
-                    atom = line[8]
+                    atom = removeNumberFromStr(line.split()[1])
                     if atom in atomCount:
                         atomCount[atom] += 1
                     else:
                         atomCount[atom] = 1
                     numSize = len(str(atomCount[atom]))
-                    line = line[:9] + str(atomCount[atom]).ljust(10) + line[18:]
+                    line = line[:8] + atom + str(atomCount[atom]).ljust(10) + line[18 - 1 + len(atom):]
 
                 if line.startswith('@<TRIPOS>ATOM'):
                     atomLines = True
@@ -376,6 +379,14 @@ def relabelAtomsMol2(atomFile):
     shutil.move(auxFile, atomFile)
     return atomFile
 
+def removeNumberFromStr(s):
+    newS = ''
+    for i in s:
+        if not i.isdigit():
+            newS += i
+        else:
+            break
+    return newS
 
 def calculateDistance(coord1, coord2):
     dist = 0
@@ -386,4 +397,45 @@ def calculateDistance(coord1, coord2):
         dist += (c1-c2) ** 2
     return dist ** (1/2)
 
+################ UTILS Sequence Object ################
 
+def getSequenceFastaName(sequence):
+    '''Return a fasta name for the sequence.
+    Priorizes the Id; if None, just "sequence"'''
+    return cleanPipeIds(sequence.getId()) if sequence.getId() is not None else 'sequence'
+
+def cleanPipeIds(idStr):
+    '''Return a guessed ID when they contain "|"'''
+    seqId = idStr.strip()
+    if '|' in seqId:
+        seqId = seqId.split('|')[1]
+    return seqId
+
+def natural_sort(listi, rev=False):
+    import re
+    convert = lambda text: int(text) if text.isdigit() else text.lower()
+    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+    return sorted(listi, key=alphanum_key, reverse=rev)
+
+def fillEmptyAttributes(inputSets):
+    '''Fill all items with empty attributes'''
+    attributes = getAllAttributes(inputSets)
+    for inSet in inputSets:
+        for item in inSet.get():
+            for attr in attributes:
+                if not hasattr(item, attr):
+                    item.__setattr__(attr, attributes[attr])
+    return inputSets
+
+def getAllAttributes(inputSets):
+    '''Return a dic with {attrName: ScipionObj=None}'''
+    attributes = {}
+    for inpSet in inputSets:
+        item = inpSet.get().getFirstItem()
+        attrKeys = item.getObjDict().keys()
+        for attrK in attrKeys:
+            if not attrK in attributes:
+                value = item.__getattribute__(attrK)
+                attributes[attrK] = value.clone()
+                attributes[attrK].set(None)
+    return attributes

@@ -31,7 +31,13 @@ from pwchem.objects import SetOfSmallMolecules
 import pyworkflow.utils as pwutils
 from pyworkflow.protocol.params import EnumParam, BooleanParam
 import pyworkflow.viewer as pwviewer
-from pwchem.viewers import PyMolViewer
+from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
+from pwchem.utils.utilsViewer import sortMolsByUnique, buildPMLDockingSingleStr, writePmlFile, getPmlsDir
+from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
+from pyworkflow.gui.dialog import showError
+from pwchem import Plugin as pwchemPlugin
+
+SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
 class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'

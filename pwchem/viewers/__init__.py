@@ -6,3 +6,4 @@ from .viewer_pockets import *
 from .viewer_protocol_consensus_pockets import ViewerConsensusPockets
 from .viewer_smallMols import SmallMoleculesViewer
 from .viewer_docking import DockingViewer, ProtConsensusDockingViewer
+from .viewers_sequences import SequenceAliViewer

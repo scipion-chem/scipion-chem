@@ -24,13 +24,16 @@
 # *
 # **************************************************************************
 import os
+from subprocess import Popen
 
-from ..protocols import ProtocolConsensusPockets
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
-from ..viewers import PyMolViewer, PocketPointsViewer, ContactSurfaceViewer, VmdViewFpocket
 
-from subprocess import Popen
+from pwchem.viewers import BioinformaticsDataViewer
+
+from ..protocols import ProtocolConsensusPockets
+from ..viewers import PyMolViewer, PocketPointsViewer, ContactSurfaceViewer, VmdViewPopen
+
 
 MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'
 VOLUME_VMD, VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1, 2
@@ -49,6 +52,11 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
                   label='Set of pockets output: ',
                   help='Set of pockets output to visualize'
                   )
+    form.addParam('displayTable', params.LabelParam,
+                  label='Display table view of set of Pockets: ',
+                  help='Table view'
+                  )
+
     form.addParam('setClass', params.StringParam,
                   label='Set of Pockets Class: ', default='-',
                   help='Pocket class in chosen set')
@@ -86,6 +94,7 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
 
   def _getVisualizeDict(self):
     return {
+      'displayTable': self._showTable,
       'displayFPocket': self._showFPocketPockets,
       'displayPyMol': self._showStandardPockets,
     }
@@ -118,6 +127,11 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
       return self._showAtomStructPyMolSurf()
 
   #Display functions
+  def _showTable(self, paramName=None):
+    outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
+    setV = BioinformaticsDataViewer(project=self.getProject())
+    return setV._visualize(outPockets)
+
   def _showAtomStructPyMolPoints(self):
     bBox = self.displayBBoxes.get()
     if bBox:
@@ -143,4 +157,4 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
     outDir = os.path.abspath(outPockets.getSetDir())
     args = '{} -e {}'.format(outFile, tclFile)
 
-    viewer = VmdViewFpocket(args, cwd=outDir).show()
+    return [VmdViewPopen(args, cwd=outDir)]
