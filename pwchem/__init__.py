@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# *              Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -30,6 +31,7 @@ manipulation of atomic struct objects
 """
 
 import os
+from subprocess import run
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 import pwem
@@ -49,11 +51,10 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        # The activation command should be something like
-        # CONDA_ACTIVATION_CMD=eval "$(path-to-conda shell.bash hook)"
-        # in the .config/scipion/scipion.conf file
+        #PLIP environment (with pymol bundle)
+        cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
+
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addopenbabelPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
@@ -68,14 +69,16 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def getRDKitEnvActivation(cls):
-        activation = cls.getVar("RDKIT_ENV_ACTIVATION")
-        return activation
-
-    @classmethod
-    def getOpenbabelEnvActivation(cls):
-      activation = cls.getVar("OPENBABEL_ENV_ACTIVATION")
+      activation = cls.getVar("RDKIT_ENV_ACTIVATION")
       return activation
 
+    @classmethod
+    def getPLIPEnvActivation(cls):
+      activation = cls.getVar("PLIP_ENV_ACTIVATION")
+      return activation
+
+
+######################## PACKAGES #########################
     @classmethod
     def addPLIPPackage(cls, env, default=False):
       PLIP_INSTALLED = 'plip_installed'
@@ -96,60 +99,48 @@ class Plugin(pwem.Plugin):
                      commands=plip_commands,
                      default=True)
 
-      # try to get CONDA activation command
-      installationCmd = cls.getCondaActivationCmd()
-
-      # Create the environment
-      installationCmd += ' conda create -y -c conda-forge -n openbabel-env openbabel &&'
-
-      # Flag installation finished
-      installationCmd += ' touch %s' % MGL_INSTALLED
-
-      env.addPackage('mgltools', version='1.5.6',
-                     url='http://mgltools.scripps.edu/downloads/downloads/tars/releases/REL1.5.6/mgltools_x86_64Linux2_1.5.6.tar.gz',
-                     buildDir='mgltools_x86_64Linux2_1.5.6',
-                     commands=[("./install.sh", "initMGLtools.sh")],
+    @classmethod
+    def addPyMolPackage(cls, env, default=False):
+      PYMOL_INSTALLED = 'pymol_installed'
+      pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
+        format(cls.getPyMolTar())
+      pymol_commands += 'tar -jxf {} --strip-components 1 && '.format(cls.getPyMolTar())
+      pymol_commands += 'touch ' + PYMOL_INSTALLED
+      pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
+      env.addPackage(PYMOL, version=PYMOL_DEFAULT_VERSION,
+                     tar='void.tgz',
+                     commands=pymol_commands,
                      default=True)
 
     @classmethod
-    def addopenbabelPackage(cls, env, default=False):
-      OPENBABEL_INSTALLED = 'openbabel_installed'
+    def addMGLToolsPackage(cls, env, default=False):
+      MGL_INSTALLED = "initMGLtools.sh"
+      mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
+        format(cls.getMGLPath('MGLTools.tar.gz'))
+      mgl_commands += 'tar -xf {} --strip-components 1 && '.format(cls.getMGLPath('MGLTools.tar.gz'))
+      mgl_commands += '{} && '.format(cls.getMGLPath('install.sh'))
+      mgl_commands += 'touch ' + MGL_INSTALLED
+      mgl_commands = [(mgl_commands, MGL_INSTALLED)]
 
-      # try to get CONDA activation command
-      installationCmd = cls.getCondaActivationCmd()
-
-      # Create the environment
-      installationCmd += ' conda create -y -c conda-forge -n openbabel-env openbabel &&'
-
-      # Flag installation finished
-      installationCmd += ' touch %s' % OPENBABEL_INSTALLED
-
-      openbabel_commands = [(installationCmd, OPENBABEL_INSTALLED)]
-
-      envPath = os.environ.get('PATH', "")
-      installEnvVars = {'PATH': envPath} if envPath else None
-      env.addPackage('openbabel',
+      env.addPackage('mgltools', version='1.5.6',
                      tar='void.tgz',
-                     commands=openbabel_commands,
-                     neededProgs=cls.getDependencies(),
-                     default=default,
-                     vars=installEnvVars)
+                     commands=mgl_commands,
+                     default=True)
 
     @classmethod
-    def runOPENBABEL(cls, protocol, program="obabel", args=None, cwd=None):
-      """ Run openbabel command from a given protocol. """
-      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getOpenbabelEnvActivation(), program)
-      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+    def addJChemPaintPackage(cls, env, default=False):
+        JCHEM_INSTALLED = 'jchem_installed'
+        jchem_commands = 'wget https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar -O {} && '.\
+          format(cls.getJChemPath())
+        jchem_commands += 'chmod +x {} && '.format(cls.getJChemPath())
+        jchem_commands += ' touch %s' % JCHEM_INSTALLED
 
-    @classmethod
-    def getDependencies(cls):
-        # try to get CONDA activation command
-        condaActivationCmd = cls.getCondaActivationCmd()
-        neededProgs = []
-        if not condaActivationCmd:
-            neededProgs.append('conda')
+        jchem_commands = [(jchem_commands, JCHEM_INSTALLED)]
 
-        return neededProgs
+        env.addPackage('jchempaint', version='3.3',
+                       tar='void.tgz',
+                       commands=jchem_commands,
+                       default=True)
 
     @classmethod
     def addRDKitPackage(cls, env, default=False):
