@@ -30,7 +30,7 @@ from pwchem.objects import SetOfSmallMolecules
 from pyworkflow.protocol.params import EnumParam, LabelParam
 import pyworkflow.viewer as pwviewer
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
-from pwchem.utils.utilsViewer import *
+from pwchem.utils.utilsViewer import sortMolsByUnique, buildPMLDockingSingleStr, writePmlFile, getPmlsDir
 from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
 from pyworkflow.gui.dialog import showError
 from pwchem import Plugin as pwchemPlugin

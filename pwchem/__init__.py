@@ -43,8 +43,12 @@ _logo = 'tool.png'
 JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
 PYMOL, PYMOL_DEFAULT_VERSION = 'pymol', '2.5'
 PLIP, PLIP_DEFAULT_VERSION = 'plip', '2.2'
+RDKIT = 'rdkit'
+ALIVIEW, ALIVIEW_DEFAULT_VERSION = 'aliview',  '1.28'
 
 class Plugin(pwem.Plugin):
+    _rdkitHome = os.path.join(pwem.Config.EM_ROOT, RDKIT)
+
     @classmethod
     def defineBinaries(cls, env):
         #PLIP environment (with pymol bundle)
@@ -54,10 +58,11 @@ class Plugin(pwem.Plugin):
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate my-rdkit-env')
+        cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
         cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
         cls._defineEmVar(PYMOL_HOME, 'pymol-2.5')
@@ -82,7 +87,7 @@ class Plugin(pwem.Plugin):
       #Installing openbabel
       plip_commands += 'conda install -y -c conda-forge/label/cf202003 openbabel && '
       #Installing swig
-      plip_commands += 'conda install -y -c anaconda swig && '
+      plip_commands += 'conda install -y -c conda-forge swig && '
       #Installing Pymol
       plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol &&'
       #Installing PLIP
@@ -141,25 +146,35 @@ class Plugin(pwem.Plugin):
     def addRDKitPackage(cls, env, default=False):
         RDKIT_INSTALLED = 'rdkit_installed'
 
-        # try to get CONDA activation command
         installationCmd = cls.getCondaActivationCmd()
-
-        # Create the environment
-        installationCmd += ' conda create -y -c conda-forge -n my-rdkit-env rdkit &&'
-
-        # Flag installation finished
-        installationCmd += ' touch %s' % RDKIT_INSTALLED
+        installationCmd += ' conda create -y -c conda-forge -n rdkit-env rdkit oddt &&'
+        installationCmd += ' mkdir oddtModels && touch %s' % RDKIT_INSTALLED
 
         rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
 
         envPath = os.environ.get('PATH', "")  # keep path since conda likely in there
         installEnvVars = {'PATH': envPath} if envPath else None
-        env.addPackage('rdkit',
+        env.addPackage(RDKIT,
                        tar='void.tgz',
                        commands=rdkit_commands,
                        neededProgs=cls.getDependencies(),
                        default=default,
                        vars=installEnvVars)
+
+    @classmethod
+    def addAliViewPackage(cls, env, default=False):
+      SEQS_INSTALLED = 'aliview_installed'
+      seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} && '. \
+        format(cls.getAliViewTar())
+      seqs_commands += 'tar -xf {} && rm {} &&'.format(cls.getAliViewTar(), cls.getAliViewTar())
+      seqs_commands += ' touch %s' % SEQS_INSTALLED
+
+      seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
+
+      env.addPackage(ALIVIEW, version=ALIVIEW_DEFAULT_VERSION,
+                     tar='void.tgz',
+                     commands=seqs_commands,
+                     default=True)
 
 
     ##################### RUN CALLS #################33333
@@ -169,6 +184,13 @@ class Plugin(pwem.Plugin):
         """ Run rdkit command from a given protocol. """
         fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+
+    @classmethod
+    def runRDKitScript(cls, protocol, scriptName, args, cwd=None):
+      """ Run rdkit command from a given protocol. """
+      scriptName = cls.getScriptsDir(scriptName)
+      fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), 'python', scriptName)
+      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
     def runJChemPaint(cls, protocol, cwd=None):
@@ -186,7 +208,7 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def runPLIP(cls, args, cwd=None):
-        """ Run rdkit command from a given protocol. """
+        """ Run PLIP command from a given protocol. """
         fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
@@ -219,9 +241,22 @@ class Plugin(pwem.Plugin):
         return softwareHome + '/' + JCHEM + '-' + JCHEM_DEFAULT_VERSION + '.jar'
 
     @classmethod
+    def getAliViewPath(cls):
+      softwareHome = os.path.join(pwem.Config.EM_ROOT, ALIVIEW + '-' + ALIVIEW_DEFAULT_VERSION)
+      return softwareHome
+
+    @classmethod
+    def getAliViewTar(cls):
+      return cls.getAliViewPath() + '/' + ALIVIEW + '-' + ALIVIEW_DEFAULT_VERSION + '.tgz'
+
+    @classmethod
     def getPyMolDir(cls):
       softwareHome = os.path.join(pwem.Config.EM_ROOT, PYMOL + '-' + PYMOL_DEFAULT_VERSION)
       return softwareHome
+
+    @classmethod
+    def getScriptsDir(cls, scriptName):
+        return cls.getPluginHome('scripts/%s' % scriptName)
 
     @classmethod
     def getPyMolTar(cls):
@@ -240,6 +275,10 @@ class Plugin(pwem.Plugin):
         'PATH': cls.getMGLPath('bin')
       }, position=pos)
       return environ
+
+    @classmethod
+    def getODDTModelsPath(cls, path=''):
+      return os.path.abspath(os.path.join(cls._rdkitHome, 'oddtModels', path))
 
 
 DataSet(name='smallMolecules', folder='smallMolecules',

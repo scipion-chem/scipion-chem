@@ -36,6 +36,7 @@ from pwem.viewers import Vmd, VmdView
 from pwchem.viewers import BioinformaticsDataViewer
 from ..constants import *
 
+
 class PyMol:
   """ Help class to run PyMol and manage its environment. """
 
@@ -77,7 +78,8 @@ class PyMolViewer(pwviewer.Viewer):
 class PocketPointsViewer(pwviewer.Viewer):
   _label = 'Viewer pocket points'
   _environments = [pwviewer.DESKTOP_TKINTER]
-  #_targets = [SetOfPockets]
+
+  # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
     outHETMFile = obj.buildPDBhetatmFile()
@@ -86,10 +88,12 @@ class PocketPointsViewer(pwviewer.Viewer):
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
+
 class ContactSurfaceViewer(pwviewer.Viewer):
   _label = 'Viewer contact surface'
   _environments = [pwviewer.DESKTOP_TKINTER]
-  #_targets = [SetOfPockets]
+
+  # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
     pmlFile = obj.createSurfacePml(bBox=bBox)
@@ -98,7 +102,7 @@ class ContactSurfaceViewer(pwviewer.Viewer):
     return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 
-class VmdViewFpocket(VmdView):
+class VmdViewPopen(VmdView):
   def __init__(self, vmdArgs, **kwargs):
     pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs,
                                   env=Vmd.getEnviron(), **kwargs)
@@ -106,7 +110,9 @@ class VmdViewFpocket(VmdView):
   def show(self):
     Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron(), shell=True)
 
+
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
+
 
 class ViewerGeneralPockets(pwviewer.ProtocolViewer):
   _label = 'Viewer pockets'
@@ -144,11 +150,11 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
 
   def _viewSet(self, e=None):
     if type(self.protocol) == SetOfPockets:
-        molSet = self.protocol
+      molSet = self.protocol
     elif hasattr(self.protocol, 'outputPockets'):
-        molSet = getattr(self.protocol, 'outputPockets')
+      molSet = getattr(self.protocol, 'outputPockets')
     else:
-        print('Cannot find outputPockets')
+      print('Cannot find outputPockets')
 
     setV = BioinformaticsDataViewer(project=self.getProject())
     return setV._visualize(molSet)
@@ -173,13 +179,13 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
   def _showAtomStructPyMolPoints(self):
     bBox = self.displayBBoxes.get()
     if bBox:
-        bBox = self.pocketRadiusN.get()
+      bBox = self.pocketRadiusN.get()
 
     pymolV = PocketPointsViewer(project=self.getProject())
     if type(self.protocol) == SetOfPockets:
-        return pymolV._visualize(self.protocol, bBox=bBox)
+      return pymolV._visualize(self.protocol, bBox=bBox)
     elif hasattr(self.protocol, 'outputPockets'):
-        return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
+      return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
     bBox = self.displayBBoxes.get()
@@ -188,10 +194,10 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
 
     pymolV = ContactSurfaceViewer(project=self.getProject())
     if type(self.protocol) == SetOfPockets:
-        return pymolV._visualize(self.protocol, bBox=bBox)
+      return pymolV._visualize(self.protocol, bBox=bBox)
     elif hasattr(self.protocol, 'outputPockets'):
-        return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
-    
+      return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
+
   def _showAtomStructPyMol(self, pmlFile, outDir):
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(pmlFile, cwd=outDir)

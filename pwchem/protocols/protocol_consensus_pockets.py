@@ -31,14 +31,17 @@ This protocol is used to make a consensus over several input sets of pockets tha
 sources
 
 """
+import os
+
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
-from pwchem.objects import SetOfPockets
 from pwem.objects.data import AtomStruct
-from ..constants import *
+
+from pwchem.objects import SetOfPockets, PredictPocketsOutput
 from pwchem.utils import *
-import os
+
+from ..constants import *
 
 MAXVOL, MAXSURF = 0, 1
 
@@ -47,6 +50,7 @@ class ProtocolConsensusPockets(EMProtocol):
     Executes the consensus on the sets of pockets
     """
     _label = 'Consensus pockets'
+    _possibleOutputs = PredictPocketsOutput
     actionChoices = ['MaxVolume', 'MaxSurface']
 
     # -------------------------- DEFINE param functions ----------------------
@@ -96,7 +100,7 @@ class ProtocolConsensusPockets(EMProtocol):
                 outPockets.append(newPock)
             if outPockets.getSize() > 0:
                 outPockets.buildPDBhetatmFile(suffix='_All')
-                self._defineOutputs(outputPocketsAll=outPockets)
+                self._defineOutputs(**{self._possibleOutputs.outputPockets.name: outPockets})
 
             indepOutputs = self.createIndepOutputs()
             for setId in indepOutputs:
@@ -121,13 +125,6 @@ class ProtocolConsensusPockets(EMProtocol):
     def _warnings(self):
         """ Try to find warnings on define params. """
         warnings = []
-        inAtomStructs = set([])
-        for pSet in self.inputPocketSets:
-            inAtomStructs.add(pSet.get().getProteinFile())
-        if len(inAtomStructs) > 1:
-            warnings = ['The input Atom Structure files from the different sets of pockets are not'
-                        ' the same. It may not have sense to calculate the consensus.']
-
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
