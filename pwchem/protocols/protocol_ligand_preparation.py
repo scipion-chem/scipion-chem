@@ -252,11 +252,11 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                   if not atomLines and line.startswith('@<TRIPOS>ATOM'):
                       atomLines = True
                       writeFirst += line
-                  elif atomLines:
-                      atomsDic[line.split()[1]] = line
                   elif atomLines and line.startswith('@'):
                       atomLines = False
                       writeLast += line
+                  elif atomLines:
+                      atomsDic[line.split()[1]] = line
                   else:
                       if atomsDic == {}:
                         writeFirst += line
