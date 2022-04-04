@@ -42,7 +42,7 @@ SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolConsensusDocking,
                                   outputs=['action'])
 SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                   targets=['corrAttribute'],
-                                  inputs=['inputSmallMolecules'],
+                                  inputs=['inputMoleculesSets'],
                                   outputs=['corrAttribute'])
 
 

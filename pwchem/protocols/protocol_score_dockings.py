@@ -65,7 +65,7 @@ class ProtocolScoreDocking(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputSmallMolecules', params.PointerParam,
+        form.addParam('inputMoleculesSets', params.MultiPointerParam,
                        pointerClass='SetOfSmallMolecules', allowsNull=False,
                        label="Input Docked Small Molecules: ",
                        help='Select the docked molecules to be scored')
@@ -153,8 +153,8 @@ class ProtocolScoreDocking(EMProtocol):
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
 
     def scoringStep(self, wStep, i):
-        molSet = self.inputSmallMolecules.get()
-        receptorFile = molSet.getProteinFile()
+        molSet = self.getAllInputMols()
+        receptorFile = self.getInputReceptorFile()
         msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
 
         #Perform the scoring using the ODDT package
@@ -162,7 +162,7 @@ class ProtocolScoreDocking(EMProtocol):
 
     def correlationStep(self):
         molFiles, refs = [], []
-        for mol in self.inputSmallMolecules.get():
+        for mol in self.getAllInputMols():
             molFiles.append(os.path.abspath(mol.getPoseFile()))
             if self.corrAttribute.get() != '':
                 refs.append(getattr(mol, self.corrAttribute.get()).get())
@@ -199,11 +199,16 @@ class ProtocolScoreDocking(EMProtocol):
 
 
     def createOutputStep(self):
-        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
+
+        self.relabelDic = {}
+        consensusMols = self.fillEmptyAttributes(self.getAllInputMols())
+        consensusMols, idsDic = self.reorderIds(consensusMols)
+
         #Calculating zScores for each score for being able to combine them
         zDic = self.getZScores()
         finalDic = self.combineZScores(zDic)
-        for mol in self.inputSmallMolecules.get():
+        newMols = self.defineOutputSet()
+        for mol in consensusMols:
             #Specific attribute name for each score?
             setattr(mol, "_oddtScore", Float(finalDic[os.path.abspath(mol.getPoseFile())]))
             newMols.append(mol)
@@ -222,9 +227,11 @@ class ProtocolScoreDocking(EMProtocol):
 
     def _validate(self):
         validations = []
-        molSet = self.inputSmallMolecules.get()
-        if not molSet.isDocked():
-            validations += ['{} is not docked yet\n'.format(molSet)]
+        for pSet in self.inputMoleculesSets:
+            pSet = pSet.get()
+            if not pSet.isDocked():
+                validations.append('Sets of input molecules must be docked first.\n'
+                                   'Set: {} has not been docked'.format(pSet))
 
         if self.correlationFilter.get():
             if self.corrAttribute.get() == '':
@@ -270,6 +277,54 @@ class ProtocolScoreDocking(EMProtocol):
                 f.write(self.createSummary(self.createMSJDic()))
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputReceptorFile(self):
+        return self.inputMoleculesSets[0].get().getProteinFile()
+
+    def defineOutputSet(self):
+        inputProteinFile = self.getInputReceptorFile()
+
+        outDocked = SetOfSmallMolecules(filename=self._getPath('outputSmallMolecules.sqlite'))
+        outDocked.setDocked(True)
+        outDocked.setProteinFile(inputProteinFile)
+        return outDocked
+
+    def fillEmptyAttributes(self, inSet):
+        '''Fill all items with empty attributes'''
+        attributes = self.getAllAttributes(self.inputMoleculesSets)
+        for item in inSet:
+            for attr in attributes:
+                if not hasattr(item, attr):
+                    item.__setattr__(attr, attributes[attr])
+        return inSet
+
+    def reorderIds(self, inSet):
+        '''Return the set with the reordered ids and a mapper dictionary {newId: oldId}'''
+        idsDic = {}
+        for i, item in enumerate(inSet):
+            idsDic[i+1] = item.getObjId()
+            item.setObjId(i+1)
+        return inSet, idsDic
+
+    def getAllAttributes(self, inSets):
+        '''Return a dic with {attrName: ScipionObj=None}'''
+        attributes = {}
+        for inSet in inSets:
+            item = inSet.get().getFirstItem()
+            attrKeys = item.getObjDict().keys()
+            for attrK in attrKeys:
+                if not attrK in attributes:
+                    value = item.__getattribute__(attrK)
+                    attributes[attrK] = value.clone()
+                    attributes[attrK].set(None)
+        return attributes
+
+    def getAllInputMols(self):
+        mols = []
+        for pSet in self.inputMoleculesSets:
+            for mol in pSet.get():
+                mols.append(mol.clone())
+        return mols
+
     def scoreDockings(self, molsScipion, receptorFile, msjDic, i):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
         self.writeParamsFile(paramsPath, molsScipion, receptorFile, msjDic, i)
