@@ -256,8 +256,13 @@ class ProtocolScoreDocking(EMProtocol):
                         refs.append(i+1)
                 if len(refs) > 1:
                     warnings += ['You have specified several scores as references for the correlation analysis. '
-                                    'Only the first one will be used\n']
+                                 'Only the first one will be used\n']
             else:
+                if len(self.inputMoleculesSets) > 1:
+                    warnings += ['The attribute {} will be used as a reference for the correlation analysis, but be '
+                                 'aware that it may have different origins for the different input sets.\n'
+                                     .format(self.corrAttribute.get())]
+
                 for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
                     msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
                     if msjDic['isReference']:
