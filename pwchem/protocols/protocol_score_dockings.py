@@ -153,16 +153,15 @@ class ProtocolScoreDocking(EMProtocol):
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
 
     def scoringStep(self, wStep, i):
-        molSet = self.getAllInputMols()
         receptorFile = self.getInputReceptorFile()
         msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
 
         #Perform the scoring using the ODDT package
-        results = self.scoreDockings(molSet, receptorFile, msjDic, i)
+        results = self.scoreDockings(receptorFile, msjDic, i)
 
     def correlationStep(self):
         molFiles, refs = [], []
-        for mol in self.getAllInputMols():
+        for mol in self.yieldAllInputMols():
             molFiles.append(os.path.abspath(mol.getPoseFile()))
             if self.corrAttribute.get() != '':
                 refs.append(getattr(mol, self.corrAttribute.get()).get())
@@ -330,9 +329,14 @@ class ProtocolScoreDocking(EMProtocol):
                 mols.append(mol.clone())
         return mols
 
-    def scoreDockings(self, molsScipion, receptorFile, msjDic, i):
+    def yieldAllInputMols(self):
+        for pSet in self.inputMoleculesSets:
+            for mol in pSet.get():
+                yield mol.clone()
+
+    def scoreDockings(self, receptorFile, msjDic, i):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
-        self.writeParamsFile(paramsPath, molsScipion, receptorFile, msjDic, i)
+        self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
         Plugin.runRDKitScript(self, scriptName, paramsPath, cwd=self._getPath())
 
     def parseResults(self, i):
@@ -392,9 +396,9 @@ class ProtocolScoreDocking(EMProtocol):
             fName = ''
         return fName
 
-    def writeParamsFile(self, paramsFile, molsScipion, recFile, msjDic, i):
+    def writeParamsFile(self, paramsFile, recFile, msjDic, i):
         molFiles = []
-        for mol in molsScipion:
+        for mol in self.yieldAllInputMols():
             molFiles.append(os.path.abspath(mol.getPoseFile()))
 
         with open(paramsFile, 'w') as f:
