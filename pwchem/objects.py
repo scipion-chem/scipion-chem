@@ -932,6 +932,60 @@ class ProteinResidue(data.EMObject):
             self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
 
 
+class MDSystem(data.EMFile):
+    """A system atom structure (prepared for MD). Base class fro Gromacs, Amber
+        _topoFile: topology file
+        _trjFile: trajectory file
+        _ff: main force field
+        _wff: water force field model"""
+
+    def __init__(self, filename=None, **kwargs):
+        super().__init__(filename=filename, **kwargs)
+        self._topoFile = pwobj.String(kwargs.get('topoFile', None))
+        self._trjFile = pwobj.String(kwargs.get('trjFile', None))
+        self._ff = pwobj.String(kwargs.get('ff', None))
+        self._wff = pwobj.String(kwargs.get('wff', None))
+
+    def __str__(self):
+        return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
+                                           self.hasTrajectory())
+
+    def getSystemFile(self):
+        return self.getFileName()
+
+    def setSystemFile(self, value):
+        self.setFileName(value)
+
+    def getTopologyFile(self):
+        return self._topoFile.get()
+
+    def setTopologyFile(self, value):
+        self._topoFile.set(value)
+
+    def hasTrajectory(self):
+        if self.getTrajectoryFile():
+            return True
+        else:
+            return False
+
+    def getTrajectoryFile(self):
+        return self._trjFile.get()
+
+    def setTrajectoryFile(self, value):
+        self._trjFile.set(value)
+
+    def getForceField(self):
+        return self._ff
+
+    def setForceField(self, value):
+        self._ff.set(value)
+
+    def getWaterForceField(self):
+        return self._wff
+
+    def setWaterForceField(self, value):
+        self._wff.set(value)
+
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################
 ############################################################
