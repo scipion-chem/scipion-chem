@@ -33,31 +33,17 @@ information such as name and number of residues.
 """
 
 # Imports
-from pyworkflow.gui.tree import ListTreeProviderString
-import pyworkflow.wizard as pwizard
-from pyworkflow.gui import dialog
-import pyworkflow.object as pwobj
-
+from pwem.wizards import SelectAttributeWizard
 import pwchem.protocols as chemprot
 
-class SelectAttributeWizard(pwizard.Wizard):
-  """Assist in the creation of python formula to be evaluated. In Steps"""
-  _targets = [(chemprot.ProtocolConsensusDocking, ['action'])]
+SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolConsensusDocking,
+                                  targets=['action'],
+                                  inputs=['inputMoleculesSets'],
+                                  outputs=['action'])
+SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+                                  targets=['corrAttribute'],
+                                  inputs=['inputMoleculesSets'],
+                                  outputs=['corrAttribute'])
 
-  def getInputAttributes(self, form):
-    attrNames = []
-    item = form.protocol.inputMoleculesSets[0].get().getFirstItem()
-    for key, attr in item.getAttributesToStore():
-      attrNames.append(key)
-    return attrNames
 
-  def show(self, form, *params):
-    attrsList = self.getInputAttributes(form)
-    finalAttrsList = []
-    for i in attrsList:
-      finalAttrsList.append(pwobj.String(i))
-    provider = ListTreeProviderString(finalAttrsList)
 
-    dlg = dialog.ListDialog(form.root, "Filter set", provider,
-                            "Select one of the attributes")
-    form.setVar('action', dlg.values[0].get())

@@ -252,10 +252,8 @@ class ProtocolConsensusDocking(EMProtocol):
     def calculateMolsRMSD(self, mol1, mol2):
         posDic1, posDic2 = mol1.getAtomsPosDic(), mol2.getAtomsPosDic()
         if self.checkSameKeys(posDic1, posDic2):
-            rmsd=0
-            for atomId in posDic1:
-                rmsd += calculateDistance(posDic1[atomId], posDic2[atomId])
-            return rmsd / len(posDic2)
+            rmsd = calculateRMSD(posDic1.values(), posDic2.values())
+            return rmsd
         else:
             print('Atom ids of the molecules are different and cannot be compared')
 
