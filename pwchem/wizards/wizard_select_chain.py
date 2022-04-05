@@ -40,7 +40,7 @@ from pyworkflow.object import String
 from pwem.wizards import EmWizard
 from pwem.convert import AtomicStructHandler
 
-from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment
+from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI
 from pwchem.wizards.wizard_base import VariableWizard
 
 class AddResidueWizard(EmWizard):
@@ -149,7 +149,7 @@ class SelectResidueWizard(SelectChainWizard):
       except Exception as e:
         print("ERROR: ", e)
         return
-      selection = getattr(protocol, 'chain_name').get()
+      selection = getattr(protocol, inputParam[1]).get()
 
       model = selection.split(',')[0].split(':')[1].strip()
       chain = selection.split(',')[1].split(':')[1].split('"')[1]
@@ -170,5 +170,46 @@ class SelectResidueWizard(SelectChainWizard):
 
 SelectResidueWizard().addTarget(protocol=ProtDefinePockets,
                                 targets=['resPosition'],
-                                inputs=['inputAtomStruct'],
+                                inputs=['inputAtomStruct', 'chain_name'],
                                 outputs=['resPosition'])
+
+class SelectResidueWizardSequence(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getResidues(self, form, inputParam):
+    protocol = form.protocol
+    sequenceObj = getattr(protocol, inputParam[0]).get()
+
+    finalResiduesList = []
+    for i, res in enumerate(sequenceObj.getSequence()):
+      stri = '{}: {}'.format(i+1, res)
+      finalResiduesList.append(String(stri))
+    return finalResiduesList
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    finalResiduesList = self.getResidues(form, inputParam)
+    provider = ListTreeProviderString(finalResiduesList)
+    dlg = dialog.ListDialog(form.root, "Sequence residues", provider,
+                            "Select one residue (residue number, "
+                            "residue name)")
+    roiStr = ''
+    idxs = [dlg.values[0].get().split(':')[0].strip(), dlg.values[-1].get().split(':')[0].strip()]
+    for i in range(int(idxs[0]) - 1, int(idxs[1])):
+        roiStr += finalResiduesList[i].get().split(':')[1].strip()
+
+    intervalStr = '{}-{}: {}'.format(idxs[0], idxs[1], roiStr)
+    form.setVar(outputParam[0], intervalStr)
+
+SelectResidueWizardSequence().addTarget(protocol=ProtDefineSeqROI,
+                                        targets=['resPosition'],
+                                        inputs=['inputSequence'],
+                                        outputs=['resPosition'])
+
+
+class AddSequenceResidueWizard(EmWizard):
+  _targets = [(ProtDefineSeqROI, ['addResidue'])]
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    form.setVar('inResidues', protocol.inResidues.get() + '{}\n'.format(protocol.resPosition.get()))
