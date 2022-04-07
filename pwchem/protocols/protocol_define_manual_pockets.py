@@ -30,20 +30,20 @@
 This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand) from some files
 
 """
+import os, json
+from scipy.spatial import distance
+from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
+from Bio.PDB.PDBParser import PDBParser
+
 from pyworkflow.protocol import params
 from pyworkflow.object import String
-from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
+from pwem.protocols import EMProtocol
+from pwem.convert import cifToPdb
+
 from pwchem.objects import SetOfPockets, ProteinPocket
 from pwchem.utils import *
 from pwchem import Plugin
-from pwem.convert import cifToPdb
-
-import os
-from scipy.spatial import distance
-
-from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
-from Bio.PDB.PDBParser import PDBParser
 
 COORDS, RESIDUES, LIGANDS = 0, 1, 2
 
@@ -78,7 +78,9 @@ class ProtDefinePockets(EMProtocol):
                       help='Specify the chain of the residue of interest')
         group.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
                       allowsNull=False, label='Residues of interest',
-                      help='Specify the residue position to define a pocket')
+                      help='Specify the residue to define a region of interest.\n'
+                           'You can either select a single residue or a range '
+                           '(it will take into account the first and last residues selected)')
         group.addParam('addResidue', params.LabelParam,
                       label='Add defined residue', condition='origin=={}'.format(RESIDUES),
                       help='Here you can define a residue which will be added to the list of residues below.')
@@ -182,13 +184,15 @@ class ProtDefinePockets(EMProtocol):
         elif self.origin.get() == RESIDUES:
             residuesStr = self.inResidues.get().strip().split('\n')
             for rStr in residuesStr:
-                chainId = eval(rStr.split('|')[0].split(',')[1].split(':')[1].strip())
-                resId = eval(rStr.split('|')[1].split(':')[1].split(',')[0].strip())
+                resDic = json.loads(rStr)
+                chainId, resIdxs = resDic['chain'], resDic['index']
+                idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
+                for resId in range(idxs[0], idxs[1] + 1):
+                    residue = self.structModel[chainId][resId]
+                    atoms = residue.get_atoms()
+                    for a in atoms:
+                      oCoords.append(list(a.get_coord()))
 
-                residue = self.structModel[chainId][resId]
-                atoms = residue.get_atoms()
-                for a in atoms:
-                  oCoords.append(list(a.get_coord()))
         elif self.origin.get() == LIGANDS:
             for mol in self.inSmallMols.get():
                 curPosDic = mol.getAtomsPosDic(onlyHeavy=False)

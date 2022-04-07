@@ -407,6 +407,74 @@ class SetOfBindingSites(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
 
 
+class SequenceROI(data.EMObject):
+    """ Represent a sequence ROI"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._sequence = kwargs.get('sequence', None)   #Sequence object
+        self._ROISequence = kwargs.get('seqROI', None)  #Sequence object
+        self._roiIdx = Integer(kwargs.get('roiIdx', None))
+        self._roiIdx2 = Integer(kwargs.get('roiIdx2', None))
+
+    def __str__(self):
+        s = '{} (Idx: {}-{}, ROI: {})'.format(self.getClassName(), self.getROIIdx(), self.getROISequence())
+        return s
+
+    def setSequence(self, sequenceObj):
+        self._sequence = sequenceObj
+
+    def getSequence(self):
+        if type(self._sequence) == Sequence:
+            return self._sequence.getSequence()
+
+    def getId(self):
+        if type(self._sequence) == Sequence:
+            return self._sequence.getId()
+
+    def getSeqName(self):
+        if type(self._sequence) == Sequence:
+            return self._sequence.getSeqName()
+
+    def getROISequence(self):
+        return self._ROISequence.getSequence()
+
+    def setROISequence(self, seqObj):
+        self._ROISequence.set(seqObj)
+
+    def findROIIdx(self):
+        # python idx starts with 0, sequences with 1
+        return self.getSequence().find(self.getROISequence()) + 1
+
+    def getROIIdx(self):
+        return self._roiIdx.get()
+
+    def setROIIdx(self, idx):
+        self._roiIdx.set(idx)
+
+    def getROIIdx2(self):
+        return self._roiIdx2.get()
+
+    def setROIIdx2(self, idx):
+        self._roiIdx2.set(idx)
+
+
+class SetOfSequenceROIs(data.EMSet):
+    ITEM_TYPE = SequenceROI
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+
+    def __str__(self):
+        s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+        return s
+
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return '/'.join(self.getSetPath().split('/')[:-1])
+
+
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """
 

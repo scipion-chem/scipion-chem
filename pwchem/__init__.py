@@ -104,7 +104,7 @@ class Plugin(pwem.Plugin):
       PYMOL_INSTALLED = 'pymol_installed'
       pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
         format(cls.getPyMolTar())
-      pymol_commands += 'tar -jxf {} --strip-components 1 && '.format(cls.getPyMolTar())
+      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.format(cls.getPyMolTar(), cls.getPyMolTar())
       pymol_commands += 'touch ' + PYMOL_INSTALLED
       pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
       env.addPackage(PYMOL, version=PYMOL_DEFAULT_VERSION,
@@ -116,8 +116,8 @@ class Plugin(pwem.Plugin):
     def addMGLToolsPackage(cls, env, default=False):
       MGL_INSTALLED = "initMGLtools.sh"
       mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
-        format(cls.getMGLPath('MGLTools.tar.gz'))
-      mgl_commands += 'tar -xf {} --strip-components 1 && '.format(cls.getMGLPath('MGLTools.tar.gz'))
+        format(cls.getMGLTar())
+      mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(cls.getMGLTar(), cls.getMGLTar())
       mgl_commands += '{} && '.format(cls.getMGLPath('install.sh'))
       mgl_commands += 'touch ' + MGL_INSTALLED
       mgl_commands = [(mgl_commands, MGL_INSTALLED)]
@@ -164,8 +164,8 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addAliViewPackage(cls, env, default=False):
       SEQS_INSTALLED = 'aliview_installed'
-      seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} && '. \
-        format(cls.getAliViewTar())
+      seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
+                      '--no-check-certificate && '.format(cls.getAliViewTar())
       seqs_commands += 'tar -xf {} && rm {} &&'.format(cls.getAliViewTar(), cls.getAliViewTar())
       seqs_commands += ' touch %s' % SEQS_INSTALLED
 
@@ -261,6 +261,10 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getPyMolTar(cls):
         return cls.getPyMolDir() + '/' + PYMOL + '-' + PYMOL_DEFAULT_VERSION + '.tar.bz2'
+
+    @classmethod
+    def getMGLTar(cls):
+      return cls.getMGLPath('MGLTools.tar.gz')
 
     @classmethod
     def getPyMolPath(cls):

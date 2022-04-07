@@ -36,6 +36,12 @@ import numpy as np
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
 
+RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
+               'ILE': 'I', 'PRO': 'P', 'THR': 'T', 'PHE': 'F', 'ASN': 'N',
+               'GLY': 'G', 'HIS': 'H', 'LEU': 'L', 'ARG': 'R', 'TRP': 'W',
+               'ALA': 'A', 'VAL':'V', 'GLU': 'E', 'TYR': 'Y', 'MET': 'M'}
+
+RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
@@ -403,6 +409,16 @@ def calculateDistance(coord1, coord2):
     for c1, c2 in zip(coord1, coord2):
         dist += (c1-c2) ** 2
     return dist ** (1/2)
+
+def calculateRMSD(coords1, coords2):
+    rmsd = 0
+    for c1, c2 in zip(coords1, coords2):
+        if len(c1) != len(c2):
+            print('ERROR: coordinates of different size')
+            return None
+        for x1, x2 in zip(c1, c2):
+            rmsd += (x1-x2) ** 2
+    return (rmsd / len(coords2)) ** (1/2)
 
 ################3 UTILS Sequence Object ################
 
