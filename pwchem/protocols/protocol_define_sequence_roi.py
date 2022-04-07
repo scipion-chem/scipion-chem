@@ -30,21 +30,20 @@
 This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand) from some files
 
 """
-from pyworkflow.protocol import params
-from pyworkflow.object import String
-from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message
-from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
-from pwchem.utils import *
-from pwchem import Plugin
-from pwem.convert import cifToPdb
-
-import os
+import os, json
 from scipy.spatial import distance
-
 from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
 from Bio.PDB.PDBParser import PDBParser
 
+from pyworkflow.protocol import params
+from pyworkflow.object import String
+from pyworkflow.utils import Message
+from pwem.protocols import EMProtocol
+from pwem.convert import cifToPdb
+
+from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
+from pwchem.utils import *
+from pwchem import Plugin
 
 class ProtDefineSeqROI(EMProtocol):
     """
@@ -68,12 +67,10 @@ class ProtDefineSeqROI(EMProtocol):
                            '(it will take into account the first and last residues selected)')
         group.addParam('addResidue', params.LabelParam,
                       label='Add defined residue',
-                      help='Here you can define a residue which will be added to the list of residues below.')
+                      help='Here you can define a residue or range which will be added to the list of residues below.')
         group.addParam('inResidues', params.TextParam, width=70, default='',
                       label='Input residues: ',
-                      help='Input residues to define the pocket. '
-                           'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
-                           'and points closer than maxIntraDistance will be considered the same pocket')
+                      help='Input residues to define the ROI.')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -86,11 +83,12 @@ class ProtDefineSeqROI(EMProtocol):
 
         residuesStr = self.inResidues.get().strip().split('\n')
         for rStr in residuesStr:
-            idx = eval(rStr.split('-')[0].strip())
-            roi = rStr.split(':')[1].strip()
+            resDic = json.loads(rStr)
+            roi, resIdxs = resDic['residues'], resDic['index']
+            idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
 
-            roiSeq = Sequence(sequence=roi, name='ROI_{}'.format(idx), id='ROI_{}'.format(idx))
-            seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idx)
+            roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs))
+            seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
             outROIs.append(seqROI)
 
         if len(outROIs) > 0:

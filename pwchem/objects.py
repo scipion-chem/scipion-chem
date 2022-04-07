@@ -414,9 +414,10 @@ class SequenceROI(data.EMObject):
         self._sequence = kwargs.get('sequence', None)   #Sequence object
         self._ROISequence = kwargs.get('seqROI', None)  #Sequence object
         self._roiIdx = Integer(kwargs.get('roiIdx', None))
+        self._roiIdx2 = Integer(kwargs.get('roiIdx2', None))
 
     def __str__(self):
-        s = '{} (Idx: {}, ROI: {})'.format(self.getClassName(), self.getROIIdx(), self.getROISequence())
+        s = '{} (Idx: {}-{}, ROI: {})'.format(self.getClassName(), self.getROIIdx(), self.getROISequence())
         return s
 
     def setSequence(self, sequenceObj):
@@ -449,6 +450,13 @@ class SequenceROI(data.EMObject):
 
     def setROIIdx(self, idx):
         self._roiIdx.set(idx)
+
+    def getROIIdx2(self):
+        return self._roiIdx2.get()
+
+    def setROIIdx2(self, idx):
+        self._roiIdx2.set(idx)
+
 
 class SetOfSequenceROIs(data.EMSet):
     ITEM_TYPE = SequenceROI
