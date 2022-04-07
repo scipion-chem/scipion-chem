@@ -474,6 +474,12 @@ class SetOfSequenceROIs(data.EMSet):
     def getSetDir(self):
         return '/'.join(self.getSetPath().split('/')[:-1])
 
+    def getSequenceObj(self):
+        return self.getFirstItem()._sequence
+
+    def getSequence(self):
+        return self.getSequenceObj().getSequence()
+
 
 class ProteinPocket(data.EMFile):
     """ Represent a pocket file """

@@ -77,7 +77,7 @@ class ProtChemPairWiseAlignment(EMProtocol):
         # Fasta file with sequences
         seq1, seq_name1 = self.getInputSequence(1)
         seq2, seq_name2 = self.getInputSequence(2)
-        pairWaise_fasta = 'pairWaise.fasta'
+        pairWaise_fasta = os.path.abspath(self._getExtraPath('pairWaise.fasta'))
         with open(pairWaise_fasta, "w") as f:
             f.write(('>{}\n{}\n>{}\n{}\n'.format(seq_name1, seq1, seq_name2, seq2)))
 
@@ -85,7 +85,7 @@ class ProtChemPairWiseAlignment(EMProtocol):
         out_file = os.path.abspath(self._getPath("clustalo_pairWise.aln"))
         cline = alignClustalSequences(pairWaise_fasta, out_file)
         args = ' --outfmt=clu'
-        self.runJob(cline, args)
+        self.runJob(cline, args, cwd=self._getPath())
 
         out_fileClustal=SequencesAlignment(alignmentFileName=out_file)
         self._defineOutputs(outputVariants=out_fileClustal)
