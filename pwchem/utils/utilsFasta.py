@@ -25,9 +25,11 @@
 # **************************************************************************
 
 from Bio import SeqIO
-from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
+from pyworkflow.utils.path import createLink
+
 from pwchem.objects import SetOfDatabaseID
+
 
 def copyFastaSequenceAndRead(protocol):
   outFileName = protocol._getExtraPath("sequence.fasta")
@@ -52,3 +54,17 @@ def checkInputHasFasta(protocol):
     if not hasattr(obj, "_uniprotFile"):
       errors.append("The input list does not have a sequence file")
   return errors
+
+
+def clustalOmegaAlignSequences(SetOfSequences, seqFileName, outputFileName):
+  from pwem.convert.sequence import alignClustalSequences
+  SetOfSequences.exportToFile(seqFileName)
+  cline = alignClustalSequences(seqFileName, outputFileName)
+  return cline
+
+
+def muscleAlignmentSequences(SetOfSequences, seqFileName, outputFileName):
+  from pwem.convert.sequence import alignMuscleSequences
+  SetOfSequences.exportToFile(seqFileName)
+  cline = alignMuscleSequences(seqFileName, outputFileName)
+  return cline
