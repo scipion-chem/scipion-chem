@@ -56,3 +56,4 @@ from .protocol_score_dockings import ProtocolScoreDocking
 from .protocol_oddt_descriptors import ProtocolODDTDescriptors
 from .protocol_rmsd_dockings import ProtocolRMSDDocking
 from .protocol_define_sequence_roi import ProtDefineSeqROI
+from .protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
