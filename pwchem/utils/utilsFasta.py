@@ -24,9 +24,12 @@
 # *
 # **************************************************************************
 
+import os, subprocess
 from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
+from pwem.convert import cifToPdb, alignClustalSequences
+
 from pwchem.objects import SetOfDatabaseID
 
 def copyFastaSequenceAndRead(protocol):
@@ -52,3 +55,43 @@ def checkInputHasFasta(protocol):
     if not hasattr(obj, "_uniprotFile"):
       errors.append("The input list does not have a sequence file")
   return errors
+
+def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None):
+    if issubclass(type(seq1), Sequence):
+        seqName1 = seq1.getSeqName()
+        seq1 = seq1.getSequence()
+    else:
+        if not seqName1:
+            seqName1 = 'sequence_1'
+
+    if issubclass(type(seq2), Sequence):
+        seqName2 = seq2.getSeqName()
+        seq2 = seq2.getSequence()
+    else:
+        if not seqName2:
+            seqName2 = 'sequence_2'
+
+    outDir = os.path.dirname(outPath)
+    oriFasta = os.path.join(outDir, 'original.fasta')
+    with open(oriFasta, "w") as f:
+      f.write(('>{}\n{}\n>{}\n{}\n'.format(seqName1, seq1, seqName2, seq2)))
+
+    ext = os.path.splitext(outPath)[1][1:]
+    if ext in ['fa', 'fasta']:
+        fmt = 'fa'
+    elif ext == 'aln':
+        fmt = 'clu'
+
+    # Alignment
+    cline = str(alignClustalSequences(oriFasta, outPath))
+    cline += ' --outfmt={}'.format(fmt)
+    subprocess.check_call(cline, cwd=outDir, shell=True)
+
+
+
+
+
+
+
+
+

@@ -43,6 +43,7 @@ from pwem.convert import cifToPdb, alignClustalSequences
 
 from pwchem.objects import SetOfPockets, ProteinPocket
 from pwchem.utils import *
+from pwchem.utils.utilsFasta import pairwiseAlign
 from pwchem import Plugin
 
 
@@ -88,19 +89,11 @@ class ProtMapSequenceROI(EMProtocol):
     def alignSequencesStep(self):
         seq, seq_name = self.getInputSequence()
         seqAS, seq_nameAS = self.getInputASSequence()
-        pairWaise_fasta = os.path.abspath(self._getExtraPath('pairWaise.fasta'))
-        with open(pairWaise_fasta, "w") as f:
-            f.write(('>{}\n{}\n>{}\n{}\n'.format(seq_name, seq, seq_nameAS, seqAS)))
 
         # Alignment
         out_file = os.path.abspath(self._getPath("pairWise.fasta"))
-        cline = alignClustalSequences(pairWaise_fasta, out_file)
-        args = ' --outfmt=fa'
-        self.runJob(cline, args, cwd=self._getPath())
-
-        cline = alignClustalSequences(pairWaise_fasta, out_file.replace('.fasta', '.aln'))
-        args = ' --outfmt=clu'
-        self.runJob(cline, args, cwd=self._getPath())
+        pairwiseAlign(seq, seqAS, out_file, seqName1=seq_name, seqName2=seq_nameAS)
+        pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seq_name, seqName2=seq_nameAS)
 
     def definePocketsStep(self):
         mapDic = self.mapResidues()
@@ -209,7 +202,7 @@ class ProtMapSequenceROI(EMProtocol):
             if seqAS[k] == '-':
                 j = j + 1
             if seq[k] != '-' and seqAS[k] != '-':
-                mapDic[k-i] = k-j
+                mapDic[k-i+1] = k-j+1
 
         return mapDic
 
@@ -217,7 +210,6 @@ class ProtMapSequenceROI(EMProtocol):
         resIdxs = []
         for roi in self.inputSequenceROIs.get():
             for roiIdx in range(roi.getROIIdx(), roi.getROIIdx2() + 1):
-                roiIdx = roiIdx - 1
                 if roiIdx in mapDic:
                     #Only added a residue if there was correspondance in the alignment
                     resIdxs.append(mapDic[roiIdx])

@@ -33,6 +33,7 @@ from pyworkflow.protocol.params import StringParam, PointerParam, BooleanParam
 from pwem.convert.sequence import alignClustalSequences
 
 from pwchem.objects import SequencesAlignment
+from pwchem.utils.utilsFasta import pairwiseAlign
 
 
 class ProtChemPairWiseAlignment(EMProtocol):
@@ -77,15 +78,9 @@ class ProtChemPairWiseAlignment(EMProtocol):
         # Fasta file with sequences
         seq1, seq_name1 = self.getInputSequence(1)
         seq2, seq_name2 = self.getInputSequence(2)
-        pairWaise_fasta = os.path.abspath(self._getExtraPath('pairWaise.fasta'))
-        with open(pairWaise_fasta, "w") as f:
-            f.write(('>{}\n{}\n>{}\n{}\n'.format(seq_name1, seq1, seq_name2, seq2)))
 
-        # Alignment
         out_file = os.path.abspath(self._getPath("clustalo_pairWise.aln"))
-        cline = alignClustalSequences(pairWaise_fasta, out_file)
-        args = ' --outfmt=clu'
-        self.runJob(cline, args, cwd=self._getPath())
+        pairwiseAlign(seq1, seq2, out_file, seqName1=seq_name1, seqName2=seq_name2)
 
         out_fileClustal=SequencesAlignment(alignmentFileName=out_file)
         self._defineOutputs(outputVariants=out_fileClustal)
