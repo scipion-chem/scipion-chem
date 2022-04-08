@@ -56,6 +56,20 @@ def checkInputHasFasta(protocol):
       errors.append("The input list does not have a sequence file")
   return errors
 
+
+def clustalOmegaAlignSequences(SetOfSequences, seqFileName, outputFileName):
+  from pwem.convert.sequence import alignClustalSequences
+  SetOfSequences.exportToFile(seqFileName)
+  cline = alignClustalSequences(seqFileName, outputFileName)
+  return cline
+
+
+def muscleAlignmentSequences(SetOfSequences, seqFileName, outputFileName):
+  from pwem.convert.sequence import alignMuscleSequences
+  SetOfSequences.exportToFile(seqFileName)
+  cline = alignMuscleSequences(seqFileName, outputFileName)
+  return cline
+
 def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None):
     if issubclass(type(seq1), Sequence):
         seqName1 = seq1.getSeqName()
