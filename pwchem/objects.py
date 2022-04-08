@@ -64,23 +64,6 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
-class ProteinSequenceFile(data.EMFile):
-    """A file with a list of protein sequences"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-
-#
-class Variants(data.EMFile):
-    """A file with a list of natural variants for a protein"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-#
-
-class SequenceFasta(data.EMFile):
-    """A fasta file for a Protein ID"""
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-#
 
 class SequencesAlignment(data.EMFile):
     """A fasta file for a Protein ID"""
@@ -99,6 +82,13 @@ class SequencesAlignment(data.EMFile):
     def __str__(self):
         return ("{} (Alignment={})".format(self.getClassName(), os.path.basename(self.getAlignmentFileName())))
 
+
+class SequenceFasta(data.EMFile):
+    """A fasta file for a Protein ID"""
+
+    def __init__(self, **kwargs):
+        data.EMFile.__init__(self, **kwargs)
+        
 
 class SequenceVariants(data.EMFile):
     """A fasta file for a Protein ID"""
