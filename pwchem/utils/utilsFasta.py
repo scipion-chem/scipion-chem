@@ -57,16 +57,16 @@ def checkInputHasFasta(protocol):
   return errors
 
 
-def clustalOmegaAlignSequences(SetOfSequences, seqFileName, outputFileName):
+def clustalOmegaAlignSequences(sequencesSet, seqFileName, outputFileName):
   from pwem.convert.sequence import alignClustalSequences
-  SetOfSequences.exportToFile(seqFileName)
+  sequencesSet.exportToFile(seqFileName)
   cline = alignClustalSequences(seqFileName, outputFileName)
   return cline
 
 
-def muscleAlignmentSequences(SetOfSequences, seqFileName, outputFileName):
+def muscleAlignmentSequences(sequencesSet, seqFileName, outputFileName):
   from pwem.convert.sequence import alignMuscleSequences
-  SetOfSequences.exportToFile(seqFileName)
+  sequencesSet.exportToFile(seqFileName)
   cline = alignMuscleSequences(seqFileName, outputFileName)
   return cline
 
