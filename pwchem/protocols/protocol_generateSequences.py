@@ -35,7 +35,7 @@ from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import *
 from pyworkflow.protocol import params
-from pwchem.objects import DatabaseID, SetOfDatabaseID, SequenceFasta, SequenceVariants
+from pwchem.objects import DatabaseID, SetOfDatabaseID, SequenceVariants
 
 class ProtChemGenerateSequences(EMProtocol):
     """Generates a set of sequence from a sequence and a list of mutations / variants"""

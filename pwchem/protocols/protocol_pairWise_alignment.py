@@ -99,7 +99,7 @@ class ProtChemPairWiseAlignment(EMProtocol):
             chainName = getattr(self, 'chain_name{}'.format(idx))
 
             # Parse chainName for model and chain selection
-            struct = json.loads(self.chain_name.get())  # From wizard dictionary
+            struct = json.loads(chainName.get())  # From wizard dictionary
             chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
             seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))

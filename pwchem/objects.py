@@ -155,13 +155,6 @@ class SequenceVariants(data.EMFile):
         return mutatedSequence
 
 
-class NucleotideSequenceFile(data.EMFile):
-    """A file with a list of nucleotide sequences"""
-
-    def __init__(self, **kwargs):
-        data.EMFile.__init__(self, **kwargs)
-
-
 class SmallMolecule(data.EMObject):
     """ Small molecule """
 

@@ -47,13 +47,13 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                       label='Select a multiple sequence alignment program: ',
                       help="Program selected to run the alignment")
 
-        form.addParam('alignmentOutputFileClustal', EnumParam, 
+        form.addParam('alignmentOutputFileClustal', EnumParam, default=0,
                       choices=['FASTA', 'ClustalO', 'MSF', 'PHYLIP', 'SELEX', 'STOCKHOLM', 'VIENNA'],
                       condition='programList == 0', expertLevel=LEVEL_ADVANCED,
                       label='Alignment output format: ',
                       help="Writes the output in Clustal Omega format selected")
 
-        form.addParam('alignmentOutputFileMuscle', EnumParam, 
+        form.addParam('alignmentOutputFileMuscle', EnumParam, default=0,
                       choices=['FASTA', 'ClustalW', 'Clustal(strick)', 'HTML', 'MSF'],
                       condition='programList == 1', expertLevel=LEVEL_ADVANCED,
                       label='Alignment Output Format: ',
@@ -63,7 +63,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                       label='Additional sequence format: ', default=True, 
                       help="Other standard formats from EMBOSS seqret")
 
-        form.addParam('embossFormats', EnumParam, 
+        form.addParam('embossFormats', EnumParam, default=0,
                       choices=['Wisconsin Package GCG 9.x and 10.x', 'GCG 8.x', 'SwisProt', 'NCBI', 'NBRF (PIR)', 
                                'Intelligenetics', 'CODATA', 'DNA strider', 'ACeDB', 
                                '"gap" program in the Staden package', 'Plain sequence', 'Fitch', 'PHYLIP interleaved', 
