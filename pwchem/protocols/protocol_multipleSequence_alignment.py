@@ -29,7 +29,7 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED
 from pwchem.objects import SequencesAlignment
-
+from pwchem.utils.utilsFasta import clustalOmegaAlignSequences, muscleAlignmentSequences
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
     """Run multiple sequence alignment for a set of sequences"""
@@ -47,32 +47,31 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                       label='Select a multiple sequence alignment program: ',
                       help="Program selected to run the alignment")
 
-        form.addParam('alignmentOutputFileClustal', EnumParam, 
+        form.addParam('alignmentOutputFileClustal', EnumParam,
                       choices=['FASTA', 'ClustalO', 'MSF', 'PHYLIP', 'SELEX', 'STOCKHOLM', 'VIENNA'],
-                      condition='programList == 0', expertLevel=LEVEL_ADVANCED,
+                      default=1, condition='programList == 0', expertLevel=LEVEL_ADVANCED,
                       label='Alignment output format: ',
                       help="Writes the output in Clustal Omega format selected")
 
-        form.addParam('alignmentOutputFileMuscle', EnumParam, 
+        form.addParam('alignmentOutputFileMuscle', EnumParam,
                       choices=['FASTA', 'ClustalW', 'Clustal(strick)', 'HTML', 'MSF'],
                       condition='programList == 1', expertLevel=LEVEL_ADVANCED,
                       label='Alignment Output Format: ',
                       help="Writes the output in Muscle format selected")
 
         form.addParam('additionalFormat', BooleanParam, expertLevel=LEVEL_ADVANCED,
-                      label='Additional sequence format: ', default=True, 
+                      label='Additional sequence format: ', default=True,
                       help="Other standard formats from EMBOSS seqret")
 
-        form.addParam('embossFormats', EnumParam, 
-                      choices=['Wisconsin Package GCG 9.x and 10.x', 'GCG 8.x', 'SwisProt', 'NCBI', 'NBRF (PIR)', 
-                               'Intelligenetics', 'CODATA', 'DNA strider', 'ACeDB', 
-                               '"gap" program in the Staden package', 'Plain sequence', 'Fitch', 'PHYLIP interleaved', 
-                               'ASN.1', 'Hennig86', 'Mega', 'Meganon', 'Nexus/PAUP', 'Nexusnon/PAUPnon', 'Jackknifer', 
+        form.addParam('embossFormats', EnumParam, default=16,
+                      choices=['Wisconsin Package GCG 9.x and 10.x', 'GCG 8.x', 'SwisProt', 'NCBI', 'NBRF (PIR)',
+                               'Intelligenetics', 'CODATA', 'DNA strider', 'ACeDB',
+                               '"gap" program in the Staden package', 'Plain sequence', 'Fitch', 'PHYLIP interleaved',
+                               'ASN.1', 'Hennig86', 'Mega', 'Meganon', 'Nexus/PAUP', 'Nexusnon/PAUPnon', 'Jackknifer',
                                'Jackknifernon', 'Treecon', 'EMBOSS sequence object report'],
                       condition='additionalFormat', expertLevel=LEVEL_ADVANCED,
                       label='EMBOSS seq output format: ',
                       help="Sequence formats from EMBOSS seqret")
-
 
     def _insertAllSteps(self):
         self._insertFunctionStep('multipleAlignment')
@@ -81,7 +80,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         programName = self.getEnumText('programList')
         print('Program Name: ', programName)
         setForAlignment = self.setOfSequences.get()
-        input_file= self._getPath('SequencesForAlignment.fasta')
+        input_file = self._getPath('SequencesForAlignment.fasta')
 
         # Clustal Omega
         if programName == 'Clustal Omega':
@@ -97,7 +96,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                 output_file = self._getPath(rootProgram + clustalFormatsArgs[formatSelectedClustal])
 
             # Alignment
-            run_alignment = setForAlignment.clustalOmegaAlignSequences(input_file, output_file)
+            run_alignment = clustalOmegaAlignSequences(setForAlignment, input_file, output_file)
             cline = run_alignment
             args = ' --outfmt=' + clustalFormatsArgs[formatSelectedClustal]
             self.runJob(cline, args)
@@ -116,7 +115,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                 output_file = self._getPath(rootProgram + muscleFormatsArgs[formatSelectedMuscle])
 
             # Alignment
-            run_alignment = setForAlignment.muscleAlignmentSequences(input_file, output_file)
+            run_alignment = muscleAlignmentSequences(setForAlignment, input_file, output_file)
             cline = run_alignment
             args = ' -' + muscleFormatsArgs[formatSelectedMuscle]
             self.runJob(cline, args)
@@ -128,15 +127,14 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         # EMBOSS format
         if self.additionalFormat:
             embossAddFormats_index = self.embossFormats.get()
-            embossAddFormatsArgs = ['gcg', 'gcg8', 'sw', 'ncbi', 'pir', 'ig', 'codata', 'strider', 'acedb', 
-                                    'experiment', 'plain', 'fitch', 'phylip3', 'asn1', 'hennig86', 'mega', 
+            embossAddFormatsArgs = ['gcg', 'gcg8', 'sw', 'ncbi', 'pir', 'ig', 'codata', 'strider', 'acedb',
+                                    'experiment', 'plain', 'fitch', 'phylip3', 'asn1', 'hennig86', 'mega',
                                     'meganon', 'nexus', 'nexusnon', 'jackknifer', 'jackknifernon', 'treecon', 'debug']
             embossSelectedFormat = embossAddFormatsArgs[embossAddFormats_index]
             StandardFormatEmboss = self._getPath(rootProgram + embossSelectedFormat)
-            emboss = out_fileAligned.convertEMBOSSformat(output_file, embossSelectedFormat,StandardFormatEmboss)
+            emboss = out_fileAligned.convertEMBOSSformat(output_file, embossSelectedFormat, StandardFormatEmboss)
             arguments = ''
             self.runJob(emboss, arguments)
-
 
     def _validate(self):
         errors = []

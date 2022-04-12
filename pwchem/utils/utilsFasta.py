@@ -28,7 +28,7 @@ import os, subprocess
 from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
-from pwem.convert import cifToPdb, alignClustalSequences
+
 
 from pwchem.objects import SetOfDatabaseID
 

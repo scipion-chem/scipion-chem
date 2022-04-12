@@ -26,12 +26,8 @@
 
 import os, json
 
-from pyworkflow.object import Pointer
-from pwem.objects import Sequence, AtomStruct
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import StringParam, PointerParam, BooleanParam
-from pwem.convert.sequence import alignClustalSequences
-
 from pwchem.objects import SequencesAlignment
 from pwchem.utils.utilsFasta import pairwiseAlign
 
@@ -99,7 +95,7 @@ class ProtChemPairWiseAlignment(EMProtocol):
             chainName = getattr(self, 'chain_name{}'.format(idx))
 
             # Parse chainName for model and chain selection
-            struct = json.loads(self.chain_name.get())  # From wizard dictionary
+            struct = json.loads(chainName.get())  # From wizard dictionary
             chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
             seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))

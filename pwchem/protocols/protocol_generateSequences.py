@@ -24,18 +24,10 @@
 # *
 # **************************************************************************
 
-# import lxml.etree as ET
-import os
-import sys
-import urllib.request
-# import pwem.objects.data as data, EMFile
-
 from pwem.objects import Sequence, EMFile, SetOfSequences
 from pwem.protocols import EMProtocol
-import pyworkflow.object as pwobj
 from pyworkflow.protocol.params import *
-from pyworkflow.protocol import params
-from pwchem.objects import DatabaseID, SetOfDatabaseID, SequenceFasta, SequenceVariants
+
 
 class ProtChemGenerateSequences(EMProtocol):
     """Generates a set of sequence from a sequence and a list of mutations / variants"""
