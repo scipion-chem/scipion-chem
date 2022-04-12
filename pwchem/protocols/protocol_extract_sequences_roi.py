@@ -73,24 +73,26 @@ class ProtExtractSeqsROI(EMProtocol):
         group.addParam('inputSequences', params.PointerParam, pointerClass='SetOfSequences',
                       allowsNull=False, label="Input sequences: ",
                       help='Select the set of sequences object where the ROI will be defined')
-        group.addParam('direction', params.EnumParam, default=0,
-                       choices=['High conservation', 'Low conservation'],
-                       label='Look for regions with: ', display=params.EnumParam.DISPLAY_HLIST,
-                       help='Whether to look for regions with high or low conservation.'
-                            'high conservation will look for low conservation values of the metrics and viceversa')
 
-        group = form.addGroup('Method')
+        group = form.addGroup('Conservation measure')
         group.addParam('method', params.EnumParam,
                        choices=[SHANNON, SIMPSON, KABAT],
                        label='Method to measure conservation: ',
                        help='Method to measure the conservation in each position of the sequences.\n'
                             'http://imed.med.ucm.es/PVS/pvs-help.html#vmth')
 
+        group = form.addGroup('Cluster regions')
+        group.addParam('direction', params.EnumParam, default=0,
+                       choices=['High conservation', 'Low conservation'],
+                       label='Look for regions with: ', display=params.EnumParam.DISPLAY_HLIST,
+                       help='Whether to look for regions with high or low conservation.'
+                            'high conservation will look for low conservation values of the metrics and viceversa')
+
         group.addParam('highLabel', params.LabelParam, condition='direction==0',
-                       label='The regions obtained will have conservation values below the threshold',
+                       label='Keep below threshold',
                        help='High conservation will look for low conservation values of the metrics')
         group.addParam('lowLabel', params.LabelParam, condition='direction==1',
-                       label='The regions obtained will have conservation values over the threshold',
+                       label='Keep over threshold',
                        help='Low conservation will look for high conservation values of the metrics')
 
         group.addParam('thres', params.FloatParam,
