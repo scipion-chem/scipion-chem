@@ -29,12 +29,14 @@
 
 """
 
-# Imports
+import numpy as np
+import matplotlib.pyplot as plt
+
 from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
-from pwchem.protocols import ProtChemInsertVariants, ProtChemGenerateSequences
+from pwchem.protocols import ProtChemInsertVariants, ProtChemGenerateSequences, ProtExtractSeqsROI
 
 
 def getMutations(protocol):
@@ -100,4 +102,33 @@ class AddVariantToListWizard(EmWizard):
     else:
         written = protocol.toMutateList.get()
     form.setVar('toMutateList', written + '{}\n'.format(protocol.selectVariant.get()))
+
+class CheckSequencesConservation(EmWizard):
+  _targets = [(ProtExtractSeqsROI, ['thres'])]
+
+  def getConservationValues(self, protocol):
+      protocol.calcConservation()
+      with open(protocol.getConservationFile()) as f:
+        consValues = f.readline().split()
+      return list(map(float, consValues))
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    consValues = self.getConservationValues(protocol)
+
+    xs = list(map(str, range(1, len(consValues) + 1)))
+    y_pos = np.arange(len(xs))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(y_pos, consValues)
+    yloc = plt.MaxNLocator(10)
+    ax.yaxis.set_major_locator(yloc)
+    ax.set_ylim(0, 1)
+
+    plt.xlabel("Sequence position")
+    plt.ylabel("Conservation value")
+    plt.title('Conservation values along sequence')
+
+    plt.show()
 

@@ -53,7 +53,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                       label='Alignment output format: ',
                       help="Writes the output in Clustal Omega format selected")
 
-        form.addParam('alignmentOutputFileMuscle', EnumParam,
+        form.addParam('alignmentOutputFileMuscle', EnumParam, default=1,
                       choices=['FASTA', 'ClustalW', 'Clustal(strick)', 'HTML', 'MSF'],
                       condition='programList == 1', expertLevel=LEVEL_ADVANCED,
                       label='Alignment Output Format: ',
@@ -76,7 +76,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
     def _insertAllSteps(self):
         self._insertFunctionStep('multipleAlignment')
 
-    def multipleAlignment(self, outputPath=None):
+    def multipleAlignment(self):
         programName = self.getEnumText('programList')
         print('Program Name: ', programName)
         setForAlignment = self.setOfSequences.get()

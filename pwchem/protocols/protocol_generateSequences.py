@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-from pwem.objects import Sequence, EMFile, SetOfSequences
+from pwem.objects import Sequence, SetOfSequences
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import *
 

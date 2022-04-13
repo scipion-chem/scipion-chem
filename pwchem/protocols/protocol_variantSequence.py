@@ -99,7 +99,8 @@ class ProtChemInsertVariants(EMProtocol):
         id_sequence = self.inputSequenceVariants.get().getId()
 
         variantSequence = inputSequenceVar.generateVariantLineage(selectedVariant)
-        variantSequence = Sequence(sequence=variantSequence, name=(id_sequence + '_VariantSequence'),
+
+        variantSequence = Sequence(sequence=variantSequence, name=(id_sequence + '_variant'),
                                    id=id_sequence + '_variant')
         self._defineOutputs(outputVariantSequence=variantSequence)
 
