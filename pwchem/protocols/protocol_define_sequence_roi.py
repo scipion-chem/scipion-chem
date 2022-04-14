@@ -61,10 +61,14 @@ class ProtDefineSeqROI(EMProtocol):
                       help='Select the sequence object where the ROI will be defined')
 
         group.addParam('resPosition', params.StringParam,
-                      allowsNull=False, label='Residues of interest',
+                      label='Residues of interest: ',
                       help='Specify the residue to define a region of interest.\n'
                            'You can either select a single residue or a range '
                            '(it will take into account the first and last residues selected)')
+        group.addParam('descrip', params.StringParam,
+                       label='ROI description: ',
+                       help='Specify some description for this region of interest')
+
         group.addParam('addResidue', params.LabelParam,
                       label='Add defined residue',
                       help='Here you can define a residue or range which will be added to the list of residues below.')
@@ -87,7 +91,8 @@ class ProtDefineSeqROI(EMProtocol):
             roi, resIdxs = resDic['residues'], resDic['index']
             idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
 
-            roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs))
+            roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs),
+                              description=resDic['desc'])
             seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
             outROIs.append(seqROI)
 

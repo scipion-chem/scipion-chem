@@ -29,7 +29,7 @@ from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
 
-
+from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
 
 def copyFastaSequenceAndRead(protocol):
@@ -58,7 +58,6 @@ def checkInputHasFasta(protocol):
 
 
 def clustalOmegaAlignSequences(sequencesSet, seqFileName, outputFileName):
-  from pwem.convert.sequence import alignClustalSequences
   sequencesSet.exportToFile(seqFileName)
   cline = alignClustalSequences(seqFileName, outputFileName)
   return cline
@@ -70,7 +69,7 @@ def muscleAlignmentSequences(sequencesSet, seqFileName, outputFileName):
   cline = alignMuscleSequences(seqFileName, outputFileName)
   return cline
 
-def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None):
+def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False):
     if issubclass(type(seq1), Sequence):
         seqName1 = seq1.getSeqName()
         seq1 = seq1.getSequence()
@@ -86,7 +85,7 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None):
             seqName2 = 'sequence_2'
 
     outDir = os.path.dirname(outPath)
-    oriFasta = os.path.join(outDir, 'original.fasta')
+    oriFasta = os.path.abspath(os.path.join(outDir, 'original.fasta'))
     with open(oriFasta, "w") as f:
       f.write(('>{}\n{}\n>{}\n{}\n'.format(seqName1, seq1, seqName2, seq2)))
 
@@ -99,7 +98,33 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None):
     # Alignment
     cline = str(alignClustalSequences(oriFasta, outPath))
     cline += ' --outfmt={}'.format(fmt)
+    if force:
+        cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)
+
+def parseFasta(fastaFile):
+    seqDic = {}
+    with open(fastaFile) as f:
+        for line in f:
+            if line.startswith('>'):
+                seqId = line.strip()[1:]
+                seqDic[seqId] = ''
+            elif line.strip() != '':
+                seqDic[seqId] += line.strip()
+    return seqDic
+
+def calculateIdentity(alignFile):
+    if os.path.splitext(alignFile)[1] in ['.fa', '.fasta']:
+        seqDic = parseFasta(alignFile)
+        if len(seqDic) == 2:
+            hits = 0
+            seqIds = list(seqDic.keys())
+            for i, j in zip(seqDic[seqIds[0]], seqDic[seqIds[1]]):
+                if i == j:
+                    hits += 1
+            ident = hits / len(seqDic[seqIds[0]])
+
+            return round(100 * ident, 2)
 
 
 
