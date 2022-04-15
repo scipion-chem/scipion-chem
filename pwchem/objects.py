@@ -76,7 +76,8 @@ class SequencesAlignment(data.EMFile):
         return self._alignmentFileName.get()
 
     def convertEMBOSSformat(self, outputProgramAlignment, embossFormat, outputStandardFormat):
-        cl_run = 'seqret -sequence ' + outputProgramAlignment + ' -osformat2 ' + embossFormat + ' ' + outputStandardFormat
+        cl_run = 'seqret -sequence {} -osformat2 {} {}'.\
+            format(outputProgramAlignment, embossFormat, outputStandardFormat)
         return cl_run
 
     def __str__(self):
