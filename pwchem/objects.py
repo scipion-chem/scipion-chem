@@ -442,7 +442,8 @@ class SetOfSequenceROIs(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
 
     def __str__(self):
-        s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+        s = '{} ({} items, sequence={})'.format(self.getClassName(), self.getSize(),
+                                                self.getSequenceObj().getId())
         return s
 
     def getSetPath(self):

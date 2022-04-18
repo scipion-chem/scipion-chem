@@ -101,7 +101,8 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         SetOfSequences,
         pwchem.objects.SetOfDatabaseID,
         pwchem.objects.SetOfSmallMolecules,
-        pwchem.objects.SetOfBindingSites
+        pwchem.objects.SetOfBindingSites,
+        pwchem.objects.SetOfSequenceROIs
     ]
 
     def __init__(self, **kwargs):
@@ -125,7 +126,9 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        if issubclass(cls, pwchem.objects.SetOfPockets):
+        elif issubclass(cls, pwchem.objects.SetOfPockets):
+            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
+        elif issubclass(cls, pwchem.objects.SetOfSequenceROIs):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
 
         return views

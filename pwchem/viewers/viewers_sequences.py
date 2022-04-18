@@ -77,7 +77,8 @@ class SequenceAliViewer(pwviewer.Viewer):
             obj._sequence.exportToFile(outPath)
 
         elif issubclass(cls, SetOfSequenceROIs):
-            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
+            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
+                                                                  format(obj.getSequenceObj().getId())))
             seqFiles += [outPath]
             if os.path.exists(outPath):
                 os.remove(outPath)

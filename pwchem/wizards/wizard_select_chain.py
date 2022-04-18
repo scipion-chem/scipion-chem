@@ -149,7 +149,7 @@ class SelectChainPairwiseWizard(SelectChainWizard):
                 handler = AtomicStructHandler(inAS.getFileName())
                 seq = str(handler.getSequenceFromChain(modelID=model, chainID=chainID))
 
-                alignFile = os.path.abspath(protocol._getExtraPath('preAlign_chain{}.fa'.format(chainID)))
+                alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
                 pairwiseAlign(inSeq, seq, alignFile, force=True)
                 ident = calculateIdentity(alignFile)
 
