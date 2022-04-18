@@ -65,9 +65,9 @@ class ProtImportSeqROI(EMProtocol):
                       label='Input file format: ',
                       help="Format of the input file")
         #todo: if not IEDB, try to define by separator and columns of interest
-        group.addParam('inputSequence', params.PointerParam, pointerClass='Sequence',
-                      allowsNull=True, label="Input sequence: ",
-                      help='Select the sequence object where the ROI will be defined')
+        # group.addParam('inputSequence', params.PointerParam, pointerClass='Sequence',
+        #               allowsNull=True, label="Input sequence: ",
+        #               help='Select the sequence object where the ROI will be defined')
 
 
     # --------------------------- STEPS functions ------------------------------
