@@ -41,30 +41,32 @@ class ProtChemPairWiseAlignment(EMProtocol):
 
         group = form.addGroup('Sequence 1')
         group.addParam('condAtomStruct1', BooleanParam,
-                       label='Is it a PDB file?: ', default=True, help="PDB for alignment")
+                       label='From atomic structure: ', default=True,
+                       help="Whether the first input for the alignment is an atomic structure or a sequence")
         group.addParam('inputAtomStruct1', PointerParam, pointerClass='AtomStruct', condition='condAtomStruct1',
-                       label='Input first PBD file:',
-                       help="Atomic structure where a sequence is extracted")
+                       label='Input first atomic structure: ',
+                       help="Atomic structure whose sequence will be align")
         group.addParam('chain_name1', StringParam, condition='condAtomStruct1',
-                       default='', label='PDB chains:',
-                       help="Chains in the PDB")
+                       default='', label='Structure chain:',
+                       help="Chain of the structure to align")
         group.addParam('inputSequence1', PointerParam, pointerClass='Sequence',
                        condition='not condAtomStruct1',
-                       label='Input first sequence:', help="Sequence for alignment")
+                       label='Input first sequence:', help="First sequence for alignment")
 
 
         group = form.addGroup('Sequence 2')
         group.addParam('condAtomStruct2', BooleanParam,
-                       label='Is it a PDB file?:', default=True, help="PDB for sequence alignment")
+                       label='From atomic structure: ', default=True,
+                       help="Whether the first input for the alignment is an atomic structure or a sequence")
         group.addParam('inputAtomStruct2', PointerParam, pointerClass='AtomStruct', condition='condAtomStruct2',
-                       label='Input second PBD file:',
-                       help="Atomic Structure where a sequence is extracted")
+                       label='Input second atomic structure: ',
+                       help="Atomic structure whose sequence will be align")
         group.addParam('chain_name2', StringParam, condition='condAtomStruct2',
-                       default='', label='List of chains:',
-                       help="Chains in the PDB input file")
+                       default='', label='Structure chain:',
+                       help="Chain of the structure to align")
         group.addParam('inputSequence2', PointerParam, pointerClass='Sequence',
                        condition='not condAtomStruct2',
-                       label='Input second sequence:', help="Sequence for alignment")
+                       label='Input second sequence:', help="Second sequence for alignment")
 
 
     def _insertAllSteps(self):
@@ -75,11 +77,11 @@ class ProtChemPairWiseAlignment(EMProtocol):
         seq1, seq_name1 = self.getInputSequence(1)
         seq2, seq_name2 = self.getInputSequence(2)
 
-        out_file = os.path.abspath(self._getPath("clustalo_pairWise.aln"))
+        out_file = os.path.abspath(self._getPath("clustalo_pairwise.aln"))
         pairwiseAlign(seq1, seq2, out_file, seqName1=seq_name1, seqName2=seq_name2)
 
         out_fileClustal=SequencesAlignment(alignmentFileName=out_file)
-        self._defineOutputs(outputVariants=out_fileClustal)
+        self._defineOutputs(outputAlignment=out_fileClustal)
 
     def _validate(self):
         errors = []

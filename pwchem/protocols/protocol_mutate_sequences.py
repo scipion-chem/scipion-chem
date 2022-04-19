@@ -29,15 +29,15 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import *
 
 
-class ProtChemGenerateSequences(EMProtocol):
+class ProtChemMutateSequences(EMProtocol):
     """Generates a set of sequence from a sequence and a list of mutations / variants"""
-    _label = 'Generates a set of sequences'
+    _label = 'Mutate a set of sequences'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
 
         form.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
-                      label='Input Sequence:', allowsNull=False,
+                      label='Input Sequence Variants:', allowsNull=False,
                       help="Sequence containing the information about the variants and mutations")
 
         form.addParam('selectVariant', StringParam,
@@ -46,11 +46,11 @@ class ProtChemGenerateSequences(EMProtocol):
 
         form.addParam('addVariant', LabelParam,
                       label='Add variant or mutation:',
-                      help='Add variant or mutation')
+                      help='Add variant or mutation to the list')
 
         form.addParam('toMutateList', TextParam, width=70,
                       default='', label='List of variants or mutations:',
-                      help='Generates a predefined variants or a customized sequences by a single mutation')
+                      help='Generates a predefined list of variants or/and sequences with single mutations')
 
 
     def _insertAllSteps(self):
@@ -59,7 +59,7 @@ class ProtChemGenerateSequences(EMProtocol):
     def generateVariantStep(self):
         posSelected_input = self.toMutateList.get()
         listVariants = posSelected_input.rstrip().split('\n')
-        print('List of variants: ', listVariants)
+        print('Selected variants/mutations: ', listVariants)
 
         sequenceSet = SetOfSequences().create(outputPath=self._getPath())
 

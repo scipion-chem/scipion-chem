@@ -28,14 +28,14 @@ from pwem.objects import Sequence
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import *
 
-class ProtChemInsertVariants(EMProtocol):
+class ProtChemGenerateVariant(EMProtocol):
     """Generates a variant / lineage or insert mutations in a given sequence"""
     _label = 'Generates a modified sequence'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
-                      label='Input Sequence:', allowsNull=False,
+                      label='Input sequence variants: ', allowsNull=False,
                       help="Input sequence containing the information about the variants "
                            "and their corresponding mutations")
 

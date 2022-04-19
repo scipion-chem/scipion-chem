@@ -36,7 +36,7 @@ from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
-from pwchem.protocols import ProtChemInsertVariants, ProtChemGenerateSequences, ProtExtractSeqsROI
+from pwchem.protocols import ProtChemGenerateVariant, ProtChemMutateSequences, ProtExtractSeqsROI
 
 
 def getMutations(protocol):
@@ -50,7 +50,7 @@ def getMutations(protocol):
     return vars
 
 class SelectVariant(EmWizard):
-  _targets = [(ProtChemInsertVariants, ['selectVariant']), (ProtChemGenerateSequences,['selectVariant'])]
+  _targets = [(ProtChemGenerateVariant, ['selectVariant']), (ProtChemMutateSequences,['selectVariant'])]
 
   def getInputSeqVar(self, protocol):
       return protocol.inputSequenceVariants.get()
@@ -71,7 +71,7 @@ class SelectVariant(EmWizard):
     form.setVar('selectVariant', dlg.values[0].get())
 
 class SelectMutation(EmWizard):
-  _targets = [(ProtChemInsertVariants, ['selectMutation'])]
+  _targets = [(ProtChemGenerateVariant, ['selectMutation'])]
 
   def show(self, form, *params):
     protocol = form.protocol
@@ -82,7 +82,7 @@ class SelectMutation(EmWizard):
     form.setVar('selectMutation', dlg.values[0].get())
 
 class AddVarMutationWizard(EmWizard):
-  _targets = [(ProtChemInsertVariants, ['addMutation'])]
+  _targets = [(ProtChemGenerateVariant, ['addMutation'])]
 
   def show(self, form, *params):
     protocol = form.protocol
@@ -93,7 +93,7 @@ class AddVarMutationWizard(EmWizard):
     form.setVar('toMutateList', written + '{}\n'.format(protocol.selectMutation.get()))
 
 class AddVariantToListWizard(EmWizard):
-  _targets = [(ProtChemGenerateSequences, ['addVariant'])]
+  _targets = [(ProtChemMutateSequences, ['addVariant'])]
 
   def show(self, form, *params):
     protocol = form.protocol
