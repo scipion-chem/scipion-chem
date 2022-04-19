@@ -43,6 +43,7 @@ from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
 from pwchem.wizards.wizard_base import VariableWizard
+from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
@@ -183,6 +184,32 @@ SelectChainPairwiseWizard().addTarget(protocol=ProtMapSequenceROI,
                                       targets=['chain_name'],
                                       inputs=['inputAtomStruct', 'inputSequenceROIs'],
                                       outputs=['chain_name'])
+
+
+class PreviewAlignmentWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+
+    chainID = json.loads(getattr(protocol, inputParam[0]).get())['chain']
+    alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
+    if not os.path.exists(alignFile):
+        inAS = getattr(protocol, inputParam[1]).get()
+        inROI = getattr(protocol, inputParam[2]).get()
+        inSeq = inROI.getSequence()
+        handler = AtomicStructHandler(inAS.getFileName())
+        seq = str(handler.getSequenceFromChain(modelID=model, chainID=chainID))
+        pairwiseAlign(inSeq, seq, alignFile, force=True)
+
+    SequenceAliView([alignFile], cwd=None).show()
+
+PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
+                                   targets=['preview'],
+                                   inputs=['chain_name', 'inputAtomStruct', 'inputSequenceROIs'],
+                                   outputs=[])
+
 
 class SelectResidueWizard(SelectChainWizard):
     _targets, _inputs, _outputs = [], {}, {}

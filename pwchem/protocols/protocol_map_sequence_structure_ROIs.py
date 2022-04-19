@@ -71,6 +71,10 @@ class ProtMapSequenceROI(EMProtocol):
                       allowsNull=False, label='Chain of interest',
                       help='Specify the chain of the residue of interest')
 
+        group.addParam('preview', params.LabelParam,
+                       label='Preview alignment: ', condition='chain_name!=""',
+                       help='Preview the alignment of the specified Sequence and AtomStruct chain')
+
         group = form.addGroup('Distances')
         group.addParam('maxDepth', params.FloatParam, default='3.0',
                        label='Maximum atom depth (A): ',
@@ -177,7 +181,7 @@ class ProtMapSequenceROI(EMProtocol):
         chainName = getattr(self, 'chain_name')
 
         # Parse chainName for model and chain selection
-        struct = json.loads(self.chain_name.get())  # From wizard dictionary
+        struct = json.loads(chainName)  # From wizard dictionary
         chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
         seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
