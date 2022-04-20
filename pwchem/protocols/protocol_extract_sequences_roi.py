@@ -176,8 +176,6 @@ class ProtExtractSeqsROI(EMProtocol):
         elif self.getEnumText('method') == KABAT:
             values = self.calcKabat(seqsArr)
 
-        print('Conservation: ', values)
-
         outFile = self.getConservationFile()
         with open(outFile, 'w') as f:
             for value in values:
@@ -187,6 +185,10 @@ class ProtExtractSeqsROI(EMProtocol):
     def getROIs(self):
         with open(self.getConservationFile()) as f:
             consValues = f.readline().split()
+
+        flexThres = self.flexThres.get()
+        if not flexThres:
+            flexThres = self.thres.get()
 
         rois = []
         inRoi, fails = False, 0

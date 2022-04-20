@@ -74,12 +74,17 @@ class ProtChemGenerateVariants(EMProtocol):
         inputSequenceVar = self.inputSequenceVariants.get()
         for variantName in listVariants:
             mutsInfo = variantName.split(':')[1].strip()
-            if 'Var:' in variantName:
+            if 'Original' == mutsInfo.strip():
+                variantSequence = inputSequenceVar.getSequence()
+                seqId = inputSequenceVar.getId()
+            elif 'Var:' in variantName:
                 variantSequence = inputSequenceVar.generateVariantLineage(mutsInfo)
+                seqId = '{}_{}'.format(inputSequenceVar.getId(), mutsInfo)
             elif 'Muts:' in variantName:
                 variantSequence = inputSequenceVar.performSubstitutions(mutsInfo.split(','))
+                seqId = '{}_mutant{}'.format(inputSequenceVar.getId(), variantName.split(')')[0])
 
-            seqVarObj = Sequence(sequence=variantSequence, name=variantName, id=variantName)
+            seqVarObj = Sequence(sequence=variantSequence, name=seqId, id=seqId)
             sequenceSet.append(seqVarObj)
 
         sequenceSet.exportToFile(self._getPath('SetOfSequences.fasta'))

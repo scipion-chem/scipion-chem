@@ -61,7 +61,7 @@ class SelectVariant(EmWizard):
 
     auxList = list(inpObj.getMutationsInLineage().keys())
     auxList.sort()
-    varsList = []
+    varsList = [String('Original')]
     for var in auxList:
         varsList.append(String(var.strip()))
 

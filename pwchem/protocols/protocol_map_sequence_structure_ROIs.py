@@ -178,7 +178,7 @@ class ProtMapSequenceROI(EMProtocol):
         inputObj = getattr(self, 'inputAtomStruct').get()
         seq_name = os.path.basename(inputObj.getFileName())
         handler = AtomicStructHandler(inputObj.getFileName())
-        chainName = getattr(self, 'chain_name')
+        chainName = getattr(self, 'chain_name').get()
 
         # Parse chainName for model and chain selection
         struct = json.loads(chainName)  # From wizard dictionary
