@@ -1,7 +1,7 @@
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
-# *
+# * Authors:  Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
+# *           Eugenia Ulzurrun (mariaeugenia.ulzurrun@cib.csic.es)
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
@@ -24,88 +24,67 @@
 # *
 # **************************************************************************
 
-from pwem.objects import Sequence
+from pwem.objects import Sequence, SetOfSequences
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import *
 
-class ProtChemGenerateVariant(EMProtocol):
-    """Generates a variant / lineage or insert mutations in a given sequence"""
-    _label = 'Generates a modified sequence'
+
+class ProtChemGenerateVariants(EMProtocol):
+    """Generates a set of variants from a sequence and a list of mutations / variants"""
+    _label = 'Generates a set of sequence variants'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
-                      label='Input sequence variants: ', allowsNull=False,
-                      help="Input sequence containing the information about the variants "
-                           "and their corresponding mutations")
 
+        form.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
+                      label='Input Sequence Variants:', allowsNull=False,
+                      help="Sequence containing the information about the variants and mutations")
         form.addParam('fromVariant', BooleanParam, label='Generate predefined variant: ',
                       default='True',
                       help='Generates a variant (set of mutations)')
-        form.addParam('selectMutation', StringParam,
-                      label='Select a mutation: ', condition='not fromVariant',
-                      help="Mutation to be inserted into the sequence")
 
-        form.addParam('addMutation', LabelParam, condition='not fromVariant',
-                      label='Add the mutation to the list: ',
-                      help='Add the mutation to the list')
-
-        form.addParam('toMutateList', TextParam, width=70, condition='not fromVariant',
-                      default='', label='List of mutations: ',
-                      help="Mutations selected to generate the new sequence")
-
-        form.addParam('selectVariant', StringParam,
-                      label='Select a variant: ', condition='fromVariant',
+        form.addParam('selectVariant', StringParam, condition='fromVariant',
+                      label='Select a predefined variant:',
                       help="Variant to be generated")
 
+        form.addParam('selectMutation', StringParam,
+                      label='Select some mutations: ', condition='not fromVariant',
+                      help="Mutations to be inserted into the sequence.\nYou can do multiple selection")
+
+        form.addParam('addVariant', LabelParam,
+                      label='Add variant or mutation:',
+                      help='Add variant or mutation to the list')
+
+        form.addParam('toMutateList', TextParam, width=70,
+                      default='', label='List of variants or mutations:',
+                      help='Generates a predefined list of variants or/and sequences with single mutations')
+
+
     def _insertAllSteps(self):
-        if not self.fromVariant:
-            self._insertFunctionStep('insertMutationsStep')
-        else:
-            self._insertFunctionStep('generateVariantStep')
-
-    def insertMutationsStep(self):
-        fnSeq = self.inputSequenceVariants.get().getSequence()
-        posSelected_input = self.toMutateList.get()
-        listVariants = posSelected_input.rstrip().split('\n')
-        aminoacid_original = []
-        aminoacid_exchanged = []
-        position_inSequence = []
-        mutList = []
-        for mutation in listVariants:
-            mutation = mutation.split()[0]
-            mutList.append(mutation)
-            aminoacid_original.append(mutation[0])
-            aminoacid_exchanged.append(mutation[-1])
-            position_inSequence.append(mutation[1:-1])
-        print('List of mutations: ', mutList)
-
-        letters_fnSeq = list(fnSeq)
-        for ele_position_inSequence in range(0, len(position_inSequence)):
-            letters_fnSeq[int(position_inSequence[ele_position_inSequence]) - 1] = \
-                aminoacid_exchanged[int(ele_position_inSequence)]
-        mutatedSequence = ''.join(letters_fnSeq)
-        id_sequence = self.inputSequenceVariants.get().getId()
-        seqMutant = Sequence(sequence=mutatedSequence, name=(id_sequence + '_MutantsSequence'))
-        seqMutant.setSequence(mutatedSequence)
-
-        self._defineOutputs(outputSequence=seqMutant)
+        self._insertFunctionStep('generateVariantStep')
 
     def generateVariantStep(self):
-        selectedVariant = self.selectVariant.get()
+        posSelected_input = self.toMutateList.get()
+        listVariants = posSelected_input.rstrip().split('\n')
+
+        sequenceSet = SetOfSequences().create(outputPath=self._getPath())
         inputSequenceVar = self.inputSequenceVariants.get()
-        varDic = inputSequenceVar.getMutationsInLineage()
-        print('List of mutations: ', varDic[selectedVariant])
-        id_sequence = self.inputSequenceVariants.get().getId()
+        for variantName in listVariants:
+            mutsInfo = variantName.split(':')[1].strip()
+            if 'Var:' in variantName:
+                variantSequence = inputSequenceVar.generateVariantLineage(mutsInfo)
+            elif 'Muts:' in variantName:
+                variantSequence = inputSequenceVar.performSubstitutions(mutsInfo.split(','))
 
-        variantSequence = inputSequenceVar.generateVariantLineage(selectedVariant)
+            seqVarObj = Sequence(sequence=variantSequence, name=variantName, id=variantName)
+            sequenceSet.append(seqVarObj)
 
-        variantSequence = Sequence(sequence=variantSequence, name=(id_sequence + '_variant'),
-                                   id=id_sequence + '_variant')
-        self._defineOutputs(outputVariantSequence=variantSequence)
+        sequenceSet.exportToFile(self._getPath('SetOfSequences.fasta'))
+        self._defineOutputs(outputSetOfSequences=sequenceSet)
+
 
     def _validate(self):
-        errors = []
+        errors=[]
         return errors
 
 
