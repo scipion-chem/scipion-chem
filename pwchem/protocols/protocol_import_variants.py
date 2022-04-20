@@ -35,7 +35,7 @@ from pwchem.objects import SequenceVariants
 
 class ProtChemImportVariants(EMProtocol):
     """Extract natural variants from uniprot or associates a mutation list to a sequence """
-    _label = 'Associates mutations list to sequence'
+    _label = 'Import sequence variants'
 
     def _defineParams(self, form):
         form.addSection(label='Input')

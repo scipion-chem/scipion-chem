@@ -35,27 +35,30 @@ class ProtChemGenerateVariants(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
+        group = form.addGroup('Input')
+        group.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
+                       label='Input Sequence Variants:', allowsNull=False,
+                       help="Sequence containing the information about the variants and mutations")
 
-        form.addParam('inputSequenceVariants', PointerParam, pointerClass='SequenceVariants',
-                      label='Input Sequence Variants:', allowsNull=False,
-                      help="Sequence containing the information about the variants and mutations")
-        form.addParam('fromVariant', BooleanParam, label='Generate predefined variant: ',
-                      default='True',
-                      help='Generates a variant (set of mutations)')
+        group = form.addGroup('Add variant or mutation')
+        group.addParam('fromVariant', BooleanParam, label='Generate predefined variant: ',
+                       default='True',
+                       help='Generates a variant (set of mutations)')
 
-        form.addParam('selectVariant', StringParam, condition='fromVariant',
-                      label='Select a predefined variant:',
-                      help="Variant to be generated")
+        group.addParam('selectVariant', StringParam, condition='fromVariant',
+                       label='Select a predefined variant:',
+                       help="Variant to be generated")
 
-        form.addParam('selectMutation', StringParam,
-                      label='Select some mutations: ', condition='not fromVariant',
-                      help="Mutations to be inserted into the sequence.\nYou can do multiple selection")
+        group.addParam('selectMutation', StringParam,
+                       label='Select some mutations: ', condition='not fromVariant',
+                       help="Mutations to be inserted into the sequence.\nYou can do multiple selection")
 
-        form.addParam('addVariant', LabelParam,
-                      label='Add variant or mutation:',
-                      help='Add variant or mutation to the list')
+        group.addParam('addVariant', LabelParam,
+                       label='Add variant or mutation:',
+                       help='Add variant or mutation to the list')
 
-        form.addParam('toMutateList', TextParam, width=70,
+        group = form.addGroup('Summary')
+        group.addParam('toMutateList', TextParam, width=70,
                       default='', label='List of variants or mutations:',
                       help='Generates a predefined list of variants or/and sequences with single mutations')
 
