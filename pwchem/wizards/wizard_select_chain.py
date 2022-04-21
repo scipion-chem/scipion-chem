@@ -42,6 +42,7 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
+from pwchem.objects import SequenceVariants
 from pwchem.wizards.wizard_base import VariableWizard
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3
@@ -195,6 +196,7 @@ class PreviewAlignmentWizard(VariableWizard):
     protocol = form.protocol
     inputParam, outputParam = self.getInputOutput(form)
 
+    model = json.loads(getattr(protocol, inputParam[0]).get())['model']
     chainID = json.loads(getattr(protocol, inputParam[0]).get())['chain']
     alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
     if not os.path.exists(alignFile):
@@ -228,10 +230,14 @@ class SelectResidueWizard(SelectChainWizard):
 
     def getResidues(self, form, inputParam):
       protocol = form.protocol
-      inputObj = getattr(protocol, inputParam[0]).get()
+      inputName = inputParam[0]
+      if type(inputName) == list:
+          inputName = inputName[getattr(protocol, inputParam[1]).get()]
+
+      inputObj = getattr(protocol, inputName).get()
       if issubclass(type(inputObj), AtomStruct):
           try:
-            modelsLength, modelsFirstResidue = self.getModelsChainsStep(protocol, inputParam[0])
+            modelsLength, modelsFirstResidue = self.getModelsChainsStep(protocol, inputName)
           except Exception as e:
             print("ERROR: ", e)
             return
@@ -245,7 +251,7 @@ class SelectResidueWizard(SelectChainWizard):
           for i in residueList:
             finalResiduesList.append(String(i))
 
-      elif issubclass(type(inputObj), Sequence):
+      elif issubclass(type(inputObj), Sequence) or issubclass(type(inputObj), SequenceVariants):
           finalResiduesList = []
           for i, res in enumerate(inputObj.getSequence()):
             stri = '{"index": %s, "residue": "%s"}' % (i + 1, RESIDUES1TO3[res])
@@ -276,15 +282,6 @@ SelectResidueWizard().addTarget(protocol=ProtDefinePockets,
 
 SelectResidueWizard().addTarget(protocol=ProtDefineSeqROI,
                                 targets=['resPosition'],
-                                inputs=['inputSequence'],
+                                inputs=[['inputSequence', 'inputSequenceVariants'], 'chooseInput'],
                                 outputs=['resPosition'])
 
-
-class AddSequenceResidueWizard(EmWizard):
-  _targets = [(ProtDefineSeqROI, ['addResidue'])]
-
-  def show(self, form, *params):
-    protocol = form.protocol
-    resInfo = protocol.resPosition.get()
-    roiInfo = resInfo.replace('}', ', "desc": "%s"}' % (protocol.descrip.get()))
-    form.setVar('inResidues', protocol.inResidues.get() + '{}\n'.format(roiInfo))

@@ -32,6 +32,7 @@ from pyworkflow.protocol.params import *
 class ProtChemGenerateVariants(EMProtocol):
     """Generates a set of variants from a sequence and a list of mutations / variants"""
     _label = 'Generates a set of sequence variants'
+    _originOptions = ['Variant', 'Mutations']
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -41,16 +42,16 @@ class ProtChemGenerateVariants(EMProtocol):
                        help="Sequence containing the information about the variants and mutations")
 
         group = form.addGroup('Add variant or mutation')
-        group.addParam('fromVariant', BooleanParam, label='Generate predefined variant: ',
-                       default='True',
+        group.addParam('fromVariant', EnumParam, label='Generate sequence from: ',
+                       default=0, choices=self._originOptions, display=EnumParam.DISPLAY_HLIST,
                        help='Generates a variant (set of mutations)')
 
-        group.addParam('selectVariant', StringParam, condition='fromVariant',
+        group.addParam('selectVariant', StringParam, condition='fromVariant==0',
                        label='Select a predefined variant:',
                        help="Variant to be generated")
 
         group.addParam('selectMutation', StringParam,
-                       label='Select some mutations: ', condition='not fromVariant',
+                       label='Select some mutations: ', condition='fromVariant==1',
                        help="Mutations to be inserted into the sequence.\nYou can do multiple selection")
 
         group.addParam('addVariant', LabelParam,
@@ -77,10 +78,14 @@ class ProtChemGenerateVariants(EMProtocol):
             if 'Original' == mutsInfo.strip():
                 variantSequence = inputSequenceVar.getSequence()
                 seqId = inputSequenceVar.getId()
-            elif 'Var:' in variantName:
+
+            #Variant origin
+            elif '{}:'.format(self._originOptions[0]) in variantName:
                 variantSequence = inputSequenceVar.generateVariantLineage(mutsInfo)
                 seqId = '{}_{}'.format(inputSequenceVar.getId(), mutsInfo)
-            elif 'Muts:' in variantName:
+
+            #Mutations origin
+            elif '{}:'.format(self._originOptions[1]) in variantName:
                 variantSequence = inputSequenceVar.performSubstitutions(mutsInfo.split(','))
                 seqId = '{}_mutant{}'.format(inputSequenceVar.getId(), variantName.split(')')[0])
 
