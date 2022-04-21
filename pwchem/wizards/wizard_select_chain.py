@@ -142,16 +142,18 @@ class SelectChainPairwiseWizard(SelectChainWizard):
         inAS = getattr(protocol, inputParam[0]).get()
         inROI = getattr(protocol, inputParam[1]).get()
 
+        handler = AtomicStructHandler(inAS.getFileName())
         for model, chainDic in listOfChains.items():
           for chainID, lenResidues in chainDic.items():
             wDic = {"model": model, "chain": str(chainID), "residues": lenResidues}
             if inROI:
                 inSeq = inROI.getSequence()
-                handler = AtomicStructHandler(inAS.getFileName())
                 seq = str(handler.getSequenceFromChain(modelID=model, chainID=chainID))
 
-                alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
-                pairwiseAlign(inSeq, seq, alignFile, force=True)
+                alignFile = 'preAlign{}_chain{}.fa'.format(protocol.getObjId(), chainID)
+                alignFile = os.path.abspath(protocol.getProject().getTmpPath(alignFile))
+                if not os.path.exists(alignFile):
+                    pairwiseAlign(inSeq, seq, alignFile, force=True)
                 ident = calculateIdentity(alignFile)
 
                 wDic["identity"] = ident
