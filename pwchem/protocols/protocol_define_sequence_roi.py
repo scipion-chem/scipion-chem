@@ -47,28 +47,61 @@ from pwchem import Plugin
 
 class ProtDefineSeqROI(EMProtocol):
     """
-    Defines a set of pockets from a set of coordinates / residues / predocked ligands
+    Defines a list of sequence ROIs, each of them from:\n'
+        1) A residue or range of residues.\n'
+        2) A predefined variant\n'
+        3) One or several mutations
     """
-    _label = 'Define sequence ROI'
+    _label = 'Define sequence ROIs'
+    _inputOptions = ['Sequence', 'SequenceVariants']
+    _originOptions = ['Residues', 'Variant', 'Mutations']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
+        group.addParam('chooseInput', params.EnumParam, choices=self._inputOptions,
+                       label='Define ROIs from: ', default=0, display=params.EnumParam.DISPLAY_HLIST,
+                       help='Define sequence ROIs from a sequence or from a sequence variants object')
         group.addParam('inputSequence', params.PointerParam, pointerClass='Sequence',
-                      allowsNull=False, label="Input sequence: ",
+                      allowsNull=True, label="Input sequence: ", condition='chooseInput==0',
                       help='Select the sequence object where the ROI will be defined')
+        group.addParam('inputSequenceVariants', params.PointerParam, pointerClass='SequenceVariants',
+                       label='Input Sequence Variants:', condition='chooseInput==1', allowsNull=True,
+                       help="Sequence containing the information about the variants and mutations")
 
-        group.addParam('resPosition', params.StringParam,
-                      allowsNull=False, label='Residues of interest',
-                      help='Specify the residue to define a region of interest.\n'
-                           'You can either select a single residue or a range '
-                           '(it will take into account the first and last residues selected)')
-        group.addParam('addResidue', params.LabelParam,
-                      label='Add defined residue',
-                      help='Here you can define a residue or range which will be added to the list of residues below.')
-        group.addParam('inResidues', params.TextParam, width=70, default='',
+        group = form.addGroup('Add ROI')
+        group.addParam('whichToAdd', params.EnumParam, choices=self._originOptions,
+                       display=params.EnumParam.DISPLAY_HLIST,
+                       label='Add ROI from: ', condition='chooseInput==1', default=0,
+                       help='Add ROI from which definition (residues, variant or mutation)')
+        #From residues
+        group.addParam('resPosition', params.StringParam, label='Residues of interest: ',
+                       condition='whichToAdd==0',
+                       help='Specify the residue to define a region of interest.\n'
+                            'You can either select a single residue or a range '
+                            '(it will take into account the first and last residues selected)')
+
+        #From Variant
+        group.addParam('selectVariant', params.StringParam, condition='chooseInput==1 and whichToAdd==1',
+                       label='Select a predefined variant:',
+                       help="Variant to use for defining the ROIs. Each mutation will be a different ROI")
+        #From mutations
+        group.addParam('selectMutation', params.StringParam,
+                       label='Select some mutations: ', condition='chooseInput==1 and whichToAdd==2',
+                       help="Mutations to be defined as sequence ROIs.\n"
+                            "You can do multiple selection. Each mutation will be a different ROI")
+
+        group.addParam('addROI', params.LabelParam,
+                       label='Add defined ROIs: ',
+                       help='Add defined residues, variant or mutations to become a ROI')
+
+        #Common for ROIs independent of the origin
+        group.addParam('descrip', params.StringParam,
+                       label='ROI description: ',
+                       help='Specify some description for this region of interest')
+        group.addParam('inROIs', params.TextParam, width=70, default='',
                       label='Input residues: ',
                       help='Input residues to define the ROI.')
 
@@ -78,18 +111,44 @@ class ProtDefineSeqROI(EMProtocol):
         self._insertFunctionStep('defineOutputStep')
 
     def defineOutputStep(self):
-        inpSeq = self.inputSequence.get()
+        inpSeq = self.getInputSequence()
         outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
 
-        residuesStr = self.inResidues.get().strip().split('\n')
+        residuesStr = self.inROIs.get().strip().split('\n')
         for rStr in residuesStr:
-            resDic = json.loads(rStr)
-            roi, resIdxs = resDic['residues'], resDic['index']
-            idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
+            roiInfo = rStr.split(':')[1].strip()
 
-            roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs))
-            seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
-            outROIs.append(seqROI)
+            # Residues origin
+            if '{}:'.format(self._originOptions[0]) in rStr:
+                roiInfo = ':'.join(rStr.split(':')[1:])
+                resDic = json.loads(roiInfo)
+                roiList, resIdxs = [resDic['residues']], resDic['index']
+                idxsList = [[int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]]
+                descList = [resDic['desc']]
+
+            elif not 'Original' == roiInfo:
+                # Variant origin
+                if '{}:'.format(self._originOptions[1]) in rStr:
+                    var2mutDic = self.inputSequenceVariants.get().getMutationsInLineage()
+                    muts = var2mutDic[roiInfo]
+
+                # Mutants origin
+                elif '{}:'.format(self._originOptions[2]) in rStr:
+                    muts = roiInfo.split(',')
+
+                roiList, idxsList, descList = [], [], []
+                for mut in muts:
+                    mut = mut.strip()
+                    roiList.append(mut[-1])
+                    idxsList.append([int(mut[1:-1]), int(mut[1:-1])])
+                    descList.append(mut)
+
+            for i in range(len(roiList)):
+                roi, idxs, desc = roiList[i], idxsList[i], descList[i]
+                roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs),
+                                  description=desc)
+                seqROI = SequenceROI(sequence=inpSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
+                outROIs.append(seqROI)
 
         if len(outROIs) > 0:
             self._defineOutputs(outputROIs=outROIs)
@@ -106,8 +165,15 @@ class ProtDefineSeqROI(EMProtocol):
 
     def _validate(self):
         errors = []
+        if not self.inputSequence.get() and not self.inputSequenceVariants.get():
+            errors += ['You must specify an input Sequence or SequenceVariants']
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputSequence(self):
+        if self.chooseInput.get() == 0:
+            return self.inputSequence.get()
+        elif self.chooseInput.get() == 1:
+            return self.inputSequenceVariants.get()._sequence
 
 

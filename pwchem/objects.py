@@ -76,7 +76,8 @@ class SequencesAlignment(data.EMFile):
         return self._alignmentFileName.get()
 
     def convertEMBOSSformat(self, outputProgramAlignment, embossFormat, outputStandardFormat):
-        cl_run = 'seqret -sequence ' + outputProgramAlignment + ' -osformat2 ' + embossFormat + ' ' + outputStandardFormat
+        cl_run = 'seqret -sequence {} -osformat2 {} {}'.\
+            format(outputProgramAlignment, embossFormat, outputStandardFormat)
         return cl_run
 
     def __str__(self):
@@ -134,22 +135,22 @@ class SequenceVariants(data.EMFile):
         return var2mutDic
 
     def generateVariantLineage(self, selectedVariant):
+        '''Perform the substitutions related to a variant'''
         varDic = self.getMutationsInLineage()
+        mutList = varDic[selectedVariant]
+        return self.performSubstitutions(mutList)
+
+    def performSubstitutions(self, mutList):
+        '''Perform substitutions in the sequence from a list as: ["L5F", "M89C", ...]'''
         sequence = self.getSequence()
-        listVariants = varDic[selectedVariant]
-        aminoacid_original = []
-        aminoacid_exchanged = []
-        position_inSequence = []
-        for mutation in listVariants:
-            mutation = mutation.split()[0]
-            aminoacid_original.append(mutation[0])
-            aminoacid_exchanged.append(mutation[-1])
-            position_inSequence.append(mutation[1:-1])
+        subsDic = {}
+        for mutation in mutList:
+            mutation = mutation.strip()
+            subsDic[int(mutation[1:-1])] = mutation[-1]
 
         letters_sequence = list(sequence)
-        for ele_position_inSequence in range(0, len(position_inSequence)):
-            letters_sequence[int(position_inSequence[ele_position_inSequence]) - 1] = aminoacid_exchanged[
-                int(ele_position_inSequence)]
+        for mutPos in subsDic:
+            letters_sequence[mutPos - 1] = subsDic[mutPos]
 
         mutatedSequence = ''.join(letters_sequence)
         return mutatedSequence
@@ -447,7 +448,8 @@ class SetOfSequenceROIs(data.EMSet):
         data.EMSet.__init__(self, **kwargs)
 
     def __str__(self):
-        s = '{} ({} items)'.format(self.getClassName(), self.getSize())
+        s = '{} ({} items, sequence={})'.format(self.getClassName(), self.getSize(),
+                                                self.getSequenceObj().getId())
         return s
 
     def getSetPath(self):

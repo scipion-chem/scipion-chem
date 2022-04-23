@@ -33,32 +33,33 @@ from pyworkflow.protocol.params import *
 from pwchem.objects import SequenceVariants
 
 
-class ProtChemSequenceMutations(EMProtocol):
+class ProtChemImportVariants(EMProtocol):
     """Extract natural variants from uniprot or associates a mutation list to a sequence """
-    _label = 'Associates mutations list to sequence'
+    _label = 'Import sequence variants'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
 
         form.addParam('fromID', BooleanParam,
-                      label='Import from Id:', default=True,
-                      help="Where sequence and natural variant list are downloaded")
+                      label='Import from Uniprot Id: ', default=True,
+                      help="Whether to import the sequence and variants from an UniprotID or from local files")
 
         form.addParam('inputUniProtKB', StringParam, condition='fromID',
-                      label='Uniprot Id:', allowsNull=False,
-                      help="Uniprot entry for the protein")
+                      label='Uniprot Id: ', allowsNull=False,
+                      help="Uniprot entry for the sequence to import")
 
         form.addParam('inputSequence', PointerParam, pointerClass='Sequence',
                       condition='not fromID',
-                      label='Input Sequence:', allowsNull=False,
-                      help="Original sequence")
+                      label='Input Sequence: ', allowsNull=False,
+                      help="Input sequence to associate the variants to")
 
         form.addParam('inputMutaList', PathParam,
                       condition='not fromID',
-                      label='Input Mutations List:', allowsNull=False,
-                      help="Customized list of mutations. A mutation as amino acid in position is replaced by other, "
-                           "e.g. leucine (L) in 5 is replaced by phenylalanine (F): L5F, also mutation and variant "
-                           "such as L5F Iota is accepted even if linage if available L5F Iota/B.1.526 ")
+                      label='Input variants file: ', allowsNull=False,
+                      help="Customized list of variants, based on single substitutions. "
+                           "\ne.g. leucine (L) in position 5 is replaced by phenylalanine (F): L5F. "
+                           "\nVariants or lineages including several mutations might also be defined, specifying them "
+                           "in a second column: L5F Iota/B.1.526 ")
 
     def _insertAllSteps(self):
         if self.fromID:

@@ -44,9 +44,8 @@ from .protocol_ligand_preparation import ProtChemOBabelPrepareLigands
 from .protocol_consensus_docking import ProtocolConsensusDocking
 from .protocol_define_manual_pockets import ProtDefinePockets
 from .protocol_pairWise_alignment import ProtChemPairWiseAlignment
-from .protocol_sequence_and_mutations import ProtChemSequenceMutations
-from .protocol_variantSequence import ProtChemInsertVariants
-from .protocol_generateSequences import ProtChemGenerateSequences
+from .protocol_import_variants import ProtChemImportVariants
+from .protocol_generate_variants import ProtChemGenerateVariants
 from. protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
 from .protocol_converter import ConvertStructures
 from .protocol_drawSmallMol import ProtDrawMolecules
@@ -58,3 +57,4 @@ from .protocol_rmsd_dockings import ProtocolRMSDDocking
 from .protocol_define_sequence_roi import ProtDefineSeqROI
 from .protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
 from .protocol_extract_sequences_roi import ProtExtractSeqsROI
+from .protocol_import_sequence_roi import ProtImportSeqROI

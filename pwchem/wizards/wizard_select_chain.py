@@ -42,8 +42,11 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
+from pwchem.objects import SequenceVariants
 from pwchem.wizards.wizard_base import VariableWizard
+from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3
+from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 class AddResidueWizard(EmWizard):
     _targets = [(ProtDefinePockets, ['addResidue'])]
@@ -82,26 +85,27 @@ class SelectChainWizard(VariableWizard):
       return structureHandler.getModelsChains()
 
     def editionListOfChains(self, listOfChains):
-      self.chainList = []
+      chainList = []
       for model, chainDic in listOfChains.items():
         for chainID, lenResidues in chainDic.items():
-          self.chainList.append(
+          chainList.append(
             '{"model": %d, "chain": "%s", "residues": %d}' %
             (model, str(chainID), lenResidues))
+      return chainList
 
     def show(self, form, *params):
       inputParam, outputParam = self.getInputOutput(form)
+      print('Estoy en este')
       protocol = form.protocol
       try:
-        print('InputParam: ', inputParam[0])
         listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParam[0])
       except Exception as e:
         print("ERROR: ", e)
         return
 
-      self.editionListOfChains(listOfChains)
+      chainList = self.editionListOfChains(listOfChains)
       finalChainList = []
-      for i in self.chainList:
+      for i in chainList:
         finalChainList.append(String(i))
       provider = ListTreeProviderString(finalChainList)
       dlg = dialog.ListDialog(form.root, "Model chains", provider,
@@ -124,17 +128,91 @@ SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
                               inputs=['inputAtomStruct1'],
                               outputs=['chain_name1'])
 
-SelectChainWizard().addTarget(protocol=ProtMapSequenceROI,
-                              targets=['chain_name'],
-                              inputs=['inputAtomStruct'],
-                              outputs=['chain_name'])
-
 #There cannot be 2 VariableWizards of same type in the same protocol
 #because we cannot know which target was clicked
 SelectChainWizard2().addTarget(protocol=ProtChemPairWiseAlignment,
                                targets=['chain_name2'],
                                inputs=['inputAtomStruct2'],
                                outputs=['chain_name2'])
+
+class SelectChainPairwiseWizard(SelectChainWizard):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def editionListOfChains(self, listOfChains, inputParam, protocol):
+        chainList = []
+        inAS = getattr(protocol, inputParam[0]).get()
+        inROI = getattr(protocol, inputParam[1]).get()
+
+        handler = AtomicStructHandler(inAS.getFileName())
+        for model, chainDic in listOfChains.items():
+          for chainID, lenResidues in chainDic.items():
+            wDic = {"model": model, "chain": str(chainID), "residues": lenResidues}
+            if inROI:
+                inSeq = inROI.getSequence()
+                seq = str(handler.getSequenceFromChain(modelID=model, chainID=chainID))
+
+                alignFile = 'preAlign{}_chain{}.fa'.format(protocol.getObjId(), chainID)
+                alignFile = os.path.abspath(protocol.getProject().getTmpPath(alignFile))
+                if not os.path.exists(alignFile):
+                    pairwiseAlign(inSeq, seq, alignFile, force=True)
+                ident = calculateIdentity(alignFile)
+
+                wDic["identity"] = ident
+
+            chainList.append(str(wDic).replace("'", '"'))
+        return chainList
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+        try:
+          listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParam[0])
+        except Exception as e:
+          print("ERROR: ", e)
+          return
+
+        chainList = self.editionListOfChains(listOfChains, inputParam, protocol)
+        finalChainList = []
+        for i in chainList:
+          finalChainList.append(String(i))
+        provider = ListTreeProviderString(finalChainList)
+        dlg = dialog.ListDialog(form.root, "Model chains", provider,
+                                "Select one of the chains (model, chain, "
+                                "number of chain residues)")
+        form.setVar(outputParam[0], dlg.values[0].get())
+
+
+
+SelectChainPairwiseWizard().addTarget(protocol=ProtMapSequenceROI,
+                                      targets=['chain_name'],
+                                      inputs=['inputAtomStruct', 'inputSequenceROIs'],
+                                      outputs=['chain_name'])
+
+
+class PreviewAlignmentWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+
+    model = json.loads(getattr(protocol, inputParam[0]).get())['model']
+    chainID = json.loads(getattr(protocol, inputParam[0]).get())['chain']
+    alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
+    if not os.path.exists(alignFile):
+        inAS = getattr(protocol, inputParam[1]).get()
+        inROI = getattr(protocol, inputParam[2]).get()
+        inSeq = inROI.getSequence()
+        handler = AtomicStructHandler(inAS.getFileName())
+        seq = str(handler.getSequenceFromChain(modelID=model, chainID=chainID))
+        pairwiseAlign(inSeq, seq, alignFile, force=True)
+
+    SequenceAliView([alignFile], cwd=None).show()
+
+PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
+                                   targets=['preview'],
+                                   inputs=['chain_name', 'inputAtomStruct', 'inputSequenceROIs'],
+                                   outputs=[])
 
 
 class SelectResidueWizard(SelectChainWizard):
@@ -152,10 +230,14 @@ class SelectResidueWizard(SelectChainWizard):
 
     def getResidues(self, form, inputParam):
       protocol = form.protocol
-      inputObj = getattr(protocol, inputParam[0]).get()
+      inputName = inputParam[0]
+      if type(inputName) == list:
+          inputName = inputName[getattr(protocol, inputParam[1]).get()]
+
+      inputObj = getattr(protocol, inputName).get()
       if issubclass(type(inputObj), AtomStruct):
           try:
-            modelsLength, modelsFirstResidue = self.getModelsChainsStep(protocol, inputParam[0])
+            modelsLength, modelsFirstResidue = self.getModelsChainsStep(protocol, inputName)
           except Exception as e:
             print("ERROR: ", e)
             return
@@ -169,7 +251,7 @@ class SelectResidueWizard(SelectChainWizard):
           for i in residueList:
             finalResiduesList.append(String(i))
 
-      elif issubclass(type(inputObj), Sequence):
+      elif issubclass(type(inputObj), Sequence) or issubclass(type(inputObj), SequenceVariants):
           finalResiduesList = []
           for i, res in enumerate(inputObj.getSequence()):
             stri = '{"index": %s, "residue": "%s"}' % (i + 1, RESIDUES1TO3[res])
@@ -200,13 +282,6 @@ SelectResidueWizard().addTarget(protocol=ProtDefinePockets,
 
 SelectResidueWizard().addTarget(protocol=ProtDefineSeqROI,
                                 targets=['resPosition'],
-                                inputs=['inputSequence'],
+                                inputs=[['inputSequence', 'inputSequenceVariants'], 'chooseInput'],
                                 outputs=['resPosition'])
 
-
-class AddSequenceResidueWizard(EmWizard):
-  _targets = [(ProtDefineSeqROI, ['addResidue'])]
-
-  def show(self, form, *params):
-    protocol = form.protocol
-    form.setVar('inResidues', protocol.inResidues.get() + '{}\n'.format(protocol.resPosition.get()))

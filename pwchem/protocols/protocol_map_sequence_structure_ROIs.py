@@ -71,6 +71,10 @@ class ProtMapSequenceROI(EMProtocol):
                       allowsNull=False, label='Chain of interest',
                       help='Specify the chain of the residue of interest')
 
+        group.addParam('preview', params.LabelParam,
+                       label='Preview alignment: ', condition='chain_name!=""',
+                       help='Preview the alignment of the specified Sequence and AtomStruct chain')
+
         group = form.addGroup('Distances')
         group.addParam('maxDepth', params.FloatParam, default='3.0',
                        label='Maximum atom depth (A): ',
@@ -96,28 +100,31 @@ class ProtMapSequenceROI(EMProtocol):
         pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seq_name, seqName2=seq_nameAS)
 
     def definePocketsStep(self):
-        mapDic = self.mapResidues()
-
         parser = PDBParser()
-        self.structModel = parser.get_structure(self.getASName(), self.getASFileName())[0] # 0: modelID?
-        self.structSurface = get_surface(self.structModel,
+        structModel = parser.get_structure(self.getASName(), self.getASFileName())[0] # 0: modelID?
+        self.structSurface = get_surface(structModel,
                                          MSMS='{}/MGLToolsPckgs/binaries/msms'.format(Plugin.getMGLPath()))
 
-        originCoords = self.getROICoords(mapDic)
-        surfaceCoords = self.mapSurfaceCoords(originCoords)
+        mapDic = self.mapResidues(structModel)
 
-        self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
+        originCoords = self.getROICoords(mapDic, structModel)
+        if originCoords:
+            surfaceCoords = self.mapSurfaceCoords(originCoords)
+            self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
+        else:
+            print('Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln"))
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
-        outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
-        for i, clust in enumerate(self.coordsClusters):
-            pocketFile = self.createPocketFile(clust, i)
-            pocket = ProteinPocket(pocketFile, self.getASFileName())
-            if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
-            pocket.calculateContacts()
-            outPockets.append(pocket)
+        if self.coordsClusters:
+            outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+            for i, clust in enumerate(self.coordsClusters):
+                pocketFile = self.createPocketFile(clust, i)
+                pocket = ProteinPocket(pocketFile, self.getASFileName())
+                if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+                    pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
+                pocket.calculateContacts()
+                outPockets.append(pocket)
 
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
@@ -171,28 +178,19 @@ class ProtMapSequenceROI(EMProtocol):
         inputObj = getattr(self, 'inputAtomStruct').get()
         seq_name = os.path.basename(inputObj.getFileName())
         handler = AtomicStructHandler(inputObj.getFileName())
-        chainName = getattr(self, 'chain_name')
+        chainName = getattr(self, 'chain_name').get()
 
         # Parse chainName for model and chain selection
-        struct = json.loads(self.chain_name.get())  # From wizard dictionary
+        struct = json.loads(chainName)  # From wizard dictionary
         chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
         seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
         return seq, seq_name
 
-    def mapResidues(self):
-        seq, seqAS = '', ''
-        first = True
-        with open(self._getPath("pairWise.fasta")) as f:
-            f.readline()
-            for line in f:
-                if not line.startswith('>'):
-                    if first:
-                        seq += line.strip()
-                    else:
-                        seqAS += line.strip()
-                else:
-                    first = False
+    def mapResidues(self, structModel):
+        seq, seqAS = self.parseSequences()
+        chain = structModel[json.loads(self.chain_name.get())['chain']]
+        resIdxs = self.getChainResidueIdxs(chain)
 
         mapDic = {}
         i, j = 0, 0
@@ -202,11 +200,11 @@ class ProtMapSequenceROI(EMProtocol):
             if seqAS[k] == '-':
                 j = j + 1
             if seq[k] != '-' and seqAS[k] != '-':
-                mapDic[k-i+1] = k-j+1
+                mapDic[k-i+1] = resIdxs[k-j]
 
         return mapDic
 
-    def getROICoords(self, mapDic):
+    def getROICoords(self, mapDic, structModel):
         resIdxs = []
         for roi in self.inputSequenceROIs.get():
             for roiIdx in range(roi.getROIIdx(), roi.getROIIdx2() + 1):
@@ -217,7 +215,7 @@ class ProtMapSequenceROI(EMProtocol):
         coords = []
         chainId = json.loads(self.chain_name.get())['chain']
         for resId in resIdxs:
-            residue = self.structModel[chainId][resId]
+            residue = structModel[chainId][resId]
             atoms = residue.get_atoms()
             for a in atoms:
                 coords.append(list(a.get_coord()))
@@ -268,7 +266,26 @@ class ProtMapSequenceROI(EMProtocol):
                 f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
         return outFile
 
+    def parseSequences(self):
+        seq, seqAS = '', ''
+        first = True
+        with open(self._getPath("pairWise.fasta")) as f:
+            f.readline()
+            for line in f:
+                if not line.startswith('>'):
+                    if first:
+                        seq += line.strip()
+                    else:
+                        seqAS += line.strip()
+                else:
+                    first = False
+        return seq, seqAS
 
+    def getChainResidueIdxs(self, chain):
+        resIdxs = []
+        for res in chain:
+            resIdxs.append(res.get_id()[1])
+        return resIdxs
 
 
 

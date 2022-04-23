@@ -36,72 +36,119 @@ from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
-from pwchem.protocols import ProtChemInsertVariants, ProtChemGenerateSequences, ProtExtractSeqsROI
+from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI
+from pwchem.wizards import VariableWizard
 
-
-def getMutations(protocol):
-  if hasattr(protocol, 'inputSequenceVariants'):
-    vars = []
-    inputVarObj = protocol.inputSequenceVariants.get()
-    varFile = inputVarObj.getVariantsFileName()
-    with open(varFile) as f:
-      for line in f:
-        vars.append(String(line.strip()))
-    return vars
-
-class SelectVariant(EmWizard):
-  _targets = [(ProtChemInsertVariants, ['selectVariant']), (ProtChemGenerateSequences,['selectVariant'])]
-
-  def getInputSeqVar(self, protocol):
-      return protocol.inputSequenceVariants.get()
+################# Sequence variants ###############################
+class SelectVariant(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
 
   def show(self, form, *params):
     protocol = form.protocol
-    inpObj = self.getInputSeqVar(protocol)
+    inputParam, outputParam = self.getInputOutput(form)
+    inpObj = getattr(protocol, inputParam[0]).get()
 
     auxList = list(inpObj.getMutationsInLineage().keys())
     auxList.sort()
-    varsList = []
+    varsList = [String('Original')]
     for var in auxList:
         varsList.append(String(var.strip()))
 
     provider = ListTreeProviderString(varsList)
     dlg = dialog.ListDialog(form.root, "Sequence Variants", provider,
                             "Select one Variant")
-    form.setVar('selectVariant', dlg.values[0].get())
+    form.setVar(outputParam[0], dlg.values[0].get())
 
-class SelectMutation(EmWizard):
-  _targets = [(ProtChemInsertVariants, ['selectMutation'])]
+
+SelectVariant().addTarget(protocol=ProtChemGenerateVariants,
+                          targets=['selectVariant'],
+                          inputs=['inputSequenceVariants'],
+                          outputs=['selectVariant'])
+
+SelectVariant().addTarget(protocol=ProtDefineSeqROI,
+                          targets=['selectVariant'],
+                          inputs=['inputSequenceVariants'],
+                          outputs=['selectVariant'])
+
+
+class SelectMutation(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getMutations(self, protocol, inputName):
+    if hasattr(protocol, inputName):
+      vars = []
+      inputVarObj = getattr(protocol, inputName).get()
+      varFile = inputVarObj.getVariantsFileName()
+      with open(varFile) as f:
+        for line in f:
+          vars.append(String(line.split(';')[0].strip()))
+      return vars
 
   def show(self, form, *params):
     protocol = form.protocol
-    mutList = getMutations(protocol)
+    inputParam, outputParam = self.getInputOutput(form)
+
+    mutList = self.getMutations(protocol, inputParam[0])
     provider = ListTreeProviderString(mutList)
     dlg = dialog.ListDialog(form.root, "Sequence Mutations", provider,
                             "Select one Mutation (prevResidue-residueNumber-postResidue)")
-    form.setVar('selectMutation', dlg.values[0].get())
+    muts = ''
+    for mut in dlg.values:
+        muts += mut.get().split()[0] + ', '
 
-class AddVarMutationWizard(EmWizard):
-  _targets = [(ProtChemInsertVariants, ['addMutation'])]
+    form.setVar(outputParam[0], muts[:-2])
 
-  def show(self, form, *params):
-    protocol = form.protocol
-    if protocol.toMutateList.get() == None:
-        written = ''
-    else:
-        written = protocol.toMutateList.get()
-    form.setVar('toMutateList', written + '{}\n'.format(protocol.selectMutation.get()))
 
-class AddVariantToListWizard(EmWizard):
-  _targets = [(ProtChemGenerateSequences, ['addVariant'])]
+SelectMutation().addTarget(protocol=ProtChemGenerateVariants,
+                           targets=['selectMutation'],
+                           inputs=['inputSequenceVariants'],
+                           outputs=['selectMutation'])
 
-  def show(self, form, *params):
-    protocol = form.protocol
-    if protocol.toMutateList.get() == None:
-        written = ''
-    else:
-        written = protocol.toMutateList.get()
-    form.setVar('toMutateList', written + '{}\n'.format(protocol.selectVariant.get()))
+SelectMutation().addTarget(protocol=ProtDefineSeqROI,
+                           targets=['selectMutation'],
+                           inputs=['inputSequenceVariants'],
+                           outputs=['selectMutation'])
+
+
+class AddSequenceROIWizard(VariableWizard):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+
+      inList = getattr(protocol, inputParam[2]).get()
+      num = len(inList.strip().split('\n'))
+      if inList.strip() != '':
+        num += 1
+
+      addIdx = getattr(protocol, inputParam[0]).get()
+      inParamName = inputParam[1][addIdx]
+      label = protocol._originOptions[addIdx]
+
+      roiInfo = getattr(protocol, inParamName).get()
+      if len(inputParam) > 3 and hasattr(protocol, inputParam[3]):
+          roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (getattr(protocol, inputParam[3]).get()))
+
+      form.setVar(outputParam[0], getattr(protocol, inputParam[2]).get() + '{}) {}: {}\n'.format(num, label, roiInfo))
+
+
+AddSequenceROIWizard().addTarget(protocol=ProtDefineSeqROI,
+                                 targets=['addROI'],
+                                 inputs=['whichToAdd', ['resPosition', 'selectVariant', 'selectMutation'],
+                                         'inROIs', 'descrip'],
+                                 outputs=['inROIs'])
+
+AddSequenceROIWizard().addTarget(protocol=ProtChemGenerateVariants,
+                                 targets=['addVariant'],
+                                 inputs=['fromVariant', ['selectVariant', 'selectMutation'],
+                                         'toMutateList'],
+                                 outputs=['toMutateList'])
+
+
+
+
+########################## Sequence conservation ####################################
 
 class CheckSequencesConservation(EmWizard):
   _targets = [(ProtExtractSeqsROI, ['thres'])]
