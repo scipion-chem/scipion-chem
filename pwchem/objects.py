@@ -357,8 +357,14 @@ class SetOfSmallMolecules(data.EMSet):
     def isDocked(self):
         return self._docked.get()
 
-    def setDocked(self, value):
-        self._docked.set(True)
+    def setDocked(self, value=True):
+        self._docked.set(value)
+
+    def getUniqueMolNames(self):
+        names = []
+        for mol in self:
+            names.append(mol.getUniqueName())
+        return names
 
 
 class BindingSite(data.EMObject):
