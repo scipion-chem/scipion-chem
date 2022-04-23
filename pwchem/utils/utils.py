@@ -382,7 +382,7 @@ def relabelAtomsMol2(atomFile):
                     else:
                         atomCount[atom] = 1
                     numSize = len(str(atomCount[atom]))
-                    line = line[:8] + atom + str(atomCount[atom]).ljust(10) + line[18 - 1 + len(atom):]
+                    line = line[:8] + ' '*(2 - len(atom)) + atom + str(atomCount[atom]).ljust(8) + line[18:]
 
                 if line.startswith('@<TRIPOS>ATOM'):
                     atomLines = True
