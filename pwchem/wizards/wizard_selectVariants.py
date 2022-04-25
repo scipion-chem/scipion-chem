@@ -174,8 +174,8 @@ class CheckSequencesConservation(EmWizard):
     ax.set_ylim(0, 1)
 
     plt.xlabel("Sequence position")
-    plt.ylabel("Conservation value")
-    plt.title('Conservation values along sequence')
+    plt.ylabel("Variability value")
+    plt.title('Variability values along sequence')
 
     plt.show()
 
