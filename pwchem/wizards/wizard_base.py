@@ -33,19 +33,23 @@ The targets, inputs and outputs of this wizard can be easily accessed and modifi
 import pyworkflow.wizard as pwizard
 
 class VariableWizard(pwizard.Wizard):
-    """Add a step of the workflow in the defined position"""
+    """Wizard base class object where input and output paramNames can be modified and added, so
+    one wizard can be used in several protocols with parameters of different names"""
     #Variables _targets, _inputs and _outputs must be created in sons
     # _targets, _inputs, _outputs = [], {}, {}
 
     def addTarget(self, protocol, targets, inputs, outputs):
+        '''Add a target to a wizard and the input and output parameters are stored in a dictionary with
+        (protocol, targetParamName) as key. Only the first target is used.'''
         self._targets += [(protocol, targets)]
-        self._inputs.update({protocol: inputs})
-        self._outputs.update({protocol: outputs})
+        self._inputs.update({(protocol, targets[0]): inputs})
+        self._outputs.update({(protocol, targets[0]): outputs})
 
     def getInputOutput(self, form):
-        '''Retrieving input and output corresponding to the protocol where the wizard is used'''
+        '''Retrieving input and output paramNames corresponding to the protocol and target of the wizard clicked'''
         outParam = ''
         for target in self._targets:
-            if form.protocol.__class__ == target[0]:
-                inParam, outParam = self._inputs[target[0]], self._outputs[target[0]]
+            if form.wizParamName == target[1][0]:
+                prot, target = (target[0], target[1][0])
+                inParam, outParam = self._inputs[(prot, target)], self._outputs[(prot, target)]
         return inParam, outParam
