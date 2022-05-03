@@ -404,6 +404,32 @@ def calculateDistance(coord1, coord2):
         dist += (c1-c2) ** 2
     return dist ** (1/2)
 
+def calculateRMSD(coords1, coords2):
+    rmsd = 0
+    for c1, c2 in zip(coords1, coords2):
+        if len(c1) != len(c2):
+            print('ERROR: coordinates of different size')
+            return None
+        for x1, x2 in zip(c1, c2):
+            rmsd += (x1-x2) ** 2
+    return (rmsd / len(coords2)) ** (1/2)
+
+def calculateRMSDKeys(coordDic1, coordDic2):
+    '''Calculate the RMSD from two dic containing coordinates, using the keys of the
+    first one
+    '''
+    rmsd, count = 0, 0
+    for k in coordDic1:
+        if k in coordDic2:
+            c1, c2 = coordDic1[k], coordDic2[k]
+            if len(c1) != len(c2):
+                print('ERROR: coordinates of different size')
+                return None
+            for x1, x2 in zip(c1, c2):
+                rmsd += (x1-x2) ** 2
+            count += 1
+    return (rmsd / count) ** (1/2)
+
 ################3 UTILS Sequence Object ################
 
 def getSequenceFastaName(sequence):
