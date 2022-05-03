@@ -43,7 +43,8 @@ import pyworkflow.object as pwobj
 import os, re, glob, shutil
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2
+from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2, \
+  splitPDBLine, natural_sort
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):
@@ -142,6 +143,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             fnMol = os.path.split(fnSmall)[1]      # Name of complete file
             fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
 
+            fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
+
             # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
             # 2. Add and calculate partial charges with different methods
             index_method = self.method_charges.get()
@@ -226,4 +229,52 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
       with open(paramsFile) as f:
         code = f.readline().split()[1]
       return code
+
+    def reorderAtoms(self, inFile, outFile):
+        '''Atom lines in the file are reordered so the atomNames numbers are in order (C2, C1, C3 -> C1, C2, C3)'''
+        atomsDic = {}
+        writeFirst, writeLast = '', ''
+        with open(inFile) as fIn:
+          if inFile.endswith('pdb'):
+              for line in fIn:
+                  sline = splitPDBLine(line)
+                  if sline[0] in ['ATOM', 'HETATM']:
+                      atomsDic[sline[2]] = line
+                  else:
+                      if atomsDic == {}:
+                          writeFirst += line
+                      else:
+                          writeLast += line
+
+          elif inFile.endswith('mol2'):
+              atomLines = False
+              for line in fIn:
+                  if not atomLines and line.startswith('@<TRIPOS>ATOM'):
+                      atomLines = True
+                      writeFirst += line
+                  elif atomLines and line.startswith('@'):
+                      atomLines = False
+                      writeLast += line
+                  elif atomLines:
+                      atomsDic[line.split()[1]] = line
+                  else:
+                      if atomsDic == {}:
+                        writeFirst += line
+                      else:
+                        writeLast += line
+          else:
+              #Don't touch other kind of files
+              return inFile
+
+        with open(outFile, 'w') as f:
+            f.write(writeFirst)
+            for key in natural_sort(atomsDic.keys()):
+                f.write(atomsDic[key])
+            f.write(writeLast)
+        return outFile
+
+
+
+
+
 
