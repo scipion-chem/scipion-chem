@@ -46,7 +46,8 @@ from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
 from pwchem import Plugin
 
-SHANNON, SIMPSON, KABAT = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient'
+SHANNON, SIMPSON, KABAT, PROP = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient', \
+                                'Maximum Proportion'
 
 def simpson(counts):
   sumi = 0
@@ -74,26 +75,26 @@ class ProtExtractSeqsROI(EMProtocol):
                       allowsNull=False, label="Input sequences: ",
                       help='Select the set of sequences object where the ROI will be defined')
 
-        group = form.addGroup('Conservation measure')
-        group.addParam('method', params.EnumParam,
-                       choices=[SHANNON, SIMPSON, KABAT],
-                       label='Method to measure conservation: ',
-                       help='Method to measure the conservation in each position of the sequences.\n'
+        group = form.addGroup('Variability measure')
+        group.addParam('method', params.EnumParam, default=3,
+                       choices=[SHANNON, SIMPSON, KABAT, PROP],
+                       label='Method to measure variability: ',
+                       help='Method to measure the conservation / variability in each position of the sequences.\n'
                             'http://imed.med.ucm.es/PVS/pvs-help.html#vmth')
 
         group = form.addGroup('Cluster regions')
         group.addParam('direction', params.EnumParam, default=0,
-                       choices=['High conservation', 'Low conservation'],
+                       choices=['Low variability', 'High variability'],
                        label='Look for regions with: ', display=params.EnumParam.DISPLAY_HLIST,
-                       help='Whether to look for regions with high or low conservation.'
-                            'high conservation will look for low conservation values of the metrics and viceversa')
+                       help='Whether to look for regions with high or low variability.'
+                            'high variability will look for high variability values of the metrics and viceversa')
 
         group.addParam('highLabel', params.LabelParam, condition='direction==0',
                        label='Keep below threshold',
-                       help='High conservation will look for low conservation values of the metrics')
+                       help='High variability will look for high conservation values of the metrics')
         group.addParam('lowLabel', params.LabelParam, condition='direction==1',
                        label='Keep over threshold',
-                       help='Low conservation will look for high conservation values of the metrics')
+                       help='Low variability will look for low conservation values of the metrics')
 
         group.addParam('thres', params.FloatParam,
                        label='Main threshold for conserved region: ',
@@ -175,6 +176,8 @@ class ProtExtractSeqsROI(EMProtocol):
             values = self.calcSimpson(seqsArr)
         elif self.getEnumText('method') == KABAT:
             values = self.calcKabat(seqsArr)
+        elif self.getEnumText('method') == PROP:
+            values = self.calcProp(seqsArr)
 
         outFile = self.getConservationFile()
         with open(outFile, 'w') as f:
@@ -241,10 +244,10 @@ class ProtExtractSeqsROI(EMProtocol):
         return seqSet
 
     def getElementNumber(self, listi):
-        props = []
+        counts = []
         for elem in set(listi):
-          props.append(list(listi).count(elem))
-        return props
+          counts.append(list(listi).count(elem))
+        return counts
 
     def getSequencesArray(self):
         seqMat = []
@@ -283,4 +286,11 @@ class ProtExtractSeqsROI(EMProtocol):
             entrs.append(ent)
         return entrs
 
-
+    def calcProp(self, seqsArr):
+        '''Proportion of the more common residue (inverse: 1- prop)'''
+        entrs = []
+        for j in range(seqsArr.shape[1]):
+            counts = self.getElementNumber(seqsArr[:,j])
+            ent = 1 - max(counts) / len(counts)
+            entrs.append(ent)
+        return entrs
