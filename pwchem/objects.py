@@ -606,7 +606,10 @@ class ProteinPocket(data.EMFile):
         if radius == []:
             radius = self.getSpheresRadius()
         coords = np.array(self.getPointsCoords())
-        cHullIndex = spatial.ConvexHull(coords).vertices
+        if len(coords) > 3:
+            cHullIndex = spatial.ConvexHull(coords).vertices
+        else:
+            cHullIndex = np.array(list(range(len(coords))))
         candidates = coords[cHullIndex]
         dist_mat = spatial.distance_matrix(candidates, candidates)
         if radius != []:
