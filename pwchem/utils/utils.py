@@ -429,7 +429,7 @@ def calculateRMSDKeys(coordDic1, coordDic2):
                 rmsd += (x1-x2) ** 2
             count += 1
     return (rmsd / count) ** (1/2)
-
+  
 ################3 UTILS Sequence Object ################
 
 def getSequenceFastaName(sequence):

@@ -84,7 +84,6 @@ class ProtocolRMSDDocking(EMProtocol):
                 print('Mol: {}. RMSD: {}'.format(os.path.basename(mol.getPoseFile()), rmsd))
             else:
                 rmsd = 10000
-
         with open(self._getExtraPath('rmsd.tsv'), 'w') as f:
             for k in rmsdDic:
                 f.write('{}\t{}\n'.format(k, rmsdDic[k]))
