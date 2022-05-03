@@ -79,22 +79,18 @@ class ProtocolRMSDDocking(EMProtocol):
             k1, k2 = list(posDic1.keys()), list(posDic2.keys())
             k1.sort(), k2.sort()
             if self.checkSameKeys(posDic1, posDic2):
-                print('Coords1: ', posDic1.values())
-                print('Coords2: ', posDic2.values())
-                rmsd = calculateRMSD(posDic1.values(), posDic2.values())
-                print('RMSD: ', rmsd)
-                rmsdDic[os.path.abspath(mol.getPoseFile())] = rmsd
+                rmsd = calculateRMSDKeys(posDic1, posDic2)
+                rmsdDic[mol.getPoseFile()] = rmsd
                 print('Mol: {}. RMSD: {}'.format(os.path.basename(mol.getPoseFile()), rmsd))
             else:
                 rmsd = 10000
-
-        with open(self._getExtraPath('rmsd.txt'), 'w') as f:
+        with open(self._getExtraPath('rmsd.tsv'), 'w') as f:
             for k in rmsdDic:
                 f.write('{}\t{}\n'.format(k, rmsdDic[k]))
 
     def createOutputStep(self):
         rmsdDic = {}
-        with open(self._getExtraPath('rmsd.txt')) as f:
+        with open(self._getExtraPath('rmsd.tsv')) as f:
             for line in f:
                 rmsdDic[line.split()[0]] = line.split()[1]
 
