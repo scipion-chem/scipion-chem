@@ -140,6 +140,7 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
+        self.molFiles = []
         self.createGUISummary()
         sSteps = []
         #Performing every score listed in the form
@@ -396,11 +397,14 @@ class ProtocolScoreDocking(EMProtocol):
             fName = ''
         return fName
 
-    def writeParamsFile(self, paramsFile, recFile, msjDic, i):
-        molFiles = []
-        for mol in self.yieldAllInputMols():
-            molFiles.append(os.path.abspath(mol.getPoseFile()))
+    def getPoseFiles(self):
+        if self.molFiles == []:
+            for mol in self.yieldAllInputMols():
+                self.molFiles.append(os.path.abspath(mol.getPoseFile()))
+        return self.molFiles
 
+    def writeParamsFile(self, paramsFile, recFile, msjDic, i):
+        molFiles = self.getPoseFiles()
         with open(paramsFile, 'w') as f:
             scoreChoice = msjDic['scoreChoice']
 

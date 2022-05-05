@@ -96,7 +96,7 @@ class ProtocolConsensusDocking(EMProtocol):
         outDocked.setProteinFile(inputProteinFile)
         for outDock in self.consensusMols:
             newDock = outDock.clone()
-            newDock = self.relabelPosId(newDock)
+            #newDock = self.relabelPosId(newDock)
             outDocked.append(newDock)
         self._defineOutputs(outputSmallMolecules=outDocked)
 
