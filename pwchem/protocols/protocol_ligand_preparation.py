@@ -235,18 +235,18 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         atomsDic = {}
         writeFirst, writeLast = '', ''
         with open(inFile) as fIn:
-          if inFile.endswith('pdb'):
-              for line in fIn:
-                  sline = splitPDBLine(line)
-                  if sline[0] in ['ATOM', 'HETATM']:
-                      atomsDic[sline[2]] = line
-                  else:
-                      if atomsDic == {}:
-                          writeFirst += line
-                      else:
-                          writeLast += line
+          # if inFile.endswith('pdb'):
+          #     for line in fIn:
+          #         sline = splitPDBLine(line)
+          #         if sline[0] in ['ATOM', 'HETATM']:
+          #             atomsDic[sline[2]] = line
+          #         else:
+          #             if atomsDic == {}:
+          #                 writeFirst += line
+          #             else:
+          #                 writeLast += line
 
-          elif inFile.endswith('mol2'):
+          if inFile.endswith('mol2'):
               atomLines = False
               for line in fIn:
                   if not atomLines and line.startswith('@<TRIPOS>ATOM'):
@@ -262,15 +262,26 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                         writeFirst += line
                       else:
                         writeLast += line
+
+              with open(outFile, 'w') as f:
+                f.write(writeFirst)
+                idsDic = {}
+                for i, key in enumerate(natural_sort(atomsDic.keys())):
+                    idsDic[atomsDic[key].split()[0]] = str(i+1)
+                    f.write(str(i+1).rjust(7) + atomsDic[key][7:])
+
+                # Renaming connects
+                f.write(writeLast.split('\n')[0] + '\n')
+                for line in writeLast.split('\n')[1:]:
+                    if line:
+                        print(line)
+                        sline = line.split()
+                        f.write(line[:6] + idsDic[sline[1]].rjust(5) + idsDic[sline[2]].rjust(5) + line[16:] + '\n')
+
           else:
               #Don't touch other kind of files
               return inFile
 
-        with open(outFile, 'w') as f:
-            f.write(writeFirst)
-            for key in natural_sort(atomsDic.keys()):
-                f.write(atomsDic[key])
-            f.write(writeLast)
         return outFile
 
 
