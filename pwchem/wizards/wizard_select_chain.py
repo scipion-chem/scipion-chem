@@ -95,7 +95,6 @@ class SelectChainWizard(VariableWizard):
 
     def show(self, form, *params):
       inputParam, outputParam = self.getInputOutput(form)
-      print('Estoy en este')
       protocol = form.protocol
       try:
         listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParam[0])
@@ -125,8 +124,6 @@ SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
                               inputs=['inputAtomStruct1'],
                               outputs=['chain_name1'])
 
-#There cannot be 2 VariableWizards of same type in the same protocol
-#because we cannot know which target was clicked
 SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name2'],
                               inputs=['inputAtomStruct2'],
