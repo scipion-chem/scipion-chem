@@ -114,9 +114,6 @@ class SelectChainWizard(VariableWizard):
       form.setVar(outputParam[0], dlg.values[0].get())
 
 
-class SelectChainWizard2(SelectChainWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
 
 SelectChainWizard().addTarget(protocol=ProtDefinePockets,
                               targets=['chain_name'],
@@ -130,10 +127,10 @@ SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
 
 #There cannot be 2 VariableWizards of same type in the same protocol
 #because we cannot know which target was clicked
-SelectChainWizard2().addTarget(protocol=ProtChemPairWiseAlignment,
-                               targets=['chain_name2'],
-                               inputs=['inputAtomStruct2'],
-                               outputs=['chain_name2'])
+SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
+                              targets=['chain_name2'],
+                              inputs=['inputAtomStruct2'],
+                              outputs=['chain_name2'])
 
 class SelectChainPairwiseWizard(SelectChainWizard):
     _targets, _inputs, _outputs = [], {}, {}
