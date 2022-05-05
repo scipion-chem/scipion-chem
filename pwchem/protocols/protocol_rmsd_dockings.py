@@ -97,7 +97,7 @@ class ProtocolRMSDDocking(EMProtocol):
         newMols = SetOfSmallMolecules.createCopy(self.inputSmallMols.get(), self._getPath(), copyInfo=True)
         for mol in self.inputSmallMols.get():
             #Specific attribute name for each score?
-            k = os.path.abspath(mol.getPoseFile())
+            k = mol.getPoseFile()
             if k in rmsdDic:
                 setattr(mol, "_rmsdToRef", Float(rmsdDic[k]))
             else:

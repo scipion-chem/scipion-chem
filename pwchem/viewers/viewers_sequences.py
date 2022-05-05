@@ -29,15 +29,15 @@ import pyworkflow.viewer as pwviewer
 from pwem.objects import SetOfSequences, Sequence
 
 from pwchem import Plugin as pwchem_plugin
+from pwchem.objects import SequencesAlignment, SequenceVariants, SetOfSequenceROIs
 
 
 class SequenceAliView(pwviewer.CommandView):
     """ View for calling an external command. """
 
     def __init__(self, seqFiles, cwd, **kwargs):
-        sBases = [os.path.basename(x) for x in seqFiles]
         pwviewer.CommandView.__init__(self, '{}/aliview/aliview {}'.
-                                      format(pwchem_plugin.getAliViewPath(), ' '.join(sBases)),
+                                      format(pwchem_plugin.getAliViewPath(), ' '.join(seqFiles)),
                                       cwd=cwd, **kwargs)
 
     def show(self):
@@ -48,7 +48,7 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [Sequence, SetOfSequences]
+    _targets = [Sequence, SetOfSequences, SequencesAlignment, SequenceVariants, SetOfSequenceROIs]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -66,6 +66,31 @@ class SequenceAliViewer(pwviewer.Viewer):
                 os.remove(outPath)
             obj.exportToFile(outPath)
 
+        elif issubclass(cls, SequencesAlignment):
+            seqFiles += [obj.getAlignmentFileName()]
+
+        elif issubclass(cls, SequenceVariants):
+            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
+            seqFiles += [outPath]
+            if os.path.exists(outPath):
+                os.remove(outPath)
+            obj._sequence.exportToFile(outPath)
+
+        elif issubclass(cls, SetOfSequenceROIs):
+            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
+                                                                  format(obj.getSequenceObj().getId())))
+            seqFiles += [outPath]
+            if os.path.exists(outPath):
+                os.remove(outPath)
+            wholeSeq = obj.getFirstItem().getSequence()
+            obj.getFirstItem()._sequence.exportToFile(outPath)
+            for roi in obj:
+                roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
+                tmpSeq = (roiIdx-1) * '-' + roiSeq + (len(wholeSeq) - len(roiSeq) - roiIdx + 1) * '-'
+                tmpSeqObj = Sequence(sequence=tmpSeq, id=roi._ROISequence.getId())
+                tmpSeqObj.appendToFile(outPath)
+
         views.append(SequenceAliView(seqFiles, cwd=self.protocol._getExtraPath()))
 
         return views
+

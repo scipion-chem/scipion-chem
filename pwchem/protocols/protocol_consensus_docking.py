@@ -96,7 +96,7 @@ class ProtocolConsensusDocking(EMProtocol):
         outDocked.setProteinFile(inputProteinFile)
         for outDock in self.consensusMols:
             newDock = outDock.clone()
-            newDock = self.relabelPosId(newDock)
+            #newDock = self.relabelPosId(newDock)
             outDocked.append(newDock)
         self._defineOutputs(outputSmallMolecules=outDocked)
 
@@ -230,7 +230,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
-        maxScore = -100000 if self.maxmin.get() else 100000
+        maxScore = -10e15 if self.maxmin.get() else 10e15
         for mol in cluster:
             molScore = getattr(mol, self.action.get())
             if (molScore > maxScore and self.maxmin.get()) or \

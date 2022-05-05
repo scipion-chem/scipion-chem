@@ -36,6 +36,12 @@ import numpy as np
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
 
+RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
+               'ILE': 'I', 'PRO': 'P', 'THR': 'T', 'PHE': 'F', 'ASN': 'N',
+               'GLY': 'G', 'HIS': 'H', 'LEU': 'L', 'ARG': 'R', 'TRP': 'W',
+               'ALA': 'A', 'VAL':'V', 'GLU': 'E', 'TYR': 'Y', 'MET': 'M'}
+
+RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
@@ -376,7 +382,7 @@ def relabelAtomsMol2(atomFile):
                     else:
                         atomCount[atom] = 1
                     numSize = len(str(atomCount[atom]))
-                    line = line[:8] + atom + str(atomCount[atom]).ljust(10) + line[18 - 1 + len(atom):]
+                    line = line[:8] + ' '*(2 - len(atom)) + atom + str(atomCount[atom]).ljust(8) + line[18:]
 
                 if line.startswith('@<TRIPOS>ATOM'):
                     atomLines = True
