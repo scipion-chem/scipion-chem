@@ -1030,7 +1030,6 @@ class SetOfPockets(data.EMSet):
         outStr = ''
         for i, pocket in enumerate(self):
             pocket.setObjId(i + 1)
-            print('i: ', i+1)
             outStr += self.formatPocketStr(pocket)
         return outStr
 
