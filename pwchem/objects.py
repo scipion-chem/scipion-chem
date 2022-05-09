@@ -1030,6 +1030,7 @@ class SetOfPockets(data.EMSet):
         outStr = ''
         for i, pocket in enumerate(self):
             pocket.setObjId(i + 1)
+            print('i: ', i+1)
             outStr += self.formatPocketStr(pocket)
         return outStr
 
@@ -1053,9 +1054,14 @@ class SetOfPockets(data.EMSet):
 
         elif pocket.getPocketClass() == 'FPocket':
             for line in rawStr.split('\n'):
-                line = line.split()
-                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:], '', 'Ve']
-                pdbLine = writePDBLine(replacements)
+                sline = line.split()
+                replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:], '', 'Ve']
+                try:
+                    pdbLine = writePDBLine(replacements)
+                except:
+                    sline = splitPDBLine(line)
+                    replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:], '', 'Ve']
+                    pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'SiteMap':
