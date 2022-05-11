@@ -37,7 +37,7 @@ from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
 from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI
-from pwchem.wizards import VariableWizard
+from pwem.wizards.wizard import VariableWizard
 
 ################# Sequence variants ###############################
 class SelectVariant(VariableWizard):
@@ -45,8 +45,8 @@ class SelectVariant(VariableWizard):
 
   def show(self, form, *params):
     protocol = form.protocol
-    inputParam, outputParam = self.getInputOutput(form)
-    inpObj = getattr(protocol, inputParam[0]).get()
+    inputParams, outputParam = self.getInputOutput(form)
+    inpObj = getattr(protocol, inputParams[0]).get()
 
     auxList = list(inpObj.getMutationsInLineage().keys())
     auxList.sort()
@@ -86,9 +86,9 @@ class SelectMutation(VariableWizard):
 
   def show(self, form, *params):
     protocol = form.protocol
-    inputParam, outputParam = self.getInputOutput(form)
+    inputParams, outputParam = self.getInputOutput(form)
 
-    mutList = self.getMutations(protocol, inputParam[0])
+    mutList = self.getMutations(protocol, inputParams[0])
     provider = ListTreeProviderString(mutList)
     dlg = dialog.ListDialog(form.root, "Sequence Mutations", provider,
                             "Select one Mutation (prevResidue-residueNumber-postResidue)")
@@ -113,35 +113,42 @@ SelectMutation().addTarget(protocol=ProtDefineSeqROI,
 class AddSequenceROIWizard(VariableWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
+    def getOriginLabel(self, inParamName):
+        if inParamName == 'resPosition':
+            return 'Residues'
+        elif inParamName == 'selectVariant':
+            return 'Variant'
+        elif inParamName == 'selectMutation':
+            return 'Mutations'
+
     def show(self, form, *params):
       protocol = form.protocol
-      inputParam, outputParam = self.getInputOutput(form)
+      inputParams, outputParam = self.getInputOutput(form)
 
-      inList = getattr(protocol, inputParam[2]).get()
+      inList = getattr(protocol, inputParams[1]).get()
       num = len(inList.strip().split('\n'))
       if inList.strip() != '':
         num += 1
 
-      addIdx = getattr(protocol, inputParam[0]).get()
-      inParamName = inputParam[1][addIdx]
-      label = protocol._originOptions[addIdx]
+      inParamName = inputParams[0]
+      label = self.getOriginLabel(inParamName)
 
       roiInfo = getattr(protocol, inParamName).get()
-      if len(inputParam) > 3 and hasattr(protocol, inputParam[3]):
-          roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (getattr(protocol, inputParam[3]).get()))
+      if len(inputParams) > 2 and hasattr(protocol, inputParams[2]):
+          roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (getattr(protocol, inputParams[2]).get()))
 
-      form.setVar(outputParam[0], getattr(protocol, inputParam[2]).get() + '{}) {}: {}\n'.format(num, label, roiInfo))
+      form.setVar(outputParam[0], getattr(protocol, inputParams[1]).get() + '{}) {}: {}\n'.format(num, label, roiInfo))
 
 
 AddSequenceROIWizard().addTarget(protocol=ProtDefineSeqROI,
                                  targets=['addROI'],
-                                 inputs=['whichToAdd', ['resPosition', 'selectVariant', 'selectMutation'],
+                                 inputs=[{'whichToAdd': ['resPosition', 'selectVariant', 'selectMutation']},
                                          'inROIs', 'descrip'],
                                  outputs=['inROIs'])
 
 AddSequenceROIWizard().addTarget(protocol=ProtChemGenerateVariants,
                                  targets=['addVariant'],
-                                 inputs=['fromVariant', ['selectVariant', 'selectMutation'],
+                                 inputs=[{'fromVariant': ['selectVariant', 'selectMutation']},
                                          'toMutateList'],
                                  outputs=['toMutateList'])
 
