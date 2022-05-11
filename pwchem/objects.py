@@ -400,7 +400,8 @@ class SequenceROI(data.EMObject):
         self._roiIdx2 = Integer(kwargs.get('roiIdx2', None))
 
     def __str__(self):
-        s = '{} (Idx: {}-{}, ROI: {})'.format(self.getClassName(), self.getROIIdx(), self.getROISequence())
+        s = '{} (Idx: {}-{}, ROI: {})'.format(self.getClassName(), self.getROIIdx(), self.getROIIdx2(),
+                                              self.getROISequence())
         return s
 
     def setSequence(self, sequenceObj):

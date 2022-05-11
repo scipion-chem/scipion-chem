@@ -49,7 +49,7 @@ class VariableWizard(pwizard.Wizard):
         '''Retrieving input and output paramNames corresponding to the protocol and target of the wizard clicked'''
         outParam = ''
         for target in self._targets:
-            if form.wizParamName == target[1][0]:
+            if form.wizParamName == target[1][0] and form.protocol.__class__ == target[0]:
                 prot, target = (target[0], target[1][0])
                 inParam, outParam = self._inputs[(prot, target)], self._outputs[(prot, target)]
         return inParam, outParam
