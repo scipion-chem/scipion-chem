@@ -53,6 +53,11 @@ class ProtocolConsensusDocking(EMProtocol):
                        pointerClass='SetOfSmallMolecules', allowsNull=False,
                        label="Input Sets of Docked Molecules",
                        help='Select the pocket sets to make the consensus')
+        form.addParam('outIndv', params.BooleanParam, default=False,
+                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Creates an output set related to each input set, with the elements from each input'
+                           'present in the consensus clusters')
+
         form.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
                       help="Maximum RMSD for clustering different docked molecules")
         form.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings',
@@ -100,17 +105,18 @@ class ProtocolConsensusDocking(EMProtocol):
             outDocked.append(newDock)
         self._defineOutputs(outputSmallMolecules=outDocked)
 
-        indepOutputs = self.createIndepOutputs()
-        for setId in indepOutputs:
-            #Index should be the same as in the input
-            suffix = '_{:03d}'.format(setId+1)
-            outName = 'outputSmallMolecules' + suffix
-            outSet = indepOutputs[setId]
-            outSet.setDocked(True)
-            outSet.setProteinFile(inputProteinFile)
+        if self.outIndv.get():
+            indepOutputs = self.createIndepOutputs()
+            for setId in indepOutputs:
+                #Index should be the same as in the input
+                suffix = '_{:03d}'.format(setId+1)
+                outName = 'outputSmallMolecules' + suffix
+                outSet = indepOutputs[setId]
+                outSet.setDocked(True)
+                outSet.setProteinFile(inputProteinFile)
 
-            self._defineOutputs(**{outName: outSet})
-            self._defineSourceRelation(self.inputMoleculesSets[setId].get(), outSet)
+                self._defineOutputs(**{outName: outSet})
+                self._defineSourceRelation(self.inputMoleculesSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):

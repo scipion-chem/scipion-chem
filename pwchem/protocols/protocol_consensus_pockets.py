@@ -61,6 +61,11 @@ class ProtocolConsensusPockets(EMProtocol):
                        pointerClass='SetOfPockets', allowsNull=False,
                        label="Input Sets of Pockets",
                        help='Select the pocket sets to make the consensus')
+        form.addParam('outIndv', params.BooleanParam, default=False,
+                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Creates an output set related to each input set, with the elements from each input'
+                           'present in the consensus clusters')
+
         form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping',
                       help="Min proportion of residues (from the smaller) of two pockets to be considered overlapping")
         form.addParam('action', params.EnumParam, default=MAXSURF,
@@ -102,16 +107,17 @@ class ProtocolConsensusPockets(EMProtocol):
                 outPockets.buildPDBhetatmFile(suffix='_All')
                 self._defineOutputs(**{self._possibleOutputs.outputPockets.name: outPockets})
 
-            indepOutputs = self.createIndepOutputs()
-            for setId in indepOutputs:
-                #Index should be the same as in the input
-                suffix = '_{:03d}'.format(setId+1)
-                outName = 'outputPockets' + suffix
-                outSet = indepOutputs[setId]
-                if outSet.getSize() > 0:
-                    outSet.buildPDBhetatmFile(suffix=suffix)
-                    self._defineOutputs(**{outName: outSet})
-                    self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
+            if self.outIndv.get():
+                indepOutputs = self.createIndepOutputs()
+                for setId in indepOutputs:
+                    #Index should be the same as in the input
+                    suffix = '_{:03d}'.format(setId+1)
+                    outName = 'outputPockets' + suffix
+                    outSet = indepOutputs[setId]
+                    if outSet.getSize() > 0:
+                        outSet.buildPDBhetatmFile(suffix=suffix)
+                        self._defineOutputs(**{outName: outSet})
+                        self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
