@@ -37,13 +37,12 @@ import os, requests, json
 
 from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
-from pwem.wizards import EmWizard
+from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, VariableWizard
 from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
 from pwchem.objects import SequenceVariants
-from pwchem.wizards.wizard_base import VariableWizard
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
@@ -61,59 +60,6 @@ class AddResidueWizard(EmWizard):
 
 ######################## Variable wizards ####################
 
-class SelectChainWizard(VariableWizard):
-    '''Opens the input AtomStruct and allows you to select one of the present chains'''
-    _targets, _inputs, _outputs = [], {}, {}
-
-    @classmethod
-    def getModelsChainsStep(cls, protocol, atomStructName='inputAtomStruct'):
-      """ Returns (1) list with the information
-         {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
-         (2) list with residues, position and chain (modelsFirstResidue)"""
-      structureHandler = AtomicStructHandler()
-      fileName = ""
-      AS = getattr(protocol, atomStructName).get()
-      if AS is not None:
-        fileName = os.path.abspath(AS.getFileName())
-        if str(type(AS).__name__) == 'SchrodingerAtomStruct':
-          fileName = os.path.abspath(AS.convert2PDB())
-        else:
-          fileName = os.path.abspath(AS.getFileName())
-
-      structureHandler.read(fileName)
-      structureHandler.getStructure()
-      return structureHandler.getModelsChains()
-
-    def editionListOfChains(self, listOfChains):
-      chainList = []
-      for model, chainDic in listOfChains.items():
-        for chainID, lenResidues in chainDic.items():
-          chainList.append(
-            '{"model": %d, "chain": "%s", "residues": %d}' %
-            (model, str(chainID), lenResidues))
-      return chainList
-
-    def show(self, form, *params):
-      inputParam, outputParam = self.getInputOutput(form)
-      protocol = form.protocol
-      try:
-        listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParam[0])
-      except Exception as e:
-        print("ERROR: ", e)
-        return
-
-      chainList = self.editionListOfChains(listOfChains)
-      finalChainList = []
-      for i in chainList:
-        finalChainList.append(String(i))
-      provider = ListTreeProviderString(finalChainList)
-      dlg = dialog.ListDialog(form.root, "Model chains", provider,
-                              "Select one of the chains (model, chain, "
-                              "number of chain residues)")
-      form.setVar(outputParam[0], dlg.values[0].get())
-
-
-
 SelectChainWizard().addTarget(protocol=ProtDefinePockets,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
@@ -128,6 +74,19 @@ SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name2'],
                               inputs=['inputAtomStruct2'],
                               outputs=['chain_name2'])
+
+
+SelectResidueWizard().addTarget(protocol=ProtDefinePockets,
+                                targets=['resPosition'],
+                                inputs=['inputAtomStruct', 'chain_name'],
+                                outputs=['resPosition'])
+
+SelectResidueWizard().addTarget(protocol=ProtDefineSeqROI,
+                                targets=['resPosition'],
+                                inputs=[{'chooseInput': ['inputSequence', 'inputSequenceVariants']}],
+                                outputs=['resPosition'])
+
+
 
 class SelectChainPairwiseWizard(SelectChainWizard):
     _targets, _inputs, _outputs = [], {}, {}
@@ -207,75 +166,3 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
                                    targets=['preview'],
                                    inputs=['chain_name', 'inputAtomStruct', 'inputSequenceROIs'],
                                    outputs=[])
-
-
-class SelectResidueWizard(SelectChainWizard):
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def editionListOfResidues(self, modelsFirstResidue, model, chain):
-      residueList = []
-      for modelID, chainDic in modelsFirstResidue.items():
-        if int(model) == modelID:
-          for chainID, seq_number in chainDic.items():
-            if chain == chainID:
-              for i in seq_number:
-                residueList.append('{"index": %d, "residue": "%s"}' % (i[0], str(i[1])))
-      return residueList
-
-    def getResidues(self, form, inputParam):
-      protocol = form.protocol
-      inputName = inputParam[0]
-      if type(inputName) == list:
-          inputName = inputName[getattr(protocol, inputParam[1]).get()]
-
-      inputObj = getattr(protocol, inputName).get()
-      if issubclass(type(inputObj), AtomStruct):
-          try:
-            modelsLength, modelsFirstResidue = self.getModelsChainsStep(protocol, inputName)
-          except Exception as e:
-            print("ERROR: ", e)
-            return
-          selection = getattr(protocol, inputParam[1]).get()
-
-          struct = json.loads(selection)  # From wizard dictionary
-          chain, model = struct["chain"].upper().strip(), int(struct["model"])
-
-          residueList = self.editionListOfResidues(modelsFirstResidue, model, chain)
-          finalResiduesList = []
-          for i in residueList:
-            finalResiduesList.append(String(i))
-
-      elif issubclass(type(inputObj), Sequence) or issubclass(type(inputObj), SequenceVariants):
-          finalResiduesList = []
-          for i, res in enumerate(inputObj.getSequence()):
-            stri = '{"index": %s, "residue": "%s"}' % (i + 1, RESIDUES1TO3[res])
-            finalResiduesList.append(String(stri))
-
-      return finalResiduesList
-
-    def show(self, form, *params):
-      inputParam, outputParam = self.getInputOutput(form)
-      finalResiduesList = self.getResidues(form, inputParam)
-      provider = ListTreeProviderString(finalResiduesList)
-      dlg = dialog.ListDialog(form.root, "Chain residues", provider,
-                              "Select one residue (residue number, "
-                              "residue name)")
-      roiStr = ''
-      idxs = [json.loads(dlg.values[0].get())['index'], json.loads(dlg.values[-1].get())['index']]
-      for i in range(idxs[0] - 1, idxs[1]):
-        roiStr += RESIDUES3TO1[json.loads(finalResiduesList[i].get())['residue']]
-
-      intervalStr = '{"index": "%s-%s", "residues": "%s"}' % (idxs[0], idxs[1], roiStr)
-      form.setVar(outputParam[0], intervalStr)
-
-
-SelectResidueWizard().addTarget(protocol=ProtDefinePockets,
-                                targets=['resPosition'],
-                                inputs=['inputAtomStruct', 'chain_name'],
-                                outputs=['resPosition'])
-
-SelectResidueWizard().addTarget(protocol=ProtDefineSeqROI,
-                                targets=['resPosition'],
-                                inputs=[['inputSequence', 'inputSequenceVariants'], 'chooseInput'],
-                                outputs=['resPosition'])
-

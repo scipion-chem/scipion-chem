@@ -93,14 +93,14 @@ class ProtDefineSeqROI(EMProtocol):
                        help="Mutations to be defined as sequence ROIs.\n"
                             "You can do multiple selection. Each mutation will be a different ROI")
 
+        # Common for ROIs independent of the origin
+        group.addParam('descrip', params.StringParam,
+                       label='ROI description: ', condition='whichToAdd==0',
+                       help='Specify some description for this region of interest')
+
         group.addParam('addROI', params.LabelParam,
                        label='Add defined ROIs: ',
                        help='Add defined residues, variant or mutations to become a ROI')
-
-        #Common for ROIs independent of the origin
-        group.addParam('descrip', params.StringParam,
-                       label='ROI description: ',
-                       help='Specify some description for this region of interest')
         group.addParam('inROIs', params.TextParam, width=70, default='',
                       label='Input residues: ',
                       help='Input residues to define the ROI.')
