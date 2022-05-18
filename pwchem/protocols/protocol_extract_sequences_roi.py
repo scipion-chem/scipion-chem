@@ -74,6 +74,12 @@ class ProtExtractSeqsROI(EMProtocol):
         group.addParam('inputSequences', params.PointerParam, pointerClass='SetOfSequences',
                       allowsNull=False, label="Input sequences: ",
                       help='Select the set of sequences object where the ROI will be defined')
+        group.addParam('useCons', params.BooleanParam, default=True,
+                       label='Use consensus sequence for output: ', expertLevel=params.LEVEL_ADVANCED,
+                       help='Use consensus sequence for the sequence ROIs output or a specific input sequence')
+        group.addParam('outSeq', params.StringParam, default='', condition='not useCons',
+                       label='Output sequence: ', expertLevel=params.LEVEL_ADVANCED,
+                       help='input sequence to use for the output sequence ROIs')
 
         group = form.addGroup('Variability measure')
         group.addParam('method', params.EnumParam, default=3,
@@ -127,14 +133,22 @@ class ProtExtractSeqsROI(EMProtocol):
         outFile = self.calcConservation()
 
     def defineOutputStep(self):
-        consSeq = str(self.calcConsensus())
-        outSeq = self.inputSequences.get().getFirstItem()
-        outSeq.setSequence(consSeq)
+        if self.useCons:
+            outStr = str(self.calcConsensus())
+            outSeq = self.inputSequences.get().getFirstItem()
+            outSeq.setSequence(outStr)
+            outSeq.setSeqName('ConsensusSequence')
+        else:
+            chosenIdx = int(self.outSeq.get().split(')')[0]) - 1
+            for i, seq in enumerate(self.inputSequences.get()):
+              if i == chosenIdx:
+                  outSeq, outStr = seq, seq.getSequence()
+                  break
 
         roiIdxs = self.getROIs()
         outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
         for idxs in roiIdxs:
-            roi = consSeq[idxs[0]-1:idxs[1]-1]
+            roi = outStr[idxs[0]-1:idxs[1]-1]
             if len(roi.replace('-', '')) >= self.minSize.get():
                 roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs))
                 seqROI = SequenceROI(sequence=outSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])

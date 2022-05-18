@@ -186,3 +186,30 @@ class CheckSequencesConservation(EmWizard):
 
     plt.show()
 
+class GetSequencesWizard(EmWizard):
+    """Lists the sequences in a SetOfSequences and choose one"""
+    _targets = [(ProtExtractSeqsROI, ['outSeq'])]
+
+    def getListOfSequences(self, protocol):
+      seqList = []
+      if hasattr(protocol, 'inputSequences') and protocol.inputSequences.get() is not None:
+        for i, seq in enumerate(protocol.inputSequences.get()):
+          seqList.append('{}) {}'.format(i+1, seq.clone()))
+      return seqList
+
+    def show(self, form, *params):
+      protocol = form.protocol
+      try:
+        listOfSeqs = self.getListOfSequences(protocol)
+      except Exception as e:
+        print("ERROR: ", e)
+        return
+
+      finalSeqsList = []
+      for i in listOfSeqs:
+        finalSeqsList.append(String(i))
+      provider = ListTreeProviderString(finalSeqsList)
+      dlg = dialog.ListDialog(form.root, "Sequences", provider,
+                              "Select one sequence")
+      form.setVar('outSeq', dlg.values[0].get())
+
