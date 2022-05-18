@@ -27,9 +27,8 @@
 import os
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwchem.objects import SequencesAlignment
-from pwchem.utils.utilsFasta import clustalOmegaAlignSequences, muscleAlignmentSequences
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
@@ -50,27 +49,35 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
     def _defineParams(self, form):
 
         form.addSection(label='Input')
-
-        form.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
+        group = form.addGroup('Input')
+        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
                       label='Input Set of Sequence File: ', allowsNull=False,
                       help="Set of sequences to be alignment ")
 
-        form.addParam('programList', EnumParam, choices=[CLUSTALO, MUSCLE, MAFFT], default=0,
+        group = form.addGroup('Program')
+        group.addParam('programList', EnumParam, choices=[CLUSTALO, MUSCLE, MAFFT], default=0,
                       label='Select a multiple sequence alignment program: ',
-                      help="Program selected to run the alignment")
-        form.addParam('muscleAlg', EnumParam, choices=['Slow', 'Fast'], default=0,
-                      label='Muscle algorithm to use: ', condition='programList==1',
-                      help="Muscle algorithm to use:\n -Slow: PPP\n -Fast: Super5")
+                      help="Program selected to run the alignment.\n")
 
-        form.addParam('additionalFormat', BooleanParam, expertLevel=LEVEL_ADVANCED,
+        group.addParam('additionalFormat', BooleanParam, expertLevel=LEVEL_ADVANCED,
                       label='Additional sequence format: ', default=False,
                       help="Other standard formats from EMBOSS seqret")
 
-        form.addParam('embossFormats', EnumParam, default=1,
+        group.addParam('embossFormats', EnumParam, default=1,
                       choices=list(EMBOSS_FORMATS.keys()),
                       condition='additionalFormat', expertLevel=LEVEL_ADVANCED,
                       label='EMBOSS seq output format: ',
                       help="Sequence formats from EMBOSS seqret")
+
+        group = form.addGroup('Parameters')
+        group.addParam('extraParams', TextParam, default="",
+                       label='Extra parameters (Auto params by default): ',
+                       help="Extra parameters to use in the alignment:\n"
+                            "CLUSTALO: http://www.clustal.org/omega/README\n"
+                            "MUSCLE: https://drive5.com/muscle5/manual/commands.html\n"
+                            "MAFFT: https://mafft.cbrc.jp/alignment/software/manual/manual.html")
+
+
 
     def _insertAllSteps(self):
         self._insertFunctionStep('multipleAlignment')
@@ -79,26 +86,23 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         programName = self.getEnumText('programList')
         print('Aligning with: ', programName)
         setForAlignment = self.setOfSequences.get()
-        input_file = self._getPath('SequencesForAlignment.fasta')
+        input_file = os.path.abspath(self._getPath('SequencesForAlignment.fasta'))
+        setForAlignment.exportToFile(input_file)
+        extraArgs = self.getExtraArgs()
 
         # Clustal Omega
         if programName == CLUSTALO:
-            output_file = self._getPath('clustal_Omega.aln')
-            args = ' --outfmt=clu'
-            cline = clustalOmegaAlignSequences(setForAlignment, input_file, output_file)
+            output_file = os.path.abspath(self._getPath('clustal_Omega.aln'))
+            cline = 'clustalo -i {} {} -o {} --outfmt=clu'.format(input_file, extraArgs, output_file)
 
         # Muscle
         elif programName == MUSCLE:
-            output_file = self._getPath('muscle.fa')
-
-            setForAlignment.exportToFile(input_file)
-            alg = 'align' if self.muscleAlg.get() == 0 else 'super5'
-            cline = 'muscle -{} {} -output {}'.format(alg, input_file, output_file)
+            output_file = os.path.abspath(self._getPath('muscle.fa'))
+            cline = 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
-            output_file = self._getPath('mafft.aln')
-            setForAlignment.exportToFile(input_file)
-            cline = 'mafft --auto --clustalout {} > {}'.format(input_file, output_file)
+            output_file = os.path.abspath(self._getPath('mafft.aln'))
+            cline = 'mafft --clustalout {} {} > {}'.format(input_file, extraArgs, output_file)
 
         self.runJob(cline, '')
 
@@ -115,3 +119,15 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
     def _validate(self):
         errors = []
         return errors
+
+    def getExtraArgs(self):
+        args = self.extraParams.get()
+        if args.strip() == '':
+            if self.getEnumText('programList') == MUSCLE:
+                args += '-align'
+            elif self.getEnumText('programList') == MAFFT:
+                args += '--auto'
+            elif self.getEnumText('programList') == CLUSTALO:
+                args += '--auto'
+        return args.strip()
+
