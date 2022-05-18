@@ -44,7 +44,7 @@ from pwem.objects import AtomStruct, Sequence
 from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
 from pwchem.objects import SequenceVariants
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3
+from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 class AddResidueWizard(EmWizard):
@@ -60,28 +60,75 @@ class AddResidueWizard(EmWizard):
 
 ######################## Variable wizards ####################
 
-SelectChainWizard().addTarget(protocol=ProtDefinePockets,
+class SelectChainWizardQT(SelectChainWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+  @classmethod
+  def getModelsChainsStep(cls, protocol, inputParamName):
+    """ Returns (1) list with the information
+       {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
+       (2) list with residues, position and chain (modelsFirstResidue)"""
+    structureHandler = AtomicStructHandler()
+    fileName = ""
+    AS = getattr(protocol, inputParamName).get()
+    if type(AS) == str:
+      if os.path.exists(AS):
+        fileName = AS
+      else:
+        pdbID = AS
+        url = "https://www.rcsb.org/structure/"
+        URL = url + ("%s" % pdbID)
+        try:
+          response = requests.get(URL)
+        except:
+          raise Exception("Cannot connect to PDB server")
+        if (response.status_code >= 400) and (response.status_code < 500):
+          raise Exception("%s is a wrong PDB ID" % pdbID)
+        fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir="/tmp/")
+
+    elif str(type(AS).__name__) == 'SchrodingerAtomStruct':
+        fileName = os.path.abspath(AS.convert2PDB())
+    elif AS.getFileName().endswith('.pdbqt'):
+      proteinFile = AS.getFileName()
+      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
+      fileName = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+      args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), fileName)
+      runOpenBabel(protocol=protocol, args=args, popen=True)
+
+    else:
+        fileName = os.path.abspath(AS.getFileName())
+
+    structureHandler.read(fileName)
+    structureHandler.getStructure()
+    return structureHandler.getModelsChains()
+
+class SelectResidueWizardQT(SelectResidueWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+  @classmethod
+  def getModelsChainsStep(cls, protocol, inputParamName):
+      return SelectChainWizardQT().getModelsChainsStep(protocol, inputParamName)
+
+SelectChainWizardQT().addTarget(protocol=ProtDefinePockets,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
 
-SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
+SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name1'],
                               inputs=['inputAtomStruct1'],
                               outputs=['chain_name1'])
 
-SelectChainWizard().addTarget(protocol=ProtChemPairWiseAlignment,
+SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name2'],
                               inputs=['inputAtomStruct2'],
                               outputs=['chain_name2'])
 
 
-SelectResidueWizard().addTarget(protocol=ProtDefinePockets,
+SelectResidueWizardQT().addTarget(protocol=ProtDefinePockets,
                                 targets=['resPosition'],
                                 inputs=['inputAtomStruct', 'chain_name'],
                                 outputs=['resPosition'])
 
-SelectResidueWizard().addTarget(protocol=ProtDefineSeqROI,
+SelectResidueWizardQT().addTarget(protocol=ProtDefineSeqROI,
                                 targets=['resPosition'],
                                 inputs=[{'chooseInput': ['inputSequence', 'inputSequenceVariants']}],
                                 outputs=['resPosition'])
