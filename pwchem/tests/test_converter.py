@@ -32,9 +32,9 @@ from pathlib import Path
 from pyworkflow.tests import *
 from pwem.protocols.protocol_import import ProtImportPdb
 
-from pwchem.protocols.protocol_import_smallMolecules import ProtChemImportSmallMolecules as importSM
+from pwchem.protocols import ProtChemImportSmallMolecules as importSM
 
-from pwchem.protocols.protocol_converter import ConvertStructures as converter
+from pwchem.protocols import ConvertStructures as converter
 
 
 class TestImportBase(BaseTest):

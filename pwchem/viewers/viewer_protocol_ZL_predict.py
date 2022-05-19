@@ -27,7 +27,7 @@
 import os
 from pathlib import Path
 
-from pwchem.protocols.protocol_ZL_predict import ProtChemZLPredict
+from pwchem.protocols import ProtChemZLPredict
 from pwchem import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import LabelParam, StringParam
