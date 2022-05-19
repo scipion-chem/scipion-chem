@@ -58,3 +58,4 @@ from .protocol_define_sequence_roi import ProtDefineSeqROI
 from .protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
 from .protocol_extract_sequences_roi import ProtExtractSeqsROI
 from .protocol_import_sequence_roi import ProtImportSeqROI
+from .protocol_operate_sequence_rois import ProtOperateSeqROI
