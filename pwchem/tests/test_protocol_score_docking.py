@@ -99,7 +99,7 @@ class TestScoreDocking(BaseTest):
         ProtDefinePockets,
         inputAtomStruct=cls.protPrepareReceptor.outputStructure,
         inResidues='{"model": 0, "chain": "C", "index": "58-58", "residues": "H"}\n'
-                   '{"model": 0, "chain": "C", "index": "101-101", "residues": "L"}')
+                   '{"model": 0, "chain": "C", "index": "101-101", "residues": "L"}\n')
 
       cls.proj.launchProtocol(cls.protDefPockets, wait=False)
 

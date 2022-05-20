@@ -108,7 +108,7 @@ class ProtExtractSeqsROI(EMProtocol):
                             'or is not conserved depending on its conservation values.\n'
                             'Conservation values are normalized from 0 (high conservation) to 1 (low conservation)')
         group.addParam('flexThres', params.FloatParam,
-                       label='Flexible threshold for conserved region: ',
+                       label='Flexible threshold for conserved region: ', allowsNull=True,
                        help='This threshold allows an already started conserved region to keep growing if the '
                             'conservation values passes it even if it does not pass the main threshold.\n'
                             'Conservation values are normalized from 0 (high conservation) to 1 (low conservation)')
@@ -218,8 +218,8 @@ class ProtExtractSeqsROI(EMProtocol):
                     inRoi = True
                     iniRoi = i + 1
 
-            elif ((v > self.flexThres.get() and self.direction.get() == 1) or \
-                    (v < self.flexThres.get() and self.direction.get() == 0)) and inRoi:
+            elif ((v > flexThres and self.direction.get() == 1) or \
+                    (v < flexThres and self.direction.get() == 0)) and inRoi:
                 if fails >= self.numFlex.get():
                     rois.append([iniRoi, i + 1])
                     inRoi = False
@@ -305,6 +305,6 @@ class ProtExtractSeqsROI(EMProtocol):
         entrs = []
         for j in range(seqsArr.shape[1]):
             counts = self.getElementNumber(seqsArr[:,j])
-            ent = 1 - max(counts) / len(counts)
+            ent = 1 - max(counts) / sum(counts)
             entrs.append(ent)
         return entrs

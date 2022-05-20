@@ -92,7 +92,8 @@ class SequenceVariants(data.EMFile):
         self._sequence = None
 
     def __str__(self):
-        return ("{} (id={}, name={})".format(self.getClassName(), self.getId(), self.getSeqName()))
+        return ("{} (id={}, numberOfVariants={})".format(self.getClassName(), self.getId(),
+                                                         len(self.getMutationsInLineage())))
 
     def setSequence(self, sequenceObj):
         self._sequence = sequenceObj
