@@ -30,5 +30,8 @@ from .test_list_operate import TestListOperate
 from .test_export_csv import TestExportcsv
 from .test_ligand_preparation import TestLigandPreparation
 from .test_converter import TestConverter
+from .test_protocol_consensus_docking import TestConsensusDocking
+from .test_protocol_define_pockets import TestDefinePockets
+from .test_protocol_score_docking import TestScoreDocking
 
 
