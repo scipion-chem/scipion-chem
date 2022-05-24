@@ -26,6 +26,12 @@
 # **************************************************************************
 
 PYMOL_HOME = 'PYMOL_HOME'
+#Constant dictionaries
+MGL_DIC = {'name': 'mgltools',    'version': '1.5.6', 'home': 'MGL_HOME'}
+PYMOL_DIC = {'name': 'pymol',       'version': '2.5',   'home': PYMOL_HOME}
+JCHEM_DIC = {'name': 'jchempaint',  'version': '3.3',   'home': 'JCHEM_HOME'}
+PLIP_DIC = {'name': 'plip',        'version': '2.2',   'home': 'PLIP_HOME'}
+ALIVIEW_DIC = {'name': 'aliview',    'version': '1.28',   'home': 'ALIVIEW_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',

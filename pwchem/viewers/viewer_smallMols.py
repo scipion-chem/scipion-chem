@@ -26,14 +26,16 @@
 
 import os
 
-from pwchem.objects import SetOfSmallMolecules
 from pyworkflow.protocol.params import EnumParam, LabelParam
 import pyworkflow.viewer as pwviewer
+from pyworkflow.gui.dialog import showError
+
+from pwchem.objects import SetOfSmallMolecules
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import sortMolsByUnique, buildPMLDockingSingleStr, writePmlFile, getPmlsDir
 from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
-from pyworkflow.gui.dialog import showError
 from pwchem import Plugin as pwchemPlugin
+from pwchem.protocols import ProtocolConsensusDocking
 
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
@@ -360,6 +362,12 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     clean_PDB(auxPath, outPath, waters=True, HETATM=False)
     return outPath
 
-  def _validate(self):
-    return []
+
+class ProtConsensusDockingViewer(SmallMoleculesViewer):
+  """ Visualize the output of protocol autodock """
+  _label = 'Viewer consensus docking'
+  _targets = [ProtocolConsensusDocking]
+
+  def __init__(self, **args):
+    super().__init__(**args)
 

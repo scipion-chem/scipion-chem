@@ -44,6 +44,7 @@ from pwem.convert import cifToPdb
 from pwchem.objects import SetOfPockets, ProteinPocket
 from pwchem.utils import *
 from pwchem import Plugin
+from pwchem.constants import MGL_DIC
 
 COORDS, RESIDUES, LIGANDS = 0, 1, 2
 
@@ -116,7 +117,7 @@ class ProtDefinePockets(EMProtocol):
         structure = parser.get_structure(self.getProteinName(), self.getProteinFileName())
         self.structModel = structure[0]
         self.structSurface = get_surface(self.structModel,
-                                         MSMS='{}/MGLToolsPckgs/binaries/msms'.format(Plugin.getMGLPath()))
+                                         MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
     def definePocketsStep(self):
         originCoords = self.getOriginCoords()

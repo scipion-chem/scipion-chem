@@ -45,6 +45,7 @@ from pwchem.objects import SetOfPockets, ProteinPocket
 from pwchem.utils import *
 from pwchem.utils.utilsFasta import pairwiseAlign
 from pwchem import Plugin
+from pwchem.constants import MGL_DIC
 
 
 class ProtMapSequenceROI(EMProtocol):
@@ -103,7 +104,7 @@ class ProtMapSequenceROI(EMProtocol):
         parser = PDBParser()
         structModel = parser.get_structure(self.getASName(), self.getASFileName())[0] # 0: modelID?
         self.structSurface = get_surface(structModel,
-                                         MSMS='{}/MGLToolsPckgs/binaries/msms'.format(Plugin.getMGLPath()))
+                                         MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
         mapDic = self.mapResidues(structModel)
 
