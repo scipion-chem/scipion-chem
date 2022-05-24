@@ -40,11 +40,7 @@ from .bibtex import _bibtexStr
 from .constants import *
 
 _logo = 'tool.png'
-JCHEM, JCHEM_DEFAULT_VERSION = 'jchempaint', '3.3'
-PYMOL, PYMOL_DEFAULT_VERSION = 'pymol', '2.5'
-PLIP, PLIP_DEFAULT_VERSION = 'plip', '2.2'
 RDKIT = 'rdkit'
-ALIVIEW, ALIVIEW_DEFAULT_VERSION = 'aliview',  '1.28'
 
 class Plugin(pwem.Plugin):
     _rdkitHome = os.path.join(pwem.Config.EM_ROOT, RDKIT)
@@ -53,7 +49,6 @@ class Plugin(pwem.Plugin):
     def defineBinaries(cls, env):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
-
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
@@ -64,8 +59,11 @@ class Plugin(pwem.Plugin):
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
-        cls._defineEmVar('MGL_HOME', 'mgltools-1.5.6')
-        cls._defineEmVar(PYMOL_HOME, 'pymol-2.5')
+        cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
+        cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
+        cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
+        cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
+
 
     @classmethod
     def getRDKitEnvActivation(cls):
@@ -94,7 +92,7 @@ class Plugin(pwem.Plugin):
       plip_commands += 'conda install -y -c conda-forge plip && touch {}'.format(PLIP_INSTALLED)
 
       plip_commands = [(plip_commands, PLIP_INSTALLED)]
-      env.addPackage('plip', version='2.2',
+      env.addPackage(PLIP_DIC['name'], version=PLIP_DIC['version'],
                      tar='void.tgz',
                      commands=plip_commands,
                      default=True)
@@ -104,10 +102,10 @@ class Plugin(pwem.Plugin):
       PYMOL_INSTALLED = 'pymol_installed'
       pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
         format(cls.getPyMolTar())
-      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.format(cls.getPyMolTar(), cls.getPyMolTar())
+      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(PYMOL_DIC)]*2)
       pymol_commands += 'touch ' + PYMOL_INSTALLED
       pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
-      env.addPackage(PYMOL, version=PYMOL_DEFAULT_VERSION,
+      env.addPackage(PYMOL_DIC['name'], version=PYMOL_DIC['version'],
                      tar='void.tgz',
                      commands=pymol_commands,
                      default=True)
@@ -117,12 +115,12 @@ class Plugin(pwem.Plugin):
       MGL_INSTALLED = "initMGLtools.sh"
       mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
         format(cls.getMGLTar())
-      mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(cls.getMGLTar(), cls.getMGLTar())
-      mgl_commands += '{} && '.format(cls.getMGLPath('install.sh'))
+      mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)]*2)
+      mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.sh'))
       mgl_commands += 'touch ' + MGL_INSTALLED
       mgl_commands = [(mgl_commands, MGL_INSTALLED)]
 
-      env.addPackage('mgltools', version='1.5.6',
+      env.addPackage(MGL_DIC['name'], version=MGL_DIC['version'],
                      tar='void.tgz',
                      commands=mgl_commands,
                      default=True)
@@ -132,12 +130,12 @@ class Plugin(pwem.Plugin):
         JCHEM_INSTALLED = 'jchem_installed'
         jchem_commands = 'wget https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar -O {} && '.\
           format(cls.getJChemPath())
-        jchem_commands += 'chmod +x {} && '.format(cls.getJChemPath())
+        jchem_commands += 'chmod +x {} && '.format(cls.getDefPath(JCHEM_DIC))
         jchem_commands += ' touch %s' % JCHEM_INSTALLED
 
         jchem_commands = [(jchem_commands, JCHEM_INSTALLED)]
 
-        env.addPackage('jchempaint', version='3.3',
+        env.addPackage(JCHEM_DIC['name'], version=JCHEM_DIC['version'],
                        tar='void.tgz',
                        commands=jchem_commands,
                        default=True)
@@ -165,8 +163,8 @@ class Plugin(pwem.Plugin):
     def addAliViewPackage(cls, env, default=False):
       SEQS_INSTALLED = 'aliview_installed'
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
-                      '--no-check-certificate && '.format(cls.getAliViewTar())
-      seqs_commands += 'tar -xf {} && rm {} &&'.format(cls.getAliViewTar(), cls.getAliViewTar())
+                      '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
+      seqs_commands += 'tar -xf {} && rm {} &&'.format(*[cls.getDefTar(ALIVIEW_DIC)]*2)
       seqs_commands += ' conda install -y -c bioconda clustalo &&'
       seqs_commands += ' conda install -y -c bioconda muscle &&'
       seqs_commands += ' conda install -y -c bioconda mafft &&'
@@ -175,7 +173,7 @@ class Plugin(pwem.Plugin):
 
       seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
 
-      env.addPackage(ALIVIEW, version=ALIVIEW_DEFAULT_VERSION,
+      env.addPackage(ALIVIEW_DIC['name'], version=ALIVIEW_DIC['version'],
                      tar='void.tgz',
                      commands=seqs_commands,
                      default=True)
@@ -199,7 +197,9 @@ class Plugin(pwem.Plugin):
     @classmethod
     def runJChemPaint(cls, protocol, cwd=None):
       """ Run jchempaint command from a given protocol. """
-      protocol.runJob('java -jar {}'.format(cls.getJChemPath()), arguments='', env=cls.getEnviron(), cwd=cwd)
+      protocol.runJob('java -jar {}'.format(cls.getProgramHome(JCHEM_DIC, 'jchempaint-{}.jar'.
+                                                               format(JCHEM_DIC['version']))),
+                      arguments='', env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
     def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
@@ -235,44 +235,19 @@ class Plugin(pwem.Plugin):
       fnDir = os.path.split(pwchem.__file__)[0]
       return os.path.join(fnDir, path)
 
+    # Default version paths
     @classmethod
-    def getMGLPath(cls, path=''):
-      return os.path.join(cls.getVar('MGL_HOME'), path)
+    def getDefPath(cls, programDic, path=''):
+        return os.path.join(pwem.Config.EM_ROOT, '{}-{}'.format(programDic['name'], programDic['version']), path)
 
+    # In use paths
     @classmethod
-    def getJChemPath(cls):
-        softwareHome = os.path.join(pwem.Config.EM_ROOT, JCHEM + '-' + JCHEM_DEFAULT_VERSION)
-        return softwareHome + '/' + JCHEM + '-' + JCHEM_DEFAULT_VERSION + '.jar'
-
-    @classmethod
-    def getAliViewPath(cls):
-      softwareHome = os.path.join(pwem.Config.EM_ROOT, ALIVIEW + '-' + ALIVIEW_DEFAULT_VERSION)
-      return softwareHome
-
-    @classmethod
-    def getAliViewTar(cls):
-      return cls.getAliViewPath() + '/' + ALIVIEW + '-' + ALIVIEW_DEFAULT_VERSION + '.tgz'
-
-    @classmethod
-    def getPyMolDir(cls):
-      softwareHome = os.path.join(pwem.Config.EM_ROOT, PYMOL + '-' + PYMOL_DEFAULT_VERSION)
-      return softwareHome
+    def getProgramHome(cls, programDic, path=''):
+        return os.path.join(cls.getVar(programDic['home']), path)
 
     @classmethod
     def getScriptsDir(cls, scriptName):
-        return cls.getPluginHome('scripts/%s' % scriptName)
-
-    @classmethod
-    def getPyMolTar(cls):
-        return cls.getPyMolDir() + '/' + PYMOL + '-' + PYMOL_DEFAULT_VERSION + '.tar.bz2'
-
-    @classmethod
-    def getMGLTar(cls):
-      return cls.getMGLPath('MGLTools.tar.gz')
-
-    @classmethod
-    def getPyMolPath(cls):
-      return cls.getPyMolDir() + '/' + 'pymol'
+      return cls.getPluginHome('scripts/%s' % scriptName)
 
     @classmethod
     def getMGLEnviron(cls):
@@ -280,13 +255,18 @@ class Plugin(pwem.Plugin):
       environ = pwutils.Environ(os.environ)
       pos = pwutils.Environ.BEGIN
       environ.update({
-        'PATH': cls.getMGLPath('bin')
+        'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
       }, position=pos)
       return environ
 
     @classmethod
     def getODDTModelsPath(cls, path=''):
       return os.path.abspath(os.path.join(cls._rdkitHome, 'oddtModels', path))
+
+    @classmethod
+    def getDefTar(cls, programDic, ext='tgz'):
+      return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
+
 
 
 DataSet(name='smallMolecules', folder='smallMolecules',
