@@ -114,7 +114,7 @@ class Plugin(pwem.Plugin):
     def addMGLToolsPackage(cls, env, default=False):
       MGL_INSTALLED = "initMGLtools.sh"
       mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
-        format(cls.getMGLTar())
+        format(cls.getDefTar(MGL_DIC, ext='tar.gz'))
       mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)]*2)
       mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.sh'))
       mgl_commands += 'touch ' + MGL_INSTALLED
