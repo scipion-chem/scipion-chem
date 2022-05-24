@@ -30,6 +30,7 @@ from pwem.objects import SetOfSequences, Sequence
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequencesAlignment, SequenceVariants, SetOfSequenceROIs
+from pwchem.constants import *
 
 
 class SequenceAliView(pwviewer.CommandView):
@@ -37,7 +38,7 @@ class SequenceAliView(pwviewer.CommandView):
 
     def __init__(self, seqFiles, cwd, **kwargs):
         pwviewer.CommandView.__init__(self, '{}/aliview/aliview {}'.
-                                      format(pwchem_plugin.getAliViewPath(), ' '.join(seqFiles)),
+                                      format(pwchem_plugin.getProgramHome(ALIVIEW_DIC), ' '.join(seqFiles)),
                                       cwd=cwd, **kwargs)
 
     def show(self):

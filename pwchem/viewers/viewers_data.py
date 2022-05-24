@@ -44,7 +44,7 @@ class PyMol:
     PyMol_HOME variable is read from the ~/.config/scipion.conf file.
     """
     environ = pwutils.Environ(os.environ)
-    environ.set('PATH', os.path.join(pwchem_plugin.getVar(PYMOL_HOME), 'bin'),
+    environ.set('PATH', pwchem_plugin.getProgramHome(PYMOL_DIC, path='bin'),
                 position=pwutils.Environ.BEGIN)
     return environ
 
@@ -53,7 +53,8 @@ class PyMolView(pwviewer.CommandView):
   """ View for calling an external command. """
 
   def __init__(self, pymolArgs, cwd, **kwargs):
-    pwviewer.CommandView.__init__(self, [pwchem_plugin.getPyMolPath(), *pymolArgs.split()],
+    print('command: ', [pwchem_plugin.getProgramHome(PYMOL_DIC), *pymolArgs.split()])
+    pwviewer.CommandView.__init__(self, [pwchem_plugin.getProgramHome(PYMOL_DIC, 'bin/pymol'), *pymolArgs.split()],
                                   cwd=cwd,
                                   env=PyMol.getEnviron(), **kwargs)
 
