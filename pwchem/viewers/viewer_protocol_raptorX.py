@@ -27,10 +27,10 @@
 import glob
 from pathlib import Path
 
-from pwchem.protocols.protocol_raptorX import ProtChemRaptorX
+from pwchem.protocols import ProtChemRaptorX
 from pwchem import Plugin
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
-from pyworkflow.protocol.params import LabelParam, StringParam
+from pyworkflow.protocol.params import StringParam
 import pyworkflow.utils as pwutils
 from pwem.objects.data import AtomStruct
 

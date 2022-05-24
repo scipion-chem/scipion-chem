@@ -27,9 +27,8 @@
 # **************************************************************************
 
 from pyworkflow.tests import *
-from pathlib import Path
-from pwchem.protocols.protocol_import_smallMolecules import ProtChemImportSmallMolecules
-from pwchem.protocols.protocol_ligand_preparation import ProtChemOBabelPrepareLigands
+from pwchem.protocols import ProtChemImportSmallMolecules
+from pwchem.protocols import ProtChemOBabelPrepareLigands
 
 
 class TestImportBase(BaseTest):

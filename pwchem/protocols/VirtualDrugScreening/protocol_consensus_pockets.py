@@ -41,7 +41,7 @@ from pwem.objects.data import AtomStruct
 from pwchem.objects import SetOfPockets, PredictPocketsOutput
 from pwchem.utils import *
 
-from ..constants import *
+from pwchem.constants import *
 
 MAXVOL, MAXSURF = 0, 1
 

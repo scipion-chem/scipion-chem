@@ -102,12 +102,12 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         elif programName == MAFFT:
             output_file = os.path.abspath(self._getPath('mafft.aln'))
-            cline = 'mafft --clustalout {} {} > {}'.format(input_file, extraArgs, output_file)
+            cline = 'mafft {} --clustalout {} > {}'.format(extraArgs, input_file, output_file)
 
         self.runJob(cline, '')
 
         out_fileAligned = SequencesAlignment(alignmentFileName=os.path.abspath(output_file))
-        self._defineOutputs(outputAlignment=out_fileAligned)
+        self._defineOutputs(outputSequences=out_fileAligned)
 
         # EMBOSS format
         if self.additionalFormat:

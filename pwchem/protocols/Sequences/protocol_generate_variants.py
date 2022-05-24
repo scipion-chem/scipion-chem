@@ -93,7 +93,7 @@ class ProtChemGenerateVariants(EMProtocol):
             sequenceSet.append(seqVarObj)
 
         sequenceSet.exportToFile(self._getPath('SetOfSequences.fasta'))
-        self._defineOutputs(outputSetOfSequences=sequenceSet)
+        self._defineOutputs(outputSequences=sequenceSet)
 
 
     def _validate(self):
