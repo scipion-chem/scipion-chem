@@ -101,7 +101,7 @@ class Plugin(pwem.Plugin):
     def addPyMolPackage(cls, env, default=False):
       PYMOL_INSTALLED = 'pymol_installed'
       pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
-        format(cls.getPyMolTar())
+        format(cls.getDefTar(PYMOL_DIC, ext='tar.bz2'))
       pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(PYMOL_DIC)]*2)
       pymol_commands += 'touch ' + PYMOL_INSTALLED
       pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
@@ -114,7 +114,7 @@ class Plugin(pwem.Plugin):
     def addMGLToolsPackage(cls, env, default=False):
       MGL_INSTALLED = "initMGLtools.sh"
       mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
-        format(cls.getDefTar(MGL_DIC, ext='tar.gz'))
+        format(cls.getDefTar(MGL_DIC))
       mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)]*2)
       mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.sh'))
       mgl_commands += 'touch ' + MGL_INSTALLED
