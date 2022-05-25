@@ -117,7 +117,8 @@ class Plugin(pwem.Plugin):
       mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
         format(cls.getDefTar(MGL_DIC))
       mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)]*2)
-      mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.sh'))
+      mgl_commands += 'cp install.sh install.bash && sed -i "s/bin\/sh/bin\/bash/g" install.bash && '
+      mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.bash'))
       mgl_commands += 'touch ' + MGL_INSTALLED
       mgl_commands = [(mgl_commands, MGL_INSTALLED)]
 
