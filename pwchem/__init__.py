@@ -102,7 +102,8 @@ class Plugin(pwem.Plugin):
       PYMOL_INSTALLED = 'pymol_installed'
       pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
         format(cls.getDefTar(PYMOL_DIC, ext='tar.bz2'))
-      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(PYMOL_DIC)]*2)
+      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.\
+        format(*[cls.getDefTar(PYMOL_DIC, ext='tar.bz2')]*2)
       pymol_commands += 'touch ' + PYMOL_INSTALLED
       pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
       env.addPackage(PYMOL_DIC['name'], version=PYMOL_DIC['version'],
