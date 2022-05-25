@@ -152,9 +152,10 @@ class TestScoreDocking(BaseTest):
 
     def _runScoreDocking(self, inputDockProts):
       protScoreDocks = self.newProtocol(ProtocolScoreDocking,
-                                       summarySteps='1) Score: Vina\n'
-                                                    '2) Score: RFScore, version 1. PDBbind 2016',
-                                       workFlowSteps=wSteps)
+                                        numberOfThreads=1,
+                                        summarySteps='1) Score: Vina\n'
+                                                     '2) Score: RFScore, version 1. PDBbind 2016',
+                                        workFlowSteps=wSteps)
 
       for i in range(len(inputDockProts)):
           protScoreDocks.inputMoleculesSets.append(inputDockProts[i])
@@ -168,21 +169,24 @@ class TestScoreDocking(BaseTest):
       inputDockProts = []
       doAD4, doVina = False, False
 
-      from autodock.protocols import ProtChemAutodock, ProtChemVina
-      protVina = self._runVina(prot=ProtChemVina, pockets=self.protDefPockets.outputPockets)
-      inputDockProts.append(protVina)
-      doVina = True
+      try:
+          from autodock.protocols import ProtChemAutodock, ProtChemVina
+          protVina = self._runVina(prot=ProtChemVina, pockets=self.protDefPockets.outputPockets)
+          inputDockProts.append(protVina)
+          doVina = True
 
-      protAD4 = self._runAutoDock(prot=ProtChemAutodock, pockets=self.protDefPockets.outputPockets)
-      inputDockProts.append(protAD4)
-      doAD4 = True
+          protAD4 = self._runAutoDock(prot=ProtChemAutodock, pockets=self.protDefPockets.outputPockets)
+          inputDockProts.append(protAD4)
+          doAD4 = True
 
-      self._waitOutput(protVina, 'outputSmallMolecules', sleepTime=5)
-      self._waitOutput(protAD4, 'outputSmallMolecules', sleepTime=5)
-      time.sleep(5)
+          self._waitOutput(protVina, 'outputSmallMolecules', sleepTime=5)
+          self._waitOutput(protAD4, 'outputSmallMolecules', sleepTime=5)
+          time.sleep(5)
+      except:
+          pass
 
       if doVina or doAD4:
-        self._runScoreDocking(inputDockProts)
+          self._runScoreDocking(inputDockProts)
       else:
-        print('No pocket plugins found installed. Try installing P2Rank or Fpocket')
+          print('No pocket plugins found installed. Try installing Autodock')
 
