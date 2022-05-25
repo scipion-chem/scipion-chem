@@ -73,9 +73,9 @@ class TestConverter(TestImportBase):
 
 
     def test_1(self):
-        """ Covert a mix of small molecules file into pdb format
+        """ Convert a mix of small molecules file into pdb format
         """
-        print("\nCovert a mix of small molecules file into pdb format \n")
+        print("\nConvert a mix of small molecules file into pdb format \n")
 
         # Import SetOfSmallMolecules
         smallM = self._importSmallM(self.lig_data)
@@ -107,9 +107,9 @@ class TestConverter(TestImportBase):
 
 
     def test_2(self):
-        """ Covert a mix of small molecules file into smi format
+        """ Convert a mix of small molecules file into smi format
         """
-        print("\nCovert a mix of small molecules file into smi format \n")
+        print("\nConvert a mix of small molecules file into smi format \n")
 
         # Import SetOfSmallMolecules
         smallM = self._importSmallM(self.lig_data)
@@ -141,9 +141,9 @@ class TestConverter(TestImportBase):
 
 
     def test_3(self):
-        """ Covert a pdb protein file into mol2 format
+        """ Convert a pdb protein file into mol2 format
         """
-        print("\nCovert a pdb protein file into mol2 format \n")
+        print("\nConvert a pdb protein file into mol2 format \n")
 
         # Import PDB as Scipion object
         target = self._importPDB()
