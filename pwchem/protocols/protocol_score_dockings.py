@@ -347,12 +347,24 @@ class ProtocolScoreDocking(EMProtocol):
                 resDic[line.split()[0]] = float(line.split()[1])
         return resDic
 
-    def getZScores(self):
+    def getCorrelatedIdxs(self):
         corFile = self._getPath('correlated.tsv')
         correlated = list(range(1, len(self.workFlowSteps.get().strip().split('\n')) + 1))
         if os.path.exists(corFile):
             with open(corFile) as f:
                 correlated = f.readline().split()
+        return correlated
+
+    def getScoreTitles(self, idxs):
+        steps = self.summarySteps.get().strip().split('\n')
+        titles = []
+        for i, st in enumerate(steps):
+            if i in idxs:
+                titles.append(st.split(':')[1].split('.')[0])
+        return titles
+
+    def getZScores(self):
+        correlated = self.getCorrelatedIdxs()
 
         zDic = {}
         for i in correlated:
@@ -368,8 +380,18 @@ class ProtocolScoreDocking(EMProtocol):
 
     def combineZScores(self, zDic):
         finalDic = {}
-        for molFile in zDic:
-            finalDic[molFile] = np.average(zDic[molFile])
+        correlatedIdxs = self.getCorrelatedIdxs()
+        scoreTitles = self.getScoreTitles(correlatedIdxs)
+
+        scoresFile = self._getPath('outputScores.csv')
+        with open(scoresFile, 'w') as f:
+            titles = (';{}'*len(scoreTitles)).format(*scoreTitles)
+            f.write('{}{};{}\n'.format('MolFile', titles, 'CombinedScore'))
+            for molFile in zDic:
+                finalDic[molFile] = np.average(zDic[molFile])
+                indScores = (';{}'*len(zDic[molFile])).format(*zDic[molFile])
+                f.write('{}{};{}\n'.format(molFile, indScores, finalDic[molFile]))
+
         return finalDic
 
     def getScoreFunction(self, msjDic):
