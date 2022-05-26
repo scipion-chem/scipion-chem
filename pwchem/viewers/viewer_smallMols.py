@@ -257,7 +257,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     pmlFile = ''
     for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-      if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
+      if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file and not 'HSD' in file:
         pmlFile = file
 
     if pmlFile != '':
