@@ -176,10 +176,10 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
             if self.method_conf.get() == 0:  # Genetic algorithm
                 args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.mol2" %\
-                       (os.path.abspath(file), self.number_conf.get()-1, fnRoot)
+                       (os.path.abspath(file), self.number_conf.get(), fnRoot)
             else:  # confab
                 args = " %s --confab --original --verbose --conf %s --rcutoff %s -O %s_conformers.mol2" % \
-                       (os.path.abspath(file), self.number_conf.get()-1, str(self.rmsd_cutoff.get()), fnRoot)
+                       (os.path.abspath(file), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
 
             runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
@@ -198,11 +198,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                 fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                 outDir = self._getExtraPath(fnRoot)
                 os.mkdir(outDir)
-                firstConfFile = self._getTmpPath('{}-{}.mol2'.format(fnRoot, 1))
-                shutil.copy(fnSmall, firstConfFile)
                 confFile = self._getExtraPath("{}_conformers.mol2".format(fnRoot))
-                confFile = appendToConformersFile(confFile, firstConfFile,
-                                                  beginning=True)
                 confDir = splitConformerFile(confFile, outDir=outDir)
                 for molFile in os.listdir(confDir):
                     molFile = os.path.abspath(os.path.join(confDir, molFile))
@@ -274,7 +270,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                 f.write(writeLast.split('\n')[0] + '\n')
                 for line in writeLast.split('\n')[1:]:
                     if line:
-                        print(line)
                         sline = line.split()
                         f.write(line[:6] + idsDic[sline[1]].rjust(5) + idsDic[sline[2]].rjust(5) + line[16:] + '\n')
 
