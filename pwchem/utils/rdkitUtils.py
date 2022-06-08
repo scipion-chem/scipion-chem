@@ -40,17 +40,17 @@ if __name__ == "__main__":
             smile=smile.split()[0]
             Draw.MolToFile(Chem.MolFromSmiles(smile),fnOut)
         elif fnIn.endswith('.sdf'):
-            supplier = Chem.rdmolfiles.SDMolSupplier(fnIn)
+            supplier = Chem.SDMolSupplier(fnIn)
             for molecule in supplier:
                 Draw.MolToFile(molecule, fnOut)
         elif fnIn.endswith('.mae') or fnIn.endswith('.maegz'):
-            supplier = Chem.rdmolfiles.MaeMolSupplier(fnIn)
+            supplier = Chem.MaeMolSupplier(fnIn)
             for molecule in supplier:
                 Draw.MolToFile(molecule, fnOut)
         elif fnIn.endswith('.mol2'):
-            supplier = Chem.rdmolfiles.MolFromMol2Block(fnIn)
+            supplier = Chem.MolFromMol2File(fnIn)
             for molecule in supplier:
                 Draw.MolToFile(molecule, fnOut)
         elif fnIn.endswith('.pdb'):
-            molecule = Chem.rdmolfiles.MolFromPDBFile(fnIn)
+            molecule = Chem.MolFromPDBFile(fnIn)
             Draw.MolToFile(molecule, fnOut)

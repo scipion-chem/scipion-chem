@@ -64,6 +64,10 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
         cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
 
+    @classmethod
+    def getEnvActivation(cls, env):
+      activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
+      return activation
 
     @classmethod
     def getRDKitEnvActivation(cls):
@@ -191,10 +195,10 @@ class Plugin(pwem.Plugin):
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
-    def runRDKitScript(cls, protocol, scriptName, args, cwd=None):
+    def runScript(cls, protocol, scriptName, args, env, cwd=None):
       """ Run rdkit command from a given protocol. """
       scriptName = cls.getScriptsDir(scriptName)
-      fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), 'python', scriptName)
+      fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
       protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
