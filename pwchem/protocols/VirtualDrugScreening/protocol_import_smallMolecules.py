@@ -127,13 +127,13 @@ class ProtChemImportSmallMolecules(EMProtocol):
         else:
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
                 fnSmall = os.path.join(self.filesPath.get(), filename)
-                outName = os.path.splitext(os.path.basename(fnSmall))[0]
                 if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
+                    outName = os.path.splitext(os.path.basename(fnSmall))[0]
                     args = ' -i {} --outputName {} --outputDir {}'.format(fnSmall, outName,
                                                                        os.path.abspath(self._getExtraPath()))
                     Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=self._getExtraPath())
                 else:
-                    copyFile(filename, fnSmall)
+                    copyFile(fnSmall, self._getExtraPath(os.path.basename(fnSmall)))
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
         for fnSmall in glob.glob(self._getExtraPath("*")):
