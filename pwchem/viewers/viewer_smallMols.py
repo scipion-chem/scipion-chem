@@ -255,10 +255,18 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
                          cwd=os.path.abspath(pmlsDir))
 
-    pmlFile = ''
+    pmlFile, pmlFiles = '', []
     for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-      if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file and not 'HSD' in file:
-        pmlFile = file
+        if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
+            pmlFiles.append(file)
+
+    for file in pmlFiles:
+        for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
+            if ligName in file:
+                pmlFile = file
+                break
+    if pmlFile == '' and len(pmlFiles) > 0:
+        pmlFile = pmlFiles[0]
 
     if pmlFile != '':
       pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
