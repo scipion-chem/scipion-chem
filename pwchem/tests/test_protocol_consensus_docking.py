@@ -149,6 +149,7 @@ class TestConsensusDocking(BaseTest):
 
     def _runConsensusDocking(self, inputDockProts):
       protConsDocks = self.newProtocol(ProtocolConsensusDocking,
+                                       numberOfThreads=1,
                                        action='_energy', maxmin=False)
 
       for i in range(len(inputDockProts)):
@@ -163,17 +164,20 @@ class TestConsensusDocking(BaseTest):
       inputDockProts = []
       doAD4, doVina = False, False
 
-      from autodock.protocols import ProtChemAutodock, ProtChemVina
-      protVina = self._runVina(prot=ProtChemVina, pockets=self.protDefPockets.outputPockets)
-      inputDockProts.append(protVina)
-      doVina = True
+      try:
+          from autodock.protocols import ProtChemAutodock, ProtChemVina
+          protVina = self._runVina(prot=ProtChemVina, pockets=self.protDefPockets.outputPockets)
+          inputDockProts.append(protVina)
+          doVina = True
 
-      protAD4 = self._runAutoDock(prot=ProtChemAutodock, pockets=self.protDefPockets.outputPockets)
-      inputDockProts.append(protAD4)
-      doAD4 = True
+          protAD4 = self._runAutoDock(prot=ProtChemAutodock, pockets=self.protDefPockets.outputPockets)
+          inputDockProts.append(protAD4)
+          doAD4 = True
 
-      self._waitOutput(protVina, 'outputSmallMolecules', sleepTime=5)
-      self._waitOutput(protAD4, 'outputSmallMolecules', sleepTime=5)
+          self._waitOutput(protVina, 'outputSmallMolecules', sleepTime=5)
+          self._waitOutput(protAD4, 'outputSmallMolecules', sleepTime=5)
+      except:
+          pass
 
 
       #TODO: alternative docking protocols (leDock, rDock)

@@ -26,14 +26,14 @@ setup(
     description='Base Scipion plugin defining objects and protocols for CHEMoinformatics',
     long_description=long_description,
     url='https://github.com/scipion-chem/scipion-chem',
-    author='Carlos Oscar Sorzano',
+    author='Carlos Oscar Sorzano, Daniel Del Hoyo',
     author_email='scipion@cnb.csic.es',
-    keywords='scipion pdb scipion-3',
+    keywords='scipion pdb scipion-3 drug screening chemoinformatics',
     packages=find_packages(),
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'pwchem': ['tool.png'],
+       'pwchem': ['scipion-chem.png'],
     },
     entry_points={
         'pyworkflow.plugin': 'pwchem = pwchem'

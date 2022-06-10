@@ -33,8 +33,10 @@ from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
+
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
+from pwchem.utils import runOpenBabel
 
 class ProtChemImportSmallMolecules(EMProtocol):
     """Import small molecules from a directory. Each molecule should be in a separate file.
@@ -42,12 +44,14 @@ class ProtChemImportSmallMolecules(EMProtocol):
        are accepted.
     """
     _label = 'import small mols'
+    draw = False
+    supportedExt = ['smi', 'mol2', 'sdf', 'pdb', 'mae', 'maegz', 'mol']
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('multiple', BooleanParam, default=True,
+        form.addParam('multipleFiles', BooleanParam, default=True,
                       label='Each file is a molecule')
-        form.addParam('filesPath', PathParam, condition='multiple',
+        form.addParam('filesPath', PathParam, condition='multipleFiles',
                       label="Files directory",
                       help="Directory with the files you want to import.\n\n"
                            "The path can also contain wildcards to select"
@@ -62,7 +66,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                            "file ID\n\n"
                            "NOTE: wildcard characters ('*', '?', '#') "
                            "cannot appear in the actual path.)")
-        form.addParam('filesPattern', StringParam,  condition='multiple',
+        form.addParam('filesPattern', StringParam,  condition='multipleFiles',
                       label='Pattern',
                       default="*",
                       help="Pattern of the files to be imported.\n\n"
@@ -75,7 +79,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                            "You may create small molecules from Smiles (.smi), Tripos Mol2 (.mol2), "
                            "SDF (.sdf), Maestro (.mae, .maegz), or PDB blocks (.pdb)")
 
-        form.addParam('filePath', PathParam, condition='not multiple',
+        form.addParam('filePath', PathParam, condition='not multipleFiles',
                       label='File', help='Allowed formats: \n '
                                          ' - CSV smiles (ID, compound; this is downloaded from ZINC) \n'
                                          ' - Mol2 (Multiple mol2 file) \n'
@@ -86,83 +90,57 @@ class ProtChemImportSmallMolecules(EMProtocol):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
+        if not self.multipleFiles.get():
+            fnSmall = os.path.abspath(self.filePath.get())
+            if fnSmall.endswith(".pdb"):  # Multiple pdb
+                with open(fnSmall) as fIn:
+                    pdbs = fIn.read().split('\nEND\n')[:-1]
+                i = 1
+                names = []
+                for pdb in pdbs:
+                    molName = "molecule_%s" % i
+                    for line in pdb.strip().split('\n'):
+                        if line.startswith('COMPND'):
+                            preName = '_'.join(line.split()[1:])
+                            if not preName in names:
+                                molName = preName
+                                names.append(molName)
+                                break
+                    with open(self._getExtraPath(molName + '.pdb'), 'w') as f:
+                        f.write(pdb)
+                    i += 1
 
-        if not self.multiple.get():
-
-            fnSmall = self._getExtraPath(os.path.split(self.filePath.get())[1])
-            copyFile(self.filePath.get(), fnSmall)
-
-            if fnSmall.endswith(".mol2"): # Multiple mol2
-                with open(fnSmall) as f:
-                    lines = f.readlines()
-                    i = 0
-                    for line in lines:
-                        if line.startswith("#"):
-                            continue
-
-                        if line.startswith("@<TRIPOS>MOLECULE"):
-                            zincID = lines[i+1].split()[0]
-                            fname_small = self._getExtraPath("%s.mol2" %zincID)
-                            f_small = open(fname_small, 'w+')
-                            f_small.write(line)
-
-                        f_small.write(line)
-                        try:
-                            if lines[i+1].startswith("@<TRIPOS>MOLECULE"):
-                                f_small.close()
-                        except:
-                            f_small.close()
-
-                        i += 1
-
-                os.remove(fnSmall)
-
-
-            elif fnSmall.endswith(".sdf"): # Multiple sdf
-                with open(fnSmall) as f:
-                    lines = f.readlines()
-                    lines2write = []
-                    i = 0
-                    for line in lines:
-                        lines2write.append(i)
-
-                        if line.startswith("$$$$"):
-                            zincID = lines[i-5].split()[0]
-                            fname_small = self._getExtraPath("%s.sdf" % zincID)
-                            f_small = open(fname_small, 'w+')
-                            for l in lines2write:
-                                f_small.write(lines[l])
-
-                            lines2write = []
-                            f_small.close()
-
-                        i += 1
-
-                os.remove(fnSmall)
+            elif fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):  # Multiple mae
+                args = ' -i {} --outputDir {}'.format(fnSmall, os.path.abspath(self._getExtraPath()))
+                Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=self._getExtraPath())
 
             else:
-                fh = open(self.filePath.get())
-                for line in fh.readlines():
-                    tokens = line.split(',')
-                    if len(tokens)==2:
-                        fhSmile = open(self._getExtraPath(tokens[0].strip()+".smi"),'w')
-                        fhSmile.write(tokens[1].strip()+"\n")
-                        fhSmile.close()
-                fh.close()
+
+                outFormat = os.path.splitext(fnSmall)[1][1:]
+                if outFormat in ['smi', 'smiles']:
+                    outFormat = 'mol2'
+
+                args = ' -i {} -of {} --outputDir {}'.format(fnSmall, outFormat,
+                                                             os.path.abspath(self._getExtraPath()))
+                Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=self._getExtraPath())
 
         else:
             for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
-                fnSmall = self._getExtraPath(os.path.split(filename)[1])
-                copyFile(filename, fnSmall)
+                fnSmall = os.path.join(self.filesPath.get(), filename)
+                if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
+                    outName = os.path.splitext(os.path.basename(fnSmall))[0]
+                    args = ' -i {} --outputName {} --outputDir {}'.format(fnSmall, outName,
+                                                                       os.path.abspath(self._getExtraPath()))
+                    Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=self._getExtraPath())
+                else:
+                    copyFile(fnSmall, self._getExtraPath(os.path.basename(fnSmall)))
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
-
-
         for fnSmall in glob.glob(self._getExtraPath("*")):
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
 
-            if len(os.listdir(self._getExtraPath())) <= 100: # costly
-                if not fnSmall.endswith('.mae') or not fnSmall.endswith('.maegz'):
+            if len(os.listdir(self._getExtraPath())) <= 100 and self.draw: # costly
+                if not fnSmall.endswith('.mae') and not fnSmall.endswith('.maegz'):
                     fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                     fnOut = self._getExtraPath("%s.png" % fnRoot)
                     args = Plugin.getPluginHome('utils/rdkitUtils.py') + " draw %s %s" % (fnSmall, fnOut)
@@ -174,3 +152,20 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
             outputSmallMolecules.append(smallMolecule)
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+
+
+    def _validate(self):
+        errors = []
+        if not self.multipleFiles.get():
+            ext = os.path.splitext(self.filePath.get())[1][1:]
+            if not ext in self.supportedExt:
+                errors.append('Unknown input file format {}\n'
+                              'Recognized formats: {}'.format(ext, self.supportedExt))
+        else:
+          for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
+              ext = os.path.splitext(filename)[1][1:]
+              if not ext in self.supportedExt:
+                errors.append('Unknown input file format {}\n'
+                              'Recognized formats: {}'.format(ext, self.supportedExt))
+                break
+        return errors

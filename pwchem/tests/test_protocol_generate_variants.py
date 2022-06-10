@@ -57,5 +57,5 @@ class TestGenerateVariants(BaseTest):
 
     def testGenerateVariants(self):
         protVars = self._runGenerateVariants()
-        self.assertIsNotNone(self.protVars.outputSequences)
+        self.assertIsNotNone(protVars.outputSequences)
 

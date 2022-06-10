@@ -42,14 +42,14 @@ class TestImportBase(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        path_test = Path(__file__).parent
-        cls.path_data = os.path.join(path_test, "data")
+        cls.dsLig = DataSet.getDataSet("smallMolecules")
+        cls.lig_data = cls.dsLig.getFile('mix')
 
     @classmethod
-    def _importPDB(cls, path):
+    def _importPDB(cls):
         inputPdbData = 1  # file
-        args = {'inputPdbData': inputPdbData,
-                'pdbFile': path
+        args = {'inputPdbData': 0,
+                'pdbId': '4erf'
                 }
 
         protocol = cls.newProtocol(ProtImportPdb, **args)
@@ -73,14 +73,12 @@ class TestConverter(TestImportBase):
 
 
     def test_1(self):
-        """ Covert a mix of small molecules file into pdb format
+        """ Convert a mix of small molecules file into pdb format
         """
-        print("\nCovert a mix of small molecules file into pdb format \n")
-
-        ligand_path = os.path.abspath(os.path.join(self.path_data, "smallMolecules", "mix"))
+        print("\nConvert a mix of small molecules file into pdb format \n")
 
         # Import SetOfSmallMolecules
-        smallM = self._importSmallM(ligand_path)
+        smallM = self._importSmallM(self.lig_data)
 
         args = {'inputType': 0,  # SmallMolecules
                 'inputSmallMols': smallM,
@@ -109,14 +107,12 @@ class TestConverter(TestImportBase):
 
 
     def test_2(self):
-        """ Covert a mix of small molecules file into smi format
+        """ Convert a mix of small molecules file into smi format
         """
-        print("\nCovert a mix of small molecules file into smi format \n")
-
-        ligand_path = os.path.abspath(os.path.join(self.path_data, "smallMolecules", "mix"))
+        print("\nConvert a mix of small molecules file into smi format \n")
 
         # Import SetOfSmallMolecules
-        smallM = self._importSmallM(ligand_path)
+        smallM = self._importSmallM(self.lig_data)
 
         args = {'inputType': 0,  # SmallMolecules
                 'inputSmallMols': smallM,
@@ -145,15 +141,12 @@ class TestConverter(TestImportBase):
 
 
     def test_3(self):
-        """ Covert a pdb protein file into mol2 format
+        """ Convert a pdb protein file into mol2 format
         """
-        print("\nCovert a pdb protein file into mol2 format \n")
-
-
-        prot_path = os.path.abspath(os.path.join(self.path_data, "4erf.pdb"))
+        print("\nConvert a pdb protein file into mol2 format \n")
 
         # Import PDB as Scipion object
-        target = self._importPDB(prot_path)
+        target = self._importPDB()
 
         args = {'inputType': 1,  # Protein structure
                 'inputStructure': target,

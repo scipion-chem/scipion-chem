@@ -165,6 +165,7 @@ class SmallMolecule(data.EMObject):
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))  # pocketID
+        self.poseId = pwobj.Integer(kwargs.get('poseId', None))
         self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
         self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
@@ -192,13 +193,11 @@ class SmallMolecule(data.EMObject):
     def setPoseFile(self, value):
         return self.poseFile.set(value)
 
+    def setPoseId(self, value):
+        return self.poseId.set(value)
+
     def getPoseId(self):
-        if '@' in self.poseFile.get():
-            # Schrodinger
-            return self.poseFile.get().split('@')[0]
-        else:
-            # Others
-            return self.poseFile.get().split('_')[-1].split('.')[0]
+        return self.poseId.get()
 
     def getGridId(self):
         return self.gridId.get()
@@ -238,7 +237,7 @@ class SmallMolecule(data.EMObject):
         if self.getGridId() != None:
             name = 'g{}_'.format(self.getGridId()) + name
         if self.poseFile.get() != None:
-            name += '_' + self.getPoseId()
+            name += '_{}'.format(self.getPoseId())
         if self.getDockId() != None:
             name += '_{}'.format(self.getDockId())
         return name
@@ -256,7 +255,8 @@ class SmallMolecule(data.EMObject):
                 for line in fIn:
                     if line.startswith('ATOM') or line.startswith('HETATM'):
                         elements = splitPDBLine(line)
-                        atomId, atomType, coords = elements[2], elements[-1], elements[6:9]
+                        atomId, coords = elements[2], elements[6:9]
+                        atomType = removeNumberFromStr(atomId)
                         if atomType != 'H' or not onlyHeavy:
                             posDic[atomId] = list(map(float, coords))
 
