@@ -250,10 +250,10 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
         return self._showAtomStructVMD()
 
     def _showStandardPockets(self, paramName=None):
-      if self.displayPyMol == VOLUME_PYMOL-1:
+      if self.displayPyMol == VOLUME_PYMOL:
         return self._showAtomStructPyMolPoints()
 
-      elif self.displayPyMol == VOLUME_PYMOL_SURF-1:
+      elif self.displayPyMol == VOLUME_PYMOL_SURF:
         return self._showAtomStructPyMolSurf()
 
     #Display functions

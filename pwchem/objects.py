@@ -298,6 +298,23 @@ class SmallMolecule(data.EMObject):
 
         return posDic
 
+    def mapLabels(self, probMol, distThres=0.1):
+        '''Maps the labels of the reference molecule to other probe molecule, which must be the same and
+        have the same positions. Returns a dic with the mapping'''
+        mapDic = {}
+        refCoords, probCoords = self.getAtomsPosDic(), probMol.getAtomsPosDic()
+        for refLabel in refCoords:
+            for probLabel in probCoords:
+                dist = calculateDistance(refCoords[refLabel], probCoords[probLabel])
+                if dist <= distThres:
+                    mapDic[refLabel] = probLabel
+        if not len(mapDic) == len(refCoords):
+            print('Atom label mapping could not be completed correctly')
+            return
+        else:
+            return mapDic
+
+
     def getEnergy(self):
         if hasattr(self, '_energy'):
             return self._energy.get()

@@ -76,6 +76,8 @@ class ProtocolRMSDDocking(EMProtocol):
         for mol in self.inputSmallMols.get():
             AS = self.inputAtomStruct.get()
             posDic1, posDic2 = self.getLigandPosDic(mol), self.getLigandPosDic(AS)
+            if hasattr(mol, '_mappingFile'):
+                posDic1 = self.mapLabels(mol, posDic1)
             k1, k2 = list(posDic1.keys()), list(posDic2.keys())
             k1.sort(), k2.sort()
             if self.checkSameKeys(posDic1, posDic2):
@@ -127,20 +129,32 @@ class ProtocolRMSDDocking(EMProtocol):
 
     ####################################### UTILS functions #############################
 
+    def mapLabels(self, mol, posDic1):
+        '''Map the atom labels which were normally reorganized during the ligand preparation to those in the original
+        molecule'''
+        mapDic, pDic = {}, {}
+        with open(mol._mappingFile.get()) as fIn:
+            for line in fIn:
+                sline = line.split()
+                mapDic[sline[1]] = sline[0]
+        for prevLabel in posDic1:
+            pDic[mapDic[prevLabel]] = posDic1[prevLabel]
+        return pDic
+
+
     def getLigandPosDic(self, item):
         onlyHeavy = self.onlyHeavy.get()
         if issubclass(type(item), SmallMolecule):
             posDic = item.getAtomsPosDic(onlyHeavy)
         elif issubclass(type(item), AtomStruct):
             posDic = {}
-            if '.pdb' in item.getFileName():
-                with open(item.getFileName()) as fIn:
-                    for line in fIn:
-                        if line.startswith('HETATM'):
-                            elements = splitPDBLine(line)
-                            atomId, atomType, coords = elements[2], elements[-1], elements[6:9]
-                            if atomType != 'H' or not onlyHeavy:
-                                posDic[atomId] = list(map(float, coords))
+            with open(item.getFileName()) as fIn:
+                for line in fIn:
+                    if line.startswith('HETATM'):
+                        elements = splitPDBLine(line)
+                        atomId, atomType, coords = elements[2], elements[-1], elements[6:9]
+                        if atomType != 'H' or not onlyHeavy:
+                            posDic[atomId] = list(map(float, coords))
             # if cif
         return posDic
 

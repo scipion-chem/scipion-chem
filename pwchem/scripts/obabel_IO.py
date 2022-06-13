@@ -31,6 +31,37 @@ import sys, os, argparse
 
 from openbabel import pybel
 
+def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, outBase=None, overW=False):
+    inFormat = os.path.splitext(inputFile)[1][1:]
+
+    if singleOutFile:
+        outObj = pybel.Outputfile(outFormat, os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat))),
+                                  overwrite=overW)
+        for mol in pybel.readfile(inFormat, inputFile):
+            if inFormat in ['smi', 'smiles']:
+                mol.make3D()
+            outObj.write(mol)
+        outObj.close()
+
+    else:
+        if inFormat == 'pdb':
+            print('Warning: openbabel is not able to parse combo pdb files')
+
+        if not outputBase:
+            outBase = 'molecule'
+
+        names = []
+        for i, mol in enumerate(pybel.readfile(inFormat, inputFile)):
+            if inFormat in ['smi', 'smiles']:
+                mol.make3D()
+            if mol.title and not mol.title in names and not outBase:
+                molName = os.path.splitext(os.path.basename(mol.title))[0]
+                names.append(molName)
+            else:
+                molName = '{}_{}'.format(outBase, i + 1)
+            mol.write(outFormat, os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, outFormat))),
+                      overwrite=overW)
+
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputFilename <mol(s)File> -of/--outputFormat <outputFormat> 
     -o/--outputName [<outputName>] [<outputDirectory>] 
@@ -50,7 +81,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     inputFile, outFormat = args.inputFilename, args.outputFormat
-    inFormat = os.path.splitext(inputFile)[1][1:]
 
     if args.outputName:
         singleOutFile, outName = True, os.path.splitext(args.outputName)[0]
@@ -62,36 +92,7 @@ if __name__ == "__main__":
     else:
         outDir = os.path.dirname(inputFile)
 
+    outBase = args.outputBase
     overW = args.overWrite
 
-    if singleOutFile:
-        outObj = pybel.Outputfile(outFormat, os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat))),
-                                  overwrite=overW)
-        for mol in pybel.readfile(inFormat, inputFile):
-            if inFormat in ['smi', 'smiles']:
-                mol.make3D()
-            outObj.write(mol)
-        outObj.close()
-
-    else:
-        if inFormat == 'pdb':
-            print('Warning: openbabel is not able to parse combo pdb files')
-
-        if args.outputBase:
-            outBase = args.outputBase
-        else:
-            outBase = 'molecule'
-
-        names = []
-        for i, mol in enumerate(pybel.readfile(inFormat, inputFile)):
-            if inFormat in ['smi', 'smiles']:
-                mol.make3D()
-            if mol.title and not mol.title in names and not args.outputBase:
-                molName = os.path.splitext(os.path.basename(mol.title))[0]
-                names.append(molName)
-            else:
-                molName = '{}_{}'.format(outBase, i+1)
-            mol.write(outFormat, os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, outFormat))),
-                      overwrite=overW)
-
-
+    oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW)
