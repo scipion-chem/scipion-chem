@@ -47,7 +47,7 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
         if inFormat == 'pdb':
             print('Warning: openbabel is not able to parse combo pdb files')
 
-        if not outputBase:
+        if not outBase:
             outBase = 'molecule'
 
         names = []

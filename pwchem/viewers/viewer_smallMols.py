@@ -33,7 +33,7 @@ from pyworkflow.gui.dialog import showError
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import sortMolsByUnique, buildPMLDockingSingleStr, writePmlFile, getPmlsDir
-from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
+from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB, natural_sort
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking
 
@@ -155,7 +155,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                   outputLigandsDic[oLabel] += [curMol]
 
     outputLabels = list(outputLigandsDic.keys())
-    outputLabels.sort()
+    outputLabels = natural_sort(outputLabels)
     if vType == POCKET and pymol and len(outputLabels) > 1:
         outputLabels = ['All'] + outputLabels
     return outputLabels, outputLigandsDic
