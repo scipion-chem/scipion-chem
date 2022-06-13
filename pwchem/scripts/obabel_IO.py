@@ -38,7 +38,7 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
         outObj = pybel.Outputfile(outFormat, os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat))),
                                   overwrite=overW)
         for mol in pybel.readfile(inFormat, inputFile):
-            if inFormat in ['smi', 'smiles']:
+            if inFormat in ['smi', 'smiles'] or make3d:
                 mol.make3D()
             outObj.write(mol)
         outObj.close()
@@ -52,7 +52,7 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
 
         names = []
         for i, mol in enumerate(pybel.readfile(inFormat, inputFile)):
-            if inFormat in ['smi', 'smiles']:
+            if inFormat in ['smi', 'smiles'] or make3d:
                 mol.make3D()
             if mol.title and not mol.title in names and not outBase:
                 molName = os.path.splitext(os.path.basename(mol.title))[0]
@@ -77,6 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--outputName', type=str, required=False, help='Output name')
     parser.add_argument('-ob', '--outputBase', type=str, required=False, help='Output basename for multiple outputs')
     parser.add_argument('-od', '--outputDir', type=str, required=False, help='Output directory')
+    parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
     parser.add_argument('--overWrite', default=False, action='store_true', help='Overwrite output')
 
     args = parser.parse_args()
@@ -94,5 +95,6 @@ if __name__ == "__main__":
 
     outBase = args.outputBase
     overW = args.overWrite
+    make3d = args.make3D
 
     oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW)

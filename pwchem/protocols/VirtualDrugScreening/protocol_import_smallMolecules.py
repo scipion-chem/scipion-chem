@@ -85,11 +85,16 @@ class ProtChemImportSmallMolecules(EMProtocol):
                                          ' - Mol2 (Multiple mol2 file) \n'
                                          ' - SDF (Multiple sdf file)')
 
+        form.addParam('make3d', BooleanParam, label='Optimize 3D structure',
+                      help='Optimize 3D structure of the molecules using the pybel fucntion. '
+                           'It is automatically done for smi, and very recommendable for 2D structures')
+
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
+        make3d = self.make3d.get()
         if not self.multipleFiles.get():
             fnSmall = os.path.abspath(self.filePath.get())
             if fnSmall.endswith(".pdb"):  # Multiple pdb
@@ -111,7 +116,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                     i += 1
 
             elif fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):  # Multiple mae
-                args = ' -i {} --outputDir {}'.format(fnSmall, os.path.abspath(self._getExtraPath()))
+                args = ' -i "{}" --outputDir {}'.format(fnSmall, os.path.abspath(self._getExtraPath()))
                 Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=self._getExtraPath())
 
             else:
@@ -120,8 +125,10 @@ class ProtChemImportSmallMolecules(EMProtocol):
                 if outFormat in ['smi', 'smiles']:
                     outFormat = 'mol2'
 
-                args = ' -i {} -of {} --outputDir {}'.format(fnSmall, outFormat,
+                args = ' -i "{}" -of {} --outputDir "{}"'.format(fnSmall, outFormat,
                                                              os.path.abspath(self._getExtraPath()))
+                if make3d:
+                    args += ' --make3D'
                 Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=self._getExtraPath())
 
         else:
@@ -129,7 +136,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                 fnSmall = os.path.join(self.filesPath.get(), filename)
                 if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
                     outName = os.path.splitext(os.path.basename(fnSmall))[0]
-                    args = ' -i {} --outputName {} --outputDir {}'.format(fnSmall, outName,
+                    args = ' -i "{}" --outputName {} --outputDir "{}"'.format(fnSmall, outName,
                                                                        os.path.abspath(self._getExtraPath()))
                     Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=self._getExtraPath())
                 else:

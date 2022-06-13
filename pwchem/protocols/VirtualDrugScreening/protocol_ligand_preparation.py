@@ -153,13 +153,13 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             # With a given pH
             oFile = "{}_prep.mol2".format(fnRoot)
             if self.ph.get():
-                args = " -i%s %s -p %s --partialcharge %s -O %s" % (fnFormat[1:], os.path.abspath(fnSmall),
+                args = " -i%s '%s' -p %s --partialcharge %s -O '%s'" % (fnFormat[1:], os.path.abspath(fnSmall),
                                                                     str(self.phvalue.get()), cmethod, oFile)
 
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
             else:
-                args = " -i%s %s -h --partialcharge %s -O %s" % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
+                args = " -i%s '%s' -h --partialcharge %s -O '%s'" % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
             oFile = relabelAtomsMol2(os.path.abspath(self._getExtraPath(oFile)))
@@ -175,10 +175,10 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             fnRoot = os.path.splitext(os.path.split(file)[1])[0]  # ID or filename without -prep.mol2
 
             if self.method_conf.get() == 0:  # Genetic algorithm
-                args = " %s --conformer --nconf %s --score rmsd --writeconformers -O %s_conformers.mol2" %\
+                args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
                        (os.path.abspath(file), self.number_conf.get(), fnRoot)
             else:  # confab
-                args = " %s --confab --original --verbose --conf %s --rcutoff %s -O %s_conformers.mol2" % \
+                args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
                        (os.path.abspath(file), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
 
             runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
