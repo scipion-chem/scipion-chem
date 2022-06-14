@@ -85,7 +85,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                                          ' - Mol2 (Multiple mol2 file) \n'
                                          ' - SDF (Multiple sdf file)')
 
-        form.addParam('make3d', BooleanParam, label='Optimize 3D structure',
+        form.addParam('make3d', BooleanParam, default=False, label='Optimize 3D structure',
                       help='Optimize 3D structure of the molecules using the pybel fucntion. '
                            'It is automatically done for smi, and very recommendable for 2D structures')
 
