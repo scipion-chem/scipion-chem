@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import enum
+import enum, io
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
@@ -278,7 +278,7 @@ class SmallMolecule(data.EMObject):
                         parse = True
 
         elif molFile.endswith('.sdf'):
-            with open(molFile) as fIn:
+            with io.open(molFile, encoding='cp1252') as fIn:
                 numType = {}
                 for i, line in enumerate(fIn):
                     if i >= 4:

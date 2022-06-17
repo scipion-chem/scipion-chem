@@ -371,9 +371,9 @@ def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
     return outFn
 
 
-def relabelAtomsMol2(atomFile):
+def relabelAtomsMol2(atomFile, i=''):
     atomCount = {}
-    auxFile = atomFile.replace(os.path.basename(atomFile), 'aux.mol2')
+    auxFile = atomFile.replace(os.path.basename(atomFile), 'aux{}.mol2'.format(i))
     atomLines = False
     with open(auxFile, 'w') as fOut:
         with open(atomFile) as fIn:
