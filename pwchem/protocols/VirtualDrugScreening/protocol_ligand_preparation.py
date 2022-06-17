@@ -179,7 +179,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                 fnRoot = os.path.splitext(os.path.basename(fnSmall))[0]
                 file = os.path.abspath(self._getExtraPath("{}_prep.mol2".format(fnRoot)))
 
-                if not os.path.exists(fnSmall) or os.path.getsize(fnSmall) == 0:
+                if not os.path.exists(file) or os.path.getsize(file) == 0:
                     fEr.write('Failed to add charges to: {}\n'.format(fnRoot))
                     continue
 
@@ -204,7 +204,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for mol in self.inputSmallMols.get():
-            print('Con: ', mol.getMolName())
             fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:
                 mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
@@ -238,11 +237,16 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         return errors
 
     def mergeErrorFiles(self):
+        lines = []
         with open(self._getExtraPath('failed.txt'), 'w') as f:
             for eFile in glob.glob(self._getExtraPath('failed_*.txt')):
                 with open(eFile) as fIn:
-                    f.write(fIn.read())
+                    for line in fIn:
+                        lines.append(line)
                 os.remove(eFile)
+            lines = natural_sort(lines)
+            for line in lines:
+                f.write(line)
 
     def getLigandCode(self, paramsFile):
       with open(paramsFile) as f:
