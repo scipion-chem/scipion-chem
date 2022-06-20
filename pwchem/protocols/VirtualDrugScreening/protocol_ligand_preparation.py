@@ -132,7 +132,9 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
     def _insertAllSteps(self):
         # Insert processing steps
         aSteps, cSteps = [], []
-        inputSubsets = self.makeSubsets(self.inputSmallMols.get(), self.numberOfThreads.get() - 1)
+        nt = self.numberOfThreads.get()
+        if nt <= 1: nt = 2
+        inputSubsets = self.makeSubsets(self.inputSmallMols.get(), nt - 1)
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('addChargesStep', subset, it, prerequisites=[])]
         if self.doConformers.get():
