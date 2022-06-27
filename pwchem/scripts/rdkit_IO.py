@@ -30,6 +30,17 @@ Mainly used for parsinf mae files (which openbabel is not able to read)'''
 
 import sys, os, argparse, shutil, gzip
 from rdkit import Chem
+from rdkit.Chem import AllChem
+
+def make3DCoords(mol):
+    '''Optimize the 3D coordinates of a rdkit molecule'''
+    mol2 = Chem.AddHs(mol)
+    mol2 = AllChem.EmbedMolecule(mol2)
+    mol2 = AllChem.MMFFOptimizeMolecule(mol2)
+    if len(mol.GetAtoms()) != len(mol2.GetAtoms()):
+        mol2 = Chem.RemoveHs(mol2)
+
+    return mol2
 
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputFilename <mol(s)File> -of/--outputFormat <outputFormat> 
@@ -46,6 +57,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--outputName', type=str, required=False, help='Output name')
     parser.add_argument('-ob', '--outputBase', type=str, required=False, help='Output basename for multiple outputs')
     parser.add_argument('-od', '--outputDir', type=str, required=False, help='Output directory')
+    parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
     parser.add_argument('--overWrite', default=False, action='store_true', help='Overwrite output')
 
     args = parser.parse_args()
@@ -63,6 +75,7 @@ if __name__ == "__main__":
         outDir = os.path.dirname(inputFile)
 
     overW = args.overWrite
+    make3d = args.make3D
 
     if inFormat == 'maegz':
         newInputFile = inputFile.replace('.maegz', '.mae')
@@ -76,6 +89,8 @@ if __name__ == "__main__":
             outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, 'sdf')))
             with Chem.SDWriter(outFile) as f:
                 for mol in Chem.MaeMolSupplier(inputFile):
+                    if make3d:
+                        mol = make3DCoords(mol)
                     f.write(mol)
 
         else:
@@ -88,6 +103,8 @@ if __name__ == "__main__":
                 molName = '{}_{}'.format(outBase, i+1)
                 outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, 'sdf')))
                 with Chem.SDWriter(outFile) as f:
+                    if make3d:
+                        mol = make3DCoords(mol)
                     f.write(mol)
     else:
         print('Script currently only prepared to convert from mae / maegz files to sdf using rdkit')

@@ -44,7 +44,7 @@ import os, re, glob, shutil
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2, \
-  splitPDBLine, natural_sort
+  splitPDBLine, natural_sort, makeSubsets
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):
@@ -134,7 +134,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         aSteps, cSteps = [], []
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
-        inputSubsets = self.makeSubsets(self.inputSmallMols.get(), nt - 1)
+        inputSubsets = makeSubsets(self.inputSmallMols.get(), nt - 1)
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('addChargesStep', subset, it, prerequisites=[])]
         if self.doConformers.get():
@@ -317,19 +317,5 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
               return inFile
 
         return outFile
-
-    def makeSubsets(self, oriSet, nt):
-        subsets = []
-        nObjs = len(oriSet) // nt
-        it, curSet = 0, []
-        for obj in oriSet:
-            curSet.append(obj.clone())
-            if len(curSet) == nObjs and it < nt - 1:
-                subsets.append(curSet)
-                curSet, it = [], it + 1
-
-        if len(curSet) > 0:
-            subsets.append(curSet)
-        return subsets
 
 

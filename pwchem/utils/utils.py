@@ -43,6 +43,21 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
+def makeSubsets(oriSet, nt):
+    '''Returns a list of subsets, given a set and the number of subsets'''
+    subsets = []
+    nObjs = len(oriSet) // nt
+    it, curSet = 0, []
+    for obj in oriSet:
+        curSet.append(obj.clone())
+        if len(curSet) == nObjs and it < nt - 1:
+            subsets.append(curSet)
+            curSet, it = [], it + 1
+
+    if len(curSet) > 0:
+        subsets.append(curSet)
+    return subsets
+
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
     with open(pdbFile) as fIn:

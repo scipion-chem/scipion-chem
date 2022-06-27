@@ -32,7 +32,7 @@ import os
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
+from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
@@ -44,7 +44,6 @@ class ProtChemImportSmallMolecules(EMProtocol):
        are accepted.
     """
     _label = 'import small mols'
-    draw = False
     supportedExt = ['smi', 'mol2', 'sdf', 'pdb', 'mae', 'maegz', 'mol']
 
     def _defineParams(self, form):
@@ -88,6 +87,12 @@ class ProtChemImportSmallMolecules(EMProtocol):
         form.addParam('make3d', BooleanParam, default=False, label='Optimize 3D structure',
                       help='Optimize 3D structure of the molecules using the pybel fucntion. '
                            'It is automatically done for smi, and very recommendable for 2D structures')
+        form.addParam('draw', BooleanParam, default=False, label='Draw molecule to jpg', expertLevel=LEVEL_ADVANCED,
+                      help='Draw molecule using OpenBabel and store it in the output object')
+        form.addParam('nameKey', StringParam, default='', label='Molecule name key: ',
+                      condition='not multipleFiles', expertLevel=LEVEL_ADVANCED,
+                      help='Key of the section in the file that defines the name of the molecule. If present,'
+                           'it will be used to name molecules')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -120,7 +125,6 @@ class ProtChemImportSmallMolecules(EMProtocol):
                 Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=self._getExtraPath())
 
             else:
-
                 outFormat = os.path.splitext(fnSmall)[1][1:]
                 if outFormat in ['smi', 'smiles']:
                     outFormat = 'mol2'
@@ -129,6 +133,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
                                                              os.path.abspath(self._getExtraPath()))
                 if make3d:
                     args += ' --make3D'
+                if self.nameKey.get().strip() != '':
+                    args += ' --nameKey {}'.format(self.nameKey.get().strip())
                 Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=self._getExtraPath())
 
         else:
@@ -146,7 +152,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
         for fnSmall in glob.glob(self._getExtraPath("*")):
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
 
-            if len(os.listdir(self._getExtraPath())) <= 100 and self.draw: # costly
+            if self.draw: # costly
                 if not fnSmall.endswith('.mae') and not fnSmall.endswith('.maegz'):
                     fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                     fnOut = self._getExtraPath("%s.png" % fnRoot)
