@@ -30,7 +30,7 @@ This package contains the protocols for
 manipulation of atomic struct objects
 """
 
-import os
+import os, subprocess
 from subprocess import run
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
@@ -195,11 +195,14 @@ class Plugin(pwem.Plugin):
         protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
-    def runScript(cls, protocol, scriptName, args, env, cwd=None):
+    def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
       """ Run rdkit command from a given protocol. """
       scriptName = cls.getScriptsDir(scriptName)
       fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
-      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+      if not popen:
+          protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+      else:
+          subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
 
     @classmethod
     def runJChemPaint(cls, protocol, cwd=None):
