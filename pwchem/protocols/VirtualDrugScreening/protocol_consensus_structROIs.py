@@ -38,19 +38,19 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwem.objects.data import AtomStruct
 
-from pwchem.objects import SetOfPockets, PredictPocketsOutput
+from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput
 from pwchem.utils import *
 
 from pwchem.constants import *
 
 MAXVOL, MAXSURF = 0, 1
 
-class ProtocolConsensusPockets(EMProtocol):
+class ProtocolConsensusStructROIs(EMProtocol):
     """
     Executes the consensus on the sets of pockets
     """
-    _label = 'Consensus pockets'
-    _possibleOutputs = PredictPocketsOutput
+    _label = 'Consensus structural ROIs'
+    _possibleOutputs = PredictStructROIsOutput
     actionChoices = ['MaxVolume', 'MaxSurface']
 
     # -------------------------- DEFINE param functions ----------------------
@@ -58,22 +58,24 @@ class ProtocolConsensusPockets(EMProtocol):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputPocketSets', params.MultiPointerParam,
-                       pointerClass='SetOfPockets', allowsNull=False,
-                       label="Input Sets of Pockets",
-                       help='Select the pocket sets to make the consensus')
+                       pointerClass='SetOfStructROIs', allowsNull=False,
+                       label="Input Sets of Structural ROIs",
+                       help='Select the structural ROIs sets to make the consensus')
         form.addParam('outIndv', params.BooleanParam, default=False,
                       label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Creates an output set related to each input set, with the elements from each input'
                            'present in the consensus clusters')
 
         form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping',
-                      help="Min proportion of residues (from the smaller) of two pockets to be considered overlapping")
+                      help="Min proportion of residues (from the smaller) of two structural regions to be considered "
+                           "overlapping")
         form.addParam('action', params.EnumParam, default=MAXSURF,
                       label='Action on overlapping', choices=self.actionChoices,
-                      help='Action to take on overlapping pockets, whther to merge them or keep just one '
+                      help='Action to take on overlapping structural regions, whether to merge them or keep just one '
                            'with some condition')
-        form.addParam('numOfOverlap', params.IntParam, default=2, label='Minimun number of overlapping pockets',
-                      help="Min number of pockets to be considered consensus pockets")
+        form.addParam('numOfOverlap', params.IntParam, default=2,
+                      label='Minimun number of overlapping structural regions',
+                      help="Min number of structural regions to be considered consensus StructROIs")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -99,20 +101,20 @@ class ProtocolConsensusPockets(EMProtocol):
             self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
             self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
-            outPockets = SetOfPockets(filename=self._getPath('consensusPockets_All.sqlite'))
+            outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
             for outPock in self.consensusPockets:
                 newPock = outPock.clone()
                 outPockets.append(newPock)
             if outPockets.getSize() > 0:
                 outPockets.buildPDBhetatmFile(suffix='_All')
-                self._defineOutputs(**{self._possibleOutputs.outputPockets.name: outPockets})
+                self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
 
             if self.outIndv.get():
                 indepOutputs = self.createIndepOutputs()
                 for setId in indepOutputs:
                     #Index should be the same as in the input
                     suffix = '_{:03d}'.format(setId+1)
-                    outName = 'outputPockets' + suffix
+                    outName = 'outputStructROIs' + suffix
                     outSet = indepOutputs[setId]
                     if outSet.getSize() > 0:
                         outSet.buildPDBhetatmFile(suffix=suffix)
@@ -145,7 +147,7 @@ class ProtocolConsensusPockets(EMProtocol):
         outSets = {}
         for setId in self.indepConsensusSets:
             suffix = '_{:03d}'.format(setId+1)
-            newSet = SetOfPockets(filename=self._getExtraPath('consensusPockets{}.sqlite'.format(suffix)))
+            newSet = SetOfStructROIs(filename=self._getExtraPath('ConsensusStructROIs{}.sqlite'.format(suffix)))
             for pock in self.indepConsensusSets[setId]:
                 newSet.append(pock.clone())
             outSets[setId] = newSet

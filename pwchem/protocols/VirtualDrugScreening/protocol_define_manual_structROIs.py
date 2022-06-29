@@ -27,7 +27,7 @@
 
 
 """
-This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand) from some files
+This protocol is used to manually define structural regions from coordinates, residues or docked small molecules
 
 """
 import os, json
@@ -41,18 +41,18 @@ from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb
 
-from pwchem.objects import SetOfPockets, ProteinPocket
+from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
 COORDS, RESIDUES, LIGANDS = 0, 1, 2
 
-class ProtDefinePockets(EMProtocol):
+class ProtDefineStructROIs(EMProtocol):
     """
-    Defines a set of pockets from a set of coordinates / residues / predocked ligands
+    Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
     """
-    _label = 'Define pockets'
+    _label = 'Define structural ROIs'
     typeChoices = ['Coordinates', 'Residues', 'SetOfSmallMolecules']
 
     # -------------------------- DEFINE param functions ----------------------
@@ -62,16 +62,16 @@ class ProtDefinePockets(EMProtocol):
         group = form.addGroup('Input')
         group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                       allowsNull=False, label="Input AtomStruct: ",
-                      help='Select the AtomStruct object where the pockets will be defined')
+                      help='Select the AtomStruct object where the structural ROIs will be defined')
         group.addParam('origin', params.EnumParam, default=RESIDUES,
-                      label='Extract pockets from: ', choices=self.typeChoices,
-                      help='The pockets will be defined from a set of elements of this type')
+                      label='Extract ROIs from: ', choices=self.typeChoices,
+                      help='The ROIs will be defined from a set of elements of this type')
 
         group.addParam('inCoords', params.TextParam, default='', width=70,
                       condition='origin=={}'.format(COORDS), label='Input coordinates: ',
-                      help='Input coordinates to define the pocket. '
+                      help='Input coordinates to define the structural ROI. '
                            'The coordinates will be mapped to surface points closer than maxDepth '
-                           'and points closer than maxIntraDistance will be considered the same pocket.'
+                           'and points closer than maxIntraDistance will be considered the same ROI.'
                            '\nCoordinates in format: (1,2,3);(4,5,6);...')
 
         group.addParam('chain_name', params.StringParam,
@@ -87,7 +87,7 @@ class ProtDefinePockets(EMProtocol):
                       help='Here you can define a residue which will be added to the list of residues below.')
         group.addParam('inResidues', params.TextParam, width=70, default='',
                       condition='origin=={}'.format(RESIDUES), label='Input residues: ',
-                      help='Input residues to define the pocket. '
+                      help='Input residues to define the structural ROI. '
                            'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket')
 
@@ -127,10 +127,10 @@ class ProtDefinePockets(EMProtocol):
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
-        outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+        outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
             pocketFile = self.createPocketFile(clust, i)
-            pocket = ProteinPocket(pocketFile, self.getProteinFileName())
+            pocket = StructROI(pocketFile, self.getProteinFileName())
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
             pocket.calculateContacts()
@@ -138,7 +138,7 @@ class ProtDefinePockets(EMProtocol):
 
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
-            self._defineOutputs(outputPockets=outPockets)
+            self._defineOutputs(outputStructROIs=outPockets)
 
 
 

@@ -27,7 +27,7 @@
 
 
 """
-This protocol is used to import a set of pockets (of fpocket, p2rank, autoligand) from some files
+This protocol is used define sequence ROIs based on the conservation in a multiple sequence alignment
 
 """
 import os, math

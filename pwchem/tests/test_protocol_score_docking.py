@@ -29,7 +29,7 @@ from pwem.protocols import ProtImportPdb
 from pyworkflow.object import Pointer
 
 from ..protocols import ProtocolScoreDocking, ProtChemOBabelPrepareLigands, \
-  ProtChemImportSmallMolecules, ProtDefinePockets
+  ProtChemImportSmallMolecules, ProtDefineStructROIs
 
 wSteps = "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'Vina', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}\n" \
          "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'RFScore', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}"
@@ -49,7 +49,7 @@ class TestScoreDocking(BaseTest):
         cls._waitOutput(cls.protPrepareReceptor, 'outputStructure', sleepTime=5)
 
         cls._runPocketsSearch()
-        cls._waitOutput(cls.protDefPockets, 'outputPockets', sleepTime=5)
+        cls._waitOutput(cls.protDefPockets, 'outputStructROIs', sleepTime=5)
 
     @classmethod
     def _runImportPDB(cls):
@@ -96,7 +96,7 @@ class TestScoreDocking(BaseTest):
     @classmethod
     def _runPocketsSearch(cls):
       cls.protDefPockets = cls.newProtocol(
-        ProtDefinePockets,
+        ProtDefineStructROIs,
         inputAtomStruct=cls.protPrepareReceptor.outputStructure,
         inResidues='{"model": 0, "chain": "C", "index": "58-58", "residues": "H"}\n'
                    '{"model": 0, "chain": "C", "index": "101-101", "residues": "L"}\n')
@@ -171,11 +171,11 @@ class TestScoreDocking(BaseTest):
 
       try:
           from autodock.protocols import ProtChemAutodock, ProtChemVina
-          protVina = self._runVina(prot=ProtChemVina, pockets=self.protDefPockets.outputPockets)
+          protVina = self._runVina(prot=ProtChemVina, pockets=self.protDefPockets.outputStructROIs)
           inputDockProts.append(protVina)
           doVina = True
 
-          protAD4 = self._runAutoDock(prot=ProtChemAutodock, pockets=self.protDefPockets.outputPockets)
+          protAD4 = self._runAutoDock(prot=ProtChemAutodock, pockets=self.protDefPockets.outputStructROIs)
           inputDockProts.append(protAD4)
           doAD4 = True
 

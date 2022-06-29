@@ -41,7 +41,7 @@ from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb, alignClustalSequences
 
-from pwchem.objects import SetOfPockets, ProteinPocket
+from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
 from pwchem.utils.utilsFasta import pairwiseAlign
 from pwchem import Plugin
@@ -118,10 +118,10 @@ class ProtMapSequenceROI(EMProtocol):
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
         if self.coordsClusters:
-            outPockets = SetOfPockets(filename=self._getPath('pockets.sqlite'))
+            outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
             for i, clust in enumerate(self.coordsClusters):
                 pocketFile = self.createPocketFile(clust, i)
-                pocket = ProteinPocket(pocketFile, self.getASFileName())
+                pocket = StructROI(pocketFile, self.getASFileName())
                 pocket.setNumberOfPoints(len(clust))
                 if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                     pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
@@ -130,7 +130,7 @@ class ProtMapSequenceROI(EMProtocol):
 
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
-            self._defineOutputs(outputPockets=outPockets)
+            self._defineOutputs(outputStructROIs=outPockets)
 
 
 

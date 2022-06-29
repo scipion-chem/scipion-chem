@@ -31,7 +31,7 @@ from .test_export_csv import TestExportcsv
 from .test_ligand_preparation import TestLigandPreparation
 from .test_converter import TestConverter
 from .test_protocol_consensus_docking import TestConsensusDocking
-from .test_protocol_define_pockets import TestDefinePockets
+from .test_protocol_define_structROIs import TestDefineStructROIs
 from .test_protocol_score_docking import TestScoreDocking
 from .test_protocol_import_setOfSequences import TestImportSequences
 from .test_protocol_multiple_alignment import TestAlignSequences
@@ -41,3 +41,4 @@ from .test_protocol_pairwise_alignment import TestPairAlignSequences
 from .test_protocol_extract_sequence_rois import TestExtractROIs
 from .test_protocol_map_sequence_structure_rois import TestMapROIs
 from .test_protocol_define_sequence_rois import TestDefineROIs
+from .test_protocol_consensus_structROIs import TestConsensusStructROIs

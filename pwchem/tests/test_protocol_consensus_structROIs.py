@@ -28,9 +28,9 @@ import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 from pyworkflow.object import Pointer
 
-from ..protocols import ProtocolConsensusPockets
+from ..protocols import ProtocolConsensusStructROIs
 
-class TestConsensusPockets(BaseTest):
+class TestConsensusStructROIs(BaseTest):
     @classmethod
     def setUpClass(cls):
         tests.setupTestProject(cls)
@@ -52,7 +52,7 @@ class TestConsensusPockets(BaseTest):
             inputAtomStruct=self.protImportPDB.outputPdb)
 
         self.launchProtocol(protFPocket)
-        pocketsOut = getattr(protFPocket, 'outputPockets', None)
+        pocketsOut = getattr(protFPocket, 'outputStructROIs', None)
         self.assertIsNotNone(pocketsOut)
         return pocketsOut
       
@@ -62,7 +62,7 @@ class TestConsensusPockets(BaseTest):
             inputAtomStruct=self.protImportPDB.outputPdb)
 
         self.launchProtocol(protP2Rank)
-        pocketsOut = getattr(protP2Rank, 'outputPockets', None)
+        pocketsOut = getattr(protP2Rank, 'outputStructROIs', None)
         self.assertIsNotNone(pocketsOut)
         return pocketsOut
 
@@ -86,19 +86,19 @@ class TestConsensusPockets(BaseTest):
             nFillPoints=10)
 
         self.launchProtocol(protAutoLigand)
-        pocketsOut = getattr(protAutoLigand, 'outputPockets', None)
+        pocketsOut = getattr(protAutoLigand, 'outputStructROIs', None)
         self.assertIsNotNone(pocketsOut)
         return pocketsOut
 
-    def _runConsensusPockets(self, inputSetsOfPockets):
-      prot = self.newProtocol(ProtocolConsensusPockets,
+    def _runConsensusStructROIs(self, inputSetsOfPockets):
+      prot = self.newProtocol(ProtocolConsensusStructROIs,
                               inputPocketSets= inputSetsOfPockets)
 
       self.launchProtocol(prot, wait=True)
-      self.assertIsNotNone(prot.outputPockets,
+      self.assertIsNotNone(prot.outputStructROIs,
                            "There was a problem with the consensus")
 
-    def testConsensusPockets(self):
+    def testConsensusStructROIs(self):
       inputPockets = []
       doFPocket, doAutoLigand, doP2Rank = False, False, False
 
@@ -128,7 +128,7 @@ class TestConsensusPockets(BaseTest):
         print('Autodock plugin not found. Skipping AutoLigand part')
 
       if doFPocket or doAutoLigand or doP2Rank:
-          self._runConsensusPockets(inputPockets)
+          self._runConsensusStructROIs(inputPockets)
       else:
           print('No pocket plugins found installed. Try installing P2Rank or Fpocket')
 

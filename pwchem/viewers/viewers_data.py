@@ -127,7 +127,7 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, pwchem.objects.SetOfPockets):
+        elif issubclass(cls, pwchem.objects.SetOfStructROIs):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfSequenceROIs):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
