@@ -41,14 +41,14 @@ from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, Varia
 from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
-from pwchem.protocols import ProtDefinePockets, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
+from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
 from pwchem.objects import SequenceVariants
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 class AddResidueWizard(EmWizard):
-    _targets = [(ProtDefinePockets, ['addResidue'])]
+    _targets = [(ProtDefineStructROIs, ['addResidue'])]
 
     def show(self, form, *params):
         protocol = form.protocol
@@ -107,7 +107,7 @@ class SelectResidueWizardQT(SelectResidueWizard):
   def getModelsChainsStep(cls, protocol, inputParamName):
       return SelectChainWizardQT().getModelsChainsStep(protocol, inputParamName)
 
-SelectChainWizardQT().addTarget(protocol=ProtDefinePockets,
+SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
@@ -123,7 +123,7 @@ SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               outputs=['chain_name2'])
 
 
-SelectResidueWizardQT().addTarget(protocol=ProtDefinePockets,
+SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
                                 targets=['resPosition'],
                                 inputs=['inputAtomStruct', 'chain_name'],
                                 outputs=['resPosition'])

@@ -32,11 +32,11 @@
 # Imports
 from pwem.wizards.wizard import EmWizard
 from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
-from ..viewers import ViewerConsensusPockets
+from ..viewers import ViewerConsensusStructROIs
 
 
 class SetOutputClass(EmWizard):
-    _targets = [(ViewerConsensusPockets, ['setClass'])]
+    _targets = [(ViewerConsensusStructROIs, ['setClass'])]
 
     def show(self, form):
         viewer = form.protocol

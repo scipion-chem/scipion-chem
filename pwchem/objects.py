@@ -484,8 +484,8 @@ class SetOfSequenceROIs(data.EMSet):
         return self.getSequenceObj().getSequence()
 
 
-class ProteinPocket(data.EMFile):
-    """ Represent a pocket file """
+class StructROI(data.EMFile):
+    """ Represent a structural region of interest"""
 
     def __init__(self, filename=None, proteinFile=None, extraFile=None, pClass='Standard', **kwargs):
         self._class = String(pClass)
@@ -509,7 +509,7 @@ class ProteinPocket(data.EMFile):
             self.calculateContacts()
 
     def __str__(self):
-        s = 'Protein pocket {}, {} class\nFile: {}'.format(self.getObjId(), self.getPocketClass(), self.getFileName())
+        s = 'Structural ROI {}, {} class\nFile: {}'.format(self.getObjId(), self.getPocketClass(), self.getFileName())
         return s
 
     # Attributes functions
@@ -585,8 +585,8 @@ class ProteinPocket(data.EMFile):
 
     # Complex pocket attributes functions
     def buildContactAtoms(self, calculate=False, maxDistance=4):
-        '''Return the reported proteins atoms in contact with the pocket.
-        If not reported, returns the protein atoms at less than 4A than any pocket point'''
+        '''Return the reported proteins atoms in contact with the structural ROI.
+        If not reported, returns the protein atoms at less than 4A than any ROI point'''
         contactCodes = self.getContactAtoms()
         contactAtoms = []
         if str(contactCodes) != 'None' and not calculate:
@@ -905,8 +905,8 @@ class ProteinPocket(data.EMFile):
         return radius
 
 
-class SetOfPockets(data.EMSet):
-    ITEM_TYPE = ProteinPocket
+class SetOfStructROIs(data.EMSet):
+    ITEM_TYPE = StructROI
 
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
@@ -1198,8 +1198,8 @@ class MDSystem(data.EMFile):
 ##############  POSSIBLE OUTPUTS OBJECTS ###################
 ############################################################
 
-class PredictPocketsOutput(enum.Enum):
-    outputPockets = SetOfPockets
+class PredictStructROIsOutput(enum.Enum):
+    outputStructROIs = SetOfStructROIs
 
 # class ImportMicsOutput(enum.Enum):
 #   outputMicrographs = SetOfMicrographs

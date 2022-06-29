@@ -31,14 +31,14 @@ import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 from pwem.viewers import Vmd, VmdView
 
-from pwchem.objects import ProteinPocket, SetOfPockets
+from pwchem.objects import StructROI, SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer
 from pwchem.constants import *
-from pwchem.protocols import ProtocolConsensusPockets
+from pwchem.protocols import ProtocolConsensusStructROIs
 
 
-class PocketPointsViewer(pwviewer.Viewer):
-  _label = 'Viewer pocket points'
+class StructROIPointsViewer(pwviewer.Viewer):
+  _label = 'Viewer structural ROIs'
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   # _targets = [SetOfPockets]
@@ -76,33 +76,33 @@ class VmdViewPopen(VmdView):
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
 
-class ViewerGeneralPockets(pwviewer.ProtocolViewer):
-  _label = 'Viewer pockets'
-  _targets = [SetOfPockets]
+class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
+  _label = 'Viewer structural ROIs'
+  _targets = [SetOfStructROIs]
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
 
   def _defineParams(self, form):
-    form.addSection(label='Visualization of predicted pockets')
+    form.addSection(label='Visualization of structural ROIs')
     form.addParam('displayAtomStruct', params.EnumParam,
-                  choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)'],
+                  choices=['PyMol (ROI Points)', 'PyMol (Contact Surface)'],
                   default=VOLUME_PYMOL,
                   display=params.EnumParam.DISPLAY_HLIST,
                   label='Display output AtomStruct with',
-                  help='*PyMol*: display AtomStruct and pockets as points / surface.'
+                  help='*PyMol*: display AtomStruct and structural ROIs as points / surface.'
                   )
     form.addParam('displayBBoxes', params.BooleanParam,
-                  default=False, label='Display pocket bounding boxes',
+                  default=False, label='Display ROIs bounding boxes',
                   help='Display the bounding boxes in pymol to check the size for the localized docking')
     form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
                   default=1.1, condition='displayBBoxes',
-                  help='The radius * n of each pocket will be used as grid radius')
+                  help='The radius * n of each ROI will be used as grid radius')
 
     form.addSection(label='Table view')
     form.addParam('displayTable', params.LabelParam,
-                  label='Display pockets set and attributes in table format: ',
-                  help='Display the pockets set in the set in table format with their respective attributes')
+                  label='Display ROIs set and attributes in table format: ',
+                  help='Display the ROIs set in the set in table format with their respective attributes')
 
   def _getVisualizeDict(self):
     return {
@@ -111,12 +111,12 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
     }
 
   def _viewSet(self, e=None):
-    if type(self.protocol) == SetOfPockets:
+    if type(self.protocol) == SetOfStructROIs:
       molSet = self.protocol
-    elif hasattr(self.protocol, 'outputPockets'):
-      molSet = getattr(self.protocol, 'outputPockets')
+    elif hasattr(self.protocol, 'outputStructROIs'):
+      molSet = getattr(self.protocol, 'outputStructROIs')
     else:
-      print('Cannot find outputPockets')
+      print('Cannot find outputStructROIs')
 
     setV = BioinformaticsDataViewer(project=self.getProject())
     return setV._visualize(molSet)
@@ -143,11 +143,11 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
     if bBox:
       bBox = self.pocketRadiusN.get()
 
-    pymolV = PocketPointsViewer(project=self.getProject())
-    if type(self.protocol) == SetOfPockets:
+    pymolV = StructROIPointsViewer(project=self.getProject())
+    if type(self.protocol) == SetOfStructROIs:
       return pymolV._visualize(self.protocol, bBox=bBox)
-    elif hasattr(self.protocol, 'outputPockets'):
-      return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
+    elif hasattr(self.protocol, 'outputStructROIs'):
+      return pymolV._visualize(getattr(self.protocol, 'outputStructROIs'), bBox=bBox)
 
   def _showAtomStructPyMolSurf(self):
     bBox = self.displayBBoxes.get()
@@ -155,10 +155,10 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
       bBox = self.pocketRadiusN.get()
 
     pymolV = ContactSurfaceViewer(project=self.getProject())
-    if type(self.protocol) == SetOfPockets:
+    if type(self.protocol) == SetOfStructROIs:
       return pymolV._visualize(self.protocol, bBox=bBox)
-    elif hasattr(self.protocol, 'outputPockets'):
-      return pymolV._visualize(getattr(self.protocol, 'outputPockets'), bBox=bBox)
+    elif hasattr(self.protocol, 'outputStructROIs'):
+      return pymolV._visualize(getattr(self.protocol, 'outputStructROIs'), bBox=bBox)
 
   def _showAtomStructPyMol(self, pmlFile, outDir):
     pymolV = PyMolViewer(project=self.getProject())
@@ -168,15 +168,15 @@ class ViewerGeneralPockets(pwviewer.ProtocolViewer):
 MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'
 VOLUME_VMD = 2
 
-class ViewerConsensusPockets(pwviewer.ProtocolViewer):
-    _label = 'Viewer pockets'
-    _targets = [ProtocolConsensusPockets]
+class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
+    _label = 'Viewer consensus structural ROIs'
+    _targets = [ProtocolConsensusStructROIs]
 
     def __init__(self, **kwargs):
       pwviewer.ProtocolViewer.__init__(self, **kwargs)
 
     def _defineParams(self, form):
-      form.addSection(label='Visualization of consensus pockets')
+      form.addSection(label='Visualization of consensus Structural ROIs')
       form.addParam('outputSet', params.EnumParam,
                     choices=self.getChoices(), default=0,
                     label='Set of pockets output: ',
@@ -268,7 +268,7 @@ class ViewerConsensusPockets(pwviewer.ProtocolViewer):
         bBox = self.pocketRadiusN.get()
 
       outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
-      pymolV = PocketPointsViewer(project=self.getProject())
+      pymolV = StructROIPointsViewer(project=self.getProject())
       return pymolV._visualize(outPockets, bBox=bBox)
 
     def _showAtomStructPyMolSurf(self):

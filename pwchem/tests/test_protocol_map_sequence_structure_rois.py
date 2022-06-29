@@ -87,5 +87,5 @@ class TestMapROIs(BaseTest):
         protROIs = self._runExtractROIs(protVars.outputSequences)
 
         protMap = self._runMapROIs(self.protImportPDB.outputPdb, protROIs.outputROIs)
-        self.assertIsNotNone(protMap.outputPockets)
+        self.assertIsNotNone(protMap.outputStructROIs)
 

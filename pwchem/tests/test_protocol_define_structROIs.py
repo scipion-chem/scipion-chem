@@ -28,9 +28,9 @@ import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 from pyworkflow.object import Pointer
 
-from ..protocols import ProtDefinePockets
+from ..protocols import ProtDefineStructROIs
 
-class TestDefinePockets(BaseTest):
+class TestDefineStructROIs(BaseTest):
     @classmethod
     def setUpClass(cls):
         tests.setupTestProject(cls)
@@ -49,7 +49,7 @@ class TestDefinePockets(BaseTest):
     @classmethod
     def _runPocketsSearch(cls):
       cls.protDefPockets = cls.newProtocol(
-        ProtDefinePockets,
+        ProtDefineStructROIs,
         inputAtomStruct=cls.protImportPDB.outputPdb,
         inResidues='{"model": 0, "chain": "A", "index": "58-58", "residues": "H"}\n'
                    '{"model": 0, "chain": "C", "index": "101-101", "residues": "L"}')
