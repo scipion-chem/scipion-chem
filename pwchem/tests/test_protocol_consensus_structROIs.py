@@ -92,7 +92,7 @@ class TestConsensusStructROIs(BaseTest):
 
     def _runConsensusStructROIs(self, inputSetsOfPockets):
       prot = self.newProtocol(ProtocolConsensusStructROIs,
-                              inputPocketSets= inputSetsOfPockets)
+                              inputStructROIsSets= inputSetsOfPockets)
 
       self.launchProtocol(prot, wait=True)
       self.assertIsNotNone(prot.outputStructROIs,

@@ -57,7 +57,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputPocketSets', params.MultiPointerParam,
+        form.addParam('inputStructROIsSets', params.MultiPointerParam,
                        pointerClass='SetOfStructROIs', allowsNull=False,
                        label="Input Sets of Structural ROIs",
                        help='Select the structural ROIs sets to make the consensus')
@@ -119,7 +119,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     if outSet.getSize() > 0:
                         outSet.buildPDBhetatmFile(suffix=suffix)
                         self._defineOutputs(**{outName: outSet})
-                        self._defineSourceRelation(self.inputPocketSets[setId].get(), outSet)
+                        self._defineSourceRelation(self.inputStructROIsSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -133,12 +133,18 @@ class ProtocolConsensusStructROIs(EMProtocol):
     def _warnings(self):
         """ Try to find warnings on define params. """
         warnings = []
+        names = []
+        for inSet in self.inputStructROIsSets:
+            names.append(inSet.get().getProteinName())
+        if len(set(names)) > 1:
+            warnings.append('The protein this structural ROIs are calculated might not be the same for all the inputs.'
+                  '\nDetected protein names: {}'.format(' | '.join(set(names))))
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
     def buildPocketDic(self):
         dic = {}
-        for i, pSet in enumerate(self.inputPocketSets):
+        for i, pSet in enumerate(self.inputStructROIsSets):
             for pocket in pSet.get():
                 dic[pocket.getFileName()] = i
         return dic
@@ -155,12 +161,12 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def getInpProteinFiles(self):
         inpProteinFiles = []
-        for inpSet in self.inputPocketSets:
+        for inpSet in self.inputStructROIsSets:
             inpProteinFiles.append(inpSet.get().getProteinFile())
         return inpProteinFiles
 
     def getPDBName(self):
-        pdbFile = self.inputPocketSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
+        pdbFile = self.inputStructROIsSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
         return pdbFile.split('_out')[0]
 
     def generatePocketClusters(self):
@@ -168,7 +174,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         Return (clusters): [[pock1, pock2], [pock3], [pock4, pock5, pock6]]'''
         clusters = []
         #For each set of pockets
-        for i, pockSet in enumerate(self.inputPocketSets):
+        for i, pockSet in enumerate(self.inputStructROIsSets):
             #For each of the pockets in the set
             for newPock in pockSet.get():
                 newClusters, newClust = [], [newPock.clone()]
@@ -275,7 +281,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def fillEmptyAttributes(self, inSet):
         '''Fill all items with empty attributes'''
-        attributes = self.getAllPocketAttributes(self.inputPocketSets)
+        attributes = self.getAllPocketAttributes(self.inputStructROIsSets)
         for item in inSet:
             for attr in attributes:
                 if not hasattr(item, attr):

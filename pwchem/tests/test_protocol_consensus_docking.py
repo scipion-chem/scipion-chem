@@ -115,7 +115,7 @@ class TestConsensusDocking(BaseTest):
         protVina = self.newProtocol(
           prot,
           wholeProt=False,
-          inputPockets=pockets,
+          inputStructROIs=pockets,
           inputLibrary=self.protOBabel.outputSmallMolecules,
           pocketRadiusN=1.4, nPos=2,
           mergeOutput=True,
@@ -138,7 +138,7 @@ class TestConsensusDocking(BaseTest):
             protAutoDock = self.newProtocol(
                 prot,
                 wholeProt=False,
-                inputPockets=pockets,
+                inputStructROIs=pockets,
                 inputLibrary=self.protOBabel.outputSmallMolecules,
                 pocketRadiusN=1.4, gaRun=2,
                 mergeOutput=True,
