@@ -80,17 +80,9 @@ class SequenceAliViewer(pwviewer.Viewer):
         elif issubclass(cls, SetOfSequenceROIs):
             outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
                                                                   format(obj.getSequenceObj().getId())))
-            seqFiles += [outPath]
-            if os.path.exists(outPath):
-                os.remove(outPath)
-            wholeSeq = obj.getFirstItem().getSequence()
-            obj.getFirstItem()._sequence.exportToFile(outPath)
-            for roi in obj:
-                roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
-                tmpSeq = (roiIdx-1) * '-' + roiSeq + (len(wholeSeq) - len(roiSeq) - roiIdx + 1) * '-'
-                tmpSeqObj = Sequence(sequence=tmpSeq, id=roi._ROISequence.getId())
-                tmpSeqObj.appendToFile(outPath)
+            obj.exportToFile(outPath)
 
+            seqFiles += [outPath]
         views.append(SequenceAliView(seqFiles, cwd=self.protocol._getExtraPath()))
 
         return views

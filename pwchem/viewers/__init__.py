@@ -5,3 +5,4 @@ from .viewers_data import *
 from .viewer_pockets import *
 from .viewer_smallMols import SmallMoleculesViewer, ProtConsensusDockingViewer
 from .viewers_sequences import SequenceAliViewer
+from .viewer_protocol_conservation import ConservationViewer

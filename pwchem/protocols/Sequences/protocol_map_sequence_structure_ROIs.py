@@ -190,6 +190,8 @@ class ProtMapSequenceROI(EMProtocol):
         return seq, seq_name
 
     def mapResidues(self, structModel):
+        '''Returns a dictionary which maps the idxs of the residues of  the sequence and the sequence from a structure
+        idxSeq: idxStrSeq}'''
         seq, seqAS = self.parseSequences()
         chain = structModel[json.loads(self.chain_name.get())['chain']]
         resIdxs = self.getChainResidueIdxs(chain)
