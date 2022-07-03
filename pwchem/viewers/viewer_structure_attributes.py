@@ -29,7 +29,7 @@ import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params
 from pwem.viewers import ChimeraAttributeViewer
 from pwem.objects import Sequence
-from pwchem.protocols import ProtExtractSeqsROI
+from pwchem.protocols import ProtExtractSeqsROI, ProtCalculateSASA
 from pwchem.viewers.viewers_sequences import SequenceAliView
 
 class ConservationViewer(ChimeraAttributeViewer):
@@ -65,5 +65,23 @@ class ConservationViewer(ChimeraAttributeViewer):
                                                               format(obj.getSequenceObj().getId())))
         obj.exportToFile(outPath)
         return [SequenceAliView([outPath], cwd=self.protocol._getExtraPath())]
+
+
+class SASAStructureViewer(ChimeraAttributeViewer):
+    """ Viewer for attribute SASA of an AtomStruct.
+      Includes visualization in chimera and in histograms"""
+    _targets = [ProtCalculateSASA]
+    _label = 'Atomic structure attributes viewer'
+
+    def __init__(self, **kwargs):
+      super().__init__(**kwargs)
+
+    def _defineParams(self, form):
+      super()._defineParams(form)
+      # Overwrite defaults
+      from pwem.wizards.wizard import ColorScaleWizardBase
+      group = form.addGroup('Color settings')
+      ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
+                                                  defaultColorMap='RdBu')
 
 
