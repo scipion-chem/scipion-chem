@@ -400,3 +400,26 @@ python end
 PML_BBOX_STR_EACH = '''rgb = {}
 boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
 '''
+
+
+PML_PHARM = '''from pymol.cgo import *
+from pymol import cmd
+load {}, protein
+{}    #ligands
+
+python
+{}
+python end
+'''
+
+SPHERE = '''\tCOLOR,    {},    {},    {},
+\tSPHERE,   {},   {},   {},  {},\n
+'''
+
+LOAD_LIGAND = '''load {}, {}\n'''
+
+SPHERE_LIST = '''spherelist_{} = [
+    {}
+    ]
+
+cmd.load_cgo(spherelist_{}, '{}')\n'''
