@@ -183,14 +183,28 @@ class SelectChainPairwiseWizard(SelectChainWizard):
 
 
 
-SelectChainPairwiseWizard().addTarget(protocol=ProtMapSequenceROI,
-                                      targets=['chain_name'],
-                                      inputs=['inputAtomStruct', 'inputSequenceROIs'],
-                                      outputs=['chain_name'])
+SelectChainWizardQT().addTarget(protocol=ProtMapSequenceROI,
+                                targets=['chain_name'],
+                                inputs=['inputAtomStruct', 'inputSequenceROIs'],
+                                outputs=['chain_name'])
 
 
 class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
+
+  def getPDBInputAS(self, AS, protocol):
+      if str(type(AS).__name__) == 'SchrodingerAtomStruct':
+        fileName = os.path.abspath(AS.convert2PDB())
+      elif AS.getFileName().endswith('.pdbqt'):
+        proteinFile = AS.getFileName()
+        inName, inExt = os.path.splitext(os.path.basename(proteinFile))
+        fileName = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+        args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), fileName)
+        runOpenBabel(protocol=protocol, args=args, popen=True)
+
+      else:
+        fileName = os.path.abspath(AS.getFileName())
+      return fileName
 
   def show(self, form, *params):
     protocol = form.protocol
@@ -200,10 +214,10 @@ class PreviewAlignmentWizard(VariableWizard):
     chainID = json.loads(getattr(protocol, inputParam[0]).get())['chain']
     alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
     if not os.path.exists(alignFile):
-        inAS = getattr(protocol, inputParam[1]).get()
+        inASFile = self.getPDBInputAS(getattr(protocol, inputParam[1]).get(), form.protocol)
         inROI = getattr(protocol, inputParam[2]).get()
         inSeq = inROI.getSequence()
-        handler = AtomicStructHandler(inAS.getFileName())
+        handler = AtomicStructHandler(inASFile)
         seq = str(handler.getSequenceFromChain(modelID=model, chainID=chainID))
         pairwiseAlign(inSeq, seq, alignFile, force=True)
 
