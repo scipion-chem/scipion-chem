@@ -78,6 +78,10 @@ class SmallMolecule(data.EMObject):
         s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
         return s
 
+
+    def getSmiles(self):
+        return self._Smiles.get()[:-1]
+
     def getFileName(self):
         '''Original filename of the molecule prior to any docking'''
         return self.smallMoleculeFile.get()

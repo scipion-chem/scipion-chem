@@ -49,3 +49,13 @@ from .protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from .protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from .protocol_score_dockings import ProtocolScoreDocking
 from .protocol_oddt_descriptors import ProtocolODDTDescriptors
+from .protocol_oddt_filter import ProtocolODDTFiltering
+from .protocol_oddt_fingerprint import ProtocolFingerprintFiltering
+from .protocol_filter_shape import ProtocolShapeFiltering
+from .pains_protocol import ProtocolPainsFiltering
+from .protocol_pdb_filtering import ProtocolLigandFiltering
+from .prueba_protocol import ProtocolPrueba
+from .pharmacophore_protocol import ProtocolPharmacophoreFiltering
+from .pains_rdkit_protocol import ProtocolPainsRdkitFiltering
+from .shape_filter2 import ProtocolShapeDistancesFiltering
+from .chembl_accesion_protocol import ProtocolChemblAccession

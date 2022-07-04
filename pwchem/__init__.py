@@ -146,6 +146,10 @@ class Plugin(pwem.Plugin):
 
         installationCmd = cls.getCondaActivationCmd()
         installationCmd += ' conda create -y -c conda-forge -n rdkit-env rdkit oddt &&'
+        installationCmd += ' %s %s && ' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation())
+        installationCmd += ' conda config --append channels conda-forge &&'
+        installationCmd += ' conda install -c conda-forge chembl_webresource_client &&'
+        installationCmd += ' conda install --file ' + str(cls.getPluginHome("requirements_rdkit.txt")) + ' &&'
         installationCmd += ' mkdir oddtModels && touch %s' % RDKIT_INSTALLED
 
         rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
