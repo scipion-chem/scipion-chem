@@ -202,7 +202,7 @@ if __name__ == "__main__":
 
     kq = 7
 
-    min_cluster_size = int(len(molecules) * 0.75)
+    min_cluster_size = int(len(molecules) * 0.2)
     top_cluster_number = 4
 
 
@@ -210,19 +210,18 @@ if __name__ == "__main__":
     ##Se realiza el clustering con k-means
 
     def clustering(feature_coord, kq):
+        k_means = None
         if feature_coord:
-
             k = math.ceil(len(feature_coord) / kq)
-            # Tailor-made adaption of k for hydrophobics in for the example in this talktorial
-            k = 2 if k == 1 else k
-            print(f"Clustering: \nVariable k in k-means: {k} of {len(feature_coord)} points\n")
+            if len(feature_coord) >= max([k, 2]):
+                # Tailor-made adaption of k for hydrophobics in for the example in this talktorial
+                k = 2 if k == 1 else k
+                print(f"Clustering: \nVariable k in k-means: {k} of {len(feature_coord)} points\n")
 
-            # Initialize k-means and compute clustering
-            k_means = cluster.KMeans(n_clusters=k)
-            k_means.fit(feature_coord)
+                # Initialize k-means and compute clustering
+                k_means = cluster.KMeans(n_clusters=k)
+                k_means.fit(feature_coord)
 
-        else:
-            k_means = None
         return k_means
 
 
