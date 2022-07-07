@@ -86,11 +86,12 @@ class ProtOperateSeqROI(EMProtocol):
     def defineOutputStep(self):
         operatedROIs = self.getOperatedROIs()
 
-        outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
-        for i, roi in enumerate(operatedROIs):
-            roi.setObjId(i)
-            outROIs.append(roi)
-        self._defineOutputs(outputROIs=outROIs)
+        if len(operatedROIs) > 0:
+            outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
+            for i, roi in enumerate(operatedROIs):
+                roi.setObjId(i)
+                outROIs.append(roi)
+            self._defineOutputs(outputROIs=outROIs)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
