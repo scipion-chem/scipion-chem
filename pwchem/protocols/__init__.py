@@ -35,6 +35,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import Protoc
 from pwchem.protocols.VirtualDrugScreening.protocol_oddt_descriptors import ProtocolODDTDescriptors
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import ProtocolPharmacophoreFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_PAINS_filter import ProtocolPainsRdkitFiltering
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
