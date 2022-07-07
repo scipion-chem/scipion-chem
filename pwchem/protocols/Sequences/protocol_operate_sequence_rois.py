@@ -103,7 +103,7 @@ class ProtOperateSeqROI(EMProtocol):
 
     def _validate(self):
         errors = []
-        if self.inputROIsSets < 2:
+        if len(self.inputROIsSets) < 2:
             errors.append('You must specify at least two input sets to operate')
         return errors
 
