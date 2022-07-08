@@ -135,7 +135,9 @@ class ProtocolScoreDocking(EMProtocol):
         group.addParam('deleteStep', params.StringParam, default='',
                        label='Delete score number: ',
                        help='Delete the score of the specified index from the workflow.')
-        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='False')
+        group.addParam('showWorkflow', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                       label="Show workflow param: ", help='Show workflow param, while wizards released to scipion-em')
+        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='showWorkflow')
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
