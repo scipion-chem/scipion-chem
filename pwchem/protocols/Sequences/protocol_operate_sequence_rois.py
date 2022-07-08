@@ -77,6 +77,11 @@ class ProtOperateSeqROI(EMProtocol):
                        label='Keep non overlaping ROIs: ', default=True,
                        help='Whether to include in the final set those ROIs which do not overlap '
                             'with others in the other sets')
+        group.addParam('keepName', params.BooleanParam, expertLevel=params.LEVEL_ADVANCED,
+                       label='Keep name of ROIs: ', default=False,
+                       help='Whether to keep the name of those output ROIs which totally correspond to '
+                            'one in the input')
+
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -106,7 +111,17 @@ class ProtOperateSeqROI(EMProtocol):
         errors = []
         if len(self.inputROIsSets) < 2:
             errors.append('You must specify at least two input sets to operate')
+
         return errors
+
+    def _warnings(self):
+        ws = []
+        inpSeqs = []
+        for roiSet in self.inputROIsSets:
+            inpSeqs.append(roiSet.get().getSequence())
+        if len(set(inpSeqs)) > 1:
+            ws.append('Not all the sequences in the input sets are the same, this might lead to errors')
+        return  ws
 
     # --------------------------- UTILS functions -----------------------------------
     def getOperatedROIs(self):
@@ -116,7 +131,7 @@ class ProtOperateSeqROI(EMProtocol):
         for curSet in inSets[1:]:
             newSet = []
             curOver = [False] * len(curSet.get())
-            prevOver = [False] * len(curSet.get())
+            prevOver = [False] * len(prevSet.get())
             for j, prevROI in enumerate(prevSet.get()):
                 for i, curROI in enumerate(curSet.get()):
                     newROIs = self.operateROIs(prevROI, curROI)
@@ -163,13 +178,22 @@ class ProtOperateSeqROI(EMProtocol):
             newROIs = []
             for consIdxs in self.getConsecutiveRanges(operIdxs):
                 roiStr = totalSequence.getSequence()[consIdxs[0]-1:consIdxs[-1]]
-                roiSeq = Sequence(sequence=roiStr, id='ROI_{}-{}'.format(consIdxs[0], consIdxs[-1]))
+                roiId = 'ROI_{}-{}'.format(consIdxs[0], consIdxs[-1])
+                if self.keepName:
+                    roi1Idxs, roi2Idxs = [roi1.getROIIdx(), roi1.getROIIdx2()], [roi2.getROIIdx(), roi2.getROIIdx2()]
+                    if consIdxs[0] == roi1Idxs[0] and consIdxs[-1] == roi1Idxs[1]:
+                        roiId = roi1.getROIId()
+                    elif consIdxs[0] == roi2Idxs[0] and consIdxs[-1] == roi2Idxs[1]:
+                        roiId = roi2.getROIId()
+
+                roiSeq = Sequence(sequence=roiStr, id=roiId)
                 newROI = SequenceROI(sequence=totalSequence, seqROI=roiSeq,
                                      roiIdx=consIdxs[0], roiIdx2=consIdxs[-1])
                 newROIs.append(newROI)
             return newROIs
         else:
             return []
+
 
     def getConsecutiveRanges(self, rang):
         ranges = []

@@ -437,6 +437,9 @@ class SequenceROI(data.EMObject):
         if type(self._sequence) == Sequence:
             return self._sequence.getSeqName()
 
+    def getROIId(self):
+        return self._ROISequence.getId()
+
     def getROISequence(self):
         return self._ROISequence.getSequence()
 
