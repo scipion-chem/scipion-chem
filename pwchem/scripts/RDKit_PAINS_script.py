@@ -83,7 +83,7 @@ def pains_filt(files, dic):
             subs = Chem.MolFromSmarts(k)
             if subs != None:
                 if mol.HasSubstructMatch(subs):
-                    counter +=1
+                    counter += 1
                 else:
                     pass
         if counter == 0:
@@ -128,7 +128,6 @@ if __name__ == "__main__":
             for molecule_p in pains:
                 a.write(str(molecule_p) + "\n")
 
-        a.close()
 
     else:
         mols_dict, mols = preprocessLigands(files)
@@ -141,14 +140,12 @@ if __name__ == "__main__":
             for element in clean:
                 f.write(element + "\n")
 
-        f.close()
 
         with open("with_pains.txt", "w") as a:
             a.write("#Molecules that have NOT passed the filter " + "\n")
             for element1 in matches:
                 a.write(element1[0] + "," + element1[1] + "\n")
 
-        a.close()
 
 #################################################################################################################
 

@@ -83,39 +83,31 @@ class ProtocolPainsRdkitFiltering(EMProtocol):
 
     def createOutputStep(self):
         list_mols = []
-        filtered_molecules = self.parseResults(self._getPath("results.tsv"))
-        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(),
-                                                 suffix='consensusSmallMolecules{}', copyInfo=True)
+        filtered_molecules_names = self.parseResults(self._getPath("results.tsv"))
+        pains_dict = self.parsePains(self._getPath("with_pains.txt"))
+        pains_molNames = list(pains_dict.keys())
+
+        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
+        newMols2 = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(),
+                                                 suffix='_pains', copyInfo=True)
 
         mols = self.inputSmallMolecules.get()
         for mol in mols:
             file = os.path.abspath(mol.getFileName())
-            newMols.append(mol)
+            molName = self.getBaseName(file)
+            if molName in filtered_molecules_names:
+                newMols.append(mol)
+            elif molName in pains_molNames:
+                mol._pain = pwobj.String(pains_dict[molName])
+                newMols2.append(mol)
 
         newMols.updateMolClass()
-        list_mols.append(newMols)
-        #self._defineOutputs(outputSmallMolecules=newMols)
+        newMols2.updateMolClass()
 
-        if not self.painsFile.get():
-            pains_dict = self.parsePains(self._getPath("with_pains.txt"))
-            pains = list(pains_dict.keys())
-            newMols2 = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
-
-            mols2 = self.inputSmallMolecules.get()
-            for mol2 in mols2:
-                file2 = os.path.abspath(mol2.getFileName())
-                if file2 in pains:
-                    mol2._pain = pwobj.String(pains_dict[file2])
-                    newMols2.append(mol2)
-            newMols2.updateMolClass()
-
-            list_mols.append(newMols2)
-            #self._defineOutputs = ({"without_pains": newMols})
-
-            if newMols:
-                self._defineOutputs(SmallMoleculesCleaned=newMols)
-            if newMols2:
-                self._defineOutputs(SmallMoleculesPains=newMols2)
+        if newMols:
+            self._defineOutputs(outputSmallMolecules=newMols)
+        if newMols2:
+            self._defineOutputs(outputSmallMoleculesPains=newMols2)
 
     # --------------- INFO functions -------------------------
 
@@ -164,27 +156,24 @@ class ProtocolPainsRdkitFiltering(EMProtocol):
     def parseResults(self, outputFile):
         molecules = []
         with open(outputFile) as tsv_file:
-            read_tsv = csv.reader(tsv_file, delimiter="\n")
-            for row in read_tsv:
-                if row[0] == "#":
-                    pass
-                else:
-                    molecules.append(row)
+            for line in tsv_file:
+                if not line[0] == "#":
+                    molName = self.getBaseName(line)
+                    molecules.append(molName)
 
-        molecules = sum(molecules, [])
-        print(molecules)
         return molecules
 
     def parsePains(self, file):
         pains_m = {}
         with open(file) as tsv:
             for row in tsv:
-                if row[0] == "#":
-                    pass
-                else:
-                    row2 = row.split(",")
-
-                    pains_m[row2[0]] = row2[1]
+                if not row[0] == "#":
+                    molFile, pain = row.split(",")
+                    molName = self.getBaseName(molFile)
+                    pains_m[molName] = pain
 
         return pains_m
+
+    def getBaseName(self, molFile):
+        return os.path.splitext(os.path.basename(molFile.strip()))[0]
 
