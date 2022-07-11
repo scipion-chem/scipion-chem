@@ -53,7 +53,7 @@ class ProtDefineStructROIs(EMProtocol):
     Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
     """
     _label = 'Define structural ROIs'
-    typeChoices = ['Coordinates', 'Residues', 'SetOfSmallMolecules']
+    typeChoices = ['Coordinates', 'Residues', 'Ligand']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -91,9 +91,21 @@ class ProtDefineStructROIs(EMProtocol):
                            'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket')
 
+        group.addParam('extLig', params.BooleanParam, default=True, condition='origin=={}'.format(LIGANDS),
+                       label='Input is a external molecule? ',
+                       help='Whether the ligand is docked in a external molecule or in the AtomStruct itself')
+
         group.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                      condition='origin=={}'.format(LIGANDS),
+                      condition='origin=={} and extLig'.format(LIGANDS),
                       label='Input molecules: ', help='Predocked molecules which will define the protein pockets')
+
+        group.addParam('ligName', params.StringParam,
+                       condition='origin=={} and extLig'.format(LIGANDS),
+                       label='Ligand name: ', help='Specific ligand of the set')
+
+        group.addParam('molName', params.StringParam,
+                       condition='origin=={} and not extLig'.format(LIGANDS),
+                       label='Molecule name: ', help='Name of the HETATM molecule in the AtomStruct')
 
         group = form.addGroup('Distances')
         group.addParam('maxDepth', params.FloatParam, default='3.0',
@@ -114,7 +126,12 @@ class ProtDefineStructROIs(EMProtocol):
 
     def getSurfaceStep(self):
         parser = PDBParser()
-        structure = parser.get_structure(self.getProteinName(), self.getProteinFileName())
+        pdbFile = self.getProteinFileName()
+        if self.origin.get() == LIGANDS and not self.extLig:
+            pdbFile = clean_PDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
+                                waters=True, HETATM=True)
+
+        structure = parser.get_structure(self.getProteinName(), pdbFile)
         self.structModel = structure[0]
         self.structSurface = get_surface(self.structModel,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
@@ -195,9 +212,21 @@ class ProtDefineStructROIs(EMProtocol):
                       oCoords.append(list(a.get_coord()))
 
         elif self.origin.get() == LIGANDS:
-            for mol in self.inSmallMols.get():
-                curPosDic = mol.getAtomsPosDic(onlyHeavy=False)
-                oCoords += list(curPosDic.values())
+            if self.extLig:
+                if not self.ligName.get():
+                    mols = self.inSmallMols.get()
+                else:
+                    for mol in self.inSmallMols.get():
+                        if self.ligName.get() == mol.__str__():
+                            mols = [mol]
+                            break
+
+                for mol in mols:
+                    curPosDic = mol.getAtomsPosDic(onlyHeavy=False)
+                    oCoords += list(curPosDic.values())
+
+            else:
+                oCoords = self.getLigCoords(self.getProteinFileName(), self.molName.get())
 
         return oCoords
 
@@ -247,8 +276,25 @@ class ProtDefineStructROIs(EMProtocol):
                 f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
         return outFile
 
+    def getLigCoords(self, ASFile, ligName):
+        if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+          pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+          parser = PDBParser().get_structure(pdb_code, ASFile)
+        elif ASFile.endswith('.cif'):
+          pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+          parser = MMCIFParser().get_structure(pdb_code, ASFile)
+        else:
+          print('Unknown AtomStruct file format')
+          return
 
-
+        coords = []
+        for model in parser:
+            for chain in model:
+                for residue in chain:
+                    if residue.resname == ligName:
+                        for atom in residue:
+                            coords.append(list(atom.get_coord()))
+        return coords
 
 
 
