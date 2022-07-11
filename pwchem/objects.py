@@ -170,7 +170,7 @@ class SmallMolecule(data.EMObject):
         self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
     def __str__(self):
-        s = '{} ({} molecule)'.format(self.getClassName(), self.getMolName())
+        s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
         return s
 
     def getFileName(self):

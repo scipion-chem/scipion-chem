@@ -34,6 +34,7 @@ information such as name and number of residues.
 
 # Imports
 import os, requests, json
+from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
@@ -227,3 +228,88 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
                                    targets=['preview'],
                                    inputs=['chain_name', 'inputAtomStruct', 'inputSequenceROIs'],
                                    outputs=[])
+
+
+class SelectLigandWizard(VariableWizard):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def is_het(self, residue):
+      res = residue.id[0]
+      return res != " " and res != "W"
+
+    def extract_ligands(self, ASFile):
+        """ Extraction of the heteroatoms of .pdb files """
+        molNames = []
+        if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+            pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+            parser = PDBParser().get_structure(pdb_code, ASFile)
+        elif ASFile.endswith('.cif'):
+            pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+            parser = MMCIFParser().get_structure(pdb_code, ASFile)
+        else:
+            print('Unknown AtomStruct file format')
+            return
+        for model in parser:
+            for chain in model:
+                for residue in chain:
+                    if self.is_het(residue):
+                        if not residue.resname in molNames:
+                            molNames.append(residue.resname)
+        return molNames
+
+    def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+
+      ASFile = getattr(protocol, inputParam[0]).get().getFileName()
+      molNames = self.extract_ligands(ASFile)
+
+      finalList = []
+      for i in molNames:
+        finalList.append(String(i))
+      provider = ListTreeProviderString(finalList)
+      dlg = dialog.ListDialog(form.root, "Ligand Names", provider,
+                              "Select one of the ligands")
+      form.setVar(outputParam[0], dlg.values[0].get())
+
+
+SelectLigandWizard().addTarget(protocol=ProtDefineStructROIs,
+                               targets=['molName'],
+                               inputs=['inputAtomStruct'],
+                               outputs=['molName'])
+
+
+class SelectElementWizard(VariableWizard):
+    """Lists the items in a SetOfX and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, inputParam):
+      eleList = []
+      scipionSet = getattr(protocol, inputParam[0]).get()
+      if scipionSet is not None:
+        for element in scipionSet:
+            eleList.append(element.__str__())
+      return eleList
+
+    def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+      try:
+        listOfElements = self.getListOfElements(protocol, inputParam)
+      except Exception as e:
+        print("ERROR: ", e)
+        return
+
+      finalList = []
+      for i in listOfElements:
+        finalList.append(String(i))
+      provider = ListTreeProviderString(finalList)
+      dlg = dialog.ListDialog(form.root, "Set items", provider,
+                              "Select one of items in the set")
+      form.setVar(outputParam[0], dlg.values[0].get())
+
+
+SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
+                               targets=['ligName'],
+                               inputs=['inSmallMols'],
+                               outputs=['ligName'])
