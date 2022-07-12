@@ -659,7 +659,11 @@ class StructROI(data.EMFile):
         elif mode == 1 and float(self.getVolume()) != None:
             return self.getVolume()
         else:
-            return self.getSurfaceConvexVolume()
+            vol = self.getSurfaceConvexVolume()
+            if vol:
+                return vol
+            else:
+                return self.getConvexVolume()
 
     def getConvexVolume(self):
         '''Calculate the convex volume of the points forming the pocket'''
@@ -671,8 +675,9 @@ class StructROI(data.EMFile):
         '''Calculate the convex volume of the protein contact atoms'''
         cAtoms = self.buildContactAtoms()
         cCoords = self.getAtomsCoords(cAtoms)
-        cHull = spatial.ConvexHull(cCoords)
-        return cHull.volume
+        if len(cCoords) >= 3:
+            cHull = spatial.ConvexHull(cCoords)
+            return cHull.volume
 
     def getPocketBox(self):
         '''Return the coordinates of the 2 corners determining the box (ortogonal to axis) where the pocket fits in
