@@ -63,6 +63,8 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                       allowsNull=False, label="Input AtomStruct: ",
                       help='Select the AtomStruct object where the structural ROIs will be defined')
+
+        group = form.addGroup('Origin')
         group.addParam('origin', params.EnumParam, default=RESIDUES,
                       label='Extract ROIs from: ', choices=self.typeChoices,
                       help='The ROIs will be defined from a set of elements of this type')
@@ -107,14 +109,18 @@ class ProtDefineStructROIs(EMProtocol):
                        condition='origin=={} and not extLig'.format(LIGANDS),
                        label='Molecule name: ', help='Name of the HETATM molecule in the AtomStruct')
 
-        group = form.addGroup('Distances')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                      label='Maximum atom depth (A): ',
-                      help='Maximum atom distance to the surface to be considered and mapped')
+        group = form.addGroup('Pocket definition')
         group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
-                      label='Maximum distance between pocket points (A): ',
-                      help='Maximum distance between two pocket atoms to considered them same pocket')
+                       label='Maximum distance between pocket points (A): ',
+                       help='Maximum distance between two pocket atoms to considered them same pocket')
 
+        group.addParam('surfaceCoords', params.BooleanParam, default=True,
+                       label='Map coordinates to surface? ',
+                       help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
+                            'closest surface coordinates or use them directly.')
+        group.addParam('maxDepth', params.FloatParam, default='3.0',
+                      label='Maximum atom depth (A): ', condition='surfaceCoords',
+                      help='Maximum atom distance to the surface to be considered and mapped')
 
 
     # --------------------------- STEPS functions ------------------------------
@@ -137,10 +143,11 @@ class ProtDefineStructROIs(EMProtocol):
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
     def definePocketsStep(self):
-        originCoords = self.getOriginCoords()
-        surfaceCoords = self.mapSurfaceCoords(originCoords)
+        pocketCoords = self.getOriginCoords()
+        if self.surfaceCoords:
+            pocketCoords = self.mapSurfaceCoords(pocketCoords)
 
-        self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
+        self.coordsClusters = self.clusterSurfaceCoords(pocketCoords)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
@@ -226,7 +233,7 @@ class ProtDefineStructROIs(EMProtocol):
                     oCoords += list(curPosDic.values())
 
             else:
-                oCoords = self.getLigCoords(self.getProteinFileName(), self.molName.get())
+                oCoords = getLigCoords(self.getProteinFileName(), self.molName.get())
 
         return oCoords
 
@@ -275,26 +282,6 @@ class ProtDefineStructROIs(EMProtocol):
             for j, coord in enumerate(clust):
                 f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
         return outFile
-
-    def getLigCoords(self, ASFile, ligName):
-        if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
-          pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-          parser = PDBParser().get_structure(pdb_code, ASFile)
-        elif ASFile.endswith('.cif'):
-          pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-          parser = MMCIFParser().get_structure(pdb_code, ASFile)
-        else:
-          print('Unknown AtomStruct file format')
-          return
-
-        coords = []
-        for model in parser:
-            for chain in model:
-                for residue in chain:
-                    if residue.resname == ligName:
-                        for atom in residue:
-                            coords.append(list(atom.get_coord()))
-        return coords
 
 
 
