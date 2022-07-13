@@ -46,6 +46,7 @@ from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import Prot
 from pwchem.protocols.Sequences.protocol_generate_variants import ProtChemGenerateVariants
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
+from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 
 # General protocols
 from pwchem.protocols.General.protocol_converter import ConvertStructures

@@ -42,7 +42,8 @@ from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, Varia
 from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
-from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI
+from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI, \
+  ProtDefineSetOfSequences
 from pwchem.objects import SequenceVariants
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
@@ -313,3 +314,80 @@ SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                targets=['ligName'],
                                inputs=['inSmallMols'],
                                outputs=['ligName'])
+
+
+SelectChainWizardQT().addTarget(protocol=ProtDefineSetOfSequences,
+                                targets=['inpChain'],
+                                inputs=[{'inputOrigin': ['inputSequence', #will not be displayed, but keep order of EnumParam
+                                                         'inputAtomStruct', 'inputPDB']}],
+                                outputs=['inpChain'])
+
+SelectResidueWizardQT().addTarget(protocol=ProtDefineSetOfSequences,
+                                  targets=['inpPositions'],
+                                  inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
+                                          'inpChain'],
+                                  outputs=['inpPositions'])
+
+
+class AddSequenceWizard(SelectResidueWizard):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        protocol = form.protocol
+        inputParams, outputParam = self.getInputOutput(form)
+
+        # StructName
+        inputObj = getattr(protocol, inputParams[0]).get()
+        pdbFile, AS = '', False
+        if issubclass(type(inputObj), str):
+            outStr = [inputObj]
+            AS = True
+        elif issubclass(type(inputObj), AtomStruct):
+            pdbFile = inputObj.getFileName()
+            outStr = [os.path.splitext(os.path.basename(pdbFile))[0]]
+            AS = True
+        elif issubclass(type(inputObj), Sequence):
+            outStr = [inputObj.getId()]
+
+        if AS:
+            # Chain
+            chainJson = getattr(protocol, inputParams[1]).get()
+            chainId = json.loads(chainJson)['chain']
+
+        # Positions
+        posJson = getattr(protocol, inputParams[2]).get()
+        if posJson:
+            posIdxs = json.loads(posJson)['index']
+            seq = json.loads(posJson)['residues']
+            outStr += [posIdxs]
+        else:
+            outStr += ['FIRST-LAST']
+            finalResiduesList = self.getResidues(form, inputParams)
+            idxs = [json.loads(finalResiduesList[0].get())['index'], json.loads(finalResiduesList[-1].get())['index']]
+            seq = self.getSequence(finalResiduesList, idxs)
+
+        chainStr = ''
+        if AS:
+          chainStr = ', "chain": "{}"'.format(chainId)
+
+        prevStr = getattr(protocol, outputParam[0]).get()
+        lenPrev = len(prevStr.strip().split('\n')) + 1
+        if prevStr.strip() == '':
+          lenPrev -= 1
+        elif not prevStr.endswith('\n'):
+          prevStr += '\n'
+
+        seqFile = protocol.getProject().getTmpPath('{}_{}_{}.fa'.format(outStr[0], lenPrev, outStr[1]))
+        with open(seqFile, 'w') as f:
+            f.write('>{}\n{}\n'.format(outStr[0], seq))
+
+        jsonStr = '%s) {"name": "%s"%s, "index": "%s", "seqFile": "%s"}\n' % \
+                  (lenPrev, outStr[0], chainStr, outStr[1], seqFile)
+        form.setVar(outputParam[0], prevStr + jsonStr)
+
+
+AddSequenceWizard().addTarget(protocol=ProtDefineSetOfSequences,
+                              targets=['addInput'],
+                              inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
+                                      'inpChain', 'inpPositions'],
+                              outputs=['inputList'])
