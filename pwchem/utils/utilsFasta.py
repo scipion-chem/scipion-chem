@@ -119,7 +119,7 @@ def parseAlnFile(alnFile):
         f.readline()
         for line in f:
             if line.strip() and not line.startswith(' '):
-                id, seq = line.strip().split()
+                id, seq = line.strip().split()[:2]
                 if id in seqDic:
                     seqDic[id] += seq
                 else:
