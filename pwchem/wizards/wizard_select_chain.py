@@ -191,6 +191,36 @@ SelectChainWizardQT().addTarget(protocol=ProtMapSequenceROI,
                                 outputs=['chain_name'])
 
 
+class SelectMultiChainWizard(SelectChainWizardQT):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+      inputParams, outputParam = self.getInputOutput(form)
+      protocol = form.protocol
+      try:
+        listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParams[0])
+      except Exception as e:
+        print("ERROR: ", e)
+        return
+
+      chainList = self.editionListOfChains(listOfChains)
+      finalChainList = []
+      for i in chainList:
+        finalChainList.append(String(i))
+      provider = ListTreeProviderString(finalChainList)
+      dlg = dialog.ListDialog(form.root, "Model chains", provider,
+                              "Select one of the chains (model, chain, "
+                              "number of chain residues)")
+      if len(dlg.values) > 1:
+        chains = []
+        for selChain in dlg.values:
+          chains += ['{}-{}'.format(json.loads(selChain.get())['model'], json.loads(selChain.get())['chain'])]
+        chainInfo = '{"model-chain": "%s"}' % (', '.join(chains))
+      else:
+        chainInfo = dlg.values[0].get()
+      form.setVar(outputParam[0], chainInfo)
+
+
 class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
