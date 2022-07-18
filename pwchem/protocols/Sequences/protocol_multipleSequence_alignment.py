@@ -26,21 +26,14 @@
 
 import os
 
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
-from pwchem.objects import SequencesAlignment
+from pwem.protocols import EMProtocol
+
+from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat
+from pwchem.objects import SetOfSequencesChem, Sequence
+from pwchem.utils.utilsFasta import parseAlnFile
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
-
-EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
-                  'SwisProt': 'sw', 'NCBI': 'ncbi',
-                  'NBRF (PIR)': 'pir', 'Intelligenetics': 'ig', 'CODATA': 'codata', 'DNA strider': 'strider',
-                  'ACeDB': 'acedb', '"gap" program in the Staden package': 'experiment', 'Plain sequence': 'plain',
-                  'Fitch': 'fitch', 'PHYLIP interleaved': 'phylip3', 'ASN.1': 'asn1', 'Hennig86': 'hennig86',
-                  'Mega': 'mega', 'Meganon': 'meganon', 'Nexus/PAUP': 'nexus', 'Nexusnon/PAUPnon': 'nexusnon',
-                  'Jackknifer': 'jackknifer','Jackknifernon': 'jackknifernon', 'Treecon': 'treecon',
-                  'EMBOSS sequence object report': 'debug'}
-
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
     """Run multiple sequence alignment for a set of sequences"""
@@ -50,7 +43,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         form.addSection(label='Input')
         group = form.addGroup('Input')
-        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
+        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequencesChem',
                       label='Input Set of Sequence File: ', allowsNull=False,
                       help="Set of sequences to be alignment ")
 
@@ -60,13 +53,13 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                       help="Program selected to run the alignment.\n")
 
         group.addParam('additionalFormat', BooleanParam, expertLevel=LEVEL_ADVANCED,
-                      label='Additional sequence format: ', default=False,
+                      label='Create additional output in other EMBOSS format: ', default=False,
                       help="Other standard formats from EMBOSS seqret")
 
         group.addParam('embossFormats', EnumParam, default=1,
                       choices=list(EMBOSS_FORMATS.keys()),
                       condition='additionalFormat', expertLevel=LEVEL_ADVANCED,
-                      label='EMBOSS seq output format: ',
+                      label='EMBOSS output format: ',
                       help="Sequence formats from EMBOSS seqret")
 
         group = form.addGroup('Parameters')
@@ -97,7 +90,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         # Muscle
         elif programName == MUSCLE:
-            output_file = os.path.abspath(self._getPath('muscle.fa'))
+            output_file = os.path.abspath(self._getPath('muscle.aln'))
             cline = 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
@@ -106,15 +99,21 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         self.runJob(cline, '')
 
-        out_fileAligned = SequencesAlignment(alignmentFileName=os.path.abspath(output_file))
-        self._defineOutputs(outputSequences=out_fileAligned)
+        outSeqDic = parseAlnFile(output_file)
+        outSeqs = SetOfSequencesChem.create(outputPath=self._getPath())
+        for seqId in outSeqDic:
+            outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
+
+        outSeqs.setAlignmentFileName(output_file)
+        outSeqs.setAligned(True)
+        self._defineOutputs(outputSequences=outSeqs)
 
         # EMBOSS format
         if self.additionalFormat:
             embossSelectedFormat = EMBOSS_FORMATS[self.getEnumText('embossFormats')]
-            StandardFormatEmboss = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
-            emboss = out_fileAligned.convertEMBOSSformat(output_file, embossSelectedFormat, StandardFormatEmboss)
-            self.runJob(emboss, '')
+            embossFile = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
+            embossFile = outSequences.convertEMBOSSformat(embossSelectedFormat, embossFile)
+
 
     def _validate(self):
         errors = []

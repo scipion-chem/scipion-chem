@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import enum, io
+import enum, io, subprocess
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
@@ -64,24 +64,35 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
+class SetOfSequencesChem(data.SetOfSequences):
+    def __init__(self, **kwargs):
+        data.SetOfSequences.__init__(self, **kwargs)
+        self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
+        self._alignFile = pwobj.String(kwargs.get('alignFile', None))
 
-class SequencesAlignment(data.EMFile):
-    """A fasta file for a Protein ID"""
+    def getAligned(self):
+        self._aligned.get()
 
-    def __init__(self, filename=None, alignmentFileName=None, **kwargs):
-        data.EMFile.__init__(self, filename, **kwargs)
-        self._alignmentFileName = String(alignmentFileName)
+    def setAligned(self, value):
+        self._aligned.set(value)
 
     def getAlignmentFileName(self):
-        return self._alignmentFileName.get()
+        return self._alignFile.get()
 
-    def convertEMBOSSformat(self, outputProgramAlignment, embossFormat, outputStandardFormat):
+    def setAlignmentFileName(self, value):
+        return self._alignFile.set(value)
+
+    def convertEMBOSSformat(self, embossFormat, outputFile):
         cl_run = 'seqret -sequence {} -osformat2 {} {}'.\
-            format(outputProgramAlignment, embossFormat, outputStandardFormat)
-        return cl_run
+            format(self.getAlignmentFileName(), embossFormat, outputFile)
+
+        subprocess.check_call(cl_run, shell=True)
+        return outputFile
 
     def __str__(self):
-        return ("{} (Alignment={})".format(self.getClassName(), os.path.basename(self.getAlignmentFileName())))
+        alignStr = super().__str__()
+        alignStr += ', aligned={}'.format(self._aligned.get())
+        return alignStr
 
 
 class SequenceVariants(data.EMFile):
@@ -485,6 +496,17 @@ class SetOfSequenceROIs(data.EMSet):
 
     def getSequence(self):
         return self.getSequenceObj().getSequence()
+
+    def exportToFile(self, outPath):
+        if os.path.exists(outPath):
+            os.remove(outPath)
+        wholeSeq = self.getFirstItem().getSequence()
+        self.getFirstItem()._sequence.exportToFile(outPath)
+        for roi in self:
+            roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
+            tmpSeq = (roiIdx - 1) * '-' + roiSeq + (len(wholeSeq) - len(roiSeq) - roiIdx + 1) * '-'
+            tmpSeqObj = Sequence(sequence=tmpSeq, id=roi._ROISequence.getId())
+            tmpSeqObj.appendToFile(outPath)
 
 
 class StructROI(data.EMFile):
