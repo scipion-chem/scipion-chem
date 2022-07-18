@@ -497,6 +497,17 @@ class SetOfSequenceROIs(data.EMSet):
     def getSequence(self):
         return self.getSequenceObj().getSequence()
 
+    def exportToFile(self, outPath):
+        if os.path.exists(outPath):
+            os.remove(outPath)
+        wholeSeq = self.getFirstItem().getSequence()
+        self.getFirstItem()._sequence.exportToFile(outPath)
+        for roi in self:
+            roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
+            tmpSeq = (roiIdx - 1) * '-' + roiSeq + (len(wholeSeq) - len(roiSeq) - roiIdx + 1) * '-'
+            tmpSeqObj = Sequence(sequence=tmpSeq, id=roi._ROISequence.getId())
+            tmpSeqObj.appendToFile(outPath)
+
 
 class StructROI(data.EMFile):
     """ Represent a structural region of interest"""

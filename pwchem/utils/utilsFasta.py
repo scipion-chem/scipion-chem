@@ -32,6 +32,22 @@ from pwem.objects.data import Sequence
 from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
 
+EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
+                  'SwisProt': 'sw', 'NCBI': 'ncbi',
+                  'NBRF (PIR)': 'pir', 'Intelligenetics': 'ig', 'CODATA': 'codata', 'DNA strider': 'strider',
+                  'ACeDB': 'acedb', '"gap" program in the Staden package': 'experiment', 'Plain sequence': 'plain',
+                  'Fitch': 'fitch', 'PHYLIP interleaved': 'phylip3', 'ASN.1': 'asn1', 'Hennig86': 'hennig86',
+                  'Mega': 'mega', 'Meganon': 'meganon', 'Nexus/PAUP': 'nexus', 'Nexusnon/PAUPnon': 'nexusnon',
+                  'Jackknifer': 'jackknifer','Jackknifernon': 'jackknifernon', 'Treecon': 'treecon',
+                  'EMBOSS sequence object report': 'debug'}
+
+def convertEMBOSSformat(inputAlignmentFile, embossFormat, outputAligmentFile):
+  '''Connvert alignment files. Options in EMBOSS_FORMATS dictionary
+  Returns a command line which must be executed into the scipion environment'''
+  cl_run = 'seqret -sequence {} -osformat2 {} {}'. \
+    format(inputAlignmentFile, embossFormat, outputAligmentFile)
+  return cl_run
+
 def copyFastaSequenceAndRead(protocol):
   outFileName = protocol._getExtraPath("sequence.fasta")
   if isinstance(protocol.inputSeq.get(), Sequence):

@@ -43,7 +43,7 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI, \
-  ProtDefineSetOfSequences
+  ProtDefineSetOfSequences, ProtExtractSeqsROI
 from pwchem.objects import SequenceVariants
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
@@ -123,6 +123,11 @@ SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name2'],
                               inputs=['inputAtomStruct2'],
                               outputs=['chain_name2'])
+
+SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
+                              targets=['chain_name'],
+                              inputs=['inputAS'],
+                              outputs=['chain_name'])
 
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,

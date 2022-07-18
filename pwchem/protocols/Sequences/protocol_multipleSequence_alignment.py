@@ -26,22 +26,14 @@
 
 import os
 
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
+from pwem.protocols import EMProtocol
+
+from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat
 from pwchem.objects import SetOfSequencesChem, Sequence
 from pwchem.utils.utilsFasta import parseAlnFile
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
-
-EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
-                  'SwisProt': 'sw', 'NCBI': 'ncbi',
-                  'NBRF (PIR)': 'pir', 'Intelligenetics': 'ig', 'CODATA': 'codata', 'DNA strider': 'strider',
-                  'ACeDB': 'acedb', '"gap" program in the Staden package': 'experiment', 'Plain sequence': 'plain',
-                  'Fitch': 'fitch', 'PHYLIP interleaved': 'phylip3', 'ASN.1': 'asn1', 'Hennig86': 'hennig86',
-                  'Mega': 'mega', 'Meganon': 'meganon', 'Nexus/PAUP': 'nexus', 'Nexusnon/PAUPnon': 'nexusnon',
-                  'Jackknifer': 'jackknifer','Jackknifernon': 'jackknifernon', 'Treecon': 'treecon',
-                  'EMBOSS sequence object report': 'debug'}
-
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
     """Run multiple sequence alignment for a set of sequences"""
@@ -51,7 +43,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         form.addSection(label='Input')
         group = form.addGroup('Input')
-        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
+        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequencesChem',
                       label='Input Set of Sequence File: ', allowsNull=False,
                       help="Set of sequences to be alignment ")
 
@@ -61,13 +53,13 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
                       help="Program selected to run the alignment.\n")
 
         group.addParam('additionalFormat', BooleanParam, expertLevel=LEVEL_ADVANCED,
-                      label='Additional sequence format: ', default=False,
+                      label='Create additional output in other EMBOSS format: ', default=False,
                       help="Other standard formats from EMBOSS seqret")
 
         group.addParam('embossFormats', EnumParam, default=1,
                       choices=list(EMBOSS_FORMATS.keys()),
                       condition='additionalFormat', expertLevel=LEVEL_ADVANCED,
-                      label='EMBOSS seq output format: ',
+                      label='EMBOSS output format: ',
                       help="Sequence formats from EMBOSS seqret")
 
         group = form.addGroup('Parameters')
