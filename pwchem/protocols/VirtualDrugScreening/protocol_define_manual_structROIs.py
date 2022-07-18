@@ -53,7 +53,7 @@ class ProtDefineStructROIs(EMProtocol):
     Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
     """
     _label = 'Define structural ROIs'
-    typeChoices = ['Coordinates', 'Residues', 'SetOfSmallMolecules']
+    typeChoices = ['Coordinates', 'Residues', 'Ligand']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -63,6 +63,8 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                       allowsNull=False, label="Input AtomStruct: ",
                       help='Select the AtomStruct object where the structural ROIs will be defined')
+
+        group = form.addGroup('Origin')
         group.addParam('origin', params.EnumParam, default=RESIDUES,
                       label='Extract ROIs from: ', choices=self.typeChoices,
                       help='The ROIs will be defined from a set of elements of this type')
@@ -91,18 +93,34 @@ class ProtDefineStructROIs(EMProtocol):
                            'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
                            'and points closer than maxIntraDistance will be considered the same pocket')
 
+        group.addParam('extLig', params.BooleanParam, default=True, condition='origin=={}'.format(LIGANDS),
+                       label='Input is a external molecule? ',
+                       help='Whether the ligand is docked in a external molecule or in the AtomStruct itself')
+
         group.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                      condition='origin=={}'.format(LIGANDS),
+                      condition='origin=={} and extLig'.format(LIGANDS),
                       label='Input molecules: ', help='Predocked molecules which will define the protein pockets')
 
-        group = form.addGroup('Distances')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                      label='Maximum atom depth (A): ',
-                      help='Maximum atom distance to the surface to be considered and mapped')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
-                      label='Maximum distance between pocket points (A): ',
-                      help='Maximum distance between two pocket atoms to considered them same pocket')
+        group.addParam('ligName', params.StringParam,
+                       condition='origin=={} and extLig'.format(LIGANDS),
+                       label='Ligand name: ', help='Specific ligand of the set')
 
+        group.addParam('molName', params.StringParam,
+                       condition='origin=={} and not extLig'.format(LIGANDS),
+                       label='Molecule name: ', help='Name of the HETATM molecule in the AtomStruct')
+
+        group = form.addGroup('Pocket definition')
+        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
+                       label='Maximum distance between pocket points (A): ',
+                       help='Maximum distance between two pocket atoms to considered them same pocket')
+
+        group.addParam('surfaceCoords', params.BooleanParam, default=True,
+                       label='Map coordinates to surface? ',
+                       help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
+                            'closest surface coordinates or use them directly.')
+        group.addParam('maxDepth', params.FloatParam, default='3.0',
+                      label='Maximum atom depth (A): ', condition='surfaceCoords',
+                      help='Maximum atom distance to the surface to be considered and mapped')
 
 
     # --------------------------- STEPS functions ------------------------------
@@ -114,16 +132,22 @@ class ProtDefineStructROIs(EMProtocol):
 
     def getSurfaceStep(self):
         parser = PDBParser()
-        structure = parser.get_structure(self.getProteinName(), self.getProteinFileName())
+        pdbFile = self.getProteinFileName()
+        if self.origin.get() == LIGANDS and not self.extLig:
+            pdbFile = clean_PDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
+                                waters=True, HETATM=True)
+
+        structure = parser.get_structure(self.getProteinName(), pdbFile)
         self.structModel = structure[0]
         self.structSurface = get_surface(self.structModel,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
     def definePocketsStep(self):
-        originCoords = self.getOriginCoords()
-        surfaceCoords = self.mapSurfaceCoords(originCoords)
+        pocketCoords = self.getOriginCoords()
+        if self.surfaceCoords:
+            pocketCoords = self.mapSurfaceCoords(pocketCoords)
 
-        self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
+        self.coordsClusters = self.clusterSurfaceCoords(pocketCoords)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
@@ -195,9 +219,21 @@ class ProtDefineStructROIs(EMProtocol):
                       oCoords.append(list(a.get_coord()))
 
         elif self.origin.get() == LIGANDS:
-            for mol in self.inSmallMols.get():
-                curPosDic = mol.getAtomsPosDic(onlyHeavy=False)
-                oCoords += list(curPosDic.values())
+            if self.extLig:
+                if not self.ligName.get():
+                    mols = self.inSmallMols.get()
+                else:
+                    for mol in self.inSmallMols.get():
+                        if self.ligName.get() == mol.__str__():
+                            mols = [mol]
+                            break
+
+                for mol in mols:
+                    curPosDic = mol.getAtomsPosDic(onlyHeavy=False)
+                    oCoords += list(curPosDic.values())
+
+            else:
+                oCoords = getLigCoords(self.getProteinFileName(), self.molName.get())
 
         return oCoords
 
@@ -246,9 +282,6 @@ class ProtDefineStructROIs(EMProtocol):
             for j, coord in enumerate(clust):
                 f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
         return outFile
-
-
-
 
 
 

@@ -135,7 +135,9 @@ class ProtocolScoreDocking(EMProtocol):
         group.addParam('deleteStep', params.StringParam, default='',
                        label='Delete score number: ',
                        help='Delete the score of the specified index from the workflow.')
-        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='False')
+        group.addParam('showWorkflow', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
+                       label="Show workflow param: ", help='Show workflow param, while wizards released to scipion-em')
+        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='showWorkflow')
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
@@ -144,8 +146,12 @@ class ProtocolScoreDocking(EMProtocol):
         self.createGUISummary()
         sSteps = []
         #Performing every score listed in the form
-        for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-            sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
+        if self.workFlowSteps.get():
+            for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
+                sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
+        else:
+            msjDic = self.createMSJDic()
+            sSteps.append(self._insertFunctionStep('scoringStep', str(msjDic), 1, prerequisites=[]))
 
         #Extracting only correlated scores if applicable
         if self.correlationFilter.get():
@@ -349,7 +355,10 @@ class ProtocolScoreDocking(EMProtocol):
 
     def getZScores(self):
         corFile = self._getPath('correlated.tsv')
-        correlated = list(range(1, len(self.workFlowSteps.get().strip().split('\n')) + 1))
+        if self.workFlowSteps.get():
+            correlated = list(range(1, len(self.workFlowSteps.get().strip().split('\n')) + 1))
+        else:
+            correlated = [1]
         if os.path.exists(corFile):
             with open(corFile) as f:
                 correlated = f.readline().split()

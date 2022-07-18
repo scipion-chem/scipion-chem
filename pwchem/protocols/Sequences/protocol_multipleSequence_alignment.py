@@ -26,11 +26,12 @@
 
 import os
 
+from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwem.protocols import EMProtocol
-from pwem.objects import SetOfSequences
-from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam, Boolean, String
-from pwchem.objects import SequencesAlignment
+
 from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat
+from pwchem.objects import SetOfSequencesChem, Sequence
+from pwchem.utils.utilsFasta import parseAlnFile
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
@@ -42,7 +43,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         form.addSection(label='Input')
         group = form.addGroup('Input')
-        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
+        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequencesChem',
                       label='Input Set of Sequence File: ', allowsNull=False,
                       help="Set of sequences to be alignment ")
 
@@ -89,7 +90,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         # Muscle
         elif programName == MUSCLE:
-            output_file = os.path.abspath(self._getPath('muscle.fa'))
+            output_file = os.path.abspath(self._getPath('muscle.aln'))
             cline = 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
@@ -98,18 +99,21 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         self.runJob(cline, '')
 
-        outSeqs = SetOfSequences.create(self._getPath())
-        outSeqs.importFromFile(os.path.abspath(output_file), type='clustal')
-        outSeqs.aligned = Boolean(True)
+        outSeqDic = parseAlnFile(output_file)
+        outSeqs = SetOfSequencesChem.create(outputPath=self._getPath())
+        for seqId in outSeqDic:
+            outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
+
+        outSeqs.setAlignmentFileName(output_file)
+        outSeqs.setAligned(True)
+        self._defineOutputs(outputSequences=outSeqs)
+
         # EMBOSS format
         if self.additionalFormat:
-          embossFormat = EMBOSS_FORMATS[self.getEnumText('embossFormats')]
-          outAlignmentFile = os.pat.abspath(self._getPath('{}.{}'.format(programName.lower(), embossFormat)))
-          emboss = convertEMBOSSformat(output_file, embossFormat, outAlignmentFile)
-          self.runJob(emboss, '')
-          outSeqs._additonalFormat = String(outAlignmentFile)
+            embossSelectedFormat = EMBOSS_FORMATS[self.getEnumText('embossFormats')]
+            embossFile = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
+            embossFile = outSequences.convertEMBOSSformat(embossSelectedFormat, embossFile)
 
-        self._defineOutputs(outputSequences=outSeqs)
 
     def _validate(self):
         errors = []

@@ -151,13 +151,19 @@ class ProtMapSequenceROI(EMProtocol):
     def getASFileName(self):
         inpStruct = self.inputAtomStruct.get()
         inpFile = inpStruct.getFileName()
+        basename = os.path.basename(inpFile).split('.')[0]
         if inpFile.endswith('.cif'):
-            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
+            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
             cifToPdb(inpFile, inpPDBFile)
 
         elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace(inpStruct.getExtension(), '.pdb'))
+            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
             inpStruct.convert2PDB(outPDB=inpPDBFile)
+
+        elif inpFile.endswith('.pdbqt'):
+            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpFile), inpPDBFile)
+            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
 
         else:
             inpPDBFile = inpFile
@@ -178,8 +184,9 @@ class ProtMapSequenceROI(EMProtocol):
     def getInputASSequence(self):
         from pwem.convert.atom_struct import AtomicStructHandler
         inputObj = getattr(self, 'inputAtomStruct').get()
-        seq_name = os.path.basename(inputObj.getFileName())
-        handler = AtomicStructHandler(inputObj.getFileName())
+        ASFile = self.getASFileName()
+        seq_name = os.path.basename(ASFile)
+        handler = AtomicStructHandler(ASFile)
         chainName = getattr(self, 'chain_name').get()
 
         # Parse chainName for model and chain selection

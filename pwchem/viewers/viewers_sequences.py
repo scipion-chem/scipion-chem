@@ -29,7 +29,7 @@ import pyworkflow.viewer as pwviewer
 from pwem.objects import SetOfSequences, Sequence
 
 from pwchem import Plugin as pwchem_plugin
-from pwchem.objects import SequencesAlignment, SequenceVariants, SetOfSequenceROIs
+from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem
 from pwchem.constants import *
 
 
@@ -49,7 +49,7 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [Sequence, SetOfSequences, SequencesAlignment, SequenceVariants, SetOfSequenceROIs]
+    _targets = [Sequence, SetOfSequences, SetOfSequencesChem, SequenceVariants, SetOfSequenceROIs]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -58,7 +58,6 @@ class SequenceAliViewer(pwviewer.Viewer):
     def _visualize(self, obj, **kwargs):
         views = []
         cls = type(obj)
-
         seqFiles = []
         if issubclass(cls, SetOfSequences) or issubclass(cls, Sequence):
             outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
@@ -66,9 +65,6 @@ class SequenceAliViewer(pwviewer.Viewer):
             if os.path.exists(outPath):
                 os.remove(outPath)
             obj.exportToFile(outPath)
-
-        elif issubclass(cls, SequencesAlignment):
-            seqFiles += [obj.getAlignmentFileName()]
 
         elif issubclass(cls, SequenceVariants):
             outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))

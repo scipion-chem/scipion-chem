@@ -129,6 +129,20 @@ def parseFasta(fastaFile):
                 seqDic[seqId] += line.strip()
     return seqDic
 
+def parseAlnFile(alnFile):
+    seqDic = {}
+    with open(alnFile) as f:
+        f.readline()
+        for line in f:
+            if line.strip() and not line.startswith(' '):
+                id, seq = line.strip().split()[:2]
+                if id in seqDic:
+                    seqDic[id] += seq
+                else:
+                    seqDic[id] = seq
+    return seqDic
+
+
 def calculateIdentity(alignFile):
     if os.path.splitext(alignFile)[1] in ['.fa', '.fasta']:
         seqDic = parseFasta(alignFile)

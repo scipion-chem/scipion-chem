@@ -28,8 +28,8 @@ import os, json
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import StringParam, PointerParam, BooleanParam
-from pwchem.objects import SequencesAlignment
-from pwchem.utils.utilsFasta import pairwiseAlign
+from pwchem.objects import SetOfSequencesChem, Sequence
+from pwchem.utils.utilsFasta import pairwiseAlign, parseAlnFile
 
 
 class ProtChemPairWiseAlignment(EMProtocol):
@@ -79,9 +79,15 @@ class ProtChemPairWiseAlignment(EMProtocol):
 
         out_file = os.path.abspath(self._getPath("clustalo_pairwise.aln"))
         pairwiseAlign(seq1, seq2, out_file, seqName1=seq_name1, seqName2=seq_name2)
+        outSeqDic = parseAlnFile(out_file)
 
-        out_fileClustal=SequencesAlignment(alignmentFileName=out_file)
-        self._defineOutputs(outputAlignment=out_fileClustal)
+        outSeqs = SetOfSequencesChem.create(outputPath=self._getPath())
+        for seqId in outSeqDic:
+            outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
+
+        outSeqs.setAlignmentFileName(out_file)
+        outSeqs.setAligned(True)
+        self._defineOutputs(outputSequences=outSeqs)
 
     def _validate(self):
         errors = []
@@ -109,3 +115,6 @@ class ProtChemPairWiseAlignment(EMProtocol):
             if not seq_name:
                 seq_name = inputObj.getSeqName()
         return seq, seq_name
+
+    def parseSequences(self, alignFile):
+        pass
