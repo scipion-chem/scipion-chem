@@ -65,18 +65,16 @@ class AddResidueWizard(EmWizard):
 class SelectChainWizardQT(SelectChainWizard):
   _targets, _inputs, _outputs = [], {}, {}
   @classmethod
-  def getModelsChainsStep(cls, protocol, inputParamName):
+  def getModelsChainsStep(cls, protocol, inputObj):
     """ Returns (1) list with the information
        {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
        (2) list with residues, position and chain (modelsFirstResidue)"""
     structureHandler = AtomicStructHandler()
-    fileName = ""
-    AS = getattr(protocol, inputParamName).get()
-    if type(AS) == str:
-      if os.path.exists(AS):
-        fileName = AS
+    if type(inputObj) == str:
+      if os.path.exists(inputObj):
+        fileName = inputObj
       else:
-        pdbID = AS
+        pdbID = inputObj
         url = "https://www.rcsb.org/structure/"
         URL = url + ("%s" % pdbID)
         try:
@@ -87,17 +85,17 @@ class SelectChainWizardQT(SelectChainWizard):
           raise Exception("%s is a wrong PDB ID" % pdbID)
         fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir="/tmp/")
 
-    elif str(type(AS).__name__) == 'SchrodingerAtomStruct':
-        fileName = os.path.abspath(AS.convert2PDB())
-    elif AS.getFileName().endswith('.pdbqt'):
-      proteinFile = AS.getFileName()
+    elif str(type(inputObj).__name__) == 'SchrodingerAtomStruct':
+        fileName = os.path.abspath(inputObj.convert2PDB())
+    elif inputObj.getFileName().endswith('.pdbqt'):
+      proteinFile = inputObj.getFileName()
       inName, inExt = os.path.splitext(os.path.basename(proteinFile))
       fileName = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
       args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), fileName)
       runOpenBabel(protocol=protocol, args=args, popen=True)
 
     else:
-        fileName = os.path.abspath(AS.getFileName())
+        fileName = os.path.abspath(inputObj.getFileName())
 
     structureHandler.read(fileName)
     structureHandler.getStructure()
@@ -106,8 +104,8 @@ class SelectChainWizardQT(SelectChainWizard):
 class SelectResidueWizardQT(SelectResidueWizard):
   _targets, _inputs, _outputs = [], {}, {}
   @classmethod
-  def getModelsChainsStep(cls, protocol, inputParamName):
-      return SelectChainWizardQT().getModelsChainsStep(protocol, inputParamName)
+  def getModelsChainsStep(cls, protocol, inputObj):
+      return SelectChainWizardQT().getModelsChainsStep(protocol, inputObj)
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
@@ -145,10 +143,8 @@ SelectResidueWizardQT().addTarget(protocol=ProtDefineSeqROI,
 class SelectChainPairwiseWizard(SelectChainWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
-    def editionListOfChains(self, listOfChains, inputParam, protocol):
+    def editionListOfChains(self, listOfChains, inAS, inROI, protocol):
         chainList = []
-        inAS = getattr(protocol, inputParam[0]).get()
-        inROI = getattr(protocol, inputParam[1]).get()
 
         handler = AtomicStructHandler(inAS.getFileName())
         for model, chainDic in listOfChains.items():
@@ -172,13 +168,15 @@ class SelectChainPairwiseWizard(SelectChainWizard):
     def show(self, form, *params):
         inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
+        inputObj = getattr(protocol, inputParam[0]).get()
         try:
-          listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParam[0])
+            listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputObj)
         except Exception as e:
-          print("ERROR: ", e)
-          return
+            print("ERROR: ", e)
+            return
 
-        chainList = self.editionListOfChains(listOfChains, inputParam, protocol)
+        inROI = getattr(protocol, inputParam[1]).get()
+        chainList = self.editionListOfChains(listOfChains, inputObj, inROI, protocol)
         finalChainList = []
         for i in chainList:
           finalChainList.append(String(i))
@@ -202,11 +200,12 @@ class SelectMultiChainWizard(SelectChainWizardQT):
   def show(self, form, *params):
       inputParams, outputParam = self.getInputOutput(form)
       protocol = form.protocol
+      inputObj = getattr(protocol, inputParams[0]).get()
       try:
-        listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputParams[0])
+          listOfChains, listOfResidues = self.getModelsChainsStep(protocol, inputObj)
       except Exception as e:
-        print("ERROR: ", e)
-        return
+          print("ERROR: ", e)
+          return
 
       chainList = self.editionListOfChains(listOfChains)
       finalChainList = []
@@ -249,9 +248,11 @@ class PreviewAlignmentWizard(VariableWizard):
 
     model = json.loads(getattr(protocol, inputParam[0]).get())['model']
     chainID = json.loads(getattr(protocol, inputParam[0]).get())['chain']
+    inputAS = getattr(protocol, inputParam[1]).get()
+
     alignFile = os.path.abspath(protocol._getPath('preAlign_chain{}.fa'.format(chainID)))
     if not os.path.exists(alignFile):
-        inASFile = self.getPDBInputAS(getattr(protocol, inputParam[1]).get(), form.protocol)
+        inASFile = self.getPDBInputAS(inputAS, form.protocol)
         inROI = getattr(protocol, inputParam[2]).get()
         inSeq = inROI.getSequence()
         handler = AtomicStructHandler(inASFile)
@@ -319,9 +320,8 @@ class SelectElementWizard(VariableWizard):
     """Lists the items in a SetOfX and choose one"""
     _targets, _inputs, _outputs = [], {}, {}
 
-    def getListOfElements(self, protocol, inputParam):
+    def getListOfElements(self, protocol, scipionSet):
       eleList = []
-      scipionSet = getattr(protocol, inputParam[0]).get()
       if scipionSet is not None:
         for element in scipionSet:
             eleList.append(element.__str__())
@@ -331,7 +331,8 @@ class SelectElementWizard(VariableWizard):
       protocol = form.protocol
       inputParam, outputParam = self.getInputOutput(form)
       try:
-        listOfElements = self.getListOfElements(protocol, inputParam)
+        scipionSet = getattr(protocol, inputParam[0]).get()
+        listOfElements = self.getListOfElements(protocol, scipionSet)
       except Exception as e:
         print("ERROR: ", e)
         return
@@ -397,7 +398,7 @@ class AddSequenceWizard(SelectResidueWizard):
             outStr += [posIdxs]
         else:
             outStr += ['FIRST-LAST']
-            finalResiduesList = self.getResidues(form, inputParams)
+            finalResiduesList = self.getResidues(form, inputObj, chainJson)
             idxs = [json.loads(finalResiduesList[0].get())['index'], json.loads(finalResiduesList[-1].get())['index']]
             seq = self.getSequence(finalResiduesList, idxs)
 
