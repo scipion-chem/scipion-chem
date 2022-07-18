@@ -238,7 +238,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         '''Return the pocket with max volume in a cluster'''
         maxVol = 0
         for pocket in cluster:
-            pocketVol = pocket.getSurfaceConvexVolume()
+            pocketVol = pocket.getPocketVolume()
             if pocketVol > maxVol:
                 maxVol = pocketVol
                 outPocket = pocket.clone()
