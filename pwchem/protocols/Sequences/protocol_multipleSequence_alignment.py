@@ -28,7 +28,8 @@ import os
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
-from pwchem.objects import SequencesAlignment
+from pwchem.objects import SetOfSequencesChem, Sequence
+from pwchem.utils.utilsFasta import parseAlnFile
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
@@ -97,7 +98,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         # Muscle
         elif programName == MUSCLE:
-            output_file = os.path.abspath(self._getPath('muscle.fa'))
+            output_file = os.path.abspath(self._getPath('muscle.aln'))
             cline = 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
@@ -106,15 +107,21 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         self.runJob(cline, '')
 
-        out_fileAligned = SequencesAlignment(alignmentFileName=os.path.abspath(output_file))
-        self._defineOutputs(outputSequences=out_fileAligned)
+        outSeqDic = parseAlnFile(output_file)
+        outSeqs = SetOfSequencesChem.create(outputPath=self._getPath())
+        for seqId in outSeqDic:
+            outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
+
+        outSeqs.setAlignmentFileName(output_file)
+        outSeqs.setAligned(True)
+        self._defineOutputs(outputSequences=outSeqs)
 
         # EMBOSS format
         if self.additionalFormat:
             embossSelectedFormat = EMBOSS_FORMATS[self.getEnumText('embossFormats')]
-            StandardFormatEmboss = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
-            emboss = out_fileAligned.convertEMBOSSformat(output_file, embossSelectedFormat, StandardFormatEmboss)
-            self.runJob(emboss, '')
+            embossFile = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
+            embossFile = outSequences.convertEMBOSSformat(embossSelectedFormat, embossFile)
+
 
     def _validate(self):
         errors = []
