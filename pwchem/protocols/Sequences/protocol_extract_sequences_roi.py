@@ -78,7 +78,7 @@ class ProtExtractSeqsROI(EMProtocol):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
-        group.addParam('inputSequences', params.PointerParam, pointerClass='SetOfSequences, SequencesAlignment',
+        group.addParam('inputSequences', params.PointerParam, pointerClass='SetOfSequences',
                       allowsNull=False, label="Input aligned sequences: ",
                       help='Select the set of sequences object where the ROI will be defined')
         group.addParam('useCons', params.BooleanParam, default=True,

@@ -29,7 +29,7 @@
 
 import sys, os, shutil
 
-from Bio.PDB import PDBParser
+from Bio.PDB import PDBParser, MMCIFParser
 from Bio.PDB.SASA import ShrakeRupley
 
 
@@ -37,7 +37,10 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <structFile> <outFile>'''
     structFile, outFile = sys.argv[1], sys.argv[2]
 
-    p = PDBParser(QUIET=1)
+    if structFile.endswith('.pdb') or structFile.endswith('.ent'):
+        p = PDBParser(QUIET=1)
+    elif structFile.endswith('.cif'):
+        p = MMCIFParser(QUIET=1)
     struct = p.get_structure("SASAstruct", structFile)
 
     sr = ShrakeRupley()

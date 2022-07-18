@@ -69,8 +69,10 @@ class ProtCalculateSASA(EMProtocol):
 
     def calculateSASAStep(self):
         inputAS = self.inputAtomStruct.get().getFileName()
+        # Removes HETATM (sometimes yiled error in Biopython)
+        clean_PDB(inputAS, self._getExtraPath('inpdb.pdb'), waters=True, HETATM=True)
         outSASA = self.getSASAFile()
-        args = '{} {}'.format(os.path.abspath(inputAS), outSASA)
+        args = '{} {}'.format(os.path.abspath(self._getExtraPath('inpdb.pdb')), outSASA)
         pwchemPlugin.runScript(self, 'calculate_SASA.py', args, env='plip', cwd=self._getExtraPath())
 
     def defineOutputStep(self):
