@@ -37,6 +37,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import Protoco
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import ProtocolPharmacophoreFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_PAINS_filter import ProtocolPainsRdkitFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolADMEFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
@@ -49,6 +50,7 @@ from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import Prot
 from pwchem.protocols.Sequences.protocol_generate_variants import ProtChemGenerateVariants
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
+from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
 
 # General protocols
 from pwchem.protocols.General.protocol_converter import ConvertStructures

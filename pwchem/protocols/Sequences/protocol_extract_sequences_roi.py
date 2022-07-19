@@ -30,20 +30,24 @@
 This protocol is used define sequence ROIs based on the conservation in a multiple sequence alignment
 
 """
-import os, math
+import os, math, json
 import numpy as np
 from scipy.stats import entropy
 
 from Bio import AlignIO
 from Bio.Align import AlignInfo
+from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
 from pyworkflow.object import String
 from pyworkflow.utils import Message
+from pwem.objects import AtomStruct
 from pwem.protocols import EMProtocol
+from pwem.convert.atom_struct import toPdb, toCIF, AtomicStructHandler, addScipionAttribute
 
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
+from pwchem.utils.utilsFasta import pairwiseAlign
 from pwchem import Plugin
 
 SHANNON, SIMPSON, KABAT, PROP = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient', \
@@ -65,6 +69,9 @@ class ProtExtractSeqsROI(EMProtocol):
     Extract a set of ROIs from a set of sequences based on the conservation in a alignment
     """
     _label = 'Extract sequences ROIs'
+    _ATTRNAME = 'Conservation'
+    _OUTNAME = 'outputAtomStruct'
+    _possibleOutputs = {_OUTNAME: AtomStruct}
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -72,14 +79,22 @@ class ProtExtractSeqsROI(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
         group.addParam('inputSequences', params.PointerParam, pointerClass='SetOfSequences',
-                      allowsNull=False, label="Input sequences: ",
+                      allowsNull=False, label="Input aligned sequences: ",
                       help='Select the set of sequences object where the ROI will be defined')
         group.addParam('useCons', params.BooleanParam, default=True,
                        label='Use consensus sequence for output: ', expertLevel=params.LEVEL_ADVANCED,
                        help='Use consensus sequence for the sequence ROIs output or a specific input sequence')
         group.addParam('outSeq', params.StringParam, default='', condition='not useCons',
                        label='Output sequence: ', expertLevel=params.LEVEL_ADVANCED,
-                       help='input sequence to use for the output sequence ROIs')
+                       help='Input sequence to use for the output sequence ROIs')
+
+        group.addParam('inputAS', params.PointerParam, pointerClass='AtomStruct',
+                       allowsNull=True, label="Input protein structure: ",
+                       help='Input protein structure. If included, the conservation values will be drawed over'
+                            'the surface of  the protein in the results analysis.')
+        group.addParam('chain_name', params.StringParam,
+                       allowsNull=True, label='Chain of interest:', condition='inputAS',
+                       help='Specify the chain of interest')
 
         group = form.addGroup('Variability measure')
         group.addParam('method', params.EnumParam, default=3,
@@ -127,10 +142,30 @@ class ProtExtractSeqsROI(EMProtocol):
     def _insertAllSteps(self):
         # Insert processing steps
         self._insertFunctionStep('calculateConservationStep')
+        if self.inputAS.get():
+            self._insertFunctionStep('mapConservationStep')
         self._insertFunctionStep('defineOutputStep')
 
     def calculateConservationStep(self):
         outFile = self.calcConservation()
+
+    def mapConservationStep(self):
+        oriSeqsFile = self._getExtraPath('originalAlignment.fasta')
+        addSeqsFile = self._getExtraPath('structureAddAlignment.fasta')
+        self.inputSequences.get().exportToFile(oriSeqsFile)
+        seqAS, seq_nameAS, seqFile = self.getInputASSequence()
+
+        cline = 'mafft --add {} --mapout {} > {}'.format(seqFile, oriSeqsFile, addSeqsFile)
+        self.runJob(cline, '')
+        if os.path.getsize(addSeqsFile) == 0:
+            auxAlignFile = self._getExtraPath('mafftAlignment.fasta')
+            print('Alignment of the structure seuqnece failed, most likely because mafft detected that input sequences '
+                  'were not aligned.\nAligning sequences with mafft in {}'.format(auxAlignFile))
+            cline = 'mafft --auto {} > {}'.format(oriSeqsFile, auxAlignFile)
+            self.runJob(cline, '')
+
+            cline = 'mafft --add {} --mapout {} > {}'.format(seqFile, auxAlignFile, addSeqsFile)
+            self.runJob(cline, '')
 
     def defineOutputStep(self):
         if self.useCons:
@@ -157,6 +192,19 @@ class ProtExtractSeqsROI(EMProtocol):
         if len(outROIs) > 0:
             self._defineOutputs(outputROIs=outROIs)
 
+        if self.inputAS:
+            outStructFileName = self._getPath('outputStructure.cif')
+            # Write conservation in a section of the output cif file
+            ASH = AtomicStructHandler()
+            consScoresDic = self.mapConservation()
+            inpAS = toCIF(self.inputAS.get().getFileName(), self._getTmpPath('inputStruct.cif'))
+            cifDic = ASH.readLowLevel(inpAS)
+            cifDic = addScipionAttribute(cifDic, consScoresDic, self._ATTRNAME)
+            ASH._writeLowLevel(outStructFileName, cifDic)
+
+            AS = AtomStruct(filename=outStructFileName)
+            self._defineOutputs(outputAtomStruct=AS)
+
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -166,6 +214,12 @@ class ProtExtractSeqsROI(EMProtocol):
     def _methods(self):
         methods = []
         return methods
+
+    def _warnings(self):
+        warns = []
+        if not hasattr(self.inputSequences.get(), 'aligned') or not getattr(self.inputSequences.get(), 'aligned'):
+            warns.append('Input sequences must be aligned to perform the conservation analysis.')
+        return warns
 
     def _validate(self):
         errors = []
@@ -231,7 +285,134 @@ class ProtExtractSeqsROI(EMProtocol):
                 inRoi = False
         return rois
 
+    def mapConservation(self):
+        '''Return a dictionary with {spec: value}
+        "spec" should be a chimera specifier. In this case:  chainId:residueIdx'''
+        # Map positions of the original sequence with the actual index in the structure (might not start on 1)
+        # {OriPos: Idx}
+        structDic = {}
+        parser = PDBParser()
+        chain_id, modelId = json.loads(self.chain_name.get())["chain"], json.loads(self.chain_name.get())["model"]
+        structModel = parser.get_structure(self.getASName(), self.getASFileName())[int(modelId)]
+        for i, residue in enumerate(structModel[json.loads(self.chain_name.get())['chain']]):
+          structDic[i + 1] = residue.get_id()[1]
+
+        #Maps original positions of the sequence with respect to the new aligned
+        # {OriPos: AlignPos}
+        alignDic = {}
+        with open(self._getExtraPath('structSequence.fasta.map')) as fIn:
+            for i in range(2):
+                fIn.readline()
+            for line in fIn:
+                oriPos, alignPos = int(line.split(',')[1].strip()), line.split(',')[2].strip()
+                if alignPos != '-':
+                    alignDic[oriPos] = int(alignPos)
+
+        # Map positions of the alignment with conservation values
+        # {AlignPos: ConsValue}
+        consDic = {}
+        with open(self.getConservationFile()) as fcons:
+            line = fcons.readline()
+            for i, value in enumerate(line.split()):
+                consDic[i+1] = value
+
+        print(consDic)
+
+        #Final mapping: {"chain:Idx": ConsValue}
+        mapDic = {}
+        for oriPos in structDic:
+            spec = '{}:{}'.format(chain_id, structDic[oriPos])
+            if oriPos in alignDic:
+                mapDic[spec] = float(consDic[alignDic[oriPos]])
+            else:
+                print('Original position {} of the structure sequence could not be mapped to alignment'.format(oriPos))
+        return mapDic
+
+
     ##################
+
+    def getInputSequence(self):
+        inputObj = getattr(self, 'inputSequences')[0].get()
+        seq = inputObj.getSequence()
+        seq_name = inputObj.getSequenceObj().getId()
+        if not seq_name:
+          seq_name = inputObj.getSeqName()
+        return seq, seq_name
+
+    def getInputASSequence(self):
+        inputObj = getattr(self, 'inputAS').get()
+        seq_name = os.path.basename(inputObj.getFileName())
+        handler = AtomicStructHandler(inputObj.getFileName())
+        chainName = getattr(self, 'chain_name').get()
+
+        # Parse chainName for model and chain selection
+        struct = json.loads(chainName)  # From wizard dictionary
+        chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
+
+        seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
+        seqFile = self._getExtraPath('structSequence.fasta')
+        with open(seqFile, "w") as f:
+          f.write(('>{}\n{}\n'.format(seq_name, seq)))
+        return seq, seq_name, seqFile
+
+    def mapResidues(self, structModel):
+        '''Returns a dictionary which maps the idxs of the residues of  the sequence and the sequence from a structure
+        {idxSeq: idxStrSeq}'''
+        seq, seqAS = self.parseSequences()
+        chain = structModel[json.loads(self.chain_name.get())['chain']]
+        resIdxs = self.getChainResidueIdxs(chain)
+
+        mapDic = {}
+        i, j = 0, 0
+        for k in range(len(seq)):
+            if seq[k] == '-':
+                i = i + 1
+            if seqAS[k] == '-':
+                j = j + 1
+            if seq[k] != '-' and seqAS[k] != '-':
+                mapDic[k-i+1] = resIdxs[k-j]
+
+        return mapDic
+
+    def parseSequences(self):
+        seq, seqAS = '', ''
+        first = True
+        with open(self._getPath("pairWise.fasta")) as f:
+            f.readline()
+            for line in f:
+                if not line.startswith('>'):
+                    if first:
+                        seq += line.strip()
+                    else:
+                        seqAS += line.strip()
+                else:
+                    first = False
+        return seq, seqAS
+
+    def getChainResidueIdxs(self, chain):
+        resIdxs = []
+        for res in chain:
+            resIdxs.append(res.get_id()[1])
+        return resIdxs
+
+    def getASFileName(self):
+        inpStruct = self.inputAS.get()
+        inpFile = inpStruct.getFileName()
+        if inpFile.endswith('.cif'):
+            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
+            cifToPdb(inpFile, inpPDBFile)
+
+        elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace(inpStruct.getExtension(), '.pdb'))
+            inpStruct.convert2PDB(outPDB=inpPDBFile)
+
+        else:
+            inpPDBFile = inpFile
+
+        return inpPDBFile
+
+    def getASName(self):
+      return os.path.splitext(os.path.basename(self.getASFileName()))[0]
 
     def getMaxLenSeq(self, seqSet):
       maxi = 0

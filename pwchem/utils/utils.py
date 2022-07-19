@@ -24,14 +24,17 @@
 # *
 # **************************************************************************
 
-from pwem.convert import AtomicStructHandler, SequenceHandler
-from pwem.convert.atom_struct import cifToPdb
-from pwem.objects.data import Sequence, Object, String, Integer, Float
-from ..constants import *
-from pwchem import Plugin as pwchemPlugin
 import random as rd
 import os, shutil
 import numpy as np
+from Bio.PDB import PDBParser, MMCIFParser
+
+from pwem.convert import AtomicStructHandler, SequenceHandler
+from pwem.convert.atom_struct import cifToPdb
+from pwem.objects.data import Sequence, Object, String, Integer, Float
+
+from pwchem.constants import *
+from pwchem import Plugin as pwchemPlugin
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -61,6 +64,27 @@ def makeSubsets(oriSet, nt):
     if len(curSet) > 0:
         subsets.append(curSet)
     return subsets
+
+def getLigCoords(ASFile, ligName):
+    '''Return the coordinates of the ligand specified in the atomic structure file'''
+    if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+      pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+      parser = PDBParser().get_structure(pdb_code, ASFile)
+    elif ASFile.endswith('.cif'):
+      pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+      parser = MMCIFParser().get_structure(pdb_code, ASFile)
+    else:
+      print('Unknown AtomStruct file format')
+      return
+
+    coords = []
+    for model in parser:
+        for chain in model:
+            for residue in chain:
+                if residue.resname == ligName:
+                    for atom in residue:
+                        coords.append(list(atom.get_coord()))
+    return coords
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
