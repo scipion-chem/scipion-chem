@@ -43,7 +43,6 @@ def parseParams(paramsFile):
                 paramsDic[key] = value.strip()
     return paramsDic
 
-
 #################################################################################################################
 def conformer_generation(mol, outBase, ffMethod, restrainMethod, numConf, rmsThres):
     param = getattr(rdDistGeom, restrainMethod)()
@@ -53,24 +52,27 @@ def conformer_generation(mol, outBase, ffMethod, restrainMethod, numConf, rmsThr
     mp = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant=ffMethod)
     AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
 
-    res, confRes = [], {}
     for cid in cids:
-
-        outFile = outBase + '-{}.sdf'.format(cid)
         ff = AllChem.MMFFGetMoleculeForceField(mol, mp, confId=cid)
         e = ff.CalcEnergy()
-        res.append((cid, e))
-        confRes[outFile] = e
-        sorted_res = sorted(res, key=lambda x: x[1])
         rdMolAlign.AlignMolConformers(mol)
 
-        w = Chem.SDWriter(outFile)
         mol.SetProp('CID', str(cid))
         mol.SetProp('Energy', str(e))
-        w.write(mol, confId=cid)
-        w.close()
-    return confRes
 
+    return mol
+
+def filterMolsSize(mols, size):
+    nMols = []
+    for mol in mols:
+        if mol.GetNumAtoms() > int(size):
+            nMols.append(mol)
+    return nMols
+
+def writeMol(mol, outFile, cid=-1):
+    w = Chem.SDWriter(outFile)
+    w.write(mol, cid)
+    w.close()
 
 ###################################################################################################################
 if __name__ == "__main__":
@@ -80,17 +82,41 @@ if __name__ == "__main__":
     paramsDic = parseParams(sys.argv[1])
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
+    ffMethod = paramsDic['ffMethod']
 
     mols_dict, _ = getMolFilesDic(molFiles)
-    for mol in mols_dict:
-        molBase = os.path.splitext(os.path.basename(mols_dict[mol]))[0]
-        if paramsDic['doHydrogens']:
-            mol = Chem.AddHs(Chem.RemoveHs(mol))
-
-
-        if paramsDic['doGasteiger']:
-            AllChem.ComputeGasteigerCharges(mol)
-
+    for inmol in mols_dict:
+        molBase = os.path.splitext(os.path.basename(mols_dict[inmol]))[0]
         outBase = os.path.join(outDir, molBase)
-        confFiles = conformer_generation(mol, outBase, paramsDic['ffMethod'], paramsDic['restrainMethod'],
-                                         paramsDic['numConf'], paramsDic['rmsThres'])
+        if 'numAtoms' in paramsDic:
+            inMols = []
+            frags = Chem.GetMolFrags(inmol, asMols=True)
+            frags = filterMolsSize(frags, paramsDic['numAtoms'])
+        else:
+            frags = [inmol]
+
+        for i, mol in enumerate(frags):
+            if len(frags) > 1:
+                outBasef = outBase + 'f{}'.format(i)
+            else:
+                outBasef = outBase
+
+            if paramsDic['doHydrogens']:
+                mol = Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
+
+            if paramsDic['doGasteiger']:
+                AllChem.ComputeGasteigerCharges(mol)
+
+            AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
+
+            if 'numConf' in paramsDic:
+                print(8)
+                mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
+                                                 paramsDic['numConf'], paramsDic['rmsThres'])
+                for cid, cMol in enumerate(mol.GetConformers()):
+                    outFile = outBasef + '-{}.sdf'.format(cid+1)
+                    writeMol(mol, outFile, cid=cid)
+            else:
+                outFile = outBasef + '.sdf'
+                writeMol(mol, outFile)
+

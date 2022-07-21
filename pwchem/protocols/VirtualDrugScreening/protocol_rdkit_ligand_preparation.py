@@ -73,22 +73,29 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
                       label='Set of small molecules:', allowsNull=False,
                       help='It must be in pdb or mol2 format, you may use the converter')
 
-        H_C = form.addGroup("Molecule management")
-        H_C.addParam('doHydrogens', params.BooleanParam, default=True,
-                     label='ReAssign hydrogens: ',
-                     help='Hydrogens are reomved (if present) and readded')
-        H_C.addParam('doGasteiger', params.BooleanParam, default=True,
-                     label='Recalculate gasteiger charges: ',
-                     help='Charges of the molecule are recomputed using the gasteiger method')
+        group = form.addGroup("Molecule management")
+        group.addParam('doHydrogens', params.BooleanParam, default=True,
+                       label='ReAssign hydrogens: ',
+                       help='Hydrogens are reomved (if present) and readded')
+        group.addParam('doGasteiger', params.BooleanParam, default=True,
+                       label='Recalculate gasteiger charges: ',
+                       help='Charges of the molecule are recomputed using the gasteiger method')
+        group.addParam('ffMethod', params.EnumParam,
+                       choices=MFF_METHODS, default=0, label='Assign force-field to use: ',
+                       help='Choose the force filed to perform the ligand optimization')
+        group.addParam('splitFrag', params.BooleanParam, default=True,
+                       label='Split molecule fragements: ', expertLevel=params.LEVEL_ADVANCED,
+                       help='Split non-bonded fragments in the input molecule and prepare them separatedly')
+        group.addParam('numAtoms', params.IntParam, expertLevel=params.LEVEL_ADVANCED,
+                       default=5, condition="splitFrag", label='Min. number of atoms to keep:',
+                       help='Set the minimum number of atoms of a fragment to be kept. This might be used to delete'
+                            'water or other molecules stored in the molecule files.')
+
 
         conformers = form.addGroup("Conformers generation")
         conformers.addParam('doConformers', params.BooleanParam, default=False,
                       label='Do you want to generate conformers? ',
                       help='You can produce conformers of the ligand in order to do a better rigid docking')
-        conformers.addParam('ffMethod', params.EnumParam,
-                     choices=MFF_METHODS, default=0, condition = "doConformers",
-                     label='Assign force-field to use: ',
-                     help='Choose the method to manage force fields')
 
         conformers.addParam('restrainMethod', params.EnumParam,
                             choices=CONF_METHODS,
@@ -136,7 +143,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for mol in self.inputSmallMols.get():
-            tempSmall = os.path.abspath(self._getExtraPath("{}-*.sdf".format(mol.getMolName())))
+            tempSmall = os.path.abspath(self._getExtraPath("{}*.sdf".format(mol.getMolName())))
             for molFile in sorted(list(glob.glob(tempSmall))):
                 if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
                     #mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
@@ -169,9 +176,12 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
             f.write('doHydrogens: {}\n'.format(self.doHydrogens.get()))
             f.write('doGasteiger: {}\n'.format(self.doGasteiger.get()))
             f.write('ffMethod: {}\n'.format(self.getEnumText('ffMethod')))
-            f.write('restrainMethod: {}\n'.format(self.getEnumText('restrainMethod')))
-            f.write('numConf: {}\n'.format(self.numConf.get()))
-            f.write('rmsThres: {}\n'.format(self.rmsd_cutoff.get()))
+            if self.doConformers.get():
+                f.write('restrainMethod: {}\n'.format(self.getEnumText('restrainMethod')))
+                f.write('numConf: {}\n'.format(self.numConf.get()))
+                f.write('rmsThres: {}\n'.format(self.rmsd_cutoff.get()))
+            if self.splitFrag.get():
+                f.write('numAtoms: {}\n'.format(self.numAtoms.get()))
 
         return paramsFile
 
