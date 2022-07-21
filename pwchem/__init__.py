@@ -50,6 +50,7 @@ class Plugin(pwem.Plugin):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
@@ -63,6 +64,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
         cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
+        cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
     @classmethod
     def getEnvActivation(cls, env):
@@ -169,6 +171,22 @@ class Plugin(pwem.Plugin):
                        vars=installEnvVars)
 
     @classmethod
+    def addShapeitPackage(cls, env, default=False):
+      SHAPEIT_INSTALLED = 'shapeit_installed'
+
+      installationCmd = ' git clone https://github.com/rdkit/shape-it.git && cd shape-it && mkdir build && cd build &&'
+      installationCmd += ' cmake -DCMAKE_INSTALL_PREFIX=. .. && make && make install && cd ../.. &&'
+      installationCmd += ' mv shape-it/* . && rm -rf shape-it && mv build/shape-it . && mv build/libshapeit_lib.so . &&'
+      installationCmd += ' touch %s' % SHAPEIT_INSTALLED
+      installationCmd = [(installationCmd, SHAPEIT_INSTALLED)]
+
+      env.addPackage(SHAPEIT_DIC['name'], version=SHAPEIT_DIC['version'],
+                     tar='void.tgz',
+                     commands=installationCmd,
+                     neededProgs=cls.getDependencies(),
+                     default=default)
+
+    @classmethod
     def addAliViewPackage(cls, env, default=False):
       SEQS_INSTALLED = 'aliview_installed'
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
@@ -189,13 +207,6 @@ class Plugin(pwem.Plugin):
 
 
     ##################### RUN CALLS #################33333
-
-    @classmethod
-    def runRDKit(cls, protocol, program, args, cwd=None):
-        """ Run rdkit command from a given protocol. """
-        fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
-        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
-
     @classmethod
     def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
       """ Run rdkit command from a given protocol. """
@@ -205,6 +216,21 @@ class Plugin(pwem.Plugin):
           protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
       else:
           subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+
+    @classmethod
+    def runShapeIt(cls, protocol, program, args, cwd=None):
+      """ Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
+      progDir = cls.getProgramHome(SHAPEIT_DIC)
+      progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
+      outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
+      protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
+      os.rename(progFile, outFile)
+
+    @classmethod
+    def runRDKit(cls, protocol, program, args, cwd=None):
+      """ Run rdkit command from a given protocol. """
+      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
+      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
     def runJChemPaint(cls, protocol, cwd=None):

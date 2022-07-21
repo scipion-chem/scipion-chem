@@ -38,6 +38,8 @@ from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation imp
 from pwchem.protocols.VirtualDrugScreening.protocol_PAINS_filter import ProtocolPainsRdkitFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolADMEFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
+from pwchem.protocols.VirtualDrugScreening.protocol_shape_filtering import ProtocolShapeDistancesFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_rdkit_ligand_preparation import ProtChemRDKitPrepareLigands
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences

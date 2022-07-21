@@ -43,7 +43,7 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI, \
-  ProtDefineSetOfSequences, ProtExtractSeqsROI
+  ProtDefineSetOfSequences, ProtExtractSeqsROI, ProtocolShapeDistancesFiltering
 from pwchem.objects import SequenceVariants
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
@@ -350,6 +350,11 @@ SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                targets=['ligName'],
                                inputs=['inSmallMols'],
                                outputs=['ligName'])
+
+SelectElementWizard().addTarget(protocol=ProtocolShapeDistancesFiltering,
+                               targets=['inputReferenceMolecule'],
+                               inputs=['inputRefSmallMolecules'],
+                               outputs=['inputReferenceMolecule'])
 
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineSetOfSequences,
