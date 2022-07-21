@@ -113,13 +113,13 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
     def _insertAllSteps(self):
         # Insert processing steps
-        aSteps, cSteps = [], []
+        aSteps = []
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
         inputSubsets = makeSubsets(self.inputSmallMols.get(), nt - 1)
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('preparationStep', subset, it, prerequisites=[])]
-        self._insertFunctionStep('createOutput', prerequisites=cSteps)
+        self._insertFunctionStep('createOutput', prerequisites=aSteps)
 
     def preparationStep(self, molSet, it):
         """ Preparate the molecules and generate the conformers as specified
@@ -136,8 +136,8 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for mol in self.inputSmallMols.get():
-            tempSmall = self._getExtraPath("{}-*.sdf".format(mol.getMolName()))
-            for molFile in sorted(glob.glob(tempSmall)):
+            tempSmall = os.path.abspath(self._getExtraPath("{}-*.sdf".format(mol.getMolName())))
+            for molFile in sorted(list(glob.glob(tempSmall))):
                 if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
                     #mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
                     newSmallMol = SmallMolecule(smallMolFilename=molFile)
@@ -145,7 +145,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
                     #newSmallMol._mappingFile = pwobj.String(mapFile)
                     outputSmallMolecules.append(newSmallMol)
 
-        if outputSmallMolecules is not None:
+        if len(outputSmallMolecules) > 0:
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
 
