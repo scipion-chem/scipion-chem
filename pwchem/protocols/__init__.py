@@ -40,6 +40,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolA
 from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
 from pwchem.protocols.VirtualDrugScreening.protocol_shape_filtering import ProtocolShapeDistancesFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_rdkit_ligand_preparation import ProtChemRDKitPrepareLigands
+from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprints import ProtocolFingerprintFiltering
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences

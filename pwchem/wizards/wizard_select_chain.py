@@ -42,8 +42,7 @@ from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, Varia
 from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
-from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI, \
-  ProtDefineSetOfSequences, ProtExtractSeqsROI, ProtocolShapeDistancesFiltering
+from pwchem.protocols import *
 from pwchem.objects import SequenceVariants
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
@@ -352,6 +351,11 @@ SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                outputs=['ligName'])
 
 SelectElementWizard().addTarget(protocol=ProtocolShapeDistancesFiltering,
+                               targets=['inputReferenceMolecule'],
+                               inputs=['inputRefSmallMolecules'],
+                               outputs=['inputReferenceMolecule'])
+
+SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
