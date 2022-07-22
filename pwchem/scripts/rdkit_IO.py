@@ -34,7 +34,7 @@ from rdkit.Chem import AllChem
 
 def make3DCoords(mol):
     '''Optimize the 3D coordinates of a rdkit molecule'''
-    mol2 = Chem.AddHs(mol)
+    mol2 = Chem.AddHs(mol, addCoords=True)
     mol2 = AllChem.EmbedMolecule(mol2)
     mol2 = AllChem.MMFFOptimizeMolecule(mol2)
     if len(mol.GetAtoms()) != len(mol2.GetAtoms()):

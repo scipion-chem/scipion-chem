@@ -372,7 +372,7 @@ def sortSet(seti):
     return seti
 
 
-def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
+def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_ids=None):
     """ Clean the pdb file from waters and ligands and redundant chains
     waters: clean waters
     HETATM: clean HETATM lines
@@ -399,7 +399,7 @@ def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
                     chain = column[4].strip()  # Name of chain
 
                     #No chain selected or line from selected line
-                    if chain_id == None or chain_id == chain:
+                    if chain_ids == None or chain in chain_ids:
                         #ATOM line or HETATM line and keep HETATM or water and keep water
                         if id == 'ATOM' or (id == "HETATM" and not HETATM and molecule != "HOH") or \
                                 (molecule == "HOH" and not waters):
