@@ -75,19 +75,32 @@ def parseParams(paramsFile):
 
 
 #################################################################################################################
-def distance_filter(mols_dict, objective, distance, ignore):
+def distance_filter(mols_dict, objective, distance, ignore, prealign, permuts):
     distance_dict = {}
     ref = Chem.AddHs(objective)
     AllChem.EmbedMolecule(ref)
     for mol, molFile in mols_dict.items():
         mol = Chem.AddHs(mol)
         AllChem.EmbedMolecule(mol)
+        if prealign:
+            try:
+                if permuts:
+                    rmsd = AllChem.GetBestRMS(mol, ref)
+                else:
+                    rmsd = rdMolAlign.AlignMol(mol, ref)
+            except:
+                rmsd = 1000
+                print('No substructure found for ', molFile)
+
         if distance == "Tanimoto Distance":
-            tanimoto = rdShapeHelpers.ShapeTanimotoDist(ref, mol, ignoreHs=True)
+            tanimoto = rdShapeHelpers.ShapeTanimotoDist(ref, mol, ignoreHs=ignore)
             distance_dict[molFile] = tanimoto
-        if distance == "Protrude Distance":
-            protude = rdShapeHelpers.ShapeProtrudeDist(ref, mol, ignoreHs=True)
+        elif distance == "Protrude Distance":
+            protude = rdShapeHelpers.ShapeProtrudeDist(ref, mol, ignoreHs=ignore)
             distance_dict[molFile] = protude
+
+        elif distance == "RMSD":
+            distance_dict[molFile] = rmsd
 
     return(distance_dict)
 
@@ -116,10 +129,11 @@ if __name__ == "__main__":
     objectiveFile = str(paramsDic["referenceFile"])
     objective = preprocessObjective(objectiveFile)
     distance = paramsDic["distanceType"]
-    ignore = paramsDic["ignoreHydrogen"]
+    prealign, permuts = bool(paramsDic["prealign"]), bool(paramsDic["prealignOrder"])
+    ignore = bool(paramsDic["ignoreHydrogen"])
     cut = float(paramsDic["cut-off"])
 
-    distance_dict = distance_filter(mols_dict, objective, distance, ignore)
+    distance_dict = distance_filter(mols_dict, objective, distance, ignore, prealign, permuts)
     final_dict = filter(distance_dict, cut)
 
     write_finalfile(paramsDic['outputPath'], final_dict)

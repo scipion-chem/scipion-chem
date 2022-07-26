@@ -47,7 +47,7 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
     """
 
     _label = 'Shape Distance filtering'
-    _distanceType = ['Tanimoto Distance', 'Protrude Distance']
+    _distanceType = ['Tanimoto Distance', 'Protrude Distance', 'RMSD']
     _shapeitScore = ['TANIMOTO', 'TVERSKY_REF', 'TVERSKY_DB']
 
     def _defineParams(self, form):
@@ -81,6 +81,16 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
                             "\nTversky_ref: V(overlap) / V(ref)"
                             "\nTversky_db: V(overlap) / V(db)"
                             "\n(https://www.sciencedirect.com/science/article/pii/S109332630800048X?via%3Dihub)")
+
+        group.addParam('prealign', params.BooleanParam, default=True,
+                       label='Prealign molecules: ', condition='distanceType in [0, 1]',
+                       help='Tries to prealign the molecules before the distance calculation by using substructure '
+                            'matching. If no substructure matching is found, molecules will be left as they are')
+        group.addParam('prealignOrder', params.BooleanParam, default=False,
+                       label='Try every atom reordering: ', condition='prealign',
+                       help='Tries every permutation in the atom order for the molecule alignment. As specified by '
+                            'RDKit, for some molecules it will lead to combinatorial explosion, especially if hydrogens'
+                            ' are present.')
 
         form.addParam('hydrogen', params.BooleanParam, default=True, condition='program==0',
                       label='Do you want to ignore the hydrogens in the filtering?')
@@ -155,6 +165,8 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
         f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
         f.write('distanceType:{}\n'.format(self.getDistance()))
+        f.write('prealign:{}\n'.format(self.prealign.get()))
+        f.write('prealignOrder:{}\n'.format(self.prealignOrder.get()))
         f.write('ignoreHydrogen:{}\n'.format(self.hydrogen.get()))
         f.write('cut-off: {}\n'.format(self.cut.get()))
 
