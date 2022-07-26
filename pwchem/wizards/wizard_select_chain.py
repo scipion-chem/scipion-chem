@@ -389,6 +389,8 @@ class AddSequenceWizard(SelectResidueWizard):
             # Chain
             chainJson = getattr(protocol, inputParams[1]).get()
             chainId = json.loads(chainJson)['chain']
+        else:
+            chainJson = ''
 
         # Positions
         posJson = getattr(protocol, inputParams[2]).get()
