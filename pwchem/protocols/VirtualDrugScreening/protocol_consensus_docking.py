@@ -37,6 +37,9 @@ from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 import os, re
+import matplotlib.pyplot as plt
+
+from scipy.cluster.hierarchy import dendrogram, linkage, dendrogram, fcluster
 
 class ProtocolConsensusDocking(EMProtocol):
     """
@@ -168,24 +171,24 @@ class ProtocolConsensusDocking(EMProtocol):
         pdbFile = self.inputMoleculesSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
         return pdbFile.split('_out')[0]
 
-    def generateDockingClusters(self):
-        '''Generate the pocket clusters based on the overlapping residues
-        Return (clusters): [[pock1, pock2], [pock3], [pock4, pock5, pock6]]'''
+    def generateDockingClusters2(self):
+        '''Generate the docking clusters based on the RMSD of the ligands
+        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
         clusters = []
-        #For each set of pockets
+        #For each set of molecules
         for i, molSet in enumerate(self.inputMoleculesSets):
-            #For each of the pockets in the set
+            #For each of the molecules in the set
             for newMol in molSet.get():
                 newClusters, newClust = [], [newMol.clone()]
                 #Check for each of the clusters
                 for clust in clusters:
-                    #Check for each of the pockets in the cluster
+                    #Check for each of the molecules in the cluster
                     append2Cluster = True
                     for cMol in clust:
                         if cMol.getMolBase() == newMol.getMolBase():
                             curRMSD = self.calculateMolsRMSD(newMol, cMol)
 
-                            #If there is overlap with the new pocket from the set
+                            #If there is overlap with the new molecule from the set
                             if curRMSD > self.maxRMSD.get():
                                 append2Cluster = False
                                 break
@@ -202,6 +205,28 @@ class ProtocolConsensusDocking(EMProtocol):
                 newClusters.append(newClust)
                 clusters = newClusters.copy()
         return clusters
+
+    def generateDockingClusters(self):
+        '''Generate the docking clusters based on the RMSD of the ligands
+        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
+        allMols = self.yieldAllInputMols()
+        nMols = len(allMols)
+        rmsds = np.empty(shape=(nMols, nMols))
+        for i, moli in enumerate(allMols):
+            for j, molj in enumerate(allMols):
+                rmsds[i,j] = self.calculateMolsRMSD(moli, molj)
+
+        linked = linkage(rmsds, 'complete')
+        clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
+        clusterMol = {}
+        for i, cl in enumerate(clusters):
+            if cl in clusterMol:
+                clusterMol[cl] += [allMols[i]]
+            else:
+                clusterMol[cl] = [allMols[i]]
+
+        return list(clusterMol.values())
+
 
     def getIndepClusters(self, clusters, molDic):
         indepClustersDic = {}
@@ -261,7 +286,7 @@ class ProtocolConsensusDocking(EMProtocol):
             rmsd = calculateRMSDKeys(posDic1, posDic2)
             return rmsd
         else:
-            print('Atom ids of the molecules are different and cannot be compared')
+            return 100
 
 
     def checkSameKeys(self, d1, d2):
@@ -378,6 +403,19 @@ class ProtocolConsensusDocking(EMProtocol):
             mol.setPoseFile(self.relabelDic[posFile])
 
         return mol
+
+    def getTotalNumberOfMols(self):
+        n = 0
+        for molSet in self.inputMoleculesSets:
+            n += len(molSet.get())
+        return n
+
+    def yieldAllInputMols(self):
+        mols = []
+        for molSet in self.inputMoleculesSets:
+            for mol in molSet.get():
+                mols.append(mol.clone())
+        return mols
 
 
 
