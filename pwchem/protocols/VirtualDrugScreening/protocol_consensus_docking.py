@@ -270,7 +270,7 @@ class ProtocolConsensusDocking(EMProtocol):
     def generateDockingClustersScipy(self):
         '''Generate the docking clusters based on the RMSD of the ligands
         Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
-        allMols = self.yieldAllInputMols()
+        allMols = self.getAllInputMols()
         nMols = len(allMols)
         rmsds = np.empty(shape=(nMols, nMols))
         for i in range(len(allMols)):
@@ -470,13 +470,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
         return mol
 
-    def getTotalNumberOfMols(self):
-        n = 0
-        for molSet in self.inputMoleculesSets:
-            n += len(molSet.get())
-        return n
-
-    def yieldAllInputMols(self):
+    def getAllInputMols(self):
         mols = []
         for molSet in self.inputMoleculesSets:
             for mol in molSet.get():
