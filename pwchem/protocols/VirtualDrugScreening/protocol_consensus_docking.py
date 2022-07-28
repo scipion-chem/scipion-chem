@@ -31,16 +31,18 @@ This protocol is used to make a consensus over several input sets of smallMolecu
 same or different software
 
 """
+
+import os, re
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from scipy.spatial import distance
+
 from pyworkflow.protocol import params
-from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
+from pwem.protocols import EMProtocol
+
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
-import matplotlib.pyplot as plt
 
-from scipy.cluster.hierarchy import dendrogram, linkage, dendrogram, fcluster
-from scipy.spatial import distance
 
 class ProtocolConsensusDocking(EMProtocol):
     """
