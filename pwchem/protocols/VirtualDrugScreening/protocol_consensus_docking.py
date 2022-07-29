@@ -35,6 +35,7 @@ same or different software
 import os, re
 from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
 from scipy.spatial import distance
+from sklearn.metrics.pairwise import pairwise_distances
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -50,6 +51,10 @@ class ProtocolConsensusDocking(EMProtocol):
     with respect to their RMSD
     """
     _label = 'Consensus docking'
+
+    def __init__(self, **args):
+        EMProtocol.__init__(self, **args)
+        self.stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -91,6 +96,7 @@ class ProtocolConsensusDocking(EMProtocol):
                       label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Creates an output set related to each input set, with the elements from each input'
                            'present in the consensus clusters')
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -267,7 +273,7 @@ class ProtocolConsensusDocking(EMProtocol):
             reps.append(cl[0])
         return reps
 
-    def generateDockingClustersScipy(self):
+    def generateDockingClustersScipy2(self):
         '''Generate the docking clusters based on the RMSD of the ligands
         Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
         allMols = self.getAllInputMols()
@@ -292,6 +298,46 @@ class ProtocolConsensusDocking(EMProtocol):
                 clusterMol[cl] = [allMols[i]]
 
         return list(clusterMol.values())
+
+    def generateDockingClustersScipy(self):
+        '''Generate the docking clusters based on the RMSD of the ligands
+        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
+        allMols = self.getAllInputMols()
+        posArrays, molsDic = {}, {}
+        for mol in allMols:
+            posDic = mol.getAtomsPosDic()
+            keys = ''.join(sorted(list(posDic.keys())))
+            if keys in posArrays:
+                posArrays[keys].append([x for coord in sorted(posDic.items()) for x in coord[1]])   # flattening coords
+                molsDic[keys].append(mol)
+            else:
+                posArrays[keys] = [[x for coord in sorted(posDic.items()) for x in coord[1]]]  # flattening coords
+                molsDic[keys] = [mol]
+
+        finalClusters = []
+        for keys in posArrays:
+            # Matrix distance and clustering perform over different molecules separatedly
+            rmsds = pairwise_distances(posArrays[keys], metric=self.calculateFlattenRMSD,
+                                       n_jobs=self.numberOfThreads.get())   # Parallel distance matrix calculation
+
+            linked = linkage(rmsds, self.getEnumText('linkage').lower())
+            clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
+
+            clusterMol = {}
+            for i, cl in enumerate(clusters):
+                if cl in clusterMol:
+                    clusterMol[cl] += [molsDic[keys][i]]
+                else:
+                    clusterMol[cl] = [molsDic[keys][i]]
+            finalClusters += list(clusterMol.values())
+
+        return finalClusters
+
+    def calculateFlattenRMSD(self, u, v):
+        return calculateRMSD(self.unflattenCoords(u), self.unflattenCoords(v))
+
+    def unflattenCoords(self, v):
+        return [v[i:i+3] for i in range(0,len(v),3)]
 
 
     def getIndepClusters(self, clusters, molDic):
