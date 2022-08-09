@@ -66,15 +66,16 @@ class ProtocolConsensusDocking(EMProtocol):
                        help='Select the pocket sets to make the consensus')
 
         group = form.addGroup('Clustering')
-        group.addParam('doScipy', params.BooleanParam, default=False,
+        group.addParam('doScipy', params.BooleanParam, default=True,
                       label='Use scipy for clustering: ',
-                      help='Whether to use scipy clustering methods or an aggregative approach (usually faster).')
+                      help='Whether to use scipy hierarchical clustering methods or an '
+                           'aggregative approach (usually slower).')
         group.addParam('linkage', params.EnumParam, default=0,
                        choices=['Single', 'Complete', 'Average', 'Ward', 'Centroid', 'Median'],
                        label='Hyerarchical clustering linkage: ', condition='doScipy',
                        help='Hyerarchical clustering linkage used on scipy clutering.\n'
                             'https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html')
-        group.addParam('checkRep', params.BooleanParam, default=False,
+        group.addParam('checkRep', params.BooleanParam, default=True,
                        label='Check only cluster representative: ', condition='not doScipy',
                        help='If True, the RMSD is only calculated on the cluster representative, speeding up '
                             'the process but making it less restrictive')
@@ -273,32 +274,6 @@ class ProtocolConsensusDocking(EMProtocol):
             reps.append(cl[0])
         return reps
 
-    def generateDockingClustersScipy2(self):
-        '''Generate the docking clusters based on the RMSD of the ligands
-        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
-        allMols = self.getAllInputMols()
-        nMols = len(allMols)
-        rmsds = np.empty(shape=(nMols, nMols))
-        for i in range(len(allMols)):
-            moli = allMols[i]
-            for j in range(i, len(allMols)):
-                molj = allMols[j]
-                if i == j:
-                    rmsds[i, j] = 0
-                else:
-                    rmsds[j, i] = rmsds[i,j] = self.calculateMolsRMSD(moli, molj)
-
-        linked = linkage(rmsds, self.getEnumText('linkage').lower())
-        clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
-        clusterMol = {}
-        for i, cl in enumerate(clusters):
-            if cl in clusterMol:
-                clusterMol[cl] += [allMols[i]]
-            else:
-                clusterMol[cl] = [allMols[i]]
-
-        return list(clusterMol.values())
-
     def generateDockingClustersScipy(self):
         '''Generate the docking clusters based on the RMSD of the ligands
         Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
@@ -334,6 +309,7 @@ class ProtocolConsensusDocking(EMProtocol):
         return finalClusters
 
     def calculateFlattenRMSD(self, u, v):
+        '''From a flat vector of 3D coords, unflattens it into a matrix and calculates the RMSD of those coordinates'''
         return calculateRMSD(self.unflattenCoords(u), self.unflattenCoords(v))
 
     def unflattenCoords(self, v):
