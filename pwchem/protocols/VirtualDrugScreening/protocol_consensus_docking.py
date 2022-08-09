@@ -66,15 +66,16 @@ class ProtocolConsensusDocking(EMProtocol):
                        help='Select the pocket sets to make the consensus')
 
         group = form.addGroup('Clustering')
-        group.addParam('doScipy', params.BooleanParam, default=False,
+        group.addParam('doScipy', params.BooleanParam, default=True,
                       label='Use scipy for clustering: ',
-                      help='Whether to use scipy clustering methods or an aggregative approach (usually faster).')
+                      help='Whether to use scipy hierarchical clustering methods or an '
+                           'aggregative approach (usually slower).')
         group.addParam('linkage', params.EnumParam, default=0,
                        choices=['Single', 'Complete', 'Average', 'Ward', 'Centroid', 'Median'],
                        label='Hyerarchical clustering linkage: ', condition='doScipy',
                        help='Hyerarchical clustering linkage used on scipy clutering.\n'
                             'https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html')
-        group.addParam('checkRep', params.BooleanParam, default=False,
+        group.addParam('checkRep', params.BooleanParam, default=True,
                        label='Check only cluster representative: ', condition='not doScipy',
                        help='If True, the RMSD is only calculated on the cluster representative, speeding up '
                             'the process but making it less restrictive')
