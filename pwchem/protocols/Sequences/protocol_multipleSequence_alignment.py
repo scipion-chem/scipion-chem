@@ -43,7 +43,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         form.addSection(label='Input')
         group = form.addGroup('Input')
-        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequencesChem',
+        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
                       label='Input Set of Sequence File: ', allowsNull=False,
                       help="Set of sequences to be alignment ")
 

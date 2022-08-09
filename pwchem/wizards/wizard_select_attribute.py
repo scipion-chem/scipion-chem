@@ -37,9 +37,9 @@ from pwem.wizards import SelectAttributeWizard
 import pwchem.protocols as chemprot
 
 SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolConsensusDocking,
-                                  targets=['action'],
+                                  targets=['repAttr'],
                                   inputs=['inputMoleculesSets'],
-                                  outputs=['action'])
+                                  outputs=['repAttr'])
 SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                   targets=['corrAttribute'],
                                   inputs=['inputMoleculesSets'],
