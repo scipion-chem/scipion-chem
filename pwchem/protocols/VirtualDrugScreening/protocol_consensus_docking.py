@@ -273,32 +273,6 @@ class ProtocolConsensusDocking(EMProtocol):
             reps.append(cl[0])
         return reps
 
-    def generateDockingClustersScipy2(self):
-        '''Generate the docking clusters based on the RMSD of the ligands
-        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
-        allMols = self.getAllInputMols()
-        nMols = len(allMols)
-        rmsds = np.empty(shape=(nMols, nMols))
-        for i in range(len(allMols)):
-            moli = allMols[i]
-            for j in range(i, len(allMols)):
-                molj = allMols[j]
-                if i == j:
-                    rmsds[i, j] = 0
-                else:
-                    rmsds[j, i] = rmsds[i,j] = self.calculateMolsRMSD(moli, molj)
-
-        linked = linkage(rmsds, self.getEnumText('linkage').lower())
-        clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
-        clusterMol = {}
-        for i, cl in enumerate(clusters):
-            if cl in clusterMol:
-                clusterMol[cl] += [allMols[i]]
-            else:
-                clusterMol[cl] = [allMols[i]]
-
-        return list(clusterMol.values())
-
     def generateDockingClustersScipy(self):
         '''Generate the docking clusters based on the RMSD of the ligands
         Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
@@ -334,6 +308,7 @@ class ProtocolConsensusDocking(EMProtocol):
         return finalClusters
 
     def calculateFlattenRMSD(self, u, v):
+        '''From a flat vector of 3D coords, unflattens it into a matrix and calculates the RMSD of those coordinates'''
         return calculateRMSD(self.unflattenCoords(u), self.unflattenCoords(v))
 
     def unflattenCoords(self, v):
