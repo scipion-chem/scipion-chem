@@ -59,7 +59,7 @@ from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOf
 from pwchem.protocols.General.protocol_converter import ConvertStructures
 from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from pwchem.protocols.General.protocol_dali import ProtChemDali
-from pwchem.protocols.General.protocol_pdb_smallMolecules import ProtChemPDBSmallMolecules
+from pwchem.protocols.General.protocol_extract_ligands import ProtocolLigandsExtraction
 from pwchem.protocols.General.protocol_listIDs_operate import ProtChemListIDOperate
 from pwchem.protocols.General.protocol_list_operate import ProtChemListOperate
 from pwchem.protocols.General.protocol_smallMolecules_pdb import ProtChemSmallMoleculesPDB
