@@ -148,18 +148,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
                 else:
                     copyFile(fnSmall, self._getExtraPath(os.path.basename(fnSmall)))
 
-        verb = [True, True]
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),suffix='SmallMols')
         for fnSmall in glob.glob(self._getExtraPath("*")):
-            for i, forb in enumerate(['-', '_']):
-                if forb in os.path.basename(fnSmall):
-                    newFile = os.path.join(os.path.dirname(fnSmall), os.path.basename(fnSmall).replace(forb, ''))
-                    os.rename(fnSmall, newFile)
-                    fnSmall = newFile
-                    if verb[i]:
-                        verb[i] = False
-                        print('Forbidden character ({}) in output filenames, removing them'.format(forb))
-
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
             smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
 
