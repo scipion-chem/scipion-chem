@@ -174,12 +174,12 @@ class SmallMolecule(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
+        self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
+        self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
         self.molName = pwobj.String(kwargs.get('molName', None))
         if self.molName.get() and self.molName.get().lower() == 'guess':
             self.molName.set(self.guessMolName())
-        self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
 
-        self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))  # pocketID
         self.poseId = pwobj.Integer(kwargs.get('poseId', None))
         self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
@@ -206,7 +206,11 @@ class SmallMolecule(data.EMObject):
         self.molName.set(value)
 
     def guessMolName(self):
-        return self.getFileName().split('/')[-1].split('.')[0].split('-')[0]
+        fBase = self.getFileName().split('/')[-1].split('.')[0]
+        if self.getConfId():
+            return '-'.join(fBase.split('-')[:-1])
+        else:
+            return fBase
 
     def getMolBase(self):
         return self.getMolName()
