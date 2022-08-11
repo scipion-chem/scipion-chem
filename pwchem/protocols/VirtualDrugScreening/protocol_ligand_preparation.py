@@ -151,7 +151,11 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             fnMol = os.path.split(fnSmall)[1]      # Name of complete file
             fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
 
-            fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
+            try:
+                fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
+            except:
+                print('Atom reordering could not be performed in {}, this could lead to errors in ahead protocols'
+                      .format(fnRoot))
 
             # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
             # 2. Add and calculate partial charges with different methods
@@ -217,12 +221,18 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                     confDir = splitConformerFile(confFile, outDir=outDir)
                     for molFile in os.listdir(confDir):
                         molFile = os.path.abspath(os.path.join(confDir, molFile))
-                        newSmallMol = SmallMolecule(smallMolFilename=molFile)
+                        confId = os.path.splitext(molFile)[0].split('-')[-1]
+
+                        newSmallMol = SmallMolecule()
+                        newSmallMol.copy(mol, copyId=False)
+
+                        newSmallMol.setFileName(molFile)
+                        newSmallMol.setConfId(confId)
                         newSmallMol._ConformersFile = pwobj.String(confFile)
                         newSmallMol._mappingFile = pwobj.String(mapFile)
                         outputSmallMolecules.append(newSmallMol)
                 else:
-                    newSmallMol = SmallMolecule(smallMolFilename=fnSmall)
+                    newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
                     newSmallMol._mappingFile = pwobj.String(mapFile)
                     outputSmallMolecules.append(newSmallMol)
 
@@ -257,7 +267,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
     def writeMapFile(self, refMol, probMol, outFile=None):
       if not outFile:
-          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getMolBase()))
+          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getMolName()))
 
       mapDic = refMol.mapLabels(probMol)
       with open(outFile, 'w') as f:

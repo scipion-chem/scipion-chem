@@ -150,7 +150,7 @@ class TestConsensusDocking(BaseTest):
     def _runConsensusDocking(self, inputDockProts):
       protConsDocks = self.newProtocol(ProtocolConsensusDocking,
                                        numberOfThreads=1,
-                                       action='_energy', maxmin=False)
+                                       repAttr='_energy', maxmin=False)
 
       for i in range(len(inputDockProts)):
           protConsDocks.inputMoleculesSets.append(inputDockProts[i])

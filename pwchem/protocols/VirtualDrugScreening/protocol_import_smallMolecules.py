@@ -161,6 +161,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                         print('Forbidden character ({}) in output filenames, removing them'.format(forb))
 
             smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+            smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
 
             if self.draw: # costly
                 if not fnSmall.endswith('.mae') and not fnSmall.endswith('.maegz'):

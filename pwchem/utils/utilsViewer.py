@@ -41,6 +41,20 @@ def buildPMLDockingSingleStr(viewer, mol, molName, addTarget=True, disable=True)
         format(pdbFile, molName, disableStr, molName, molName)
     return pmlStr
 
+def buildPMLFileNameSingleStr(viewer, mol, molName, addTarget=True, disable=True):
+    pmlStr = ''
+    if addTarget:
+        pmlStr = 'load {}\n'.format(os.path.abspath(viewer.protocol.getOriginalReceptorFile()))
+
+    disableStr = ''
+    if disable:
+        disableStr = '\ndisable {}'.format(molName)
+
+    pdbFile = os.path.abspath(mol.getFileName())
+    pmlStr += 'load {}, {}{}\nhide spheres, {}\nshow sticks, {}\n'. \
+        format(pdbFile, molName, disableStr, molName, molName)
+    return pmlStr
+
 def writePmlFile(pmlFile, pmlStr):
     with open(pmlFile, 'w') as f:
         f.write(pmlStr)

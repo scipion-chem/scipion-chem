@@ -174,7 +174,12 @@ class SmallMolecule(data.EMObject):
     def __init__(self, **kwargs):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
+        self.molName = pwobj.String(kwargs.get('molName', None))
+        if self.molName.get() and self.molName.get().lower() == 'guess':
+            self.molName.set(self.guessMolName())
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
+
+        self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))  # pocketID
         self.poseId = pwobj.Integer(kwargs.get('poseId', None))
         self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
@@ -192,10 +197,19 @@ class SmallMolecule(data.EMObject):
         self.smallMoleculeFile.set(value)
 
     def getMolName(self):
-        return self.getFileName().split('/')[-1].split('.')[0]
+        molName = self.molName.get()
+        if not molName:
+            molName = self.guessMolName()
+        return molName
+
+    def setMolName(self, value):
+        self.molName.set(value)
+
+    def guessMolName(self):
+        return self.getFileName().split('/')[-1].split('.')[0].split('-')[0]
 
     def getMolBase(self):
-        return self.getMolName().split('-')[0]
+        return self.getMolName()
 
     def getPoseFile(self):
         '''Filename of the molecule after docking'''
@@ -209,6 +223,12 @@ class SmallMolecule(data.EMObject):
 
     def getPoseId(self):
         return self.poseId.get()
+
+    def getConfId(self):
+        return self.confId.get()
+
+    def setConfId(self, confId):
+        self.confId.set(confId)
 
     def getGridId(self):
         return self.gridId.get()
@@ -243,13 +263,15 @@ class SmallMolecule(data.EMObject):
     def setMolClass(self, value):
         self._type.set(value)
 
-    def getUniqueName(self):
+    def getUniqueName(self, grid=True, conf=True, pose=True, dock=True):
         name = self.getMolName()
-        if self.getGridId() != None:
+        if self.getGridId() and grid:
             name = 'g{}_'.format(self.getGridId()) + name
-        if self.poseFile.get() != None:
+        if self.getConfId() and conf:
+            name += '-{}'.format(self.getConfId())
+        if self.getPoseId() and pose:
             name += '_{}'.format(self.getPoseId())
-        if self.getDockId() != None:
+        if self.getDockId() and dock:
             name += '_{}'.format(self.getDockId())
         return name
 

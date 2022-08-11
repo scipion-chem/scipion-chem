@@ -118,6 +118,7 @@ class ProtocolLigandsExtraction(EMProtocol):
         with urlopen(url % uniprot_id.strip()) as response:
             jsonDic = json.loads(response.read())
 
+        # todo: filter by paramters
         # Extract PDB Ids
         pdbIds = []
         for cross in jsonDic['uniProtKBCrossReferences']:
@@ -160,11 +161,11 @@ class ProtocolLigandsExtraction(EMProtocol):
             io = PDBIO()
             io.set_structure(s)
             for ligId in ligNames[pdbId]:
-                ligi = 0
+                ligi = 1
                 for residue in s.get_residues():
                     # Several HETATM residues with same name might be found. Stored in different structROIs
                     if residue.get_resname() == ligId:
-                        allLigId = 'g{}_{}_{}'.format(ligi, pdbId, ligId)
+                        allLigId = '{}_{}_frag{}'.format(pdbId, ligId, ligi)
                         ligandFiles[allLigId] = self._getPath(allLigId + '.pdb')
                         io.save(ligandFiles[allLigId], ResSelect(residue))
                         ligi += 1
@@ -177,7 +178,6 @@ class ProtocolLigandsExtraction(EMProtocol):
             ligId = os.path.basename(ligFile).split('.')[0]
             s = PDBParser().get_structure(ligId, ligFile)
             coords, ws = [], []
-            print(ligFile)
             for i, residue in enumerate(s.get_residues()):
                 for atom in residue:
                     coords.append(atom.get_coord())
@@ -198,26 +198,15 @@ class ProtocolLigandsExtraction(EMProtocol):
                                                                 suffix='outputSmallMolecules_{}'.format(i))
             for fnSmall in cluster:
                 smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+                smallMolecule.setMolName(os.path.basename(fnSmall).split('_frag')[0])
+                smallMolecule.setPoseId(1)
                 smallMolecule.setPoseFile(fnSmall)
+                smallMolecule.setGridId(i+1)
+                smallMolecule.setDockId(self.getObjId())
                 outputSmallMolecules.append(smallMolecule)
             outputSmallMolecules.setProteinFile(self.getOriginalReceptorFile())
             outputSmallMolecules.setDocked()
             self._defineOutputs(**{'outputSmallMolecules_{}'.format(i): outputSmallMolecules})
-
-    # --------------- INFO functions -------------------------
-
-    def _methods(self):
-        methods = """Filtering choices:\n
-        - Uniprot ID of the target protein.\n
-        - Experimental method: structure determination method, among the possible options are X-RAY DIFFRACTION, SOLUTION NMR, ELECTRON
-        MICROSCOPY, etc or None, in case the experimental technique is not specified.\n
-        - Minimum molecular weight of the ligand associated with the structure.\n
-        - Quality of the structure: the lower the angstrom resolution of the structure, the higher the quality.\n
-        - Number of structure chains: it is recommended to set the value of this field to 1, as it simplifies the processing of the structure and the search.\n
-        - Date of deposition: this field is enabled to ensure the reproducibility of the screening; the user sets a date after which any structure that is uploaded on the database will not be considered.\n
-        - Number of final extracted ligands."""
-
-        return methods
 
     # --------------------------- UTILS functions -----------------------------------
 
