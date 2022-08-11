@@ -22,11 +22,66 @@
 # *
 # **************************************************************************
 
+import os
+from subprocess import Popen
+
 import pyworkflow.viewer as pwviewer
 import pwem.viewers.views as pwemViews
 import pwem.viewers.showj as showj
+from pwem.objects import SetOfSequences, AtomStruct
+import pyworkflow.utils as pwutils
+
 import pwchem.objects
-from pwem.objects import SetOfSequences
+from pwchem import Plugin as pwchem_plugin
+from ..constants import *
+
+class PyMol:
+  """ Help class to run PyMol and manage its environment. """
+
+  @classmethod
+  def getEnviron(cls):
+    """ Return the proper environ to launch PyMol.
+    PyMol_HOME variable is read from the ~/.config/scipion.conf file.
+    """
+    environ = pwutils.Environ(os.environ)
+    environ.set('PATH', pwchem_plugin.getProgramHome(PYMOL_DIC, path='bin'),
+                position=pwutils.Environ.BEGIN)
+    return environ
+
+
+class PyMolView(pwviewer.CommandView):
+  """ View for calling an external command. """
+
+  def __init__(self, pymolArgs, cwd, **kwargs):
+    print('command: ', [pwchem_plugin.getProgramHome(PYMOL_DIC), *pymolArgs.split()])
+    pwviewer.CommandView.__init__(self, [pwchem_plugin.getProgramHome(PYMOL_DIC, 'bin/pymol'), *pymolArgs.split()],
+                                  cwd=cwd,
+                                  env=PyMol.getEnviron(), **kwargs)
+
+  def show(self):
+    Popen(self._cmd, cwd=self._cwd, env=PyMol.getEnviron())
+
+
+class PyMolViewer(pwviewer.Viewer):
+  """ Wrapper to visualize pml objects with PyMol viewer. """
+  _environments = [pwviewer.DESKTOP_TKINTER]
+
+  def __init__(self, **args):
+    pwviewer.Viewer.__init__(self, **args)
+
+  def _visualize(self, pymolFile, cwd=None, **args):
+    view = PyMolView(pymolFile, cwd)
+    return [view]
+
+class AtomStructPymolViewer(PyMolViewer):
+    _label = 'Viewer AtomStruct'
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [AtomStruct]
+
+    def _visualize(self, obj, **args):
+      pymolV = PyMolViewer(project=self.getProject())
+      return pymolV._visualize(obj.getFileName())
+
 
 class SetOfDatabaseIDView(pwemViews.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
@@ -47,7 +102,8 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         SetOfSequences,
         pwchem.objects.SetOfDatabaseID,
         pwchem.objects.SetOfSmallMolecules,
-        pwchem.objects.SetOfBindingSites
+        pwchem.objects.SetOfBindingSites,
+        pwchem.objects.SetOfSequenceROIs
     ]
 
     def __init__(self, **kwargs):
@@ -71,7 +127,9 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        if issubclass(cls, pwchem.objects.SetOfPockets):
+        elif issubclass(cls, pwchem.objects.SetOfStructROIs):
+            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
+        elif issubclass(cls, pwchem.objects.SetOfSequenceROIs):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
 
         return views

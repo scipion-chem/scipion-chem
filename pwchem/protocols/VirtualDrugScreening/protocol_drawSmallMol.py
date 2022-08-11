@@ -82,7 +82,7 @@ class ProtDrawMolecules(EMProtocol):
             for molFile in cFiles:
                 outputSet.append(SmallMolecule(smallMolFilename=molFile))
 
-            self._defineOutputs(outputPockets=outputSet)
+            self._defineOutputs(outputStructROIs=outputSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):

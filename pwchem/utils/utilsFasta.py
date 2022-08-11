@@ -24,10 +24,29 @@
 # *
 # **************************************************************************
 
+import os, subprocess
 from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
+
+from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
+
+EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
+                  'SwisProt': 'sw', 'NCBI': 'ncbi',
+                  'NBRF (PIR)': 'pir', 'Intelligenetics': 'ig', 'CODATA': 'codata', 'DNA strider': 'strider',
+                  'ACeDB': 'acedb', '"gap" program in the Staden package': 'experiment', 'Plain sequence': 'plain',
+                  'Fitch': 'fitch', 'PHYLIP interleaved': 'phylip3', 'ASN.1': 'asn1', 'Hennig86': 'hennig86',
+                  'Mega': 'mega', 'Meganon': 'meganon', 'Nexus/PAUP': 'nexus', 'Nexusnon/PAUPnon': 'nexusnon',
+                  'Jackknifer': 'jackknifer','Jackknifernon': 'jackknifernon', 'Treecon': 'treecon',
+                  'EMBOSS sequence object report': 'debug'}
+
+def convertEMBOSSformat(inputAlignmentFile, embossFormat, outputAligmentFile):
+  '''Connvert alignment files. Options in EMBOSS_FORMATS dictionary
+  Returns a command line which must be executed into the scipion environment'''
+  cl_run = 'seqret -sequence {} -osformat2 {} {}'. \
+    format(inputAlignmentFile, embossFormat, outputAligmentFile)
+  return cl_run
 
 def copyFastaSequenceAndRead(protocol):
   outFileName = protocol._getExtraPath("sequence.fasta")
@@ -52,3 +71,96 @@ def checkInputHasFasta(protocol):
     if not hasattr(obj, "_uniprotFile"):
       errors.append("The input list does not have a sequence file")
   return errors
+
+
+def clustalOmegaAlignSequences(sequencesSet, seqFileName, outputFileName):
+  sequencesSet.exportToFile(seqFileName)
+  cline = alignClustalSequences(seqFileName, outputFileName)
+  return cline
+
+
+def muscleAlignmentSequences(sequencesSet, seqFileName, outputFileName):
+  from pwem.convert.sequence import alignMuscleSequences
+  sequencesSet.exportToFile(seqFileName)
+  cline = alignMuscleSequences(seqFileName, outputFileName)
+  return cline
+
+def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False):
+    if issubclass(type(seq1), Sequence):
+        seqName1 = seq1.getSeqName()
+        seq1 = seq1.getSequence()
+    else:
+        if not seqName1:
+            seqName1 = 'sequence_1'
+
+    if issubclass(type(seq2), Sequence):
+        seqName2 = seq2.getSeqName()
+        seq2 = seq2.getSequence()
+    else:
+        if not seqName2:
+            seqName2 = 'sequence_2'
+
+    outDir = os.path.dirname(outPath)
+    oriFasta = os.path.abspath(os.path.join(outDir, 'original.fasta'))
+    with open(oriFasta, "w") as f:
+      f.write(('>{}\n{}\n>{}\n{}\n'.format(seqName1, seq1, seqName2, seq2)))
+
+    ext = os.path.splitext(outPath)[1][1:]
+    if ext in ['fa', 'fasta']:
+        fmt = 'fa'
+    elif ext == 'aln':
+        fmt = 'clu'
+
+    # Alignment
+    cline = str(alignClustalSequences(oriFasta, outPath))
+    cline += ' --outfmt={}'.format(fmt)
+    if force:
+        cline += ' --force'
+    subprocess.check_call(cline, cwd=outDir, shell=True)
+
+def parseFasta(fastaFile):
+    seqDic = {}
+    with open(fastaFile) as f:
+        for line in f:
+            if line.startswith('>'):
+                seqId = line.strip()[1:]
+                seqDic[seqId] = ''
+            elif line.strip() != '':
+                seqDic[seqId] += line.strip()
+    return seqDic
+
+def parseAlnFile(alnFile):
+    seqDic = {}
+    with open(alnFile) as f:
+        f.readline()
+        for line in f:
+            if line.strip() and not line.startswith(' '):
+                id, seq = line.strip().split()[:2]
+                if id in seqDic:
+                    seqDic[id] += seq
+                else:
+                    seqDic[id] = seq
+    return seqDic
+
+
+def calculateIdentity(alignFile):
+    if os.path.splitext(alignFile)[1] in ['.fa', '.fasta']:
+        seqDic = parseFasta(alignFile)
+        if len(seqDic) == 2:
+            hits = 0
+            seqIds = list(seqDic.keys())
+            for i, j in zip(seqDic[seqIds[0]], seqDic[seqIds[1]]):
+                if i == j:
+                    hits += 1
+            ident = hits / len(seqDic[seqIds[0]])
+
+            return round(100 * ident, 2)
+
+
+
+
+
+
+
+
+

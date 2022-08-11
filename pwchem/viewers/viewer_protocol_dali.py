@@ -24,13 +24,10 @@
 # *
 # **************************************************************************
 
-import os
 from pathlib import Path
 import webbrowser
 
-from pwchem.protocols.protocol_dali import ProtChemDali
-from pwchem.objects import DatabaseID, SetOfDatabaseID
-import pyworkflow.object as pwobj
+from pwchem.protocols import ProtChemDali
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
 from pyworkflow.protocol.params import StringParam
 

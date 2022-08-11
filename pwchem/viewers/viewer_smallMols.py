@@ -26,14 +26,16 @@
 
 import os
 
-from pwchem.objects import SetOfSmallMolecules
 from pyworkflow.protocol.params import EnumParam, LabelParam
 import pyworkflow.viewer as pwviewer
-from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
-from pwchem.utils.utilsViewer import *
-from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB
 from pyworkflow.gui.dialog import showError
+
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
+from pwchem.utils.utilsViewer import sortMolsByUnique, buildPMLDockingSingleStr, writePmlFile, getPmlsDir
+from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB, natural_sort
 from pwchem import Plugin as pwchemPlugin
+from pwchem.protocols import ProtocolConsensusDocking
 
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
@@ -153,7 +155,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                   outputLigandsDic[oLabel] += [curMol]
 
     outputLabels = list(outputLigandsDic.keys())
-    outputLabels.sort()
+    outputLabels = natural_sort(outputLabels)
     if vType == POCKET and pymol and len(outputLabels) > 1:
         outputLabels = ['All'] + outputLabels
     return outputLabels, outputLigandsDic
@@ -253,10 +255,18 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
                          cwd=os.path.abspath(pmlsDir))
 
-    pmlFile = ''
+    pmlFile, pmlFiles = '', []
     for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-      if file.endswith('.pse') and self.typicalLigNames(file):
-        pmlFile = file
+        if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
+            pmlFiles.append(file)
+
+    for file in pmlFiles:
+        for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
+            if ligName in file:
+                pmlFile = file
+                break
+    if pmlFile == '' and len(pmlFiles) > 0:
+        pmlFile = pmlFiles[0]
 
     if pmlFile != '':
       pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
@@ -324,7 +334,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           return True
 
   def typicalLigNames(self, file):
-    ligNames = ['UNK', 'UNL', 'LIG', 'X']
+    ligNames = ['UNK', 'UNL', 'LIG', 'X', 'LG']
     for ln in ligNames:
       if ln in file:
         return True
@@ -360,6 +370,12 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     clean_PDB(auxPath, outPath, waters=True, HETATM=False)
     return outPath
 
-  def _validate(self):
-    return []
+
+class ProtConsensusDockingViewer(SmallMoleculesViewer):
+  """ Visualize the output of protocol autodock """
+  _label = 'Viewer consensus docking'
+  _targets = [ProtocolConsensusDocking]
+
+  def __init__(self, **args):
+    super().__init__(**args)
 

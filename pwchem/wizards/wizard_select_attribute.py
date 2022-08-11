@@ -1,12 +1,13 @@
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# * Authors: Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
-# * the Free Software Foundation; either version 3 of the License, or
+# * the Free Software Foundation; either version 2 of the License, or
 # * (at your option) any later version.
 # *
 # * This program is distributed in the hope that it will be useful,
@@ -24,14 +25,25 @@
 # *
 # **************************************************************************
 
-from pwchem.protocols import ProtocolConsensusDocking
-from pwchem.viewers import SmallMoleculesViewer
+"""
+This wizard will extract the chains from a atomic structure (pdb) file in
+order to select it in the protocol.
+Then, it will load the structure and will take all chain related
+information such as name and number of residues.
+"""
 
-class ProtConsensusDockingViewer(SmallMoleculesViewer):
-    """ Visualize the output of protocol autodock """
-    _label = 'Viewer consensus docking'
-    _targets = [ProtocolConsensusDocking]
+# Imports
+from pwem.wizards import SelectAttributeWizard
+import pwchem.protocols as chemprot
 
-    def __init__(self, **args):
-        super().__init__(**args)
+SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolConsensusDocking,
+                                  targets=['repAttr'],
+                                  inputs=['inputMoleculesSets'],
+                                  outputs=['repAttr'])
+SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+                                  targets=['corrAttribute'],
+                                  inputs=['inputMoleculesSets'],
+                                  outputs=['corrAttribute'])
+
+
 

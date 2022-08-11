@@ -24,18 +24,63 @@
 # *
 # **************************************************************************
 
-from pwem.convert import AtomicStructHandler, SequenceHandler
-from pwem.convert.atom_struct import cifToPdb
-from pwem.objects.data import Sequence, Object, String, Integer, Float
-from ..constants import *
-from pwchem import Plugin as pwchemPlugin
 import random as rd
 import os, shutil
 import numpy as np
+from Bio.PDB import PDBParser, MMCIFParser
+
+from pwem.convert import AtomicStructHandler, SequenceHandler
+from pwem.convert.atom_struct import cifToPdb
+from pwem.objects.data import Sequence, Object, String, Integer, Float
+
+from pwchem.constants import *
+from pwchem import Plugin as pwchemPlugin
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
 
+RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
+               'ILE': 'I', 'PRO': 'P', 'THR': 'T', 'PHE': 'F', 'ASN': 'N',
+               'GLY': 'G', 'HIS': 'H', 'LEU': 'L', 'ARG': 'R', 'TRP': 'W',
+               'ALA': 'A', 'VAL':'V', 'GLU': 'E', 'TYR': 'Y', 'MET': 'M'}
+
+RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
+
+def makeSubsets(oriSet, nt):
+    '''Returns a list of subsets, given a set and the number of subsets'''
+    subsets = []
+    nObjs = len(oriSet) // nt
+    it, curSet = 0, []
+    for obj in oriSet:
+        curSet.append(obj.clone())
+        if len(curSet) == nObjs and it < nt - 1:
+            subsets.append(curSet)
+            curSet, it = [], it + 1
+
+    if len(curSet) > 0:
+        subsets.append(curSet)
+    return subsets
+
+def getLigCoords(ASFile, ligName):
+    '''Return the coordinates of the ligand specified in the atomic structure file'''
+    if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+      pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+      parser = PDBParser().get_structure(pdb_code, ASFile)
+    elif ASFile.endswith('.cif'):
+      pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+      parser = MMCIFParser().get_structure(pdb_code, ASFile)
+    else:
+      print('Unknown AtomStruct file format')
+      return
+
+    coords = []
+    for model in parser:
+        for chain in model:
+            for residue in chain:
+                if residue.resname == ligName:
+                    for atom in residue:
+                        coords.append(list(atom.get_coord()))
+    return coords
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
@@ -64,14 +109,20 @@ def writePDBLine(j):
     j[6] = str('%8.3f' % (float(j[6]))).rjust(8)  # x
     j[7] = str('%8.3f' % (float(j[7]))).rjust(8)  # y
     j[8] = str('%8.3f' % (float(j[8]))).rjust(8)  # z\
-    j[9] = str('%6.2f' % (float(j[9]))).rjust(6)  # occ
-    j[10] = str('%6.2f' % (float(j[10]))).ljust(6)  # temp
+    if j[9] != '':
+        j[9] = str('%6.2f' % (float(j[9]))).rjust(6)  # occ
+    else:
+        j[9] = j[9].rjust(6)
+    if j[10] != '':
+        j[10] = str('%6.2f' % (float(j[10]))).ljust(6)  # temp
+    else:
+        j[10] = j[10].ljust(6)
     if j[11] != '':
         j[11] = str('%8.3f' % (float(j[11]))).rjust(10)
     else:
         j[11] = j[11].rjust(10)
     j[12] = j[12].rjust(2)  # elname
-    return "\n%s%s %s %s %s%s    %s%s%s%s%s%s%s" % \
+    return "%s%s %s %s %s%s    %s%s%s%s%s%s%s\n" % \
            (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
 
 def splitPDBLine(line, rosetta=False):
@@ -163,8 +214,11 @@ def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
 
 
 def splitConformerFile(confFile, outDir):
-    _, ext = os.path.splitext(confFile)
-    fnRoot = os.path.split(confFile)[1].split('_')[0]
+    fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
+    if '_prep_' in fnRoot:
+        fnRoot = fnRoot.split('_prep')[0]
+    elif '_conformers' in fnRoot:
+        fnRoot = fnRoot.split('_conformers')[0]
     iConf, lastRemark, towrite = 1, True, ''
     with open(confFile) as fConf:
         for line in fConf:
@@ -314,7 +368,7 @@ def sortSet(seti):
     return seti
 
 
-def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
+def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_ids=None):
     """ Clean the pdb file from waters and ligands and redundant chains
     waters: clean waters
     HETATM: clean HETATM lines
@@ -341,7 +395,7 @@ def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
                     chain = column[4].strip()  # Name of chain
 
                     #No chain selected or line from selected line
-                    if chain_id == None or chain_id == chain:
+                    if chain_ids == None or chain in chain_ids:
                         #ATOM line or HETATM line and keep HETATM or water and keep water
                         if id == 'ATOM' or (id == "HETATM" and not HETATM and molecule != "HOH") or \
                                 (molecule == "HOH" and not waters):
@@ -356,9 +410,9 @@ def clean_PDB(inputPDB, outFn, waters=False, HETATM=False, chain_id=None):
     return outFn
 
 
-def relabelAtomsMol2(atomFile):
+def relabelAtomsMol2(atomFile, i=''):
     atomCount = {}
-    auxFile = atomFile.replace(os.path.basename(atomFile), 'aux.mol2')
+    auxFile = atomFile.replace(os.path.basename(atomFile), 'aux{}.mol2'.format(i))
     atomLines = False
     with open(auxFile, 'w') as fOut:
         with open(atomFile) as fIn:
@@ -367,13 +421,13 @@ def relabelAtomsMol2(atomFile):
                     atomLines = False
 
                 if atomLines:
-                    atom = line[8]
+                    atom = removeNumberFromStr(line.split()[1])
                     if atom in atomCount:
                         atomCount[atom] += 1
                     else:
                         atomCount[atom] = 1
                     numSize = len(str(atomCount[atom]))
-                    line = line[:9] + str(atomCount[atom]).ljust(10) + line[18:]
+                    line = line[:8] + ' '*(2 - len(atom)) + atom + str(atomCount[atom]).ljust(8) + line[18:]
 
                 if line.startswith('@<TRIPOS>ATOM'):
                     atomLines = True
@@ -383,6 +437,14 @@ def relabelAtomsMol2(atomFile):
     shutil.move(auxFile, atomFile)
     return atomFile
 
+def removeNumberFromStr(s):
+    newS = ''
+    for i in s:
+        if not i.isdigit():
+            newS += i
+        else:
+            break
+    return newS
 
 def calculateDistance(coord1, coord2):
     dist = 0
@@ -393,6 +455,32 @@ def calculateDistance(coord1, coord2):
         dist += (c1-c2) ** 2
     return dist ** (1/2)
 
+def calculateRMSD(coords1, coords2):
+    rmsd = 0
+    for c1, c2 in zip(coords1, coords2):
+        if len(c1) != len(c2):
+            print('ERROR: coordinates of different size')
+            return None
+        for x1, x2 in zip(c1, c2):
+            rmsd += (x1-x2) ** 2
+    return (rmsd / len(coords2)) ** (1/2)
+
+def calculateRMSDKeys(coordDic1, coordDic2):
+    '''Calculate the RMSD from two dic containing coordinates, using the keys of the
+    first one
+    '''
+    rmsd, count = 0, 0
+    for k in coordDic1:
+        if k in coordDic2:
+            c1, c2 = coordDic1[k], coordDic2[k]
+            if len(c1) != len(c2):
+                print('ERROR: coordinates of different size')
+                return None
+            for x1, x2 in zip(c1, c2):
+                rmsd += (x1-x2) ** 2
+            count += 1
+    return (rmsd / count) ** (1/2)
+  
 ################3 UTILS Sequence Object ################
 
 def getSequenceFastaName(sequence):
@@ -412,3 +500,26 @@ def natural_sort(listi, rev=False):
     convert = lambda text: int(text) if text.isdigit() else text.lower()
     alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
     return sorted(listi, key=alphanum_key, reverse=rev)
+
+def fillEmptyAttributes(inputSets):
+    '''Fill all items with empty attributes'''
+    attributes = getAllAttributes(inputSets)
+    for inSet in inputSets:
+        for item in inSet.get():
+            for attr in attributes:
+                if not hasattr(item, attr):
+                    item.__setattr__(attr, attributes[attr])
+    return inputSets
+
+def getAllAttributes(inputSets):
+    '''Return a dic with {attrName: ScipionObj=None}'''
+    attributes = {}
+    for inpSet in inputSets:
+        item = inpSet.get().getFirstItem()
+        attrKeys = item.getObjDict().keys()
+        for attrK in attrKeys:
+            if not attrK in attributes:
+                value = item.__getattribute__(attrK)
+                attributes[attrK] = value.clone()
+                attributes[attrK].set(None)
+    return attributes

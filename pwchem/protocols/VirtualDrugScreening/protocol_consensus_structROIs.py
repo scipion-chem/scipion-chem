@@ -27,42 +27,55 @@
 
 
 """
-This protocol is used to make a consensus over several input sets of smallMolecules which have been docked by the
-same or different software
+This protocol is used to make a consensus over several input sets of pockets that might come from different
+sources
 
 """
+import os
+
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
-from pwchem.objects import SetOfSmallMolecules
+from pwem.objects.data import AtomStruct
+
+from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput
 from pwchem.utils import *
-import os, re
 
-MAXSCORE, MINENERGY = 0, 1
+from pwchem.constants import *
 
-class ProtocolConsensusDocking(EMProtocol):
+MAXVOL, MAXSURF = 0, 1
+
+class ProtocolConsensusStructROIs(EMProtocol):
     """
-    Executes the consensus on the sets of SmallMolecules. The poses of the different molecules are clustered
-    with respect to their RMSD
+    Executes the consensus on the sets of pockets
     """
-    _label = 'Consensus docking'
-    actionChoices = ['MaxScore', 'MinEnergy']
+    _label = 'Consensus structural ROIs'
+    _possibleOutputs = PredictStructROIsOutput
+    actionChoices = ['MaxVolume', 'MaxSurface']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputMoleculesSets', params.MultiPointerParam,
-                       pointerClass='SetOfSmallMolecules', allowsNull=False,
-                       label="Input Sets of Docked Molecules",
-                       help='Select the pocket sets to make the consensus')
-        form.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
-                      help="Maximum RMSD for clustering different docked molecules")
-        form.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings',
-                      help="Min number of docked molecules to be considered consensus docking")
-        form.addParam('action', params.EnumParam, default=MAXSCORE,
-                      label='Criteria to choose cluster representative', choices=self.actionChoices,
-                      help='Criteria to follow on docking clusters to choose a representative')
+        form.addParam('inputStructROIsSets', params.MultiPointerParam,
+                       pointerClass='SetOfStructROIs', allowsNull=False,
+                       label="Input Sets of Structural ROIs",
+                       help='Select the structural ROIs sets to make the consensus')
+        form.addParam('outIndv', params.BooleanParam, default=False,
+                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Creates an output set related to each input set, with the elements from each input'
+                           'present in the consensus clusters')
+
+        form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping',
+                      help="Min proportion of residues (from the smaller) of two structural regions to be considered "
+                           "overlapping")
+        form.addParam('action', params.EnumParam, default=MAXSURF,
+                      label='Action on overlapping', choices=self.actionChoices,
+                      help='Action to take on overlapping structural regions, whether to merge them or keep just one '
+                           'with some condition')
+        form.addParam('numOfOverlap', params.IntParam, default=2,
+                      label='Minimun number of overlapping structural regions',
+                      help="Min number of structural regions to be considered consensus StructROIs")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -71,46 +84,42 @@ class ProtocolConsensusDocking(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def consensusStep(self):
-        molDic = self.buildMolDic()
-        molClusters = self.generateDockingClusters()
-        #Getting the representative of the clusters from any of the inputs
-        self.consensusMols = self.cluster2representative(molClusters)
+        pocketDic = self.buildPocketDic()
+        pocketClusters = self.generatePocketClusters()
+        # Getting the representative of the clusters from any of the inputs
+        self.consensusPockets = self.cluster2representative(pocketClusters)
 
         self.indepConsensusSets = {}
-        #Separating clusters by input set
-        indepClustersDic = self.getIndepClusters(molClusters, molDic)
+        # Separating clusters by input set
+        indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
         for inSetId in indepClustersDic:
             # Getting independent representative for each input set
             self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
 
 
     def createOutputStep(self):
-        inputProteinFile = self.inputMoleculesSets[0].get().getProteinFile()
+            self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
+            self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
-        self.relabelDic = {}
-        self.consensusMols = self.fillEmptyAttributes(self.consensusMols)
-        self.consensusMols, idsDic = self.reorderIds(self.consensusMols)
+            outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
+            for outPock in self.consensusPockets:
+                newPock = outPock.clone()
+                outPockets.append(newPock)
+            if outPockets.getSize() > 0:
+                outPockets.buildPDBhetatmFile(suffix='_All')
+                self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
 
-        outDocked = SetOfSmallMolecules(filename=self._getPath('consensusDocked_All.sqlite'))
-        outDocked.setDocked(True)
-        outDocked.setProteinFile(inputProteinFile)
-        for outDock in self.consensusMols:
-            newDock = outDock.clone()
-            newDock = self.relabelPosId(newDock)
-            outDocked.append(newDock)
-        self._defineOutputs(outputSmallMoleculesAll=outDocked)
-
-        indepOutputs = self.createIndepOutputs()
-        for setId in indepOutputs:
-            #Index should be the same as in the input
-            suffix = '_{:03d}'.format(setId+1)
-            outName = 'outputSmallMolecules' + suffix
-            outSet = indepOutputs[setId]
-            outSet.setDocked(True)
-            outSet.setProteinFile(inputProteinFile)
-
-            self._defineOutputs(**{outName: outSet})
-            self._defineSourceRelation(self.inputMoleculesSets[setId].get(), outSet)
+            if self.outIndv.get():
+                indepOutputs = self.createIndepOutputs()
+                for setId in indepOutputs:
+                    #Index should be the same as in the input
+                    suffix = '_{:03d}'.format(setId+1)
+                    outName = 'outputStructROIs' + suffix
+                    outSet = indepOutputs[setId]
+                    if outSet.getSize() > 0:
+                        outSet.buildPDBhetatmFile(suffix=suffix)
+                        self._defineOutputs(**{outName: outSet})
+                        self._defineSourceRelation(self.inputStructROIsSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -121,73 +130,67 @@ class ProtocolConsensusDocking(EMProtocol):
         methods = []
         return methods
 
-    def _validate(self):
+    def _warnings(self):
         """ Try to find warnings on define params. """
-        validations = []
-        for pSet in self.inputMoleculesSets:
-            pSet = pSet.get()
-            if not pSet.isDocked():
-                validations.append('Sets of input molecules must be docked first.\n'
-                                'Set: {} has not been docked'.format(pSet))
-
-        return validations
+        warnings = []
+        names = []
+        for inSet in self.inputStructROIsSets:
+            names.append(inSet.get().getProteinName())
+        if len(set(names)) > 1:
+            warnings.append('The protein this structural ROIs are calculated might not be the same for all the inputs.'
+                  '\nDetected protein names: {}'.format(' | '.join(set(names))))
+        return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def buildMolDic(self):
+    def buildPocketDic(self):
         dic = {}
-        for i, pSet in enumerate(self.inputMoleculesSets):
-            for mol in pSet.get():
-                dic[mol.getPoseFile()] = i
+        for i, pSet in enumerate(self.inputStructROIsSets):
+            for pocket in pSet.get():
+                dic[pocket.getFileName()] = i
         return dic
 
     def createIndepOutputs(self):
         outSets = {}
         for setId in self.indepConsensusSets:
             suffix = '_{:03d}'.format(setId+1)
-            newSet = SetOfSmallMolecules(filename=self._getExtraPath('consensusSmallMolecules{}.sqlite'.format(suffix)))
-            for mol in self.indepConsensusSets[setId]:
-                newMol = mol.clone()
-                newMol = self.relabelPosId(newMol)
-                newSet.append(newMol)
+            newSet = SetOfStructROIs(filename=self._getExtraPath('ConsensusStructROIs{}.sqlite'.format(suffix)))
+            for pock in self.indepConsensusSets[setId]:
+                newSet.append(pock.clone())
             outSets[setId] = newSet
         return outSets
 
     def getInpProteinFiles(self):
         inpProteinFiles = []
-        for inpSet in self.inputMoleculesSets:
+        for inpSet in self.inputStructROIsSets:
             inpProteinFiles.append(inpSet.get().getProteinFile())
         return inpProteinFiles
 
     def getPDBName(self):
-        pdbFile = self.inputMoleculesSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
+        pdbFile = self.inputStructROIsSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
         return pdbFile.split('_out')[0]
 
-    def generateDockingClusters(self):
+    def generatePocketClusters(self):
         '''Generate the pocket clusters based on the overlapping residues
         Return (clusters): [[pock1, pock2], [pock3], [pock4, pock5, pock6]]'''
         clusters = []
         #For each set of pockets
-        for i, molSet in enumerate(self.inputMoleculesSets):
+        for i, pockSet in enumerate(self.inputStructROIsSets):
             #For each of the pockets in the set
-            for newMol in molSet.get():
-                newClusters, newClust = [], [newMol.clone()]
+            for newPock in pockSet.get():
+                newClusters, newClust = [], [newPock.clone()]
                 #Check for each of the clusters
                 for clust in clusters:
                     #Check for each of the pockets in the cluster
-                    append2Cluster = True
-                    for cMol in clust:
-                        if cMol.getMolBase() == newMol.getMolBase():
-                            curRMSD = self.calculateMolsRMSD(newMol, cMol)
-
-                            #If there is overlap with the new pocket from the set
-                            if curRMSD > self.maxRMSD.get():
-                                append2Cluster = False
-                                break
-                        else:
-                            append2Cluster = False
+                    overClust = False
+                    for cPocket in clust:
+                        propOverlap = self.calculateResiduesOverlap(newPock, cPocket)
+                        #If there is overlap with the new pocket from the set
+                        if propOverlap > self.overlap.get():
+                            overClust = True
+                            break
 
                     #newClust: Init with only the newPocket, grow with each clust which overlaps with newPocket
-                    if append2Cluster:
+                    if overClust:
                         newClust += clust
                     #If no overlap, the clust keeps equal
                     else:
@@ -202,13 +205,13 @@ class ProtocolConsensusDocking(EMProtocol):
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
                 curIndepCluster = {}
-                for mol in clust:
-                    curMolFile = mol.getPoseFile()
-                    inSetId = molDic[curMolFile]
+                for pock in clust:
+                    curPockFile = pock.getFileName()
+                    inSetId = molDic[curPockFile]
                     if inSetId in curIndepCluster:
-                        curIndepCluster[inSetId] += [mol]
+                        curIndepCluster[inSetId] += [pock]
                     else:
-                        curIndepCluster[inSetId] = [mol]
+                        curIndepCluster[inSetId] = [pock]
 
                 for inSetId in curIndepCluster:
                     if inSetId in indepClustersDic:
@@ -224,46 +227,44 @@ class ProtocolConsensusDocking(EMProtocol):
         representatives = []
         for clust in clusters:
             if len(clust) >= minSize:
-                if self.action.get() == MAXSCORE:
-                    repr = self.getMaxScoreMolecule(clust)
-                elif self.action.get() == MINENERGY:
-                    repr = self.getMinEnergyMolecule(clust)
-                representatives.append(repr)
+                if self.action.get() == MAXVOL:
+                    outPocket = self.getMaxVolumePocket(clust)
+                elif self.action.get() == MAXSURF:
+                    outPocket = self.getMaxVolumePocket(clust)
+                representatives.append(outPocket)
         return representatives
 
-    def getMaxScoreMolecule(self, cluster):
-        '''Return the docked molecule with max score in a cluster'''
-        maxScore = 0
-        for mol in cluster:
-            molScore = mol.getScore()
-            if molScore > maxScore:
-                maxScore = molScore
-                outMol = mol.clone()
-        return outMol
+    def getMaxVolumePocket(self, cluster):
+        '''Return the pocket with max volume in a cluster'''
+        maxVol = 0
+        for pocket in cluster:
+            pocketVol = pocket.getPocketVolume()
+            if pocketVol > maxVol:
+                maxVol = pocketVol
+                outPocket = pocket.clone()
+        return outPocket
 
-    def getMinEnergyMolecule(self, cluster):
-        '''Return the docked molecule with min energy in a cluster'''
-        minEnergy = 10000
-        for mol in cluster:
-            molEnergy = mol.getEnergy()
-            if molEnergy < minEnergy:
-                minEnergy = molEnergy
-                outMol = mol.clone()
-        return outMol
+    def getMaxSurfacePocket(self, cluster):
+        '''Return the pocket with max surface in a cluster.
+        The surface is just interpolated to the number of contact atoms. In case of even, volume is used'''
+        maxSurf, maxVol = 0, 0
+        for pocket in cluster:
+            pocketSurf = len(pocket.getDecodedCAtoms())
+            pocketVol = pocket.getSurfaceConvexVolume()
+            if pocketSurf > maxSurf:
+                maxSurf, maxVol = pocketSurf, pocketVol
+                outPocket = pocket.clone()
+            elif pocketSurf == maxSurf:
+                if pocketVol > maxVol:
+                    maxSurf, maxVol = pocketSurf, pocketVol
+                    outPocket = pocket.clone()
 
-    def calculateMolsRMSD(self, mol1, mol2):
-        posDic1, posDic2 = mol1.getAtomsPosDic(), mol2.getAtomsPosDic()
-        if self.checkSameKeys(posDic1, posDic2):
-            rmsd=0
-            for atomId in posDic1:
-                rmsd += calculateDistance(posDic1[atomId], posDic2[atomId])
-            return rmsd / len(posDic2)
-        else:
-            print('Atom ids of the molecules are different and cannot be compared')
+        return outPocket
 
-
-    def checkSameKeys(self, d1, d2):
-        return set(d1.keys()) == set(d2.keys())
+    def calculateResiduesOverlap(self, pock1, pock2):
+        res1, res2 = pock1.getDecodedCResidues(), pock2.getDecodedCResidues()
+        overlap = set(res1).intersection(set(res2))
+        return len(overlap) / min(len(res1), len(res2))
 
     def getAllPocketAttributes(self, pocketSets):
         '''Return a dic with {attrName: ScipionObj=None}'''
@@ -280,7 +281,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def fillEmptyAttributes(self, inSet):
         '''Fill all items with empty attributes'''
-        attributes = self.getAllPocketAttributes(self.inputMoleculesSets)
+        attributes = self.getAllPocketAttributes(self.inputStructROIsSets)
         for item in inSet:
             for attr in attributes:
                 if not hasattr(item, attr):
@@ -346,39 +347,3 @@ class ProtocolConsensusDocking(EMProtocol):
         newStr = 'APOL STP C{}'.format((4-newLen)*' ' + newId)
         line = line.replace(oldStr, newStr)
         return line
-
-    def getOriginalReceptorFile(self):
-        return self.inputMoleculesSets[0].get().getProteinFile()
-
-    def relabelPosId(self, mol):
-        molName = mol.getMolName()
-        posFile = mol.getPoseFile()
-        #If mol has not been relabel yet
-        if not posFile in self.relabelDic:
-            #Set the new posId (begining with one, for each molName)
-            if molName in self.relabelDic:
-                self.relabelDic[molName] += 1
-            else:
-                self.relabelDic[molName] = 1
-
-            newPosId = self.relabelDic[molName]
-            posExt = os.path.splitext(posFile)[1]
-
-            #Moving new posFile to current protocol with new posId
-            newPosFile = re.sub('_\d{}'.format(posExt), '_{}{}'.format(newPosId, posExt), posFile, 1)
-            newPosFile = self._getPath(os.path.basename(newPosFile))
-            shutil.copy(posFile, newPosFile)
-            mol.setPoseFile(newPosFile)
-
-            self.relabelDic[posFile] = newPosFile
-
-        else:
-            mol.setPoseFile(self.relabelDic[posFile])
-
-        return mol
-
-
-
-
-
-

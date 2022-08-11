@@ -27,9 +27,8 @@
 # **************************************************************************
 
 from pyworkflow.tests import *
-from pathlib import Path
-from pwchem.protocols.protocol_import_smallMolecules import ProtChemImportSmallMolecules
-from pwchem.protocols.protocol_ligand_preparation import ProtChemOBabelPrepareLigands
+from pwchem.protocols import ProtChemImportSmallMolecules
+from pwchem.protocols import ProtChemOBabelPrepareLigands
 
 
 class TestImportBase(BaseTest):
@@ -63,7 +62,7 @@ class TestLigandPreparation(TestImportBase):
                 'method_charges': 0,  # gasteiger
                 'doConformers': True,
                 "method_conf": 0,
-                "number_conf": 100,
+                "number_conf": 10,
                 "rmsd_cutoff": 0.375,
                 }
 
@@ -74,15 +73,9 @@ class TestLigandPreparation(TestImportBase):
 
         self.assertIsNotNone(small_1,
                              "There was a problem with the import")
-        self.assertTrue(small_1.getSize()==4,
-                        "There was a problem with the import or conversion and the SetOfSmallMolecules is empty")
-
-        n_columns = len(list(small_1.getFirstItem().getAttributes()))
-        self.assertTrue(n_columns == 5,
-                        "There is a incorrect number of columns. Therefore there are a lost of files")  # 4 fixed columns + 5 given
 
         for mol in small_1:
-            self.assertTrue((mol.getFileName()).endswith("_withH.mol2"),
+            self.assertTrue((mol.getFileName()).endswith(".mol2"),
                             "The format of first molecule is wrong. It must be in mol2 format")
             try:
                 self.assertTrue((mol.getConformersFileName()).endswith("_conformers.mol2"),
@@ -105,7 +98,7 @@ class TestLigandPreparation(TestImportBase):
                 'method_charges': 1,  # mmff94
                 'doConformers': True,
                 "method_conf": 1,
-                "number_conf": 1000,
+                "number_conf": 10,
                 "rmsd_cutoff": 0.5,
                 }
 
@@ -116,15 +109,9 @@ class TestLigandPreparation(TestImportBase):
 
         self.assertIsNotNone(small_1,
                              "There was a problem with the import")
-        self.assertTrue(small_1.getSize() == 4,
-                        "There was a problem with the import or conversion and the SetOfSmallMolecules is empty")
-
-        n_columns = len(list(small_1.getFirstItem().getAttributes()))
-        self.assertTrue(n_columns == 5,
-                        "There is a incorrect number of columns. Therefore there are a lost of files")  # 4 fixed columns + 5 given
 
         for mol in small_1:
-            self.assertTrue((mol.getFileName()).endswith("_withH.mol2"),
+            self.assertTrue((mol.getFileName()).endswith(".mol2"),
                             "The format of first molecule is wrong. It must be in mol2 format")
             try:
                 self.assertTrue((mol.getConformersFileName()).endswith("_conformers.mol2"),

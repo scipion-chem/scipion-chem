@@ -26,6 +26,31 @@
 # **************************************************************************
 
 PYMOL_HOME = 'PYMOL_HOME'
+#Constant dictionaries
+MGL_DIC = {'name': 'mgltools',    'version': '1.5.6', 'home': 'MGL_HOME'}
+PYMOL_DIC = {'name': 'pymol',       'version': '2.5',   'home': PYMOL_HOME}
+JCHEM_DIC = {'name': 'jchempaint',  'version': '3.3',   'home': 'JCHEM_HOME'}
+PLIP_DIC = {'name': 'plip',        'version': '2.2',   'home': 'PLIP_HOME'}
+ALIVIEW_DIC = {'name': 'aliview',    'version': '1.28',   'home': 'ALIVIEW_HOME'}
+
+#Autoligand
+POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
+                      'Total Volume': 'volume', 'Total Energy per Vol': 'energy', 'class': 'class',
+                      'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'}
+#Fpocket
+POCKET_ATTRIBUTES_MAPPING.update({'Pocket Score': 'score', 'Drug Score': 'druggability', 'Number of alpha spheres': 'nPoints',
+                      'Pocket volume (Monte Carlo)': 'volume', 'class': 'class',
+                      'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'})
+#P2Rank
+POCKET_ATTRIBUTES_MAPPING.update({'score': 'score', 'sas_points': 'nPoints', 'class': 'class',
+                      'surf_atom_ids': 'contactAtoms', 'residue_ids': 'contactResidues'})
+#Sitemap
+POCKET_ATTRIBUTES_MAPPING.update({'SiteScore': 'score', 'Dscore': 'druggability', 'size': 'nPoints',
+                      'volume': 'volume', 'exposure': 'exposure', 'enclosure': 'enclosure',
+                      'contact': 'contact', 'phobic': 'hidrophobic', 'philic': 'hidrophilic',
+                      'balance': 'balance', 'don/acc': 'don/acc', 'class': 'class',
+                      'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'})
+
 
 PML_STR = '''from pymol import cmd,stored
 load {}

@@ -28,30 +28,9 @@ import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 from pyworkflow.object import Pointer
 
-from ..protocols import ProtocolConsensusPockets
-try:
-  doP2Rank = True
-  from p2rank.protocols import P2RankFindPockets
-except:
-  doP2Rank = False
-  print('P2Rank plugin not found. Skipping its part')
+from ..protocols import ProtocolConsensusStructROIs
 
-try:
-  doFPocket = True
-  from fpocket.protocols import FpocketFindPockets
-except:
-  doFPocket = False
-  print('FPocket plugin not found. Skipping its part')
-
-try:
-  doAutoLigand = True
-  from autodock.protocols import ProtChemAutoLigand, Autodock_GridGeneration
-except:
-  doAutoLigand = False
-  print('Autodock plugin not found. Skipping AutoLigand part')
-
-
-class TestConsensusPockets(BaseTest):
+class TestConsensusStructROIs(BaseTest):
     @classmethod
     def setUpClass(cls):
         tests.setupTestProject(cls)
@@ -67,29 +46,29 @@ class TestConsensusPockets(BaseTest):
       cls.launchProtocol(protImportPDB)
       cls.protImportPDB = protImportPDB
 
-    def _runFPocketFind(self):
+    def _runFPocketFind(self, prot):
         protFPocket = self.newProtocol(
-            FpocketFindPockets,
+            prot,
             inputAtomStruct=self.protImportPDB.outputPdb)
 
         self.launchProtocol(protFPocket)
-        pocketsOut = getattr(protFPocket, 'outputPockets', None)
+        pocketsOut = getattr(protFPocket, 'outputStructROIs', None)
         self.assertIsNotNone(pocketsOut)
         return pocketsOut
       
-    def _runP2RankFind(self):
+    def _runP2RankFind(self, prot):
         protP2Rank = self.newProtocol(
-            P2RankFindPockets,
+            prot,
             inputAtomStruct=self.protImportPDB.outputPdb)
 
         self.launchProtocol(protP2Rank)
-        pocketsOut = getattr(protP2Rank, 'outputPockets', None)
+        pocketsOut = getattr(protP2Rank, 'outputStructROIs', None)
         self.assertIsNotNone(pocketsOut)
         return pocketsOut
 
-    def _runCreateGrid(self):
+    def _runCreateGrid(self, prot):
         protGrid = self.newProtocol(
-            Autodock_GridGeneration,
+            prot,
             inputAtomStruct=self.protImportPDB.outputPdb,
             radius=37.0,
             spacing=1.0)
@@ -99,41 +78,58 @@ class TestConsensusPockets(BaseTest):
         self.assertIsNotNone(gridOut)
         return protGrid
 
-    def _runAutoLigandFind(self, protGrid):
+    def _runAutoLigandFind(self, protGrid, prot):
         protAutoLigand = self.newProtocol(
-            ProtChemAutoLigand,
+            prot,
             prevGrid=True,
             inputGrid=protGrid.outputGrid,
             nFillPoints=10)
 
         self.launchProtocol(protAutoLigand)
-        pocketsOut = getattr(protAutoLigand, 'outputPockets', None)
+        pocketsOut = getattr(protAutoLigand, 'outputStructROIs', None)
         self.assertIsNotNone(pocketsOut)
         return pocketsOut
 
-    def _runConsensusPockets(self, inputSetsOfPockets):
-      prot = self.newProtocol(ProtocolConsensusPockets,
-                              inputPocketSets= inputSetsOfPockets)
+    def _runConsensusStructROIs(self, inputSetsOfPockets):
+      prot = self.newProtocol(ProtocolConsensusStructROIs,
+                              inputStructROIsSets= inputSetsOfPockets)
 
       self.launchProtocol(prot, wait=True)
-      self.assertIsNotNone(prot.outputPocketsAll,
+      self.assertIsNotNone(prot.outputStructROIs,
                            "There was a problem with the consensus")
 
-    def testConsensusPockets(self):
+    def testConsensusStructROIs(self):
       inputPockets = []
-      if doAutoLigand:
-        protGrid = self._runCreateGrid()
-        autoligandPockets = self._runAutoLigandFind(protGrid)
-        inputPockets.append(autoligandPockets)
+      doFPocket, doAutoLigand, doP2Rank = False, False, False
 
-      if doFPocket:
-        fpocketPockets = self._runFPocketFind()
-        inputPockets.append(fpocketPockets)
-
-      if doP2Rank:
-        p2rankPockets = self._runP2RankFind()
+      try:
+        from p2rank.protocols import P2RankFindPockets
+        p2rankPockets = self._runP2RankFind(prot=P2RankFindPockets)
         inputPockets.append(p2rankPockets)
+        doP2Rank = True
+      except:
+        print('P2Rank plugin not found. Skipping its part')
 
-      self._runConsensusPockets(inputPockets)
+      try:
+        from fpocket.protocols import FpocketFindPockets
+        fpocketPockets = self._runFPocketFind(prot=FpocketFindPockets)
+        inputPockets.append(fpocketPockets)
+        doFPocket = True
+      except:
+        print('FPocket plugin not found. Skipping its part')
+
+      try:
+        from autodock.protocols import ProtChemAutoLigand, Autodock_GridGeneration
+        protGrid = self._runCreateGrid(prot=Autodock_GridGeneration)
+        autoligandPockets = self._runAutoLigandFind(protGrid, prot=ProtChemAutoLigand)
+        inputPockets.append(autoligandPockets)
+        doAutoLigand = True
+      except:
+        print('Autodock plugin not found. Skipping AutoLigand part')
+
+      if doFPocket or doAutoLigand or doP2Rank:
+          self._runConsensusStructROIs(inputPockets)
+      else:
+          print('No pocket plugins found installed. Try installing P2Rank or Fpocket')
 
 
