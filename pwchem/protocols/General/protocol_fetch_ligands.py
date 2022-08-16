@@ -83,11 +83,14 @@ class ProtocolLigandsFetching(EMProtocol):
 
         group = form.addGroup('Clustering Descriptors')
         group.addParam('eps', params.FloatParam, default=0, label='Maximum distance between instances: ',
-                       help="The Maximum distance between two samples for one to be considered as in the neighborhood "
-                            "of the other.")
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="The maximum distance between two samples for one to be considered as in the neighborhood "
+                            "of the other. Molecules clustered in structural ROIs as in docking")
 
         group.addParam('min_samples', params.IntParam, default=1, label='Minimum samples of a cluster: ',
-                       help="The number of samples in a neighborhood for a point to be considered as a core point.")
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="The number of samples in a neighborhood for a point to be considered as a core point."
+                            "Molecules clustered in structural ROIs as in docking")
 
         form.addSection(label='Filtering')
         group = form.addGroup('Filters structure')
