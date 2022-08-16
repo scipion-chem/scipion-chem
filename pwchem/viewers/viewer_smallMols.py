@@ -35,13 +35,13 @@ from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
 from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB, natural_sort
 from pwchem import Plugin as pwchemPlugin
-from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsExtraction
+from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
 class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'
-  _targets = [ProtocolConsensusDocking, ProtocolLigandsExtraction, SetOfSmallMolecules]
+  _targets = [ProtocolConsensusDocking, ProtocolLigandsFetching, SetOfSmallMolecules]
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   def __init__(self, **kwargs):
