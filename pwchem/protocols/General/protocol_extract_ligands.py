@@ -210,65 +210,9 @@ class ProtocolLigandsExtraction(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
 
-    def writeParamsFile(self, paramsFile):
-        with open(paramsFile, 'w') as f:
-            f.write('outputPath: results.tsv\n')
-            f.write('uniprotID: {}\n'.format(self.inputUniprotID.get()))
-            f.write('experimentalMethod: {}\n'.format(self.getExperimentalMethodChoice()))
-            f.write('molecularWeigth: {}\n'.format(self.molecularWeight.get()))
-            f.write('maxResolution: {}\n'.format(self.maxResolution.get()))
-            f.write('polymerCount: {}\n'.format(self.polymerCount.get()))
-            f.write('topStructures: {}\n'.format(self.numberOfStructures.get()))
-            f.write('date: {}\n'.format(self.date.get()))
-            f.write('eps: {}\n'.format(self.eps.get()))
-            f.write('min_samples: {}\n'.format(self.min_samples.get()))
-        return paramsFile
-
     def getExperimentalMethodChoice(self):
         function = self.getEnumText('experimentalMethodChoice')
         return function
-
-    def parseResults(self, outputFile):
-        paths = []
-        with open(outputFile) as tsv_file:
-            list_cluster = []
-            for row in tsv_file:
-                row = row.replace('\n', '')
-                if "Cluster" in row:
-                    list_cluster = []
-                elif "#" in row:
-                    if list_cluster:
-                        paths.append(list_cluster)
-                else:
-                    list_cluster.append(row)
-
-        return paths
-
-
-    def obtain_protein_file(self, pdb_file):
-        with open(pdb_file) as tsv_file:
-            for row in tsv_file:
-                pdb_file1 = row
-                #str(row).split("/")
-                #pdb = pdb_file1[-1]
-                out = "only_protein.pdb"
-                out_protein = clean_PDB(pdb_file1, out, waters=True, HETATM=True)
-
-        return out_protein
-
-
-    def parse_csv(self, csv_file):
-        dict_smile = {}
-        with open(csv_file) as csv:
-            for row in csv:
-                if row[0] == "#":
-                    pass
-                else:
-                    word = row.split(",")
-                    key = str(word[0]) + "_lig.pdb"
-                    dict_smile[key] = word[-1]
-
-        return dict_smile
 
     def getRefProteinFile(self):
         return glob.glob(self._getExtraPath('*.cif'))[0]
