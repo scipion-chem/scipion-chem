@@ -61,8 +61,9 @@ class ProtDefineStructROIs(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
         group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
-                      allowsNull=False, label="Input AtomStruct: ",
-                      help='Select the AtomStruct object where the structural ROIs will be defined')
+                      allowsNull=True, label="Input AtomStruct: ",
+                      help='Select the AtomStruct object where the structural ROIs will be defined.'
+                           'It only can be empty if the input is a SetOfSmallMolecules docked (with AtomStruct)')
 
         group = form.addGroup('Origin')
         group.addParam('origin', params.EnumParam, default=RESIDUES,
@@ -177,13 +178,22 @@ class ProtDefineStructROIs(EMProtocol):
 
     def _validate(self):
         errors = []
+        if not self.getProteinFileName():
+            errors.append('You must specify an input structure')
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
 
     def getProteinFileName(self):
         inpStruct = self.inputAtomStruct.get()
-        inpFile = inpStruct.getFileName()
+        if inpStruct:
+            inpFile = inpStruct.getFileName()
+        else:
+            inpFile = self.inSmallMols.get().getProteinFile()
+
+        if not inpFile:
+            return None
+
         if inpFile.endswith('.cif'):
           inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
           cifToPdb(inpFile, inpPDBFile)
