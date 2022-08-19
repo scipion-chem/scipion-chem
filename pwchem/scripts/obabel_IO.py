@@ -27,7 +27,7 @@
 
 '''Script to convert molecule files using the openbabel pybel module in the plip-env'''
 
-import sys, os, argparse
+import sys, os, argparse, glob
 
 from openbabel import pybel
 
@@ -76,6 +76,11 @@ if __name__ == "__main__":
     If the output directory is not specified, molecule file(s) will be saved in the input file directory
     '''
     parser = argparse.ArgumentParser(description='Handles the IO for molecule files using openbabel')
+    parser.add_argument('--multiFiles', default=False, action='store_true', help='Multiple files to convert')
+    parser.add_argument('-iD', '--inputDir', type=str, help='Input molecule files directory if multiFiles')
+    parser.add_argument('-pat', '--pattern', type=str, required=False, default='',
+                        help='Input molecule files directory if multiFiles')
+
     parser.add_argument('-i', '--inputFilename', type=str, help='Input molecule file')
     parser.add_argument('-of', '--outputFormat', type=str, default='mol2', help='Output format')
     parser.add_argument('-o', '--outputName', type=str, required=False, help='Output name')
@@ -86,13 +91,6 @@ if __name__ == "__main__":
     parser.add_argument('--nameKey', type=str, required=False, help='molecule name key in file')
 
     args = parser.parse_args()
-    inputFile, outFormat = args.inputFilename, args.outputFormat
-
-    if args.outputName:
-        singleOutFile, outName = True, os.path.splitext(args.outputName)[0]
-    else:
-        singleOutFile, outName = False, None
-
     if args.outputDir:
         outDir = args.outputDir
     else:
@@ -103,4 +101,19 @@ if __name__ == "__main__":
     make3d = args.make3D
     nameKey = args.nameKey
 
-    oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW, make3d, nameKey)
+    if not args.multiFiles:
+        inputFile, outFormat = args.inputFilename, args.outputFormat
+
+        if args.outputName:
+            singleOutFile, outName = True, os.path.splitext(args.outputName)[0]
+        else:
+            singleOutFile, outName = False, None
+
+        oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW, make3d, nameKey)
+
+    else:
+        inputDir, pattern, outFormat = args.inputDir, args.pattern, args.outputFormat
+        pattern = os.path.join(inputDir, pattern)
+        for inFile in glob.glob(pattern):
+            outName = os.path.splitext(os.path.basename(inFile))[0]
+            oBabelConversion(inFile, outFormat, True, outDir, outName, outBase, overW, make3d, nameKey)
