@@ -175,6 +175,10 @@ class ProtocolConsensusDocking(EMProtocol):
                 validations.append('Sets of input molecules must be docked first.\n'
                                 'Set: {} has not been docked'.format(pSet))
 
+        if not self.repAttr.get() or not self.repAttr.get().strip():
+            validations.append('You must specify an attribute to choose a ligand representative of the generated '
+                               'cluster. Typically, the energy or the score, to choose the best out of the cluster')
+
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
