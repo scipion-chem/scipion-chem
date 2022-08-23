@@ -418,6 +418,7 @@ SPHERE = '''\tCOLOR,    {},    {},    {},
 '''
 
 LOAD_LIGAND = '''load {}, {}\n'''
+DISABLE_LIGAND = '''disable {}\n'''
 
 SPHERE_LIST = '''spherelist_{} = [
     {}

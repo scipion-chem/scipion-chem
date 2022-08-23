@@ -31,16 +31,20 @@ import pyworkflow.viewer as pwviewer
 
 from pwchem.viewers import PyMolViewer, PyMolView
 from pwchem.protocols import ProtocolPharmacophoreFiltering
-from pwchem.constants import PML_PHARM, SPHERE, LOAD_LIGAND, SPHERE_LIST
+from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import *
+from pwchem.constants import PML_PHARM, SPHERE, LOAD_LIGAND, SPHERE_LIST, DISABLE_LIGAND
+from pwchem.utils import getBaseFileName
+
+colors = [(0, 0.9, 0), (0.9, 0, 0), (1, 0.9, 0), (0.5, 0, 1)]
+colors_advanced = [(0, 1, 1), (1, 0.5, 0), (0, 0, 0.9), (0, 0.5, 1)]
 
 feature_colors = {
-    "donor": (0, 0.9, 0),  # Green
-    "acceptor": (0.9, 0, 0),  # Red
-    "hydrophobic": (1, 0.9, 0),  # Yellow
-    "posionizable": (0.5, 0, 1),  # Purple
-    "aromatic": (0, 1, 1),  # Orange
-    "lumpedhydrophobe": (1, 0.5, 0),  # Cyan
+    feat.lower(): color for feat, color in zip(FEATURE_LABELS_SIMPLE, colors)
 }
+
+feature_colors.update({
+  feat.lower(): color for feat, color in zip(FEATURE_LABELS_ADVANCED , colors_advanced)
+})
 
 
 class PharmacophoreViewer(pwviewer.ProtocolViewer):
@@ -90,18 +94,17 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
       for feature_type in idxDic.keys():
           featSpheres = ''
           centers = cenDic[feature_type]
-          if centers != [' ']:
+          if centers:
               for i, loc in enumerate(centers):
                   sphere_radius = 1
                   if feature_type in feature_colors:
                       feature_color = feature_colors[feature_type]
-
                       featSpheres += SPHERE.format(*feature_color, *loc, sphere_radius)
 
               spheresStr += SPHERE_LIST.format(feature_type, featSpheres, feature_type, feature_type)
 
       protFile = os.path.abspath(self.protocol.inputLigands.get().getProteinFile())
-      ligStr = self.getLigandsStr(self.getLigandsFiles())
+      ligStr = self.getLigandsStr(self.getLigandsFiles(), disabled=True)
 
       pharStr = PML_PHARM.format(protFile, ligStr, spheresStr)
 
@@ -118,10 +121,13 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
                   files = line.split()[1:]
       return files
 
-  def getLigandsStr(self, ligandFiles):
+  def getLigandsStr(self, ligandFiles, disabled=False):
       ligStr = ''
       for file in ligandFiles:
-          ligStr += LOAD_LIGAND.format(file, os.path.basename(file).split('.')[0])
+          ligBase = getBaseFileName(file)
+          ligStr += LOAD_LIGAND.format(file, ligBase)
+          if disabled:
+            ligStr += DISABLE_LIGAND.format(ligBase)
       return ligStr
 
 

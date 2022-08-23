@@ -245,7 +245,7 @@ class ProtocolLigandsFetching(EMProtocol):
 
         elif self.inputDatabase.get() == CHEMBL:
             outDir = os.path.abspath(self._getPath())
-            args = ' --multiFiles -iD "{}" --pattern {} -of mol2 --outputDir "{}"'. \
+            args = ' --multiFiles -iD "{}" --pattern "{}" -of mol2 --outputDir "{}"'. \
                 format(os.path.abspath(self._getTmpPath()), '*.smi', outDir)
             pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
 
