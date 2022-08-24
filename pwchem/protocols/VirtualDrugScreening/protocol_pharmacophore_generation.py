@@ -30,13 +30,12 @@ from os.path import abspath
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import PharmFeature, PharmacophoreChem
+from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
 from pwchem.scripts.PBVS_script import *
 
-FEATURE_LABELS_SIMPLE = ["Donor", "Acceptor", "Hydrophobe", "Aromatic"]
-FEATURE_LABELS_ADVANCED = ["LumpedHydrophobe", "PosIonizable", "NegIonizable", "ZnBinder"]
 
 scriptName = 'PBVS_script.py'
 
@@ -47,7 +46,7 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
     """
     #Nombre del protocolo (aparece en grande arriba)
-    _label = 'Pharmacophore filtering'
+    _label = 'Pharmacophore generation'
 
     ##### -------------------------- DEFINE param functions ----------------------
 
@@ -58,6 +57,14 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
                       pointerClass='SetOfSmallMolecules', allowsNull=False,
                       label="Input reference ligands: ",
                       help='Select the ligands PDB files')
+
+        form.addParam('propRadii', params.FloatParam, default=0.5,
+                       label='Pharmacophore radii proportion: ', expertLevel=params.LEVEL_ADVANCED,
+                       help="The radii of each feature (sphere) in the pharmacophore is determined by the distance "
+                            "from the centriod to one of the points in the cluster. This number determines the "
+                            "proportion of points in the cluster that must be included in the resulting sphere."
+                            "(e.g: if 0.5, half of the feature points in the cluster will be placed inside the sphere)"
+                            "\n Minimum radius is set to 1 (A)")
 
         group = form.addGroup('Features')
         for feat in FEATURE_LABELS_SIMPLE:
@@ -162,17 +169,24 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
 
     def createOutputStep(self):
-        if False:
-            newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
+        cenPath = os.path.abspath(self._getPath('cluster_centers.pkl'))
+        with open(cenPath, "rb") as clCenters:
+          centers = pickle.load(clCenters)
 
-            mols = self.inputSmallMolecules.get()
-            for mol in mols:
-                file = abspath(mol.getFileName())
-                if file in filtered_molecules:
-                    newMols.append(mol)
+        radPath = os.path.abspath(self._getPath('cluster_radii.pkl'))
+        with open(radPath, "rb") as clRadii:
+          radii = pickle.load(clRadii)
 
-            newMols.updateMolClass()
-            self._defineOutputs(outputSmallMolecules=newMols)
+        outPharm = PharmacophoreChem().create(outputPath=self._getPath())
+        #outPharm.setProteinFile(self.inputLigands.get().getProteinFile())
+        for feat in radii:
+            feat_radii = radii[feat]
+            for i, loc in enumerate(centers[feat]):
+                pharmFeat = PharmFeature(type=feat, radius=feat_radii[i],
+                                         x=loc[0], y=loc[1], z=loc[2])
+                outPharm.append(pharmFeat)
+
+        self._defineOutputs(outputPharmacophore=outPharm)
 
     def writeParamsFile(self):
         paramsPath = abspath(self._getExtraPath('inputParams.txt'))
@@ -203,6 +217,8 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
             f.write('minType:: {}\n'.format(self.getEnumText('minType')))
             f.write('minSize:: {}\n'.format(self.minSize.get()))
             f.write('topClusters:: {}\n'.format(self.topClusters.get()))
+
+            f.write('propRadii:: {}\n'.format(self.propRadii.get()))
 
             featStr = 'features:: '
             for feat in FEATURE_LABELS_SIMPLE + FEATURE_LABELS_ADVANCED:

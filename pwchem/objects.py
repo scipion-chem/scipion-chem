@@ -1250,6 +1250,67 @@ class MDSystem(data.EMFile):
     def setWaterForceField(self, value):
         self._wff.set(value)
 
+
+class PharmFeature(data.EMObject):
+    """ Represent a pharmacophore feature """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._type = String(kwargs.get('type', None))
+        self._X, self._Y, self._Z = Float(kwargs.get('x', None)), Float(kwargs.get('y', None)), \
+                                    Float(kwargs.get('z', None))
+        self._radius = Float(kwargs.get('radius', None))
+
+    def __str__(self):
+        s = '{} (Type: {}. Coords: ({}, {}, {}). Radii: {})'.\
+            format(self.getClassName(), self.getType(), *self.getCoords(), self.getRadius())
+        return s
+
+    def getType(self):
+        return self._type.get()
+
+    def setType(self, value):
+        self._type.set(value)
+
+    def getRadius(self):
+        return self._radius.get()
+
+    def setRadius(self, value):
+        self._radius.set(value)
+
+    def getCoords(self):
+        return self._X.get(), self._Y.get(), self._Z.get()
+
+    def setCoords(self, values):
+        self._X.set(values[0]), self._Y.set(values[1]), self._Z.set(values[2])
+
+class PharmacophoreChem(data.EMSet):
+    """ Pharmacophore (built as a set of PharmFeature) """
+    ITEM_TYPE = PharmFeature
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._proteinFile = pwobj.String(kwargs.get('proteinFile', None))
+
+    def __str__(self):
+        s = '{} ({} features)'.format(self.getClassName(), self.getSize())
+        return s
+
+    def copyInfo(self, other):
+        self._proteinFile = other.proteinFile
+        self._docked = other._docked
+
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self, path=''):
+        return os.path.join('/'.join(self.getSetPath().split('/')[:-1]), path)
+
+    def setProteinFile(self, value):
+        self._proteinFile.set(value)
+
+    def getProteinFile(self):
+        return self._proteinFile.get()
+
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################
 ############################################################

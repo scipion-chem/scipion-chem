@@ -52,6 +52,10 @@ POCKET_ATTRIBUTES_MAPPING.update({'SiteScore': 'score', 'Dscore': 'druggability'
                       'balance': 'balance', 'don/acc': 'don/acc', 'class': 'class',
                       'contactAtoms': 'contactAtoms', 'contactResidues': 'contactResidues'})
 
+# Pharmacophore
+FEATURE_LABELS_SIMPLE = ["Donor", "Acceptor", "Hydrophobe", "Aromatic"]
+FEATURE_LABELS_ADVANCED = ["LumpedHydrophobe", "PosIonizable", "NegIonizable", "ZnBinder"]
+
 
 PML_STR = '''from pymol import cmd,stored
 load {}
@@ -405,7 +409,7 @@ boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1],
 
 PML_PHARM = '''from pymol.cgo import *
 from pymol import cmd
-load {}, protein
+{}
 {}    #ligands
 
 python
@@ -413,7 +417,8 @@ python
 python end
 '''
 
-SPHERE = '''\tCOLOR,    {},    {},    {},
+SPHERE = '''\tALPHA,   {},
+\tCOLOR,    {},    {},    {},
 \tSPHERE,   {},   {},   {},  {},\n
 '''
 

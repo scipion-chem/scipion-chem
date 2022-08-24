@@ -129,17 +129,24 @@ def get_clusters(feature_labels, min_cluster_size, top_cluster_number):
 
     return cluster_indices_sel
 
-def get_selected_cluster_center_coords(feature_coords, cluster_labels, cluster_indices_sel):
-    cluster_centers_sel = []
+def get_cluster_center_radii(feature_coords, cluster_labels, cluster_indices_sel, propRadii):
+    cluster_centers, clusters_radii = [], []
     if cluster_indices_sel:
         for label in cluster_indices_sel:
             points_of_cluster = np.array(feature_coords)[cluster_labels == label]
             centroid_of_cluster = np.mean(points_of_cluster, axis=0)
-            cluster_centers_sel.append(centroid_of_cluster)
-    else:
-        pass
+            cluster_centers.append(centroid_of_cluster)
 
-    return list(cluster_centers_sel)
+            dists = []
+            for point in points_of_cluster:
+                dists.append(np.sqrt(np.sum((centroid_of_cluster - point) ** 2, axis=0)))
+
+            radii = sorted(dists)[int(propRadii*len(dists))]
+            if radii < 1:
+                radii = 1
+            clusters_radii.append(radii)
+
+    return cluster_centers, clusters_radii
 
 def create_Pharmacophore(final_dict, feature):
     samplePh4Feats = []
@@ -180,6 +187,8 @@ if __name__ == "__main__":
         dbEps = float(paramsDic['eps'])
 
     top_cluster_number = int(paramsDic['topClusters'])
+
+    propRadii = float(paramsDic['propRadii'])
 
 #####################################################################
     # Load molecules and assign bonds order based on the SMILES
@@ -248,25 +257,25 @@ if __name__ == "__main__":
    # print('clustDic: ', clustDic)
 
     ## Filters top clusters with minimum size
-    cluster_indices_sel = {feat: [] for feat in selFeatures}
-    for feat in cluster_indices_sel:
+    cluster_indices = {feat: [] for feat in selFeatures}
+    for feat in cluster_indices:
         min_cluster_size = getMinClusterSize(paramsDic, len(molecules), len(clustDic[feat]))
         selClusters = get_clusters(clustDic[feat], min_cluster_size, top_cluster_number)
         if selClusters:
-            cluster_indices_sel[feat] = selClusters
+            cluster_indices[feat] = selClusters
 
-   # print('cluster_indices_sel: ', cluster_indices_sel)
-    with open(os.path.join(outDir, 'cluster_index.pkl'), 'wb') as outp:
-        pickle.dump(cluster_indices_sel, outp, pickle.HIGHEST_PROTOCOL)
+    # print('cluster_indices_sel: ', cluster_indices_sel)
 
     # Save coordinates of the cluster centers
-    cluster_centers_sel = {}
-    for feat in cluster_indices_sel:
-        center2 = str(feat).capitalize()
-        cluster_centers_sel[center2] = get_selected_cluster_center_coords(features_coord[feat], clustDic[feat],
-                                                                          cluster_indices_sel[feat])
+    cluster_centers, cluster_radii = {}, {}
+    for feat in cluster_indices:
+        cluster_centers[feat], cluster_radii[feat] = get_cluster_center_radii(features_coord[feat], clustDic[feat],
+                                                                              cluster_indices[feat], propRadii)
 
     #print('cluster_centers_sel: ', cluster_centers_sel)
     with open(os.path.join(outDir, 'cluster_centers.pkl'), 'wb') as outp:
-        pickle.dump(cluster_centers_sel, outp, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(cluster_centers, outp, pickle.HIGHEST_PROTOCOL)
+
+    with open(os.path.join(outDir, 'cluster_radii.pkl'), 'wb') as outp:
+        pickle.dump(cluster_radii, outp, pickle.HIGHEST_PROTOCOL)
 
