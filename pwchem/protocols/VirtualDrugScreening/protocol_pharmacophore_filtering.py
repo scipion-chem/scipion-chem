@@ -37,12 +37,13 @@ from pwchem import Plugin as pwchemPlugin
 from pwchem.scripts.pharmacophore_generation import *
 
 
+scriptName = 'pharmacophore_filtering.py'
+
 ADD, REM, MOD = 'ADD', 'REMOVE', 'MODIFY'
 
 class ProtocolPharmacophoreModification(EMProtocol):
     """
-    Perform the modification of a pharmacophore.
-    Allows to add, remove or modify its chemical features
+    Perform the filtering of a set of small molecules that match an input pharmacophore.
 
     """
     _label = 'Pharmacophore modification'
@@ -52,16 +53,14 @@ class ProtocolPharmacophoreModification(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label='Input')
+        form.addParam('inputSmallMolecules', params.PointerParam,
+                      pointerClass='AtomStruct', allowsNull=False,
+                      label="Input small molecules: ",
+                      help='Select the set of small molecules to be filtered by matching the pharmacophore.')
         form.addParam('inputPharmacophore', params.PointerParam,
-                      pointerClass='PharmacophoreChem', allowsNull=True,
+                      pointerClass='PharmacophoreChem', allowsNull=False,
                       label="Input pharmacophore: ",
-                      help='Select the pharmacophore to modify.\n'
-                           'If empty, you can only add features (which will become a new pharmacophore)')
-        form.addParam('inputAtomStruct', params.PointerParam,
-                      pointerClass='AtomStruct', allowsNull=True,
-                      label="Input pharmacophore related protein: ",
-                      help='Select the protein structure where the pharmacophore will be placed.\n'
-                           'If empty, the input pharmacophore related protein will be kept as it is.')
+                      help='Select the pharmacophore to use for the filtering.')
 
         group = form.addGroup('Define operation')
         group.addParam('operation', params.EnumParam, label='Feature operation: ',

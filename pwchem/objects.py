@@ -1283,6 +1283,12 @@ class PharmFeature(data.EMObject):
     def setCoords(self, values):
         self._X.set(values[0]), self._Y.set(values[1]), self._Z.set(values[2])
 
+    def feat2Dic(self):
+        return {'type': feat.getType(), 'coords': feat.getCoords(), 'radius': feat.getRadius()}
+
+    def setFeatFromDic(self, featDic):
+        if 'type' in fe
+
 class PharmacophoreChem(data.EMSet):
     """ Pharmacophore (built as a set of PharmFeature) """
     ITEM_TYPE = PharmFeature
@@ -1309,6 +1315,12 @@ class PharmacophoreChem(data.EMSet):
 
     def getProteinFile(self):
         return self._proteinFile.get()
+
+    def pharm2Dic(self):
+        pDic = {}
+        for feat in self:
+            pDic[feat.getObjId()] = feat.feat2Dic()
+        return pDic
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################

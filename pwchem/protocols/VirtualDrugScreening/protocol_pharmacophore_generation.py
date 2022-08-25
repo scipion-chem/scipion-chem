@@ -35,10 +35,10 @@ from pwchem.objects import PharmFeature, PharmacophoreChem
 from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
-from pwchem.scripts.PBVS_script import *
+from pwchem.scripts.pharmacophore_generation import *
 
 
-scriptName = 'PBVS_script.py'
+scriptName = 'pharmacophore_generation.py'
 
 class ProtocolPharmacophoreGeneration(EMProtocol):
     """
