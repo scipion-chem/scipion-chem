@@ -360,6 +360,11 @@ SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
 
+SelectElementWizard().addTarget(protocol=ProtocolPharmacophoreModification,
+                               targets=['currentFeatures'],
+                               inputs=['inputPharmacophore'],
+                               outputs=['currentFeatures'])
+
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineSetOfSequences,
                                 targets=['inpChain'],

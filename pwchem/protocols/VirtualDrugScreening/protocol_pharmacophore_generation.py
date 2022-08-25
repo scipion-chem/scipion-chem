@@ -2,6 +2,7 @@
 # # # **************************************************************************
 # # # *
 # # # * Authors: Alba Lomas Redondo (albalomasredon@gmail.com)
+# # # *          Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # # # *
 # # # *
 # * This program is free software; you can redistribute it and/or modify
@@ -39,13 +40,11 @@ from pwchem.scripts.PBVS_script import *
 
 scriptName = 'PBVS_script.py'
 
-class ProtocolPharmacophoreFiltering(EMProtocol):
+class ProtocolPharmacophoreGeneration(EMProtocol):
     """
-    Perform the construction of a consensus pharmacophore from a set of PDB ligands and
-    the PBVS (using the pharmacophore) against a set of molecules in smi, pdb, mol, mol2 or sdf file format.
+    Perform the construction of a consensus pharmacophore from a set of docked small molecules
 
     """
-    #Nombre del protocolo (aparece en grande arriba)
     _label = 'Pharmacophore generation'
 
     ##### -------------------------- DEFINE param functions ----------------------
@@ -157,17 +156,6 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
         args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
         pwchemPlugin.runScript(self, scriptName, args, env='rdkit', cwd=self._getPath())
 
-    # --------------- INFO functions -------------------------
-
-    def _citations(self):
-        return ["@article{wójcikowski_zielenkiewicz_siedlecki_2015, title={Open drug discovery toolkit (ODDT): A new open-source player in the Drug Discovery Field}, volume={7}, DOI={10.1186/s13321-015-0078-2}, number={1}, journal={Journal of Cheminformatics}, author={Wójcikowski, Maciej and Zielenkiewicz, Piotr and Siedlecki, Pawel}, year={2015}}"]
-
-    def _methods(self):
-        methods ="The first part of the process involves the generation of the consensus pharmacophore from the PDB ligands. The second protocol step is the analysis of starting molecules pharmacophore characteristics using the consensus pharmacophore."
-        return methods
-
-    # --------------------------- UTILS functions -----------------------------------
-
     def createOutputStep(self):
         cenPath = os.path.abspath(self._getPath('cluster_centers.pkl'))
         with open(cenPath, "rb") as clCenters:
@@ -187,6 +175,8 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
                 outPharm.append(pharmFeat)
 
         self._defineOutputs(outputPharmacophore=outPharm)
+
+    # --------------------------- UTILS functions -----------------------------------
 
     def writeParamsFile(self):
         paramsPath = abspath(self._getExtraPath('inputParams.txt'))

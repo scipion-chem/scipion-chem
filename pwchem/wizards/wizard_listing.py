@@ -33,7 +33,7 @@ information such as name and number of residues.
 """
 
 # Imports
-import pwchem.protocols as chemprot
+from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
 
 class AddElementWizard(VariableWizard):
@@ -111,12 +111,12 @@ class DeleteElementWizard(VariableWizard):
             print('Incorrect index')
 
 
-AddElementSummaryWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])
 
-DeleteElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])

@@ -1261,8 +1261,8 @@ class PharmFeature(data.EMObject):
         self._radius = Float(kwargs.get('radius', None))
 
     def __str__(self):
-        s = '{} (Type: {}. Coords: ({}, {}, {}). Radii: {})'.\
-            format(self.getClassName(), self.getType(), *self.getCoords(), self.getRadius())
+        s = '{} {} (Type: {}. Coords: ({:.2f}, {:.2f}, {:.2f}). Radius: {:.2f})'.\
+            format(self.getClassName(), self.getObjId(), self.getType(), *self.getCoords(), self.getRadius())
         return s
 
     def getType(self):
@@ -1296,8 +1296,7 @@ class PharmacophoreChem(data.EMSet):
         return s
 
     def copyInfo(self, other):
-        self._proteinFile = other.proteinFile
-        self._docked = other._docked
+        self._proteinFile = other._proteinFile
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])

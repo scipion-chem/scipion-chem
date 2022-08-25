@@ -31,7 +31,7 @@ import pyworkflow.viewer as pwviewer
 
 from pwchem.viewers import PyMolViewer, PyMolView
 from pwchem.objects import PharmacophoreChem
-from pwchem.protocols import ProtocolPharmacophoreFiltering
+from pwchem.protocols import ProtocolPharmacophoreGeneration
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import *
 from pwchem.constants import *
 from pwchem.utils import getBaseFileName
@@ -135,7 +135,7 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
 
 class GeneratePharmacophoreViewer(PharmacophoreViewer):
     _label = 'Viewer generate pharmacophore'
-    _targets = [ProtocolPharmacophoreFiltering]
+    _targets = [ProtocolPharmacophoreGeneration]
     _environments = [pwviewer.DESKTOP_TKINTER]
 
     def getLigandsFiles(self):
