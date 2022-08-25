@@ -36,6 +36,25 @@ information such as name and number of residues.
 import pwchem.protocols as chemprot
 from pwchem.wizards import VariableWizard
 
+
+class AddElementWizard(VariableWizard):
+    """Add the content of a parameter to another"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        inParam = getattr(protocol, inputParam[0]).get()
+        if inParam and inParam.strip() != '':
+            prevList = getattr(protocol, outputParam[0]).get()
+            if not prevList:
+                prevList = ''
+            elif not prevList.endswith('\n'):
+                prevList += '\n'
+
+            form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
+
 class AddElementSummaryWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""
     _targets, _inputs, _outputs = [], {}, {}
