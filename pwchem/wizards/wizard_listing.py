@@ -36,7 +36,7 @@ information such as name and number of residues.
 import pwchem.protocols as chemprot
 from pwchem.wizards import VariableWizard
 
-class AddElementWizard(VariableWizard):
+class AddElementSummaryWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""
     _targets, _inputs, _outputs = [], {}, {}
 
@@ -65,6 +65,7 @@ class AddElementWizard(VariableWizard):
 
             newSum = protocol.createSummary()
             form.setVar(outputParam[1], newSum)
+
 
 class DeleteElementWizard(VariableWizard):
     """Delete the step of the workflow defined by the index"""
