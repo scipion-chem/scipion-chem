@@ -171,8 +171,7 @@ def getMinClusterSize(paramsDic, nMols, nFeats):
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
-    ParamsFile must include:
-        <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
+    '''
     paramsDic = parseParams(sys.argv[1])
     outDir = sys.argv[2]
     paths_ligands = paramsDic['ligandFiles']
@@ -196,9 +195,6 @@ if __name__ == "__main__":
     molsDic, mols = preprocessLigands(paths_ligands)
     for mol in molsDic:
         dict_molecules[getBaseFileName(molsDic[mol])] = mol
-
-    with open(os.path.join(outDir, 'molecules.pkl'), 'wb') as outp:
-        pickle.dump(mols, outp, pickle.HIGHEST_PROTOCOL)
 
     # Building dictionary: {ligBase: [ChemMol(from file), ChemMol(from SMILES)]}
     dict_mol_reference = {}

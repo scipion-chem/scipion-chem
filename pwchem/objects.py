@@ -246,6 +246,16 @@ class SmallMolecule(data.EMObject):
     def setDockId(self, value):
         self.dockId.set(value)
 
+    def getEnergy(self):
+        if hasattr(self, '_energy'):
+            return self._energy.get()
+
+    def setEnergy(self, value):
+        if hasattr(self, '_energy'):
+            self._energy.set(value)
+        else:
+            self._energy = pwobj.Float(value)
+
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
             return self._ConformersFile.get()
@@ -350,11 +360,6 @@ class SmallMolecule(data.EMObject):
             return
         else:
             return mapDic
-
-
-    def getEnergy(self):
-        if hasattr(self, '_energy'):
-            return self._energy.get()
 
 
 class SetOfSmallMolecules(data.EMSet):
@@ -1258,7 +1263,7 @@ class PharmFeature(data.EMObject):
         self._type = String(kwargs.get('type', None))
         self._X, self._Y, self._Z = Float(kwargs.get('x', None)), Float(kwargs.get('y', None)), \
                                     Float(kwargs.get('z', None))
-        self._radius = Float(kwargs.get('radius', None))
+        self._radius = Float(kwargs.get('radius', 1.0))
 
     def __str__(self):
         s = '{} {} (Type: {}. Coords: ({:.2f}, {:.2f}, {:.2f}). Radius: {:.2f})'.\
@@ -1284,10 +1289,23 @@ class PharmFeature(data.EMObject):
         self._X.set(values[0]), self._Y.set(values[1]), self._Z.set(values[2])
 
     def feat2Dic(self):
-        return {'type': feat.getType(), 'coords': feat.getCoords(), 'radius': feat.getRadius()}
+        return {'type': self.getType(), 'coords': self.getCoords(), 'radius': self.getRadius()}
 
     def setFeatFromDic(self, featDic):
-        if 'type' in fe
+        if 'type' in featDic:
+            self.setType(featDic['type'])
+        else:
+            print('Type for {} has not been specified'.format(self))
+
+        if 'coords' in featDic:
+            self.setCoords(featDic['coords'])
+        else:
+            print('Coordinates for {} has not been specified'.format(self))
+
+        if 'radius' in featDic:
+            self.setRadius(featDic['radius'])
+        else:
+            self.setRadius(1.0)
 
 class PharmacophoreChem(data.EMSet):
     """ Pharmacophore (built as a set of PharmFeature) """
@@ -1321,6 +1339,13 @@ class PharmacophoreChem(data.EMSet):
         for feat in self:
             pDic[feat.getObjId()] = feat.feat2Dic()
         return pDic
+
+    def setPharmFromDic(self, pDic):
+        pDic = {}
+        for featId in pDic:
+            feat = PharmFeature().setFeatFromDic(pDic[featId])
+            feat.setObjId(featId)
+            self.append(feat)
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################

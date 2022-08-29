@@ -208,7 +208,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """
         self.mergeErrorFiles()
 
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
         for mol in self.inputSmallMols.get():
             fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:

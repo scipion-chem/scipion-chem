@@ -31,7 +31,7 @@ import pyworkflow.viewer as pwviewer
 
 from pwchem.viewers import PyMolViewer, PyMolView
 from pwchem.objects import PharmacophoreChem
-from pwchem.protocols import ProtocolPharmacophoreGeneration
+from pwchem.protocols import ProtocolPharmacophoreGeneration, ProtocolPharmacophoreFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import *
 from pwchem.constants import *
 from pwchem.utils import getBaseFileName
@@ -78,8 +78,6 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
       pmlFile = self.writePharmacophoreFile(pharmStr)
       return [PyMolView(pmlFile, cwd=self.getPharmacophoreObject().getSetDir())]
 
-
-
 #####################################################
 
   def getPharmPoints(self):
@@ -113,7 +111,7 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
       if not protFile:
           protStr = ''
       else:
-          protStr = 'load {}, protein'.format(protFile)
+          protStr = 'load {}, receptor'.format(protFile)
 
       ligStr = self.getLigandsStr()
 
@@ -157,5 +155,29 @@ class GeneratePharmacophoreViewer(PharmacophoreViewer):
 
     def getPharmacophoreObject(self):
       return self.protocol.outputPharmacophore
+
+
+class FilterPharmacophoreViewer(PharmacophoreViewer):
+  _label = 'Viewer pharmacophore filtering'
+  _targets = [ProtocolPharmacophoreFiltering]
+  _environments = [pwviewer.DESKTOP_TKINTER]
+
+  def getLigandsFiles(self):
+    files = []
+    for mol in self.protocol.outputSmallMolecules:
+        files.append(mol.getPoseFile())
+    return files
+
+  def getLigandsStr(self, disabled=True):
+    ligStr = ''
+    for file in self.getLigandsFiles():
+      ligBase = getBaseFileName(file)
+      ligStr += LOAD_LIGAND.format(file, ligBase)
+      if disabled:
+        ligStr += DISABLE_LIGAND.format(ligBase)
+    return ligStr
+
+  def getPharmacophoreObject(self):
+    return self.protocol.inputPharmacophore.get()
 
 

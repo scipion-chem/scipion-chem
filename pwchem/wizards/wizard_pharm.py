@@ -41,6 +41,7 @@ class WatchPharmacophoreAttributes(VariableWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
     def getFeatureObj(self, inputPharm, featStr):
+        featStr = featStr.split('|')[1].strip()
         for feat in inputPharm:
             if featStr == feat.__str__():
                 return feat
@@ -54,8 +55,10 @@ class WatchPharmacophoreAttributes(VariableWizard):
         protocol = form.protocol
         inputParam, outputParam = self.getInputOutput(form)
 
-        inputPharm = getattr(protocol, inputParam[0]).get()
         inputFeatStr = getattr(protocol, inputParam[1]).get()
+        pharmId = int(inputFeatStr.split('|')[0].split()[1])
+        inputPharm = getattr(protocol, inputParam[0])[pharmId].get()
+
         inputFeat = self.getFeatureObj(inputPharm, inputFeatStr)
 
         form.setVar(outputParam[0], self.getTypeIdx(inputFeat))
@@ -67,7 +70,7 @@ class WatchPharmacophoreAttributes(VariableWizard):
 
 WatchPharmacophoreAttributes().addTarget(protocol=ProtocolPharmacophoreModification,
                                          targets=['showCurrent'],
-                                         inputs=['inputPharmacophore', 'currentFeatures'],
+                                         inputs=['inputPharmacophores', 'currentFeatures'],
                                          outputs=['featType', 'featX', 'featY', 'featZ', 'featRadius'])
 
 
@@ -106,7 +109,7 @@ class AddPharmOperationWizard(VariableWizard):
         form.setVar(outputParam[0], prevList + '{}\n'.format(remStr.strip()))
 
     elif operation == self.MOD:
-      featId = ' '.join(curFeat.split()[:2])
+      featId = ' '.join(curFeat.split()[:5])
 
       modStr = 'MODIFY | ' + featId + ' TO: ' + '{"Type": "%s", "Coords": "(%s, %s, %s)", "Radius": %s}' % \
                (featType, x, y, z, radius)

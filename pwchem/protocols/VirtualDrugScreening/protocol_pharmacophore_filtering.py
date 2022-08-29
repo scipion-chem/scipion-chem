@@ -30,7 +30,7 @@ from os.path import abspath
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import PharmFeature, PharmacophoreChem
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
@@ -39,14 +39,12 @@ from pwchem.scripts.pharmacophore_generation import *
 
 scriptName = 'pharmacophore_filtering.py'
 
-ADD, REM, MOD = 'ADD', 'REMOVE', 'MODIFY'
-
-class ProtocolPharmacophoreModification(EMProtocol):
+class ProtocolPharmacophoreFiltering(EMProtocol):
     """
     Perform the filtering of a set of small molecules that match an input pharmacophore.
 
     """
-    _label = 'Pharmacophore modification'
+    _label = 'Pharmacophore filtering'
 
     ##### -------------------------- DEFINE param functions ----------------------
 
@@ -54,7 +52,7 @@ class ProtocolPharmacophoreModification(EMProtocol):
         """ """
         form.addSection(label='Input')
         form.addParam('inputSmallMolecules', params.PointerParam,
-                      pointerClass='AtomStruct', allowsNull=False,
+                      pointerClass='SetOfSmallMolecules', allowsNull=False,
                       label="Input small molecules: ",
                       help='Select the set of small molecules to be filtered by matching the pharmacophore.')
         form.addParam('inputPharmacophore', params.PointerParam,
@@ -62,128 +60,135 @@ class ProtocolPharmacophoreModification(EMProtocol):
                       label="Input pharmacophore: ",
                       help='Select the pharmacophore to use for the filtering.')
 
-        group = form.addGroup('Define operation')
-        group.addParam('operation', params.EnumParam, label='Feature operation: ',
-                       choices=[ADD, REM, MOD], default=0,
-                       help="Chose whether to add, remove or modify a feature for the pharmacophore."
-                            "Once defined, the operation must be stored using the wizard so several modifications "
-                            "can be defined")
+        group = form.addGroup('Matching parameters')
+        group.addParam('downSample', params.BooleanParam, default=False,
+                       label='Use matching downsamplig: ',
+                       help="Whether to use downsampling while matching the pharmacophore.\n"
+                            "Downsample will produce faster but less robust resuls ")
 
-        group.addParam('currentFeatures', params.StringParam, label='Select input feature: ',
-                       condition='operation!=0', default='',
-                       help="Chose the input present feature to remove / modify using the wizard")
+        group.addParam('nAlignments', params.IntParam, default=5,
+                       label='Maximum number of alignments: ',
+                       help="Maximum number of molecule-pharmacophore alignments")
 
-        group.addParam('showCurrent', params.LabelParam, label='Show current attributes: ',
-                       condition='operation==2',
-                       help="Display the current attributes of the selected feature")
+        group.addParam('optimize', params.BooleanParam, default=False,
+                       label='Optimize molecules to align: ',
+                       help="Whether to optimize the molecules that match to pharmacophore."
+                            "It may improve the alignment, but it will increase the computational cost")
 
-        group.addParam('featType', params.EnumParam, label='Feature type: ', condition='operation!=1',
-                       choices=FEATURE_LABELS_SIMPLE + FEATURE_LABELS_ADVANCED, default=0,
-                       help="Chose the type of feature to add.")
+        group.addParam('maxSSD', params.FloatParam, default=20,
+                       label='Maximum deviation (SSD): ',
+                       help="Maximum sum squares deviation of the ligand aligned to the pharmacophore to be considered")
 
-        line = group.addLine('Coordinates: ', condition='operation!=1',
-                             help='Coordinates of the feature too add')
-        line.addParam('featX', params.FloatParam, label='X: ', condition='operation!=1', default=0.0)
-        line.addParam('featY', params.FloatParam, label='Y: ', condition='operation!=1', default=0.0)
-        line.addParam('featZ', params.FloatParam, label='Z: ', condition='operation!=1', default=0.0)
-
-        group.addParam('featRadius', params.FloatParam, label='Radius: ', condition='operation!=1',
-                       default=1.0, help="Choose the radius for the feature to add")
-
-        group.addParam('addOperation', params.LabelParam, label='Add operation: ',
-                       help="Click on the wizard to save the defined operation in the list of operations")
-
-        group = form.addGroup('List of operations')
-        group.addParam('operationList', params.TextParam, width=100, height=10,
-                       default='', label='List of operations:',
-                       help='Defines the list of operations that will be performed on the pharmacophore.'
-                            'If several operations are defined for the same feature, only the last one '
-                            'will be performed.\nManual modification of this parameter is strongly not recommended '
-                            'except for deleting entire lines.')
 
 
         # --------------------------- STEPS functions ------------------------------
 
     def _insertAllSteps(self):
+        self._insertFunctionStep('convertStep')
+        self._insertFunctionStep('filterStep')
         self._insertFunctionStep('createOutputStep')
 
-    def createOutputStep(self):
-        if self.inputPharmacophore.get():
-            outPharm = PharmacophoreChem.createCopy(self.inputPharmacophore.get(), self._getPath(),
-                                                    copyInfo=True, copyItems=False)
-        else:
-            outPharm = PharmacophoreChem().create(outputPath=self._getPath())
+    def convertStep(self):
+        tmpDir, outDir = abspath(self._getTmpPath('convLigands')), self.getInputLigandsDir()
+        if not os.path.exists(tmpDir):
+            os.makedirs(tmpDir)
+        if not os.path.exists(outDir):
+            os.makedirs(outDir)
 
-        if self.inputAtomStruct.get():
-            outPharm.setProteinFile(abspath(self.inputAtomStruct.get().getFileName()))
-
-        operDic, addList = self.getOperationDic()
-        featsDic = self.getCurrentFeaturesDic()
-
-        for featId in featsDic:
-            if featId in operDic:
-                jDic = operDic[featId]
-                if jDic:
-                    pharmFeat = self.buildFeatureFromJDic(jDic)
-                    outPharm.append(pharmFeat)
+        for ligand in self.inputSmallMolecules.get():
+            if ligand.getPoseFile():
+                inFile = ligand.getPoseFile()
             else:
-                outPharm.append(featsDic[featId])
+                inFile = ligand.getFileName()
 
-        for jDic in addList:
-            pharmFeat = self.buildFeatureFromJDic(jDic)
-            outPharm.append(pharmFeat)
+            if not inFile.split('.')[-1] in ['pdb', 'mol2', 'sdf', 'mol']:
+                shutil.copy(inFile, os.path.join(tmpDir, os.path.basename(inFile)))
+            else:
+                shutil.copy(inFile, os.path.join(outDir, os.path.basename(inFile)))
 
-        self._defineOutputs(outputPharmacophore=outPharm)
+        if len(os.listdir(tmpDir)) > 0:
+            # we need the input files in a RDKit readable format (not pdbqt for example)
+            args = ' --multiFiles -iD "{}" --pattern "{}" -of pdb --outputDir "{}"'. \
+                format(tmpDir, '*', outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+
+    def filterStep(self):
+        paramsPath = self.writeParamsFile()
+
+        args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
+        pwchemPlugin.runScript(self, scriptName, args, env='rdkit', cwd=self._getPath())
+
+    def createOutputStep(self):
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
+        docked = False
+        if self.inputPharmacophore.get().getProteinFile():
+            outputSmallMolecules.setProteinFile(self.inputPharmacophore.get().getProteinFile())
+            docked = True
+            outputSmallMolecules.setDocked(docked)
+
+        resDic = self.parseResults()
+        for mol in self.inputSmallMolecules.get():
+            if mol.getPoseFile() and getBaseFileName(mol.getPoseFile()) in resDic:
+                molBase = getBaseFileName(mol.getPoseFile())
+            elif mol.getFileName() and getBaseFileName(mol.getFileName()) in resDic:
+                molBase = getBaseFileName(mol.getFileName())
+            else:
+                continue
+
+            newSmallMol = SmallMolecule()
+            newSmallMol.copy(mol, copyId=False)
+            newSmallMol.setGridId(1)
+            newSmallMol.setPoseFile(resDic[molBase][0])
+            newSmallMol.setEnergy(resDic[molBase][1])
+
+            poseId = resDic[molBase][0].split('.')[0].split('_')[-1]
+            newSmallMol.setPoseId(poseId)
+            outputSmallMolecules.append(newSmallMol)
+
+        self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
     # --------------------------- INFO functions -----------------------------------
 
     def _validate(self):
         vals = []
-        operDic, _ = self.getOperationDic()
-        if len(operDic) > 0 and not self.inputPharmacophore.get():
-            vals.append('If no input pharmacophore is specified, you can only add new features.\n'
-                        'No modification or deletion can be performed (over which features would it be?)')
         return vals
 
     # --------------------------- UTILS functions -----------------------------------
 
-    def getPresentFeatures(self):
-        if hasattr(self, 'inputPharmacophore') and self.inputPharmacophore.get():
-            featList = []
-            for feat in self.inputPharmacophore.get():
-                featList.append(str(feat))
-        else:
-            return []
+    def writeParamsFile(self):
+        paramsPath = abspath(self._getExtraPath('inputParams.txt'))
+        convLigandNames = os.listdir(self.getInputLigandsDir())
 
-    def getOperationDic(self):
-        operDic, addList = {}, []
-        for operation in self.operationList.get().split('\n'):
-            if operation.strip():
-              oper, rest = operation.split('|')
-              if oper.strip() == ADD:
-                  feat = json.loads(rest.strip())
-                  addList += [feat]
+        ligandFiles = []
+        for fnLigand in convLigandNames:
+            ligandFiles.append(os.path.join(self.getInputLigandsDir(), fnLigand))
 
-              elif oper.strip() == REM:
-                  featId = int(rest.split()[1])
-                  operDic[featId] = ''
+        pharmDic = self.inputPharmacophore.get().pharm2Dic()
 
-              elif oper.strip() == MOD:
-                  featId = int(rest.split()[1])
-                  feat = json.loads(rest.split('TO:')[1].strip())
-                  operDic[featId] = feat
-        return operDic, addList
 
-    def getCurrentFeaturesDic(self):
-        featDic = {}
-        if self.inputPharmacophore.get():
-            for feat in self.inputPharmacophore.get():
-                nFeat = feat.clone()
-                featDic[nFeat.getObjId()] = nFeat
-        return featDic
+        with open(paramsPath, 'w') as f:
+            # Esta linea vale --> es la que lleva al archivo output
 
-    def buildFeatureFromJDic(self, jDic):
-        loc = eval(jDic['Coords'])
-        pharmFeat = PharmFeature(type=jDic['Type'], radius=jDic['Radius'],
-                               x=loc[0], y=loc[1], z=loc[2])
-        return pharmFeat
+            f.write('outputPath:: results.tsv\n')
+
+            f.write('pharmDic:: {}\n'.format(str(pharmDic)))
+            f.write('downSample:: {}\n'.format(self.downSample.get()))
+            f.write('optimize:: {}\n'.format(self.optimize.get()))
+            f.write('nAlignments:: {}\n'.format(self.nAlignments.get()))
+            f.write('maxSSD:: {}\n'.format(self.maxSSD.get()))
+            
+            f.write('ligandFiles:: {}\n'.format(' '.join(ligandFiles)))
+
+        return paramsPath
+
+    def getInputLigandsDir(self):
+        return abspath(self._getExtraPath('inputSmallMolecules'))
+
+    def parseResults(self):
+        resDic = {}
+        with open(self._getPath('deviations.tsv')) as f:
+            f.readline()
+            for line in f:
+                oriBase, outFile, dev = line.split()
+                resDic[oriBase] = [outFile, dev]
+        return resDic

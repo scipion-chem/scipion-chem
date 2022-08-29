@@ -344,6 +344,37 @@ class SelectElementWizard(VariableWizard):
                               "Select one of items in the set")
       form.setVar(outputParam[0], dlg.values[0].get())
 
+class SelectElementMultiPointerWizard(SelectElementWizard):
+    """Lists the items in a multipointer of SetOfX and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, scipionSet, i):
+      eleList = []
+      if scipionSet is not None:
+        for element in scipionSet:
+            eleList.append('Set {} | {}'.format(i, element.__str__()))
+      return eleList
+
+    def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+      try:
+        listOfElements = []
+        scipionMultiSet = getattr(protocol, inputParam[0])
+        for i, scipionPointer in enumerate(scipionMultiSet):
+            listOfElements += self.getListOfElements(protocol, scipionPointer.get(), i)
+      except Exception as e:
+        print("ERROR: ", e)
+        return
+
+      finalList = []
+      for i in listOfElements:
+        finalList.append(String(i))
+      provider = ListTreeProviderString(finalList)
+      dlg = dialog.ListDialog(form.root, "Sets items", provider,
+                              "Select one of items in the sets")
+      form.setVar(outputParam[0], dlg.values[0].get())
+
 
 SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                targets=['ligName'],
@@ -360,10 +391,10 @@ SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
 
-SelectElementWizard().addTarget(protocol=ProtocolPharmacophoreModification,
-                               targets=['currentFeatures'],
-                               inputs=['inputPharmacophore'],
-                               outputs=['currentFeatures'])
+SelectElementMultiPointerWizard().addTarget(protocol=ProtocolPharmacophoreModification,
+                                           targets=['currentFeatures'],
+                                           inputs=['inputPharmacophores'],
+                                           outputs=['currentFeatures'])
 
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineSetOfSequences,

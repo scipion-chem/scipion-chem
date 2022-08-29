@@ -23,8 +23,8 @@
 # *  e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
-import os, sys, math, ast, pickle, operator
-from collections import OrderedDict, Counter
+import os, sys, copy
+from operator import itemgetter
 
 #import pandas as pd
 import numpy as np
@@ -34,6 +34,7 @@ from sklearn import datasets, cluster
 from rdkit import RDConfig, Chem, Geometry, DistanceGeometry
 from rdkit.Chem import ChemicalFeatures, rdDistGeom, Draw, rdMolTransforms, AllChem
 from rdkit.Chem.Pharm3D import Pharmacophore, EmbedLib
+from rdkit.Numerics import rdAlignment
 
 
 ABSOLUTE, PROP_MOLS, PROP_FEATS = ['Absolute', 'Molecules proportion', 'Features proportion']
@@ -42,7 +43,7 @@ DBSCAN, KMEANS = ['DBSCAN', 'KMeans']
 def getBaseFileName(filename):
     return os.path.splitext(os.path.basename(filename))[0]
 
-def preprocessLigands(ligandsFiles):
+def readLigands(ligandsFiles):
     mols_dict = {}
 
     for molFile in ligandsFiles:
@@ -84,89 +85,6 @@ def parseParams(paramsFile):
                 paramsDic[key] = value.strip()
     return paramsDic
 
-def clusteringDBScan(feature_coord, dbEps):
-    clus = None
-    if feature_coord:
-        model = cluster.DBSCAN(min_samples=1, eps=dbEps)
-        clus = model.fit_predict(np.array(feature_coord))
-
-    return clus
-
-def clusteringKMeans(feature_coord, kNumber):
-    k_means = None
-    if feature_coord:
-        if kNumber > len(feature_coord):
-            kNumber = len(feature_coord)
-        #print(f"Clustering: \nVariable k in k-means: {kNumber} of {len(feature_coord)} points\n")
-
-        # Initialize k-means and compute clustering
-        k_means = cluster.KMeans(n_clusters=kNumber, random_state=44)
-        k_means.fit(feature_coord)
-
-    return k_means
-
-def get_clusters(feature_labels, min_cluster_size, top_cluster_number):
-    if not feature_labels is None:
-        feature_labels_count = Counter(feature_labels)
-
-        feature_labels_count = sorted(
-            feature_labels_count.items(), key=operator.itemgetter(1), reverse=True
-        )
-        # print(f"Clusters sorted by size: \n{feature_labels_count}\n")
-
-        # Get number of the largest clusters, which are larger then the threshold (selected clusters)
-        cluster_indices_sel = []
-
-        for cluster_index, cluster_size in feature_labels_count:
-            if cluster_size >= min_cluster_size and \
-                    (top_cluster_number < 0 or  len(cluster_indices_sel) < top_cluster_number):
-                cluster_indices_sel.append(cluster_index)
-
-        # print(f"Cluster indices of selected clusters: \n{cluster_indices_sel}\n")
-
-    else:
-        cluster_indices_sel = None
-
-    return cluster_indices_sel
-
-def get_cluster_center_radii(feature_coords, cluster_labels, cluster_indices_sel, propRadii):
-    cluster_centers, clusters_radii = [], []
-    if cluster_indices_sel:
-        for label in cluster_indices_sel:
-            points_of_cluster = np.array(feature_coords)[cluster_labels == label]
-            centroid_of_cluster = np.mean(points_of_cluster, axis=0)
-            cluster_centers.append(centroid_of_cluster)
-
-            dists = []
-            for point in points_of_cluster:
-                dists.append(np.sqrt(np.sum((centroid_of_cluster - point) ** 2, axis=0)))
-
-            radii = sorted(dists)[int(propRadii*len(dists))]
-            if radii < 1:
-                radii = 1
-            clusters_radii.append(radii)
-
-    return cluster_centers, clusters_radii
-
-def create_Pharmacophore(final_dict, feature):
-    samplePh4Feats = []
-    for key, coord in final_dict.items():
-        if key == feature:
-            samplePh4Feats.append(ChemicalFeatures.FreeChemicalFeature(str(key[:-1]), Geometry.Point3D(*coord)))
-    pcophore = Pharmacophore.Pharmacophore(samplePh4Feats)
-    return pcophore
-
-def getMinClusterSize(paramsDic, nMols, nFeats):
-    numberType = paramsDic['minType']
-    number = float(paramsDic['minSize'])
-
-    if numberType == PROP_MOLS:
-        minClusterSize = int(nMols * number)
-    elif numberType == ABSOLUTE:
-        minClusterSize = number
-    elif numberType == PROP_FEATS:
-        minClusterSize = int(nFeats * number)
-    return minClusterSize
 
 def buildPharmacophore(pharmDic):
     chemFeats, radii = [], []
@@ -184,113 +102,113 @@ def buildPharmacophore(pharmDic):
 
     return pcophore
 
+def getTransformMatrix(alignRef, confEmbed, atomMatch):
+  alignProbe = []
+  for matchIds in atomMatch:
+    dummyPoint = Geometry.Point3D(0.0,0.0,0.0)
+    for id in matchIds:
+      dummyPoint += confEmbed.GetAtomPosition(id)
+    dummyPoint /= len(matchIds)
+    alignProbe.append(dummyPoint)
+  return rdAlignment.GetAlignmentTransform(alignRef,alignProbe)
+
+def transformEmbeddings(pcophore, embeddings, atomMatch):
+  alignRef = [f.GetPos() for f in pcophore.getFeatures()]
+  SSDs, confs = [], []
+  for embedding in embeddings:
+    conf = embedding.GetConformer()
+    #print(conf.GetPositions())
+    SSD, transformMatrix = getTransformMatrix(alignRef, conf, atomMatch)
+    rdMolTransforms.TransformConformer(conf, transformMatrix)
+    SSDs.append(SSD)
+    confs.append(conf)
+  return SSDs, confs
+
+def writeMol(mol, outFile, cid=-1):
+    w = Chem.SDWriter(outFile)
+    w.write(mol, cid)
+    w.close()
+
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
-    ParamsFile must include:
-        <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
+    '''
     paramsDic = parseParams(sys.argv[1])
     outDir = sys.argv[2]
-    paths_ligands = paramsDic['ligandFiles']
-    dict_smiles = ast.literal_eval(paramsDic['ligandSmiles'])
+    ligandFiles = paramsDic['ligandFiles']
+    pharmDic = eval(paramsDic['pharmDic'])
 
-    selFeatures = paramsDic['features'].split()
+    downSample = eval(paramsDic['downSample'])
+    optimize = eval(paramsDic['optimize'])
+    nAlignments = int(paramsDic['nAlignments'])
+    maxSSD = float(paramsDic['maxSSD'])
 
-    method = paramsDic['method']
-    if method == KMEANS:
-        kNumber = int(paramsDic['kNumber'])
-    elif method == DBSCAN:
-        dbEps = float(paramsDic['eps'])
-
-    top_cluster_number = int(paramsDic['topClusters'])
-
-    propRadii = float(paramsDic['propRadii'])
 
 #####################################################################
-    # Load molecules and assign bonds order based on the SMILES
+    # Load molecules and pharmacophore to RDKit objects
     dict_molecules = {}
-    molsDic, mols = preprocessLigands(paths_ligands)
-    for mol in molsDic:
-        dict_molecules[getBaseFileName(molsDic[mol])] = mol
+    molFileDic, mols = readLigands(ligandFiles)
+    if len(mols) > 0:
+        pcophore = buildPharmacophore(pharmDic)
 
-    with open(os.path.join(outDir, 'molecules.pkl'), 'wb') as outp:
-        pickle.dump(mols, outp, pickle.HIGHEST_PROTOCOL)
+        ###################### Check for pharmacophore matches #######################
+        fdefName = os.path.join(RDConfig.RDDataDir, 'BaseFeatures.fdef')
+        featFactory = ChemicalFeatures.BuildFeatureFactory(fdefName)
 
-    # Building dictionary: {ligBase: [ChemMol(from file), ChemMol(from SMILES)]}
-    dict_mol_reference = {}
-    for key, value in dict_molecules.items():
-        if key in dict_smiles.keys():
-            smiles_mol = Chem.MolFromSmiles(dict_smiles[key])
-            dict_mol_reference[key] = [dict_molecules[key], smiles_mol]
+        res = {}
+        for i, mol in enumerate(mols):
+            boundsMat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
+            canMatch, allMatches = EmbedLib.MatchPharmacophoreToMol(mol, featFactory, pcophore)
+            if canMatch:
+                failed, boundsMatMatched, matched, matchDetails = \
+                    EmbedLib.MatchPharmacophore(allMatches, boundsMat, pcophore, useDownsampling=downSample)
+                if failed:
+                    print("Couldn't embed molecule {}".format(molFileDic[mol]))
+                    continue
+            else:
+                print("Couldn't match molecule {}".format(molFileDic[mol]))
+                continue
+            atomMatch = [list(x.GetAtomIds()) for x in matched]
+            try:
+                molH = Chem.AddHs(mol, addCoords=True)
+                bm, embeddings, numFail = EmbedLib.EmbedPharmacophore(molH, atomMatch, pcophore, randomSeed=44,
+                                                                      targetNumber=nAlignments, count=nAlignments*10)
+                # always yielding equal embeddings for all nAlignments
+                if optimize:
+                    optEmbeddings = []
+                    for embMol in embeddings:
+                        optMol = copy.deepcopy(embMol)
+                        e1, e2 = EmbedLib.OptimizeMol(optMol, bm, atomMatch)
+                        optEmbeddings.append(optMol)
+                else:
+                    optEmbeddings = embeddings
 
-    dict_mol_reference = OrderedDict(sorted(dict_mol_reference.items()))
-
-    molecules = []
-    for key in dict_mol_reference:
-        molecule, reference_molecule = dict_mol_reference[key]
-        try:
-            molecules += [AllChem.AssignBondOrdersFromTemplate(reference_molecule, molecule)]
-        except:
-            print('AssignBondOrdersFromTemplate failed for ', key)
-
-    ###################### BUILD RDKIT PHARMACOPHORE #######################
-    fdefName = os.path.join(RDConfig.RDDataDir, 'BaseFeatures.fdef')
-    factory = ChemicalFeatures.BuildFeatureFactory(fdefName)
-
-    # molecule_feature_frequencies = []
-    # for molecule2 in molecules_2:
-    #     features = [feature.GetFamily() for feature in factory.GetFeaturesForMol(molecule2)]
-    #     feature_frequency = Counter(features)
-    #     molecule_feature_frequencies.append(feature_frequency)
-    #
-    # feature_frequencies_df = (
-    #     pd.DataFrame(molecule_feature_frequencies, index=[f"Mol{i}" for i, _ in enumerate(molecules_2, 1)],).fillna(0).astype(int))
-    # print(feature_frequencies_df.transpose())
-
-
-    ########################################
-    # Build features for each molecule and retrieve coordinates
-    features = {feat: [] for feat in selFeatures}
-    for feat in features:
-        for mol in molecules:
-            features[feat].append(factory.GetFeaturesForMol(mol, includeOnly=feat))
-    #print('features: ', features)
-
-    features_coord = {}
-    for feat in features:
-        features_coord[feat] = [list(item.GetPos()) for sublist in features[feat] for item in sublist]
-    #print('features_coord: ', features_coord)
+            except ValueError:
+                print("Bounds smoothing failed for molecule {}".format(molFileDic[mol]))
+                continue
 
 
-    ############################################
-    ## Clustering the feature coordinates using KMeans or DBScan
-    clustDic = {}
-    for feat in features_coord:
-        if method == KMEANS:
-            clustDic[feat] = clusteringKMeans(features_coord[feat], kNumber).labels_
-        elif method == DBSCAN:
-            clustDic[feat] = clusteringDBScan(features_coord[feat], dbEps)
-   # print('clustDic: ', clustDic)
+            SSDs, confs = transformEmbeddings(pcophore, optEmbeddings, atomMatch)
+            bestFitIndex = min(enumerate(SSDs), key=itemgetter(1))[0]
 
-    ## Filters top clusters with minimum size
-    cluster_indices = {feat: [] for feat in selFeatures}
-    for feat in cluster_indices:
-        min_cluster_size = getMinClusterSize(paramsDic, len(molecules), len(clustDic[feat]))
-        selClusters = get_clusters(clustDic[feat], min_cluster_size, top_cluster_number)
-        if selClusters:
-            cluster_indices[feat] = selClusters
+            #print('Best: ', bestFitIndex)
+            #print('SSDs: ', SSDs)
+            prevSSDs = []
+            for i, conf in enumerate(confs):
+                if maxSSD >= SSDs[i] and not SSDs[i] in prevSSDs:
+                    optMol = optEmbeddings[i]
+                    outFile = os.path.join(outDir, getBaseFileName(molFileDic[mol]) + '_{}.sdf'.format(i))
+                    writeMol(optMol, outFile, cid=confs[i].GetId())
+                    prevSSDs.append(SSDs[i])
 
-    # print('cluster_indices_sel: ', cluster_indices_sel)
+                    res[mol] = [outFile, SSDs[i]]
 
-    # Save coordinates of the cluster centers
-    cluster_centers, cluster_radii = {}, {}
-    for feat in cluster_indices:
-        cluster_centers[feat], cluster_radii[feat] = get_cluster_center_radii(features_coord[feat], clustDic[feat],
-                                                                              cluster_indices[feat], propRadii)
+        with open(os.path.join(outDir, 'deviations.tsv'), 'w') as f:
+            f.write('OriginalMolecule\tOutputMolecule\tDeviation\n')
+            for mol in res:
+                f.write('{}\t{}\t{}\n'.format(getBaseFileName(molFileDic[mol]), res[mol][0], res[mol][1]))
 
-    #print('cluster_centers_sel: ', cluster_centers_sel)
-    with open(os.path.join(outDir, 'cluster_centers.pkl'), 'wb') as outp:
-        pickle.dump(cluster_centers, outp, pickle.HIGHEST_PROTOCOL)
+    else:
+        print('None of the input molecules could be read by RDKit.\n'
+              'Preparing the molecules with the RDKit ligand preparation protocol might solve this issue')
 
-    with open(os.path.join(outDir, 'cluster_radii.pkl'), 'wb') as outp:
-        pickle.dump(cluster_radii, outp, pickle.HIGHEST_PROTOCOL)
 

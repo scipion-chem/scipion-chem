@@ -43,6 +43,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprints import P
 
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import ProtocolPharmacophoreGeneration
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_modification import ProtocolPharmacophoreModification
+from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_filtering import ProtocolPharmacophoreFiltering
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences

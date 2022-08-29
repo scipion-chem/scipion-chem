@@ -123,8 +123,8 @@ def ro3_filter(paramsDic):
     return filtered_mols, mols_dict, mols
 
 ###############################################################################
-def comprobar(moleculas, dict):
-    with open("comprobar.txt", 'w') as a:
+def write_details(moleculas, dict):
+    with open("details.txt", 'w') as a:
         for molecula in moleculas:
             molecular_weight = Descriptors.ExactMolWt(molecula)
             n_hba = Descriptors.NumHAcceptors(molecula)
@@ -151,9 +151,6 @@ if __name__ == "__main__":
     elif 'ro3' in rule:
         results, mols_dict, mols = ro3_filter(paramsDic)
 
-    print("mols")
-    print(mols_dict)
-
     with open(paramsDic['outputPath'], 'w') as f:
         f.write("#The following molecules have been passed the " + str(rule) + " filter:" + "\n")
         results = sum(results, [])
@@ -161,5 +158,5 @@ if __name__ == "__main__":
             file_f = mols_dict[molecule]
             f.write(str(file_f) + "\n")
 
-    comprobar(results, mols_dict)
+    write_details(results, mols_dict)
 

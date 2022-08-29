@@ -52,7 +52,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label='Input')
-        form.addParam('inputLigands', params.PointerParam,
+        form.addParam('inputSmallMolecules', params.PointerParam,
                       pointerClass='SetOfSmallMolecules', allowsNull=False,
                       label="Input reference ligands: ",
                       help='Select the ligands PDB files')
@@ -120,7 +120,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
 
     def _insertAllSteps(self):
         self._insertFunctionStep('convertStep')
-        self._insertFunctionStep('filterStep')
+        self._insertFunctionStep('generationStep')
         self._insertFunctionStep('createOutputStep')
 
     def convertStep(self):
@@ -130,7 +130,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
         if not os.path.exists(outDir):
             os.makedirs(outDir)
 
-        for ligand in self.inputLigands.get():
+        for ligand in self.inputSmallMolecules.get():
             inFile = ligand.getPoseFile()
             if not inFile.split('.')[-1] in ['pdb', 'mol2', 'sdf', 'mol']:
                 shutil.copy(inFile, os.path.join(tmpDir, os.path.basename(inFile)))
@@ -150,7 +150,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
             format(outDir, '*', smiDir)
         pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
 
-    def filterStep(self):
+    def generationStep(self):
         paramsPath = self.writeParamsFile()
 
         args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
@@ -166,7 +166,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
           radii = pickle.load(clRadii)
 
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
-        #outPharm.setProteinFile(self.inputLigands.get().getProteinFile())
+        outPharm.setProteinFile(abspath(self.inputSmallMolecules.get().getProteinFile()))
         for feat in radii:
             feat_radii = radii[feat]
             for i, loc in enumerate(centers[feat]):
@@ -197,8 +197,6 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
         with open(paramsPath, 'w') as f:
             # Esta linea vale --> es la que lleva al archivo output
 
-            f.write('outputPath:: results.tsv\n')
-
             f.write('method:: {}\n'.format(self.getEnumText('method')))
 
             f.write('kNumber:: {}\n'.format(self.kNumber.get()))
@@ -222,10 +220,10 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
         return paramsPath
 
     def getInputLigandsDir(self):
-        return abspath(self._getExtraPath('inputLigands'))
+        return abspath(self._getExtraPath('inputSmallMolecules'))
 
     def getInputSMIDir(self):
-        return abspath(self._getExtraPath('inputLigandsSMI'))
+        return abspath(self._getExtraPath('inputSmallMoleculesSMI'))
 
     def getBaseNameDic(self, inDir):
         bDic = {}

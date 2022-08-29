@@ -52,7 +52,7 @@ class ProtocolPharmacophoreModification(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label='Input')
-        form.addParam('inputPharmacophore', params.PointerParam,
+        form.addParam('inputPharmacophores', params.MultiPointerParam,
                       pointerClass='PharmacophoreChem', allowsNull=True,
                       label="Input pharmacophore: ",
                       help='Select the pharmacophore to modify.\n'
@@ -109,8 +109,8 @@ class ProtocolPharmacophoreModification(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def createOutputStep(self):
-        if self.inputPharmacophore.get():
-            outPharm = PharmacophoreChem.createCopy(self.inputPharmacophore.get(), self._getPath(),
+        if len(self.inputPharmacophores) > 0:
+            outPharm = PharmacophoreChem.createCopy(self.inputPharmacophores[0].get(), self._getPath(),
                                                     copyInfo=True, copyItems=False)
         else:
             outPharm = PharmacophoreChem().create(outputPath=self._getPath())
@@ -128,7 +128,9 @@ class ProtocolPharmacophoreModification(EMProtocol):
                     pharmFeat = self.buildFeatureFromJDic(jDic)
                     outPharm.append(pharmFeat)
             else:
-                outPharm.append(featsDic[featId])
+                pharmFeat = featsDic[featId]
+                pharmFeat.cleanObjId()
+                outPharm.append(pharmFeat)
 
         for jDic in addList:
             pharmFeat = self.buildFeatureFromJDic(jDic)
@@ -141,7 +143,7 @@ class ProtocolPharmacophoreModification(EMProtocol):
     def _validate(self):
         vals = []
         operDic, _ = self.getOperationDic()
-        if len(operDic) > 0 and not self.inputPharmacophore.get():
+        if len(operDic) > 0 and len(self.inputPharmacophores) == 0:
             vals.append('If no input pharmacophore is specified, you can only add new features.\n'
                         'No modification or deletion can be performed (over which features would it be?)')
         return vals
@@ -149,10 +151,11 @@ class ProtocolPharmacophoreModification(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
 
     def getPresentFeatures(self):
-        if hasattr(self, 'inputPharmacophore') and self.inputPharmacophore.get():
+        if hasattr(self, 'inputPharmacophores') and len(self.inputPharmacophores) > 0:
             featList = []
-            for feat in self.inputPharmacophore.get():
-                featList.append(str(feat))
+            for pharm in self.inputPharmacophores:
+              for feat in pharm.get():
+                  featList.append(str(feat))
         else:
             return []
 
@@ -160,31 +163,38 @@ class ProtocolPharmacophoreModification(EMProtocol):
         operDic, addList = {}, []
         for operation in self.operationList.get().split('\n'):
             if operation.strip():
-              oper, rest = operation.split('|')
+              oper = operation.split('|')[0]
               if oper.strip() == ADD:
+                  rest = operation.split('|')[1]
                   feat = json.loads(rest.strip())
                   addList += [feat]
 
               elif oper.strip() == REM:
+                  setStr, rest = operation.split('|')[1:]
+                  setId = int(setStr.split()[1])
                   featId = int(rest.split()[1])
-                  operDic[featId] = ''
+                  operDic[(setId, featId)] = ''
 
               elif oper.strip() == MOD:
+                  setStr, rest = operation.split('|')[1:]
+                  setId = int(setStr.split()[1])
                   featId = int(rest.split()[1])
                   feat = json.loads(rest.split('TO:')[1].strip())
-                  operDic[featId] = feat
+                  operDic[(setId, featId)] = feat
         return operDic, addList
 
     def getCurrentFeaturesDic(self):
         featDic = {}
-        if self.inputPharmacophore.get():
-            for feat in self.inputPharmacophore.get():
+        if len(self.inputPharmacophores) > 0:
+          for i, pharm in enumerate(self.inputPharmacophores):
+            for feat in pharm.get():
                 nFeat = feat.clone()
-                featDic[nFeat.getObjId()] = nFeat
+                featDic[(i, nFeat.getObjId())] = nFeat
         return featDic
 
     def buildFeatureFromJDic(self, jDic):
         loc = eval(jDic['Coords'])
         pharmFeat = PharmFeature(type=jDic['Type'], radius=jDic['Radius'],
                                x=loc[0], y=loc[1], z=loc[2])
+        pharmFeat.cleanObjId()
         return pharmFeat
