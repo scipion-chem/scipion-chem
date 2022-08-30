@@ -126,6 +126,11 @@ SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
                               inputs=['inputAS'],
                               outputs=['chain_name'])
 
+SelectChainWizardQT().addTarget(protocol=ProtExtractLigands,
+                              targets=['chain_name'],
+                              inputs=['inputStructure'],
+                              outputs=['chain_name'])
+
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
                                 targets=['resPosition'],

@@ -30,7 +30,7 @@
 This module will extract the ligand from a complex pdb.
 """
 
-import os, sys
+import os, sys, json
 from Bio.PDB import PDBParser, PDBIO, Select, MMCIFParser
 
 from pyworkflow.protocol import params
@@ -122,7 +122,7 @@ class ProtExtractLigands(EMProtocol):
             chain_id = chain["chain"].upper().strip()
         else:
             chain_id = None
-        cleanedPDB = clean_PDB(inputStructureFile, self._getPath('{}.pdb'.format(inputBaseName)),
+        cleanedPDB = clean_PDB(inputStructureFile, self._getPath('{}.pdb'.format(getBaseFileName(inputStructureFile))),
                                self.waters.get(), True, chain_id)
 
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
@@ -159,7 +159,7 @@ class ProtExtractLigands(EMProtocol):
                     if not is_het(residue) or len(list(residue.get_atoms())) < self.nAtoms.get():
                         continue
                     print(f"saving {chain} {residue}")
-                    outFile = self._getPath(f"{struct_name}-{i}.pdb")
+                    outFile = self._getPath(f"{struct_name}_{residue.get_resname()}-{i}.pdb")
                     ligandFiles.append(outFile)
                     io.save(outFile, ResidueSelect(chain, residue))
                     i += 1
