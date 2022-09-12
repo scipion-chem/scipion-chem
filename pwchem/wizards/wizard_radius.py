@@ -53,7 +53,6 @@ class GetRadiusProtein(VariableWizard):
         protocol = form.protocol
 
         inputObj = getattr(protocol, inputParams[0]).get()
-        print('Input obj: ', inputObj)
         if not inputObj:
             print('You must specify input structure')
             return
