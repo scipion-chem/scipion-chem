@@ -732,6 +732,14 @@ class StructROI(data.EMFile):
             cHull = spatial.ConvexHull(cCoords)
             return cHull.volume
 
+    def getSurfaceConvexArea(self):
+        '''Calculate the convex area of the protein contact atoms'''
+        cAtoms = self.buildContactAtoms()
+        cCoords = self.getAtomsCoords(cAtoms)
+        if len(cCoords) >= 3:
+            cHull = spatial.ConvexHull(cCoords)
+            return cHull.area
+
     def getPocketBox(self):
         '''Return the coordinates of the 2 corners determining the box (ortogonal to axis) where the pocket fits in
         For example: ([-1,0,2], [2,5,4])'''

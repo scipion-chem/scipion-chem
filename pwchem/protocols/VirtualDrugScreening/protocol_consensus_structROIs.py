@@ -71,6 +71,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                            "overlapping")
         form.addParam('action', params.EnumParam, default=MAXSURF,
                       label='Action on overlapping', choices=self.actionChoices,
+                      expertLevel=params.LEVEL_ADVANCED,
                       help='Action to take on overlapping structural regions, whether to merge them or keep just one '
                            'with some condition')
         form.addParam('numOfOverlap', params.IntParam, default=2,
@@ -230,35 +231,30 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 if self.action.get() == MAXVOL:
                     outPocket = self.getMaxVolumePocket(clust)
                 elif self.action.get() == MAXSURF:
-                    outPocket = self.getMaxVolumePocket(clust)
+                    outPocket = self.getMaxSurfacePocket(clust)
                 representatives.append(outPocket)
         return representatives
 
     def getMaxVolumePocket(self, cluster):
-        '''Return the pocket with max volume in a cluster'''
+        '''Return the pocket with max volume in a cluster
+        The volume is calculated from the convex hull of the contact atoms'''
         maxVol = 0
         for pocket in cluster:
-            pocketVol = pocket.getPocketVolume()
+            pocketVol = pocket.getSurfaceConvexVolume()
             if pocketVol > maxVol:
                 maxVol = pocketVol
                 outPocket = pocket.clone()
         return outPocket
 
     def getMaxSurfacePocket(self, cluster):
-        '''Return the pocket with max surface in a cluster.
-        The surface is just interpolated to the number of contact atoms. In case of even, volume is used'''
-        maxSurf, maxVol = 0, 0
+        '''Return the pocket with max surface area in a cluster.
+        The surface is calculated from the convex hull of the contact atoms'''
+        maxArea, maxVol = 0, 0
         for pocket in cluster:
-            pocketSurf = len(pocket.getDecodedCAtoms())
-            pocketVol = pocket.getSurfaceConvexVolume()
-            if pocketSurf > maxSurf:
-                maxSurf, maxVol = pocketSurf, pocketVol
+            pocketArea = pocket.getSurfaceConvexArea()
+            if pocketArea > maxArea:
+                maxArea = pocketArea
                 outPocket = pocket.clone()
-            elif pocketSurf == maxSurf:
-                if pocketVol > maxVol:
-                    maxSurf, maxVol = pocketSurf, pocketVol
-                    outPocket = pocket.clone()
-
         return outPocket
 
     def calculateResiduesOverlap(self, pock1, pock2):
