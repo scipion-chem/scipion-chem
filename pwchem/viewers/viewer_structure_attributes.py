@@ -45,7 +45,7 @@ class ConservationViewer(ChimeraAttributeViewer):
         form.addSection(label='Visualization of conservation regions')
         form.addParam('viewROIs', params.LabelParam, label='View sequence conservation ROIs: ',
                        help='View sequence conservation ROIs extracted in the protocol')
-        if getattr(self.protocol, 'inputAS'):
+        if hasattr(self.protocol, 'inputAS'):
             super()._defineParams(form)
             # Overwrite defaults
             from pwem.wizards.wizard import ColorScaleWizardBase
@@ -55,7 +55,7 @@ class ConservationViewer(ChimeraAttributeViewer):
 
     def _getVisualizeDict(self):
         visDic = {'viewROIs': self._showROIs}
-        if getattr(self.protocol, 'inputAS'):
+        if hasattr(self.protocol, 'inputAS'):
             visDic.update(super()._getVisualizeDict())
         return visDic
 
@@ -69,19 +69,39 @@ class ConservationViewer(ChimeraAttributeViewer):
 
 class SASAStructureViewer(ChimeraAttributeViewer):
     """ Viewer for attribute SASA of an AtomStruct.
-      Includes visualization in chimera and in histograms"""
+      Includes structure visualization in chimera and in histograms or accesibility sequence regions"""
     _targets = [ProtCalculateSASA]
-    _label = 'Atomic structure attributes viewer'
+    _label = 'Accesibility viewer'
 
     def __init__(self, **kwargs):
       super().__init__(**kwargs)
 
     def _defineParams(self, form):
-      super()._defineParams(form)
-      # Overwrite defaults
-      from pwem.wizards.wizard import ColorScaleWizardBase
-      group = form.addGroup('Color settings')
-      ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
+      if hasattr(self.protocol, 'outputROIs'):
+          form.addSection(label='Accesibility regions visualization')
+          form.addParam('viewROIs', params.LabelParam, label='View sequence accesibility ROIs: ',
+                        help='View sequence accesibility ROIs extracted in the protocol')
+
+      if hasattr(self.protocol, 'outputAtomStruct'):
+          super()._defineParams(form)
+          # Overwrite defaults
+          from pwem.wizards.wizard import ColorScaleWizardBase
+          group = form.addGroup('Color settings')
+          ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
                                                   defaultColorMap='RdBu')
 
+    def _getVisualizeDict(self):
+        visDic = {}
+        if hasattr(self.protocol, 'outputROIs'):
+            visDic.update({'viewROIs': self._showROIs})
+        if hasattr(self.protocol, 'outputAtomStruct'):
+            visDic.update(super()._getVisualizeDict())
+        return visDic
+
+    def _showROIs(self, paramName=None):
+        obj = self.protocol.outputROIs
+        outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
+                                                              format(obj.getSequenceObj().getId())))
+        obj.exportToFile(outPath)
+        return [SequenceAliView([outPath], cwd=self.protocol._getExtraPath())]
 
