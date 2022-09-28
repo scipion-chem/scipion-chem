@@ -208,6 +208,14 @@ def writeSurfPML(pockets, pmlFileName):
     with open(pmlFileName, 'w') as f:
         f.write(createSurfacePml(pockets))
 
+def pdbqt2other(protocol, pdbqtFile, otherFile):
+    inName, inExt = os.path.splitext(os.path.basename(otherFile))
+    if not inExt in ['.pdb', '.mol2', '.sdf', '.mol']:
+        inExt, otherFile = 'pdb', otherFile.replace(inExt, '.pdb')
+
+    args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
+    runOpenBabel(protocol=protocol, args=args, popen=True)
+    return otherFile
 
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
     pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
