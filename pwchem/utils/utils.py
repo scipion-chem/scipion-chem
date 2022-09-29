@@ -209,13 +209,29 @@ def writeSurfPML(pockets, pmlFileName):
         f.write(createSurfacePml(pockets))
 
 def pdbqt2other(protocol, pdbqtFile, otherFile):
+    '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
     inName, inExt = os.path.splitext(os.path.basename(otherFile))
     if not inExt in ['.pdb', '.mol2', '.sdf', '.mol']:
         inExt, otherFile = 'pdb', otherFile.replace(inExt, '.pdb')
 
     args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
     runOpenBabel(protocol=protocol, args=args, popen=True)
-    return otherFile
+    return os.path.abspath(otherFile)
+
+def sdfFrompdbqt(protocol,  pdbqtFile, sdfFile=None, overWrite=False):
+    '''Convert pdbqt to sdf using openbabel (better for ligands)'''
+    if not sdfFile:
+        baseName = os.path.splitext(os.path.basename(pdbqtFile))[0]
+        outDir = os.path.abspath(protocol._getTmpPath())
+        sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
+    else:
+        baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+        outDir = os.path.abspath(os.path.dirname(sdfFile))
+    if not os.path.exists(sdfFile) or overWrite:
+        args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(pdbqtFile),
+                                                                              os.path.abspath(outDir), baseName)
+        pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+    return sdfFile
 
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
     pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
