@@ -549,3 +549,6 @@ def getAllAttributes(inputSets):
                 attributes[attrK] = value.clone()
                 attributes[attrK].set(None)
     return attributes
+
+def getBaseFileName(filename):
+    return os.path.splitext(os.path.basename(filename))[0]
