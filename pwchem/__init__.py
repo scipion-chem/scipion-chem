@@ -94,8 +94,8 @@ class Plugin(pwem.Plugin):
       plip_commands += 'conda install -y -c conda-forge swig && '
       #Installing Pymol
       plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol && '
-      #Installing Biopython
-      plip_commands += 'conda install -y biopython=1.79 && '
+      #Installing Biopython (remove when scipion3 has biopython 1.79, instead of 1.76)
+      plip_commands += 'conda install -y -c conda-forge biopython=1.79 && '
       #Installing PLIP
       plip_commands += 'conda install -y -c conda-forge plip && touch {}'.format(PLIP_INSTALLED)
 
