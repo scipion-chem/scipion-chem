@@ -218,17 +218,19 @@ def pdbqt2other(protocol, pdbqtFile, otherFile):
     runOpenBabel(protocol=protocol, args=args, popen=True)
     return os.path.abspath(otherFile)
 
-def sdfFrompdbqt(protocol,  pdbqtFile, sdfFile=None, overWrite=False):
-    '''Convert pdbqt to sdf using openbabel (better for ligands)'''
+def convertToSdf(protocol,  molFile, sdfFile=None, overWrite=False):
+    '''Convert molecule files to sdf using openbabel'''
+    if molFile.endswith('.sdf'):
+        return molFile
     if not sdfFile:
-        baseName = os.path.splitext(os.path.basename(pdbqtFile))[0]
+        baseName = os.path.splitext(os.path.basename(molFile))[0]
         outDir = os.path.abspath(protocol._getTmpPath())
         sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
     else:
         baseName = os.path.splitext(os.path.basename(sdfFile))[0]
         outDir = os.path.abspath(os.path.dirname(sdfFile))
     if not os.path.exists(sdfFile) or overWrite:
-        args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(pdbqtFile),
+        args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(molFile),
                                                                               os.path.abspath(outDir), baseName)
         pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
     return sdfFile
