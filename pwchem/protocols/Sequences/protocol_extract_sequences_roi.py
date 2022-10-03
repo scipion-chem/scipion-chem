@@ -192,7 +192,7 @@ class ProtExtractSeqsROI(EMProtocol):
         if len(outROIs) > 0:
             self._defineOutputs(outputROIs=outROIs)
 
-        if self.inputAS:
+        if self.inputAS.get():
             outStructFileName = self._getPath('outputStructure.cif')
             # Write conservation in a section of the output cif file
             ASH = AtomicStructHandler()

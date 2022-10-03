@@ -45,7 +45,7 @@ class ConservationViewer(ChimeraAttributeViewer):
         form.addSection(label='Visualization of conservation regions')
         form.addParam('viewROIs', params.LabelParam, label='View sequence conservation ROIs: ',
                        help='View sequence conservation ROIs extracted in the protocol')
-        if hasattr(self.protocol, 'inputAS'):
+        if hasattr(self.protocol, 'inputAS') and getattr(self.protocol, 'inputAS').get():
             super()._defineParams(form)
             # Overwrite defaults
             from pwem.wizards.wizard import ColorScaleWizardBase
@@ -55,7 +55,7 @@ class ConservationViewer(ChimeraAttributeViewer):
 
     def _getVisualizeDict(self):
         visDic = {'viewROIs': self._showROIs}
-        if hasattr(self.protocol, 'inputAS'):
+        if hasattr(self.protocol, 'inputAS') and getattr(self.protocol, 'inputAS').get():
             visDic.update(super()._getVisualizeDict())
         return visDic
 
