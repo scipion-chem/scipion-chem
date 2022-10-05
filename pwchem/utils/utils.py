@@ -46,6 +46,10 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
+
+def getBaseName(file):
+    return os.path.splitext(os.path.basename(file.strip()))[0]
+
 def makeSubsets(oriSet, nt):
     '''Returns a list of subsets, given a set and the number of subsets'''
     subsets = []

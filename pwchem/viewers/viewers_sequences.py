@@ -49,7 +49,7 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [Sequence, SetOfSequences, SetOfSequencesChem, SequenceVariants, SetOfSequenceROIs]
+    _targets = [SetOfSequencesChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)

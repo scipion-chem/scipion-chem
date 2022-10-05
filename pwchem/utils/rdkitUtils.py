@@ -28,6 +28,29 @@ import sys
 from rdkit import Chem
 from rdkit.Chem import Draw
 
+def parseMoleculeFile(molFile):
+    if molFile.endswith('.mol2'):
+        mol = Chem.MolFromMol2File(molFile)
+    elif molFile.endswith('.mol'):
+        mol = Chem.MolFromMolFile(molFile)
+    elif molFile.endswith('.pdb'):
+        mol = Chem.MolFromPDBFile(molFile)
+    elif molFile.endswith('.smi'):
+        f = open(molFile, "r")
+        firstline = next(f)
+        mol = Chem.MolFromSmiles(str(firstline))
+    elif molFile.endswith('.sdf'):
+        suppl = Chem.SDMolSupplier(molFile)
+        for mol in suppl:
+            break
+    else:
+        mol = Chem.MolFromSmiles(molFile)
+
+    return mol
+
+def drawMolecule(mol, fnOut):
+    Draw.MolToFile(mol, fnOut)
+
 if __name__ == "__main__":
     if len(sys.argv)==1:
         print("Usage: python3 rdkitUtils.py [options]")
@@ -35,22 +58,7 @@ if __name__ == "__main__":
     elif sys.argv[1]=="draw":
         fnIn = sys.argv[2]
         fnOut = sys.argv[3]
-        if fnIn.endswith('.smi'):
-            smile=open(fnIn).readlines()[0]
-            smile=smile.split()[0]
-            Draw.MolToFile(Chem.MolFromSmiles(smile),fnOut)
-        elif fnIn.endswith('.sdf'):
-            supplier = Chem.SDMolSupplier(fnIn)
-            for molecule in supplier:
-                Draw.MolToFile(molecule, fnOut)
-        elif fnIn.endswith('.mae') or fnIn.endswith('.maegz'):
-            supplier = Chem.MaeMolSupplier(fnIn)
-            for molecule in supplier:
-                Draw.MolToFile(molecule, fnOut)
-        elif fnIn.endswith('.mol2'):
-            supplier = Chem.MolFromMol2File(fnIn)
-            for molecule in supplier:
-                Draw.MolToFile(molecule, fnOut)
-        elif fnIn.endswith('.pdb'):
-            molecule = Chem.MolFromPDBFile(fnIn)
-            Draw.MolToFile(molecule, fnOut)
+
+        mol = parseMoleculeFile(fnIn)
+        drawMolecule(mol)
+

@@ -146,10 +146,13 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
             tempSmall = os.path.abspath(self._getExtraPath("{}*.sdf".format(mol.getMolName())))
             for molFile in sorted(list(glob.glob(tempSmall))):
                 if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
-                    #mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
-                    newSmallMol = SmallMolecule(smallMolFilename=molFile)
-                    #newSmallMol._ConformersFile = pwobj.String(confFile)
-                    #newSmallMol._mappingFile = pwobj.String(mapFile)
+                    confId = os.path.splitext(molFile)[0].split('-')[-1]
+
+                    newSmallMol = SmallMolecule()
+                    newSmallMol.copy(mol, copyId=False)
+
+                    newSmallMol.setFileName(molFile)
+                    newSmallMol.setConfId(confId)
                     outputSmallMolecules.append(newSmallMol)
 
         if len(outputSmallMolecules) > 0:
@@ -182,7 +185,6 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
                 f.write('rmsThres: {}\n'.format(self.rmsd_cutoff.get()))
             if self.splitFrag.get():
                 f.write('numAtoms: {}\n'.format(self.numAtoms.get()))
-
         return paramsFile
 
     def mergeErrorFiles(self):
@@ -204,7 +206,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
     def writeMapFile(self, refMol, probMol, outFile=None):
       if not outFile:
-          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getMolBase()))
+          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getUniqueName()))
 
       mapDic = refMol.mapLabels(probMol)
       with open(outFile, 'w') as f:

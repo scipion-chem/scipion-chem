@@ -31,29 +31,41 @@ to select the radius of the sphere that contains the protein or a desired zone.
 """
 
 # Imports
-from pwem.wizards.wizard import EmWizard
+
+from pwem.objects import AtomStruct
+from pwem.wizards.wizard import EmWizard, VariableWizard
 from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
 from pwchem.utils import getProteinMaxDiameter
 
-class GetRadiusProtein(EmWizard):
-    _targets = []
+from pwchem.objects import SetOfSmallMolecules
+
+class GetRadiusProtein(VariableWizard):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getASFile(self, inputObj):
+        if issubclass(type(inputObj), AtomStruct):
+            return inputObj.getFileName()
+        elif issubclass(type(inputObj), SetOfSmallMolecules):
+            return inputObj.getProteinFile()
 
     def show(self, form):
+        inputParams, outputParam = self.getInputOutput(form)
         protocol = form.protocol
-        structure = protocol.inputAtomStruct.get()
-        if not structure:
+
+        inputObj = getattr(protocol, inputParams[0]).get()
+        if not inputObj:
             print('You must specify input structure')
             return
 
-        strFile = structure.getFileName()
+        strFile = self.getASFile(inputObj)
         try:
             plt = MaskStructureWizard(strFile)
             plt.initializePlot()
-            form.setVar('radius', plt.radius)
+            form.setVar(outputParam[0], plt.radius)
         except:
             print('Cannot open the file with MaskStructureWizard.'
                   'Trying to assign the radius directly')
             radius = getProteinMaxDiameter(strFile) / 2
-            form.setVar('radius', int(radius + 1))
+            form.setVar(outputParam[0], int(radius + 1))
 
 

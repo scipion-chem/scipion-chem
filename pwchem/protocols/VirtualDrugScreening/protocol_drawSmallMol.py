@@ -80,7 +80,9 @@ class ProtDrawMolecules(EMProtocol):
         if len(cFiles) > 0:
             outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
             for molFile in cFiles:
-                outputSet.append(SmallMolecule(smallMolFilename=molFile))
+                newMol = SmallMolecule(smallMolFilename=molFile)
+                newMol.setMolName(os.path.splitext(os.path.basename(molFile))[0])
+                outputSet.append(newMol)
 
             self._defineOutputs(outputStructROIs=outputSet)
 

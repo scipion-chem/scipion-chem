@@ -2,6 +2,8 @@
 CHEM scipion plugin
 ================================
 
+**Documentation under development, sorry for the inconvenience**
+
 Base Scipion plugin defining objects and protocols for CHEMoinformatics and virtual drug screening
 
 ===================
@@ -23,13 +25,25 @@ OR
       
 - **Developer's version** 
 
-1. Download repository: 
+1. **Download repository**:
 
 .. code-block::
 
             git clone https://github.com/scipion-chem/scipion-chem.git
 
-2. Install:
+2. **Switch to the desired branch** (master or devel):
+
+Scipion-chem is constantly under development.
+If you want a relatively older an more stable version, use master branch (default).
+If you want the latest changes and developments, user devel branch.
+
+.. code-block::
+
+            cd scipion-chem
+            git checkout devel
+
+3. **Install**:
+The following comand will launch the installation of the plugin, together with some third-party programs
 
 .. code-block::
 

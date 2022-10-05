@@ -34,8 +34,16 @@ from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import Pro
 from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import ProtocolScoreDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_oddt_descriptors import ProtocolODDTDescriptors
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
+from pwchem.protocols.VirtualDrugScreening.protocol_PAINS_filter import ProtocolPainsRdkitFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolADMEFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
+from pwchem.protocols.VirtualDrugScreening.protocol_shape_filtering import ProtocolShapeDistancesFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_rdkit_ligand_preparation import ProtChemRDKitPrepareLigands
+from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprints import ProtocolFingerprintFiltering
+
+from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import ProtocolPharmacophoreGeneration
+from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_modification import ProtocolPharmacophoreModification
+from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_filtering import ProtocolPharmacophoreFiltering
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
@@ -54,7 +62,7 @@ from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOf
 from pwchem.protocols.General.protocol_converter import ConvertStructures
 from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from pwchem.protocols.General.protocol_dali import ProtChemDali
-from pwchem.protocols.General.protocol_pdb_smallMolecules import ProtChemPDBSmallMolecules
+from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetching
 from pwchem.protocols.General.protocol_listIDs_operate import ProtChemListIDOperate
 from pwchem.protocols.General.protocol_list_operate import ProtChemListOperate
 from pwchem.protocols.General.protocol_smallMolecules_pdb import ProtChemSmallMoleculesPDB
@@ -67,5 +75,6 @@ from pwchem.protocols.General.protocol_raptorX import ProtChemRaptorX
 from pwchem.protocols.General.protocol_ZINC_filter import ProtChemZINCFilter
 from pwchem.protocols.General.protocol_pubchem_search import ProtChemPubChemSearch
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
+from pwchem.protocols.General.protocol_extract_ligands import ProtExtractLigands
 
 

@@ -147,7 +147,7 @@ class ConvertStructures(EMProtocol):
 
                     runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
 
-                    smallMolecule = SmallMolecule(smallMolFilename=fnOut)
+                    smallMolecule = SmallMolecule(smallMolFilename=fnOut, molName='guess')
                     outputSmallMolecules.append(smallMolecule)
 
                 except:

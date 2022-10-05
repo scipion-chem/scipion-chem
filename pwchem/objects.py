@@ -175,6 +175,11 @@ class SmallMolecule(data.EMObject):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
+        self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
+        self.molName = pwobj.String(kwargs.get('molName', None))
+        if self.molName.get() and self.molName.get().lower() == 'guess':
+            self.molName.set(self.guessMolName())
+
         self.gridId = pwobj.Integer(kwargs.get('gridId', None))  # pocketID
         self.poseId = pwobj.Integer(kwargs.get('poseId', None))
         self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
@@ -192,10 +197,23 @@ class SmallMolecule(data.EMObject):
         self.smallMoleculeFile.set(value)
 
     def getMolName(self):
-        return self.getFileName().split('/')[-1].split('.')[0]
+        molName = self.molName.get()
+        if not molName:
+            molName = self.guessMolName()
+        return molName
+
+    def setMolName(self, value):
+        self.molName.set(value)
+
+    def guessMolName(self):
+        fBase = self.getFileName().split('/')[-1].split('.')[0]
+        if self.getConfId():
+            return '-'.join(fBase.split('-')[:-1])
+        else:
+            return fBase
 
     def getMolBase(self):
-        return self.getMolName().split('-')[0]
+        return self.getMolName()
 
     def getPoseFile(self):
         '''Filename of the molecule after docking'''
@@ -210,6 +228,12 @@ class SmallMolecule(data.EMObject):
     def getPoseId(self):
         return self.poseId.get()
 
+    def getConfId(self):
+        return self.confId.get()
+
+    def setConfId(self, confId):
+        self.confId.set(confId)
+
     def getGridId(self):
         return self.gridId.get()
 
@@ -221,6 +245,16 @@ class SmallMolecule(data.EMObject):
 
     def setDockId(self, value):
         self.dockId.set(value)
+
+    def getEnergy(self):
+        if hasattr(self, '_energy'):
+            return self._energy.get()
+
+    def setEnergy(self, value):
+        if hasattr(self, '_energy'):
+            self._energy.set(value)
+        else:
+            self._energy = pwobj.Float(value)
 
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
@@ -243,13 +277,15 @@ class SmallMolecule(data.EMObject):
     def setMolClass(self, value):
         self._type.set(value)
 
-    def getUniqueName(self):
+    def getUniqueName(self, grid=True, conf=True, pose=True, dock=True):
         name = self.getMolName()
-        if self.getGridId() != None:
+        if self.getGridId() and grid:
             name = 'g{}_'.format(self.getGridId()) + name
-        if self.poseFile.get() != None:
+        if self.getConfId() and conf:
+            name += '-{}'.format(self.getConfId())
+        if self.getPoseId() and pose:
             name += '_{}'.format(self.getPoseId())
-        if self.getDockId() != None:
+        if self.getDockId() and dock:
             name += '_{}'.format(self.getDockId())
         return name
 
@@ -324,11 +360,6 @@ class SmallMolecule(data.EMObject):
             return
         else:
             return mapDic
-
-
-    def getEnergy(self):
-        if hasattr(self, '_energy'):
-            return self._energy.get()
 
 
 class SetOfSmallMolecules(data.EMSet):
@@ -700,6 +731,14 @@ class StructROI(data.EMFile):
         if len(cCoords) >= 3:
             cHull = spatial.ConvexHull(cCoords)
             return cHull.volume
+
+    def getSurfaceConvexArea(self):
+        '''Calculate the convex area of the protein contact atoms'''
+        cAtoms = self.buildContactAtoms()
+        cCoords = self.getAtomsCoords(cAtoms)
+        if len(cCoords) >= 3:
+            cHull = spatial.ConvexHull(cCoords)
+            return cHull.area
 
     def getPocketBox(self):
         '''Return the coordinates of the 2 corners determining the box (ortogonal to axis) where the pocket fits in
@@ -1223,6 +1262,98 @@ class MDSystem(data.EMFile):
 
     def setWaterForceField(self, value):
         self._wff.set(value)
+
+
+class PharmFeature(data.EMObject):
+    """ Represent a pharmacophore feature """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._type = String(kwargs.get('type', None))
+        self._X, self._Y, self._Z = Float(kwargs.get('x', None)), Float(kwargs.get('y', None)), \
+                                    Float(kwargs.get('z', None))
+        self._radius = Float(kwargs.get('radius', 1.0))
+
+    def __str__(self):
+        s = '{} {} (Type: {}. Coords: ({:.2f}, {:.2f}, {:.2f}). Radius: {:.2f})'.\
+            format(self.getClassName(), self.getObjId(), self.getType(), *self.getCoords(), self.getRadius())
+        return s
+
+    def getType(self):
+        return self._type.get()
+
+    def setType(self, value):
+        self._type.set(value)
+
+    def getRadius(self):
+        return self._radius.get()
+
+    def setRadius(self, value):
+        self._radius.set(value)
+
+    def getCoords(self):
+        return self._X.get(), self._Y.get(), self._Z.get()
+
+    def setCoords(self, values):
+        self._X.set(values[0]), self._Y.set(values[1]), self._Z.set(values[2])
+
+    def feat2Dic(self):
+        return {'type': self.getType(), 'coords': self.getCoords(), 'radius': self.getRadius()}
+
+    def setFeatFromDic(self, featDic):
+        if 'type' in featDic:
+            self.setType(featDic['type'])
+        else:
+            print('Type for {} has not been specified'.format(self))
+
+        if 'coords' in featDic:
+            self.setCoords(featDic['coords'])
+        else:
+            print('Coordinates for {} has not been specified'.format(self))
+
+        if 'radius' in featDic:
+            self.setRadius(featDic['radius'])
+        else:
+            self.setRadius(1.0)
+
+class PharmacophoreChem(data.EMSet):
+    """ Pharmacophore (built as a set of PharmFeature) """
+    ITEM_TYPE = PharmFeature
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+        self._proteinFile = pwobj.String(kwargs.get('proteinFile', None))
+
+    def __str__(self):
+        s = '{} ({} features)'.format(self.getClassName(), self.getSize())
+        return s
+
+    def copyInfo(self, other):
+        self._proteinFile = other._proteinFile
+
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self, path=''):
+        return os.path.join('/'.join(self.getSetPath().split('/')[:-1]), path)
+
+    def setProteinFile(self, value):
+        self._proteinFile.set(value)
+
+    def getProteinFile(self):
+        return self._proteinFile.get()
+
+    def pharm2Dic(self):
+        pDic = {}
+        for feat in self:
+            pDic[feat.getObjId()] = feat.feat2Dic()
+        return pDic
+
+    def setPharmFromDic(self, pDic):
+        pDic = {}
+        for featId in pDic:
+            feat = PharmFeature().setFeatFromDic(pDic[featId])
+            feat.setObjId(featId)
+            self.append(feat)
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################

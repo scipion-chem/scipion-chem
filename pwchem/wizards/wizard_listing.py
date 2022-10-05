@@ -33,9 +33,8 @@ information such as name and number of residues.
 """
 
 # Imports
-import pwchem.protocols as chemprot
+from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
-
 
 class AddElementWizard(VariableWizard):
     """Add the content of a parameter to another"""
@@ -54,6 +53,9 @@ class AddElementWizard(VariableWizard):
                 prevList += '\n'
 
             form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
+
+
+
 
 class AddElementSummaryWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""
@@ -85,7 +87,6 @@ class AddElementSummaryWizard(VariableWizard):
             newSum = protocol.createSummary()
             form.setVar(outputParam[1], newSum)
 
-
 class DeleteElementWizard(VariableWizard):
     """Delete the step of the workflow defined by the index"""
     _targets, _inputs, _outputs = [], {}, {}
@@ -110,12 +111,12 @@ class DeleteElementWizard(VariableWizard):
             print('Incorrect index')
 
 
-AddElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])
 
-DeleteElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])
