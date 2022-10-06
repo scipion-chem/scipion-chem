@@ -135,9 +135,7 @@ class ProtocolScoreDocking(EMProtocol):
         group.addParam('deleteStep', params.StringParam, default='',
                        label='Delete score number: ',
                        help='Delete the score of the specified index from the workflow.')
-        group.addParam('showWorkflow', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
-                       label="Show workflow param: ", help='Show workflow param, while wizards released to scipion-em')
-        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='showWorkflow')
+        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='False')
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
@@ -146,12 +144,8 @@ class ProtocolScoreDocking(EMProtocol):
         self.createGUISummary()
         sSteps = []
         #Performing every score listed in the form
-        if self.workFlowSteps.get():
-            for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-                sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
-        else:
-            msjDic = self.createMSJDic()
-            sSteps.append(self._insertFunctionStep('scoringStep', str(msjDic), 1, prerequisites=[]))
+        for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
+            sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
 
         #Extracting only correlated scores if applicable
         if self.correlationFilter.get():
@@ -344,7 +338,7 @@ class ProtocolScoreDocking(EMProtocol):
     def scoreDockings(self, receptorFile, msjDic, i):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
         self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runRDKitScript(self, scriptName, paramsPath, cwd=self._getPath())
 
     def parseResults(self, i):
         resDic = {}
@@ -353,15 +347,24 @@ class ProtocolScoreDocking(EMProtocol):
                 resDic[line.split()[0]] = float(line.split()[1])
         return resDic
 
-    def getZScores(self):
+    def getCorrelatedIdxs(self):
         corFile = self._getPath('correlated.tsv')
-        if self.workFlowSteps.get():
-            correlated = list(range(1, len(self.workFlowSteps.get().strip().split('\n')) + 1))
-        else:
-            correlated = [1]
+        correlated = list(range(1, len(self.workFlowSteps.get().strip().split('\n')) + 1))
         if os.path.exists(corFile):
             with open(corFile) as f:
                 correlated = f.readline().split()
+        return correlated
+
+    def getScoreTitles(self, idxs):
+        steps = self.summarySteps.get().strip().split('\n')
+        titles = []
+        for i, st in enumerate(steps):
+            if i in idxs:
+                titles.append(st.split(':')[1].split('.')[0])
+        return titles
+
+    def getZScores(self):
+        correlated = self.getCorrelatedIdxs()
 
         zDic = {}
         for i in correlated:
@@ -377,8 +380,18 @@ class ProtocolScoreDocking(EMProtocol):
 
     def combineZScores(self, zDic):
         finalDic = {}
-        for molFile in zDic:
-            finalDic[molFile] = np.average(zDic[molFile])
+        correlatedIdxs = self.getCorrelatedIdxs()
+        scoreTitles = self.getScoreTitles(correlatedIdxs)
+
+        scoresFile = self._getPath('outputScores.csv')
+        with open(scoresFile, 'w') as f:
+            titles = (';{}'*len(scoreTitles)).format(*scoreTitles)
+            f.write('{}{};{}\n'.format('MolFile', titles, 'CombinedScore'))
+            for molFile in zDic:
+                finalDic[molFile] = np.average(zDic[molFile])
+                indScores = (';{}'*len(zDic[molFile])).format(*zDic[molFile])
+                f.write('{}{};{}\n'.format(molFile, indScores, finalDic[molFile]))
+
         return finalDic
 
     def getScoreFunction(self, msjDic):
