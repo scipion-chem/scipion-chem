@@ -59,7 +59,7 @@ class ResidueSelect(Select):
 
 
 class ProtExtractLigands(EMProtocol):
-    _label = 'Extract Ligand'
+    _label = 'Extract Ligand from structure'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
