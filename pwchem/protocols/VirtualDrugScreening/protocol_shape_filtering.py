@@ -151,7 +151,12 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
         paramsPath = ' -r {} -d {} -s shape-it.tsv'.\
             format(self.getRefFile(), allMolsFile, self.getEnumText('distanceTypeShapeit'), self.cut.get())
-        Plugin.runShapeIt(self, './shape-it', paramsPath, cwd=self._getPath())
+        try:
+            Plugin.runShapeIt(self, './shape-it', paramsPath, cwd=self._getPath())
+        except:
+            print('Shape-it could not be executed because it was not installed properly. \nIf you want to use it, '
+                  'you will need to install it manually (https://github.com/rdkit/shape-it) and define its home dir '
+                  'as "SHAPEIT_HOME=<path_to_shape-it>" in the scipion.conf file')
 
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []
