@@ -50,7 +50,12 @@ class Plugin(pwem.Plugin):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        try:
+            cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        except:
+            print('Shape-it could not be installed automatically. \nIf you want to use it, '
+                  'you will need to install it manually (https://github.com/rdkit/shape-it) and define its home dir '
+                  'as "SHAPEIT_HOME=<path_to_shape-it>" in the scipion.conf file')
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
