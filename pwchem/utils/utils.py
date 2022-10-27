@@ -25,7 +25,7 @@
 # **************************************************************************
 
 import random as rd
-import os, shutil
+import os, shutil, json
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser
 
@@ -556,3 +556,20 @@ def getAllAttributes(inputSets):
 
 def getBaseFileName(filename):
     return os.path.splitext(os.path.basename(filename))[0]
+
+
+
+################# Wizard utils #####################
+
+def getChainIds(chainStr):
+    '''Parses a line of json with the description of a chain or chains and returns the ids'''
+    chainJson = json.loads(chainStr)
+    if 'chain' in chainJson:
+      chain_ids = [chainJson["chain"].upper().strip()]
+    elif 'model-chain' in chainJson:
+      modelChains = chainJson["model-chain"].upper().strip()
+      chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+    return chain_ids
+
+
+

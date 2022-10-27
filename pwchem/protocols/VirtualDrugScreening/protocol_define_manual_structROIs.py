@@ -30,7 +30,7 @@
 This protocol is used to manually define structural regions from coordinates, residues or docked small molecules
 
 """
-import os, json
+import os, json, math, sys
 from scipy.spatial import distance
 from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
 from Bio.PDB.PDBParser import PDBParser
@@ -46,14 +46,14 @@ from pwchem.utils import *
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
-COORDS, RESIDUES, LIGANDS = 0, 1, 2
+COORDS, RESIDUES, LIGANDS, PPI = 0, 1, 2, 3
 
 class ProtDefineStructROIs(EMProtocol):
     """
     Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
     """
     _label = 'Define structural ROIs'
-    typeChoices = ['Coordinates', 'Residues', 'Ligand']
+    typeChoices = ['Coordinates', 'Residues', 'Ligand', 'Protein-Protein Interface']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -78,7 +78,8 @@ class ProtDefineStructROIs(EMProtocol):
                            '\nCoordinates in format: (1,2,3);(4,5,6);...')
 
         group.addParam('chain_name', params.StringParam,
-                      allowsNull=False, label='Chain of interest', condition='origin=={}'.format(RESIDUES),
+                      allowsNull=False, label='Chain of interest:', condition='origin in [{}, {}]'.
+                       format(RESIDUES, PPI),
                       help='Specify the chain of the residue of interest')
         group.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
                       allowsNull=False, label='Residues of interest',
@@ -99,7 +100,7 @@ class ProtDefineStructROIs(EMProtocol):
                        help='Whether the ligand is docked in a external molecule or in the AtomStruct itself')
 
         group.addParam('inSmallMols', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                      condition='origin=={} and extLig'.format(LIGANDS),
+                      condition='origin=={} and extLig'.format(LIGANDS), allowsNull=True,
                       label='Input molecules: ', help='Predocked molecules which will define the protein pockets')
 
         group.addParam('ligName', params.StringParam,
@@ -109,6 +110,33 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('molName', params.StringParam,
                        condition='origin=={} and not extLig'.format(LIGANDS),
                        label='Molecule name: ', help='Name of the HETATM molecule in the AtomStruct')
+
+        group.addParam('chain_name2', params.StringParam,
+                       allowsNull=False, label='Chain of interest 2: ', condition='origin=={}'.format(PPI),
+                       help='Select the second protein chain to determine its interface with the first chain')
+        group.addParam('ppiDistance', params.FloatParam, default='3.0',
+                       label='Interface distance (A): ',
+                       help='Maximum distance between two chain atoms to considered them part of the interface')
+
+        group.addParam('addPPI', params.LabelParam,
+                       label='Add defined PPI interface', condition='origin=={}'.format(PPI),
+                       help='Here you can define a residue which will be added to the list of residues below.')
+        group.addParam('inInterfaces', params.TextParam, width=70, default='',
+                       condition='origin=={}'.format(PPI), label='Input PPIs: ',
+                       help='Input PPI interfaces to define the structural ROI. '
+                            'The coordinates of the interface atoms will be mapped to surface points closer than '
+                            'maxDepth and points closer than maxIntraDistance will be considered the same pocket')
+        
+        clean = form.addGroup('Clean Structure File', condition='origin=={}'.format(PPI))
+        clean.addParam("rchains", params.BooleanParam,
+                       label='Select specific chains: ',
+                       default=False, important=True, condition='origin=={}'.format(PPI),
+                       help='Keep only the chains selected')
+
+        clean.addParam("keep_chain_name", params.StringParam,
+                       label="Keep chains: ", important=True,
+                       condition="rchains and origin=={}".format(PPI),
+                       help="Select the chain(s) you want to keep in the structure")
 
         group = form.addGroup('Pocket definition')
         group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
@@ -140,7 +168,18 @@ class ProtDefineStructROIs(EMProtocol):
 
         structure = parser.get_structure(self.getProteinName(), pdbFile)
         self.structModel = structure[0]
-        self.structSurface = get_surface(self.structModel,
+
+        if self.origin.get() == PPI and self.rchains.get():
+            # Surface must be calculated only on the kept chains
+            chain_ids = getChainIds(self.keep_chain_name.get())
+            pdbFile = clean_PDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
+                                waters=True, HETATM=True, chain_ids=chain_ids)
+            structure = parser.get_structure(self.getProteinName(), pdbFile)
+            keepStructure = structure[0]
+        else:
+            keepStructure = self.structModel
+
+        self.structSurface = get_surface(keepStructure,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
     def definePocketsStep(self):
@@ -152,10 +191,16 @@ class ProtDefineStructROIs(EMProtocol):
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
+        if self.origin.get() == PPI and self.rchains.get():
+            chain_ids = getChainIds(self.keep_chain_name.get())
+            pdbFile = os.path.abspath(self._getExtraPath('cleanPDB.pdb'))
+        else:
+            pdbFile = self.getProteinFileName()
+
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
             pocketFile = self.createPocketFile(clust, i)
-            pocket = StructROI(pocketFile, self.getProteinFileName())
+            pocket = StructROI(pocketFile, pdbFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
             pocket.calculateContacts()
@@ -178,13 +223,13 @@ class ProtDefineStructROIs(EMProtocol):
 
     def _validate(self):
         errors = []
-        if not self.getProteinFileName():
+        if not self.getProteinFileName(inProtocol=False):
             errors.append('You must specify an input structure')
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
 
-    def getProteinFileName(self):
+    def getProteinFileName(self, inProtocol=True):
         inpStruct = self.inputAtomStruct.get()
         if inpStruct:
             inpFile = inpStruct.getFileName()
@@ -195,11 +240,19 @@ class ProtDefineStructROIs(EMProtocol):
             return None
 
         if inpFile.endswith('.cif'):
-          inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
+          if inProtocol:
+              inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
+          else:
+              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
           cifToPdb(inpFile, inpPDBFile)
 
         elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace(inpStruct.getExtension(), '.pdb'))
+            if inProtocol:
+              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
+                                                        replace(inpStruct.getExtension(), '.pdb'))
+            else:
+              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
+                                                        replace(inpStruct.getExtension(), '.pdb'))
             inpStruct.convert2PDB(outPDB=inpPDBFile)
 
         else:
@@ -244,6 +297,35 @@ class ProtDefineStructROIs(EMProtocol):
 
             else:
                 oCoords = getLigCoords(self.getProteinFileName(), self.molName.get())
+
+        elif self.origin.get() == PPI:
+            ppiInterfaces = self.inInterfaces.get().strip().split('\n')
+            for ppiInt in ppiInterfaces:
+                ppiDic = json.loads(ppiInt)
+                chain1Id, chain2Id = ppiDic['chain'], ppiDic['chain2']
+                chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
+
+                c1, c2 = True, True
+                if self.rchains.get():
+                    keepChains = getChainIds(self.keep_chain_name.get())
+                    if not chain1Id in keepChains:
+                      c1 = False
+                    if not chain2Id in keepChains:
+                      c2 = False
+
+                if c1 or c2:
+                    print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
+                    sys.stdout.flush()
+                    for atom1 in chain1.get_atoms():
+                        for atom2 in chain2.get_atoms():
+                            coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
+                            dist = (math.dist(coord1, coord2)) ** (1/2)
+                            if dist <= self.ppiDistance.get():
+                                if c1:
+                                    oCoords.append(coord1)
+                                if c2:
+                                    oCoords.append(coord2)
+                                break
 
         return oCoords
 

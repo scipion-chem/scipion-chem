@@ -59,6 +59,17 @@ class AddResidueWizard(EmWizard):
                     (chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues']))
 
 
+class AddPPIsWizard(EmWizard):
+  _targets = [(ProtDefineStructROIs, ['addPPI'])]
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    chainDic, chainDic2 = json.loads(protocol.chain_name.get()), json.loads(protocol.chain_name2.get())
+    form.setVar('inInterfaces', protocol.inInterfaces.get() +
+                '{"model": %s, "chain": "%s", "model2": "%s", "chain2": "%s"}\n' %
+                (chainDic['model'], chainDic['chain'], chainDic2['model'], chainDic2['chain']))
+
+
 ######################## Variable wizards ####################
 
 class SelectChainWizardQT(SelectChainWizard):
@@ -110,6 +121,10 @@ SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
+                              targets=['chain_name2'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name2'])
 
 SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name1'],
@@ -233,6 +248,10 @@ class SelectMultiChainWizard(SelectChainWizardQT):
         chainInfo = dlg.values[0].get()
       form.setVar(outputParam[0], chainInfo)
 
+SelectMultiChainWizard().addTarget(protocol=ProtDefineStructROIs,
+                                   targets=['keep_chain_name'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['keep_chain_name'])
 
 class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
