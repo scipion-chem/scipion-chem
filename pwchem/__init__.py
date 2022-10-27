@@ -89,7 +89,7 @@ class Plugin(pwem.Plugin):
       plip_commands = 'conda create -y -n plip-env python=3.6 && '
       plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation())
       #Installing openbabel
-      plip_commands += 'conda install -y openbabel && '
+      plip_commands += 'conda install -y -c conda-forge openbabel && '
       #Installing swig
       plip_commands += 'conda install -y -c conda-forge swig && '
       #Installing Pymol
