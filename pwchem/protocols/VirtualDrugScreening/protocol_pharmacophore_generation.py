@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-import os, re
+import os, re, pickle
 from os.path import abspath
 
 from pyworkflow.protocol import params
@@ -36,6 +36,8 @@ from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
 
+ABSOLUTE, PROP_MOLS, PROP_FEATS = ['Absolute', 'Molecules proportion', 'Features proportion']
+DBSCAN, KMEANS = ['DBSCAN', 'KMeans']
 
 scriptName = 'pharmacophore_generation.py'
 
