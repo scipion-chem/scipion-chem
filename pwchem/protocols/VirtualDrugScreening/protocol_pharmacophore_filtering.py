@@ -34,7 +34,6 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
-from pwchem.scripts.pharmacophore_generation import *
 
 
 scriptName = 'pharmacophore_filtering.py'

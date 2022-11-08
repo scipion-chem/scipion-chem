@@ -34,7 +34,6 @@ from pwchem.objects import PharmFeature, PharmacophoreChem
 from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
-from pwchem.scripts.pharmacophore_generation import *
 
 
 ADD, REM, MOD = 'ADD', 'REMOVE', 'MODIFY'
