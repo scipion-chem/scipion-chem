@@ -550,7 +550,7 @@ class StructROI(data.EMFile):
             kwargs.update(self.getKwargs(self.properties, POCKET_ATTRIBUTES_MAPPING))
 
         data.EMFile.__init__(self, filename, **kwargs)
-        if hasattr(self, 'pocketId'):
+        if hasattr(self, 'pocketId') and self.pocketId:
             self.setObjId(self.pocketId)
         self._proteinFile = String(proteinFile)
         self._extraFile = String(extraFile)
@@ -921,7 +921,8 @@ class StructROI(data.EMFile):
                             props = dict(zip(keys, values))
                         pId += 1
 
-
+        else:
+            props, pocketId = {}, None
         return props, pocketId
 
     def getStructureMaeFile(self):
@@ -1125,7 +1126,7 @@ class SetOfStructROIs(data.EMSet):
         outStr = ''
         numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
         rawStr = getRawPDBStr(pocketFile, ter=False).strip()
-        if pocket.getPocketClass() == 'AutoLigand':
+        if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
             for line in rawStr.split('\n'):
                 line = line.split()
                 replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
