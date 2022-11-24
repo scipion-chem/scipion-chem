@@ -25,7 +25,7 @@
 # **************************************************************************
 
 import random as rd
-import os, shutil, json
+import os, shutil, json, requests
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser
 
@@ -85,6 +85,20 @@ def getLigCoords(ASFile, ligName):
                     for atom in residue:
                         coords.append(list(atom.get_coord()))
     return coords
+
+def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
+    if not structureHandler:
+        structureHandler = AtomicStructHandler()
+
+    url = "https://www.rcsb.org/structure/" + str(pdbID)
+    try:
+        response = requests.get(url)
+    except:
+        raise Exception("Cannot connect to PDB server")
+    if (response.status_code >= 400) and (response.status_code < 500):
+        raise Exception("%s is a wrong PDB ID" % pdbID)
+    fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir=outDir)
+    return fileName
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
