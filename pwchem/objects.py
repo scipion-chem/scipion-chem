@@ -565,7 +565,7 @@ class StructROI(data.EMFile):
             self.calculateContacts()
 
     def __str__(self):
-        s = 'Structural ROI {}, {} class\nFile: {}'.format(self.getObjId(), self.getPocketClass(), self.getFileName())
+        s = 'Structural ROI {}, {} class'.format(self.getObjId(), self.getPocketClass())
         return s
 
     # Attributes functions
