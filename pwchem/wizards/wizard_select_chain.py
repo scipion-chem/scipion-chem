@@ -43,7 +43,7 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence
 
 from pwchem.protocols import *
-from pwchem.objects import SequenceVariants
+from pwchem.objects import SequenceVariants, SetOfStructROIs
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
@@ -97,15 +97,19 @@ class SelectChainWizardQT(SelectChainWizard):
 
     elif str(type(inputObj).__name__) == 'SchrodingerAtomStruct':
         fileName = os.path.abspath(inputObj.convert2PDB())
-    elif inputObj.getFileName().endswith('.pdbqt'):
-      proteinFile = inputObj.getFileName()
-      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-      fileName = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
-      args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), fileName)
-      runOpenBabel(protocol=protocol, args=args, popen=True)
+
+    elif str(type(inputObj).__name__) == 'SetOfStructROIs':
+        fileName = inputObj.getProteinFile()
 
     else:
         fileName = os.path.abspath(inputObj.getFileName())
+
+    if fileName.endswith('.pdbqt'):
+      inName, inExt = os.path.splitext(os.path.basename(fileName))
+      pdbFile = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+      args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
+      runOpenBabel(protocol=protocol, args=args, popen=True)
+      fileName = pdbFile
 
     structureHandler.read(fileName)
     structureHandler.getStructure()
@@ -116,6 +120,27 @@ class SelectResidueWizardQT(SelectResidueWizard):
   @classmethod
   def getModelsChainsStep(cls, protocol, inputObj):
       return SelectChainWizardQT().getModelsChainsStep(protocol, inputObj)
+
+  def checkNoPDBQT(self, form, fileName):
+      if fileName.endswith('.pdbqt'):
+        protocol = form.protocol
+        inName, inExt = os.path.splitext(os.path.basename(fileName))
+        pdbFile = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+        args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
+        runOpenBabel(protocol=protocol, args=args, popen=True)
+        fileName = pdbFile
+      return fileName
+
+  def getResidues(self, form, inputObj, chainStr):
+    if issubclass(type(inputObj), SetOfStructROIs):
+        inputObj = inputObj.getProteinFile()
+        inputObj = self.checkNoPDBQT(form, inputObj)
+    elif issubclass(type(inputObj), AtomStruct):
+        inputObj = inputObj.getFileName()
+        inputObj = self.checkNoPDBQT(form, inputObj)
+
+    return super().getResidues(form, inputObj, chainStr)
+
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
