@@ -44,7 +44,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
        are accepted.
     """
     _label = 'import small mols'
-    supportedExt = ['smi', 'mol2', 'sdf', 'pdb', 'mae', 'maegz', 'mol']
+    supportedExt = ['smi', 'mol2', 'sdf', 'pdb', 'mae', 'maegz', 'mol', 'pdbqt']
 
     def _defineParams(self, form):
         form.addSection(label='Input')
