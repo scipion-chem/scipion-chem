@@ -48,15 +48,26 @@ from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
-class AddResidueWizard(EmWizard):
-    _targets = [(ProtDefineStructROIs, ['addResidue'])]
+class AddResidueWizard(VariableWizard):
+    _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
+        inputParams, outputParam = self.getInputOutput(form)
         protocol = form.protocol
-        chainDic, resDic = json.loads(protocol.chain_name.get()), json.loads(protocol.resPosition.get())
-        form.setVar('inResidues', protocol.inResidues.get() +
-                    '{"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' %
-                    (chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues']))
+        chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
+                           json.loads(getattr(protocol, inputParams[1]).get())
+        resDef = '{"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' % \
+                 (chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
+        prevList = getattr(protocol, outputParam[0]).get()
+        if prevList == None:
+            prevList = ''
+        form.setVar(outputParam[0], prevList + resDef)
+
+
+AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
+                             targets=['addResidue'],
+                             inputs=['chain_name', 'resPosition'],
+                             outputs=['inResidues'])
 
 
 class AddPPIsWizard(EmWizard):
