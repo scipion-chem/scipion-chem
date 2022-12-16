@@ -32,7 +32,7 @@ import sys, os, argparse, glob
 from openbabel import pybel
 
 def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, outBase=None,
-                     overW=False, make3d=False, nameKey=None):
+                     overW=True, make3d=False, nameKey=None):
     inFormat = os.path.splitext(inputFile)[1][1:]
 
     if singleOutFile:
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument('-ob', '--outputBase', type=str, required=False, help='Output basename for multiple outputs')
     parser.add_argument('-od', '--outputDir', type=str, required=False, help='Output directory')
     parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
-    parser.add_argument('--overWrite', default=False, action='store_true', help='Overwrite output')
+    parser.add_argument('--overWrite', default=True, action='store_true', help='Overwrite output')
     parser.add_argument('--nameKey', type=str, required=False, help='molecule name key in file')
 
     args = parser.parse_args()
