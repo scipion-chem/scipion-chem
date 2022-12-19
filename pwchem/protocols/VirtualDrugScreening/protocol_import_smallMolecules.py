@@ -25,18 +25,21 @@
 # *
 # **************************************************************************
 
-import glob
-import os
+import os, requests, glob
 
 
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
 from pwchem.utils import runOpenBabel
+
+urlDic = {'ECBL bioactive (~5000)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Video-Content/other_uploads/Pilot_08_09_2021.sdf',
+          'ECBL diversity (~10⁵)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Video-Content/other_uploads/ECBL_08_09_2021.sdf',
+          'ECBL fragments (~1000)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Fragments.sdf'}
 
 class ProtChemImportSmallMolecules(EMProtocol):
     """Import small molecules from a directory. Each molecule should be in a separate file.
@@ -48,10 +51,19 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('multipleFiles', BooleanParam, default=True,
-                      label='Each file is a molecule')
-        form.addParam('filesPath', PathParam, condition='multipleFiles',
-                      label="Files directory",
+        form.addParam('defLibraries', BooleanParam, default=True, label='Download a predefined library: ',
+                      help='Download a predefined library from a website')
+        form.addParam('choicesLibraries', EnumParam, default=0,
+                      label='Download ligand library: ', condition='defLibraries',
+                      choices=list(urlDic.keys()),
+                      help='Choose the predefined library you want to download.\n'
+                           'ECBL: https://www.eu-openscreen.eu/services/compound-collection.html')
+
+        form.addParam('multipleFiles', BooleanParam, default=True, condition='not defLibraries',
+                      label='Each file is a molecule: ',
+                      help='Whether to import each molecule from a file or all molecules stored in a single file')
+        form.addParam('filesPath', PathParam, condition='multipleFiles and not defLibraries',
+                      label="Files directory: ",
                       help="Directory with the files you want to import.\n\n"
                            "The path can also contain wildcards to select"
                            "from several folders. \n\n"
@@ -65,9 +77,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
                            "file ID\n\n"
                            "NOTE: wildcard characters ('*', '?', '#') "
                            "cannot appear in the actual path.)")
-        form.addParam('filesPattern', StringParam,  condition='multipleFiles',
-                      label='Pattern',
-                      default="*",
+        form.addParam('filesPattern', StringParam,  condition='multipleFiles and not defLibraries',
+                      label='Pattern', default="*",
                       help="Pattern of the files to be imported.\n\n"
                            "The pattern can contain standard wildcards such as\n"
                            "*, ?, etc, or special ones like ### to mark some\n"
@@ -78,12 +89,13 @@ class ProtChemImportSmallMolecules(EMProtocol):
                            "You may create small molecules from Smiles (.smi), Tripos Mol2 (.mol2), "
                            "SDF (.sdf), Maestro (.mae, .maegz), or PDB blocks (.pdb)")
 
-        form.addParam('filePath', PathParam, condition='not multipleFiles',
+        form.addParam('filePath', PathParam, condition='not multipleFiles and not defLibraries',
                       label='File', help='Allowed formats: \n '
                                          ' - CSV smiles (ID, compound; this is downloaded from ZINC) \n'
                                          ' - Mol2 (Multiple mol2 file) \n'
                                          ' - SDF (Multiple sdf file)')
 
+        # todo: make 3D opt actually everytime is true
         form.addParam('make3d', BooleanParam, default=False, label='Optimize 3D structure',
                       help='Optimize 3D structure of the molecules using the pybel fucntion. '
                            'It is automatically done for smi, and very recommendable for 2D structures')
@@ -99,26 +111,27 @@ class ProtChemImportSmallMolecules(EMProtocol):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
+        if self.defLibraries:
+            libName = self.getEnumText('choicesLibraries')
+            url = urlDic[libName]
+            r = requests.get(url, allow_redirects=True)
+            inFile = self._getTmpPath(os.path.split(url)[-1])
+            open(inFile, 'wb').write(r.content)
+            mulFiles = False
+            nameKey = 'Supplier_ID'
+
+        else:
+          mulFiles = self.multipleFiles.get()
+          inFile = self.filePath.get()
+          nameKey = self.nameKey.get().strip()
+
+
+
         make3d = self.make3d.get()
-        if not self.multipleFiles.get():
-            fnSmall = os.path.abspath(self.filePath.get())
+        if not mulFiles:
+            fnSmall = os.path.abspath(inFile)
             if fnSmall.endswith(".pdb"):  # Multiple pdb
-                with open(fnSmall) as fIn:
-                    pdbs = fIn.read().split('\nEND\n')[:-1]
-                i = 1
-                names = []
-                for pdb in pdbs:
-                    molName = "molecule_%s" % i
-                    for line in pdb.strip().split('\n'):
-                        if line.startswith('COMPND'):
-                            preName = '_'.join(line.split()[1:])
-                            if not preName in names:
-                                molName = preName
-                                names.append(molName)
-                                break
-                    with open(self._getExtraPath(molName + '.pdb'), 'w') as f:
-                        f.write(pdb)
-                    i += 1
+                self.parseMultiPDBFile(fnSmall)
 
             elif fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):  # Multiple mae
                 args = ' -i "{}" --outputDir {}'.format(fnSmall, os.path.abspath(self._getExtraPath()))
@@ -133,8 +146,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
                                                              os.path.abspath(self._getExtraPath()))
                 if make3d:
                     args += ' --make3D'
-                if self.nameKey.get().strip() != '':
-                    args += ' --nameKey {}'.format(self.nameKey.get().strip())
+                if nameKey != '':
+                    args += ' --nameKey {}'.format(nameKey)
                 Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=self._getExtraPath())
 
         else:
@@ -170,16 +183,38 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     def _validate(self):
         errors = []
-        if not self.multipleFiles.get():
-            ext = os.path.splitext(self.filePath.get())[1][1:]
-            if not ext in self.supportedExt:
-                errors.append('Unknown input file format {}\n'
-                              'Recognized formats: {}'.format(ext, self.supportedExt))
-        else:
-          for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
-              ext = os.path.splitext(filename)[1][1:]
+        if not self.defLibraries:
+          if not self.multipleFiles.get():
+              ext = os.path.splitext(self.filePath.get())[1][1:]
               if not ext in self.supportedExt:
-                errors.append('Unknown input file format {}\n'
-                              'Recognized formats: {}'.format(ext, self.supportedExt))
-                break
+                  errors.append('Unknown input file format {}\n'
+                                'Recognized formats: {}'.format(ext, self.supportedExt))
+          else:
+            for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
+                ext = os.path.splitext(filename)[1][1:]
+                if not ext in self.supportedExt:
+                  errors.append('Unknown input file format {}\n'
+                                'Recognized formats: {}'.format(ext, self.supportedExt))
+                  break
         return errors
+
+    def parseMultiPDBFile(self, file, outDir=None):
+      if not outDir:
+          outDir = self._getExtraPath()
+
+      with open(fnSmall) as fIn:
+          pdbs = fIn.read().split('\nEND\n')[:-1]
+
+      names = []
+      for i, pdb in enumerate(pdbs):
+        molName = "molecule_%s" % (i+1)
+        for line in pdb.strip().split('\n'):
+          if line.startswith('COMPND'):
+            preName = '_'.join(line.split()[1:])
+            if not preName in names:
+              molName = preName
+              names.append(molName)
+              break
+
+        with open(os.path.join(outDir, molName + '.pdb'), 'w') as f:
+          f.write(pdb)
