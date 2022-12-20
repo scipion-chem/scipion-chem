@@ -51,7 +51,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('defLibraries', BooleanParam, default=True, label='Download a predefined library: ',
+        form.addParam('defLibraries', BooleanParam, default=False, label='Download a predefined library: ',
                       help='Download a predefined library from a website')
         form.addParam('choicesLibraries', EnumParam, default=0,
                       label='Download ligand library: ', condition='defLibraries',
@@ -202,7 +202,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
       if not outDir:
           outDir = self._getExtraPath()
 
-      with open(fnSmall) as fIn:
+      with open(file) as fIn:
           pdbs = fIn.read().split('\nEND\n')[:-1]
 
       names = []
