@@ -40,7 +40,7 @@ from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
 from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, VariableWizard
 from pwem.convert import AtomicStructHandler
-from pwem.objects import AtomStruct, Sequence
+from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
 from pwchem.objects import SequenceVariants, SetOfStructROIs
@@ -484,10 +484,10 @@ class AddSequenceWizard(SelectResidueWizard):
 
         # StructName
         inputObj = getattr(protocol, inputParams[0]).get()
-        pdbFile, AS = '', False
+        pdbFile, AS, addPointer = '', False, True
         if issubclass(type(inputObj), str):
             outStr = [inputObj]
-            AS = True
+            AS, addPointer = True, False
         elif issubclass(type(inputObj), AtomStruct):
             pdbFile = inputObj.getFileName()
             outStr = [os.path.splitext(os.path.basename(pdbFile))[0]]
@@ -514,9 +514,10 @@ class AddSequenceWizard(SelectResidueWizard):
             idxs = [json.loads(finalResiduesList[0].get())['index'], json.loads(finalResiduesList[-1].get())['index']]
             seq = self.getSequence(finalResiduesList, idxs)
 
-        chainStr = ''
+        chainStr, chainFileId = '', ''
         if AS:
           chainStr = ', "chain": "{}"'.format(chainId)
+          chainFileId = '_{}'.format(chainId)
 
         prevStr = getattr(protocol, outputParam[0]).get()
         lenPrev = len(prevStr.strip().split('\n')) + 1
@@ -525,7 +526,7 @@ class AddSequenceWizard(SelectResidueWizard):
         elif not prevStr.endswith('\n'):
           prevStr += '\n'
 
-        seqFile = protocol.getProject().getTmpPath('{}_{}_{}.fa'.format(outStr[0], lenPrev, outStr[1]))
+        seqFile = protocol.getProject().getTmpPath('{}{}_{}.fa'.format(outStr[0], chainFileId, outStr[1]))
         with open(seqFile, 'w') as f:
             f.write('>{}\n{}\n'.format(outStr[0], seq))
 
@@ -533,9 +534,16 @@ class AddSequenceWizard(SelectResidueWizard):
                   (lenPrev, outStr[0], chainStr, outStr[1], seqFile)
         form.setVar(outputParam[0], prevStr + jsonStr)
 
+        if addPointer:
+            outPointers = outputParam[1]
+            prevPointers = getattr(protocol, outPointers)
+            prevPointers.append(Pointer(inputObj))
+            form.setVar(outPointers, prevPointers)
+
+
 
 AddSequenceWizard().addTarget(protocol=ProtDefineSetOfSequences,
                               targets=['addInput'],
                               inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
                                       'inpChain', 'inpPositions'],
-                              outputs=['inputList'])
+                              outputs=['inputList', 'inputPointers'])

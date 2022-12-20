@@ -84,8 +84,9 @@ class ProtocolFingerprintFiltering(EMProtocol):
                         choices=self._coefChoices,
                         help="Chosen fingerprint type to perform the filtering")
 
-        group.addParam('cut', params.FloatParam, default=0, label='Filter cut-off: ',
-                       help="Filter cut-off, distances below the threshold will be filtered")
+        group.addParam('cut', params.FloatParam, default=0.5, label='Similarity cut-off: ',
+                       help="Similarity cut-off, similarities below the threshold will be discarded."
+                            "Similarities go from 0 (not similar) to 1 (equal)")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -97,6 +98,21 @@ class ProtocolFingerprintFiltering(EMProtocol):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)
         Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+
+    def createOutputStep(self):
+        filtered_molecules_dict = self.parseResults(self._getPath("results.tsv"))
+        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
+        filtered_molecules = list(filtered_molecules_dict.keys())
+
+        mols = self.inputSmallMolecules.get()
+        for mol in mols:
+            file = os.path.abspath(mol.getFileName())
+            if file in filtered_molecules:
+                mol._fingerprintSimilarity = pwobj.String(filtered_molecules_dict[file])
+                newMols.append(mol)
+
+        newMols.updateMolClass()
+        self._defineOutputs(outputSmallMolecules=newMols)
 
     # --------------- INFO functions -------------------------
 
@@ -117,21 +133,6 @@ class ProtocolFingerprintFiltering(EMProtocol):
         return summary
 
     # --------------------------- UTILS functions -----------------------------------
-
-    def createOutputStep(self):
-        filtered_molecules_dict = self.parseResults(self._getPath("results.tsv"))
-        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
-        filtered_molecules = list(filtered_molecules_dict.keys())
-
-        mols = self.inputSmallMolecules.get()
-        for mol in mols:
-            file = os.path.abspath(mol.getFileName())
-            if file in filtered_molecules:
-                mol._coefficient = pwobj.String(filtered_molecules_dict[file])
-                newMols.append(mol)
-
-        newMols.updateMolClass()
-        self._defineOutputs(outputSmallMolecules=newMols)
 
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []
@@ -169,7 +170,7 @@ class ProtocolFingerprintFiltering(EMProtocol):
                 if row[0] == "#":
                     pass
                 else:
-                    row1 = row.split(",")
+                    row1 = row.split("\t")
                     molecules[row1[0]] = row1[1]
         return molecules
 

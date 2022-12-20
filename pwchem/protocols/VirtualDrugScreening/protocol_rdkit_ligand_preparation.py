@@ -69,7 +69,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """ Define the input parameters that will be used.
         """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputSmallMols', params.PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
                       help='It must be in pdb or mol2 format, you may use the converter')
 
@@ -123,7 +123,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         aSteps = []
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
-        inputSubsets = makeSubsets(self.inputSmallMols.get(), nt - 1)
+        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('preparationStep', subset, it, prerequisites=[])]
         self._insertFunctionStep('createOutput', prerequisites=aSteps)
@@ -142,11 +142,14 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
               - Path to conformers file (mol2 format)
         """
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
-        for mol in self.inputSmallMols.get():
+        for mol in self.inputSmallMolecules.get():
             tempSmall = os.path.abspath(self._getExtraPath("{}*.sdf".format(mol.getMolName())))
             for molFile in sorted(list(glob.glob(tempSmall))):
                 if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
-                    confId = os.path.splitext(molFile)[0].split('-')[-1]
+                    if self.doConformers:
+                        confId = os.path.splitext(molFile)[0].split('-')[-1]
+                    else:
+                        confId = 0
 
                     newSmallMol = SmallMolecule()
                     newSmallMol.copy(mol, copyId=False)
@@ -157,7 +160,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
         if len(outputSmallMolecules) > 0:
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+            self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
 
     # --------------------------- UTILS functions ------------------------------

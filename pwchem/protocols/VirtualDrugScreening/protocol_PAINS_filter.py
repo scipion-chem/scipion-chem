@@ -62,12 +62,12 @@ class ProtocolPainsRdkitFiltering(EMProtocol):
                       label="Input  Small Molecules: ",
                       help='Select the molecules to be filtered')
 
-        form.addParam('referenceMolecule', params.BooleanParam, default=True,
-                      label='have you a file os PAINS to perform the filtering?')
+        form.addParam('referenceMolecule', params.BooleanParam, default=False,
+                      label='Custom PAINS file: ')
 
         form.addParam('painsFile', params.PathParam, condition='referenceMolecule',
                       label="Reference file: ",
-                      help='Import the path PAINS file')
+                      help='Custom PAINS file to use for filtering')
 
 
     # --------------------------- STEPS functions ------------------------------

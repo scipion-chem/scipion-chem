@@ -143,6 +143,9 @@ class ProtDefineSeqROI(EMProtocol):
                     idxsList.append([int(mut[1:-1]), int(mut[1:-1])])
                     descList.append(mut)
 
+            elif 'Original' == roiInfo:
+                roiList = []
+
             for i in range(len(roiList)):
                 roi, idxs, desc = roiList[i], idxsList[i], descList[i]
                 roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs),

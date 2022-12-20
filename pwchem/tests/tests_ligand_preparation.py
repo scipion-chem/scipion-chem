@@ -27,29 +27,12 @@
 # **************************************************************************
 
 from pyworkflow.tests import *
-from pwchem.protocols import ProtChemImportSmallMolecules
-from pwchem.protocols import ProtChemOBabelPrepareLigands
+from pwchem.protocols import *
+
+from .tests_imports import TestImportBase
 
 
-class TestImportBase(BaseTest):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.dsLig = DataSet.getDataSet("smallMolecules")
-
-        setupTestProject(cls)
-        cls._runImportSmallMols()
-
-    @classmethod
-    def _runImportSmallMols(cls):
-        protImportSmallMols = cls.newProtocol(
-          ProtChemImportSmallMolecules,
-          filesPath=cls.dsLig.getFile('mol2'))
-        cls.launchProtocol(protImportSmallMols)
-        cls.protImportSmallMols = protImportSmallMols
-
-
-class TestLigandPreparation(TestImportBase):
+class TestOBLigandPreparation(TestImportBase):
 
     def test_1(self):
         """ Prepare a set of 4 ligands with conformer generation (genetic algotithm)
@@ -120,3 +103,27 @@ class TestLigandPreparation(TestImportBase):
             except:
                 self.assertTrue((mol.getConformersFileName()).endswith("Not available"),
                                 "Something was wrong in column of _ConformersFile")
+
+
+class TestRDKitLigandPreparation(TestImportBase):
+  @classmethod
+  def _runPrep(cls, inProt, mode=0):
+    protShape = cls.newProtocol(
+      ProtChemRDKitPrepareLigands,
+    )
+    protShape.inputSmallMolecules.set(inProt)
+    protShape.inputSmallMolecules.setExtended('outputSmallMolecules')
+    if mode == 1:
+        protShape.doConformers.set(True)
+
+    cls.proj.launchProtocol(protShape, wait=False)
+    return protShape
+
+  def test(self):
+    protsShape = []
+    for i in range(2):
+        protsShape.append(self._runPrep(inProt=self.protImportSmallMols, mode=i))
+
+    for p in protsShape:
+        self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
+        self.assertIsNotNone(getattr(p, 'outputSmallMolecules', None))

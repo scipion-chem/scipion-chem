@@ -147,7 +147,7 @@ if __name__ == "__main__":
     f = open(paramsDic["outputPath"], "w")
     f.write("#The following molecules have passed the fingerprint filter: " + "\n")
     for key, item in filtered_fp.items():
-        f.write(key + "," + str(item) + "\n")
+        f.write("{}\t{}\n".format(key, item))
 
     f.close()
 
