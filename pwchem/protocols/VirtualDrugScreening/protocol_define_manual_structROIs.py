@@ -70,30 +70,21 @@ class ProtDefineStructROIs(EMProtocol):
                       label='Extract ROIs from: ', choices=self.typeChoices,
                       help='The ROIs will be defined from a set of elements of this type')
 
-        group.addParam('inCoords', params.TextParam, default='', width=70,
-                      condition='origin=={}'.format(COORDS), label='Input coordinates: ',
-                      help='Input coordinates to define the structural ROI. '
-                           'The coordinates will be mapped to surface points closer than maxDepth '
-                           'and points closer than maxIntraDistance will be considered the same ROI.'
-                           '\nCoordinates in format: (1,2,3);(4,5,6);...')
+        line = group.addLine('coordsROI', condition='origin=={}'.format(COORDS),
+                             help='Coordinates of the defiend ROI')
+        line.addParam('coordX', params.IntParam, default=10, label='X: ')
+        line.addParam('coordY', params.IntParam, default=10, label='Y: ')
+        line.addParam('coordZ', params.IntParam, default=10, label='Z: ')
 
         group.addParam('chain_name', params.StringParam,
-                      allowsNull=False, label='Chain of interest:', condition='origin in [{}, {}]'.
+                       allowsNull=False, label='Chain of interest:', condition='origin in [{}, {}]'.
                        format(RESIDUES, PPI),
-                      help='Specify the chain of the residue of interest')
+                       help='Specify the chain of the residue of interest')
         group.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
-                      allowsNull=False, label='Residues of interest',
-                      help='Specify the residue to define a region of interest.\n'
-                           'You can either select a single residue or a range '
-                           '(it will take into account the first and last residues selected)')
-        group.addParam('addResidue', params.LabelParam,
-                      label='Add defined residue', condition='origin=={}'.format(RESIDUES),
-                      help='Here you can define a residue which will be added to the list of residues below.')
-        group.addParam('inResidues', params.TextParam, width=70, default='',
-                      condition='origin=={}'.format(RESIDUES), label='Input residues: ',
-                      help='Input residues to define the structural ROI. '
-                           'The coordinates of the residue atoms will be mapped to surface points closer than maxDepth '
-                           'and points closer than maxIntraDistance will be considered the same pocket')
+                       allowsNull=False, label='Residues of interest',
+                       help='Specify the residue to define a region of interest.\n'
+                            'You can either select a single residue or a range '
+                            '(it will take into account the first and last residues selected)')
 
         group.addParam('extLig', params.BooleanParam, default=True, condition='origin=={}'.format(LIGANDS),
                        label='Input is a external molecule? ',
@@ -115,28 +106,27 @@ class ProtDefineStructROIs(EMProtocol):
                        allowsNull=False, label='Chain of interest 2: ', condition='origin=={}'.format(PPI),
                        help='Select the second protein chain to determine its interface with the first chain')
         group.addParam('ppiDistance', params.FloatParam, default='3.0',
-                       label='Interface distance (A): ',
+                       label='Interface distance (A): ', condition='origin=={}'.format(PPI),
                        help='Maximum distance between two chain atoms to considered them part of the interface')
 
-        group.addParam('addPPI', params.LabelParam,
-                       label='Add defined PPI interface', condition='origin=={}'.format(PPI),
-                       help='Here you can define a residue which will be added to the list of residues below.')
-        group.addParam('inInterfaces', params.TextParam, width=70, default='',
-                       condition='origin=={}'.format(PPI), label='Input PPIs: ',
-                       help='Input PPI interfaces to define the structural ROI. '
+        group.addParam('addCoordinate', params.LabelParam, label='Add defined coordinate: ',
+                       condition='origin=={}'.format(COORDS),
+                       help='Here you can define a coordinate ROI which will be added to the list of ROIs below.')
+        group.addParam('addResidue', params.LabelParam, label='Add defined residues: ',
+                       condition='origin=={}'.format(RESIDUES),
+                       help='Here you can define a residue ROI which will be added to the list of ROIs below.')
+        group.addParam('addLigand', params.LabelParam, label='Add defined ligand: ',
+                       condition='origin=={}'.format(LIGANDS),
+                       help='Here you can define a ligand ROI which will be added to the list of ROIs below.')
+        group.addParam('addPPI', params.LabelParam, label='Add defined PPI: ',
+                       condition='origin=={}'.format(PPI),
+                       help='Here you can define a PPI ROI which will be added to the list of ROIs below.')
+
+        group.addParam('inROIs', params.TextParam, width=70, default='',
+                       label='List of input ROIs: ',
+                       help='Inputs to define the structural ROI.\n'
                             'The coordinates of the interface atoms will be mapped to surface points closer than '
                             'maxDepth and points closer than maxIntraDistance will be considered the same pocket')
-        
-        clean = form.addGroup('Clean Structure File', condition='origin=={}'.format(PPI))
-        clean.addParam("rchains", params.BooleanParam,
-                       label='Select specific chains: ',
-                       default=False, important=True, condition='origin=={}'.format(PPI),
-                       help='Keep only the chains selected')
-
-        clean.addParam("keep_chain_name", params.StringParam,
-                       label="Keep chains: ", important=True,
-                       condition="rchains and origin=={}".format(PPI),
-                       help="Select the chain(s) you want to keep in the structure")
 
         group = form.addGroup('Pocket definition')
         group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
@@ -151,6 +141,19 @@ class ProtDefineStructROIs(EMProtocol):
                       label='Maximum atom depth (A): ', condition='surfaceCoords',
                       help='Maximum atom distance to the surface to be considered and mapped')
 
+        form.addSection(label='Input Pointers')
+        form.addParam('inputPointerLabels', params.LabelParam, important=True,
+                      label='Records of inputs. Do not modificate manually',
+                      help='This is a list of the input pointer to keep track of the inputs received.\n'
+                           'It is automatically updated with the first section wizards.\n'
+                           'Manual modification (adding inputs from the lens) will have no actual impact on the '
+                           'protocol performance')
+        form.addParam('inputPointers', params.MultiPointerParam, pointerClass="SetOfSmallMolecules",
+                      label='Input Pointers: ', allowsNull=True,
+                      help='This is a list of the input pointer to keep track of the inputs received.\n'
+                           'It is automatically updated with the first section wizards.\n'
+                           'Manual modification (adding inputs from the lens) will have no actual impact on the '
+                           'protocol performance')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -169,33 +172,22 @@ class ProtDefineStructROIs(EMProtocol):
         structure = parser.get_structure(self.getProteinName(), pdbFile)
         self.structModel = structure[0]
 
-        if self.origin.get() == PPI and self.rchains.get():
-            # Surface must be calculated only on the kept chains
-            chain_ids = getChainIds(self.keep_chain_name.get())
-            pdbFile = clean_PDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
-                                waters=True, HETATM=True, chain_ids=chain_ids)
-            structure = parser.get_structure(self.getProteinName(), pdbFile)
-            keepStructure = structure[0]
-        else:
-            keepStructure = self.structModel
-
-        self.structSurface = get_surface(keepStructure,
+        self.structSurface = get_surface(self.structModel,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
     def definePocketsStep(self):
-        pocketCoords = self.getOriginCoords()
-        if self.surfaceCoords:
-            pocketCoords = self.mapSurfaceCoords(pocketCoords)
+        self.coordsClusters = []
+        for roiStr in self.inROIs.get().split('\n'):
+            if roiStr.strip():
+                pocketCoords = self.getOriginCoords(roiStr)
+                if self.surfaceCoords:
+                    pocketCoords = self.mapSurfaceCoords(pocketCoords)
 
-        self.coordsClusters = self.clusterSurfaceCoords(pocketCoords)
+                self.coordsClusters += self.clusterSurfaceCoords(pocketCoords)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
-        if self.origin.get() == PPI and self.rchains.get():
-            chain_ids = getChainIds(self.keep_chain_name.get())
-            pdbFile = os.path.abspath(self._getExtraPath('cleanPDB.pdb'))
-        else:
-            pdbFile = self.getProteinFileName()
+        pdbFile = self.getProteinFileName()
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
@@ -263,69 +255,54 @@ class ProtDefineStructROIs(EMProtocol):
     def getProteinName(self):
       return os.path.splitext(os.path.basename(self.getProteinFileName()))[0]
 
-    def getOriginCoords(self):
+    def getOriginCoords(self, roiStr):
         oCoords = []
-        if self.origin.get() == COORDS:
-            coordsStr = self.inCoords.get().split(';')
-            oCoords = [eval(c) for c in coordsStr]
+        jSonStr = ':'.join(roiStr.split(':')[1:]).strip()
+        jDic = json.loads(jSonStr)
+        roiKey = roiStr.split()[1].strip()
+        if roiKey == 'Coordinate:':
+            oCoords = [[jDic[c] for c in jDic]]
 
-        elif self.origin.get() == RESIDUES:
-            residuesStr = self.inResidues.get().strip().split('\n')
-            for rStr in residuesStr:
-                resDic = json.loads(rStr)
-                chainId, resIdxs = resDic['chain'], resDic['index']
-                idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
-                for resId in range(idxs[0], idxs[1] + 1):
-                    residue = self.structModel[chainId][resId]
-                    atoms = residue.get_atoms()
-                    for a in atoms:
-                      oCoords.append(list(a.get_coord()))
+        elif roiKey == 'Residues:':
+            chainId, resIdxs = jDic['chain'], jDic['index']
+            idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
+            for resId in range(idxs[0], idxs[1] + 1):
+                residue = self.structModel[chainId][resId]
+                atoms = residue.get_atoms()
+                for a in atoms:
+                  oCoords.append(list(a.get_coord()))
 
-        elif self.origin.get() == LIGANDS:
-            if self.extLig:
-                if not self.ligName.get():
-                    mols = self.inSmallMols.get()
-                else:
-                    for mol in self.inSmallMols.get():
-                        if self.ligName.get() == mol.__str__():
-                            mols = [mol]
+        elif roiKey == 'Ligand:':
+            oCoords = getLigCoords(self.getProteinFileName(), jDic['molName'])
+
+        elif roiKey == 'Ext-Ligand:':
+            mol = None
+            molSet = self.inputPointers[int(jDic['pointerIdx'])].get()
+            for mol in molSet:
+              if jDic['ligName'] == mol.__str__():
+                break
+            if mol:
+              curPosDic = mol.getAtomsPosDic(onlyHeavy=False)
+              oCoords += list(curPosDic.values())
+
+        elif roiKey == 'PPI:':
+            chain1Id, chain2Id = jDic['chain1'].split('-')[1], jDic['chain2'].split('-')[1]
+            chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
+
+            c1, c2 = True, True
+            if c1 or c2:
+                print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
+                sys.stdout.flush()
+                for atom1 in chain1.get_atoms():
+                    for atom2 in chain2.get_atoms():
+                        coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
+                        dist = (math.dist(coord1, coord2)) ** (1/2)
+                        if dist <= self.ppiDistance.get():
+                            if c1:
+                                oCoords.append(coord1)
+                            if c2:
+                                oCoords.append(coord2)
                             break
-
-                for mol in mols:
-                    curPosDic = mol.getAtomsPosDic(onlyHeavy=False)
-                    oCoords += list(curPosDic.values())
-
-            else:
-                oCoords = getLigCoords(self.getProteinFileName(), self.molName.get())
-
-        elif self.origin.get() == PPI:
-            ppiInterfaces = self.inInterfaces.get().strip().split('\n')
-            for ppiInt in ppiInterfaces:
-                ppiDic = json.loads(ppiInt)
-                chain1Id, chain2Id = ppiDic['chain'], ppiDic['chain2']
-                chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
-
-                c1, c2 = True, True
-                if self.rchains.get():
-                    keepChains = getChainIds(self.keep_chain_name.get())
-                    if not chain1Id in keepChains:
-                      c1 = False
-                    if not chain2Id in keepChains:
-                      c2 = False
-
-                if c1 or c2:
-                    print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
-                    sys.stdout.flush()
-                    for atom1 in chain1.get_atoms():
-                        for atom2 in chain2.get_atoms():
-                            coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
-                            dist = (math.dist(coord1, coord2)) ** (1/2)
-                            if dist <= self.ppiDistance.get():
-                                if c1:
-                                    oCoords.append(coord1)
-                                if c2:
-                                    oCoords.append(coord2)
-                                break
 
         return oCoords
 

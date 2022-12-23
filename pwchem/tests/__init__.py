@@ -36,7 +36,6 @@ from .test_export_csv import TestExportcsv
 
 from .test_converter import TestConverter
 from .test_protocol_consensus_docking import TestConsensusDocking
-from .test_protocol_define_structROIs import TestDefineStructROIs
 from .test_protocol_score_docking import TestScoreDocking
 from .test_protocol_consensus_structROIs import TestConsensusStructROIs
 
