@@ -98,17 +98,27 @@ SelectLigandWizard().addTarget(protocol=ProtDefineStructROIs,
                                outputs=['molName'])
 
 
-class AddCoordinatesWizard(VariableWizard):
+class AddROIWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getPrevList(self, protocol, outputParam):
+    prevList = getattr(protocol, outputParam[0]).get()
+    if prevList == None:
+      prevList = ''
+    elif not prevList.endswith('\n'):
+      prevList += '\n'
+    lenPrev = len(prevList.split('\n'))
+    return prevList, lenPrev
+
+
+class AddCoordinatesWizard(AddROIWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
   def show(self, form, *params):
     inputParams, outputParam = self.getInputOutput(form)
     protocol = form.protocol
 
-    prevList = getattr(protocol, outputParam[0]).get()
-    if prevList == None:
-      prevList = ''
-    lenPrev = len(prevList.split('\n'))
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
 
     coords = []
     for i in range(3):
@@ -124,7 +134,7 @@ AddCoordinatesWizard().addTarget(protocol=ProtDefineStructROIs,
                                  inputs=['coordX', 'coordY', 'coordZ'],
                                  outputs=['inROIs'])
 
-class AddResidueWizard(VariableWizard):
+class AddResidueWizard(AddROIWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
@@ -133,10 +143,7 @@ class AddResidueWizard(VariableWizard):
         chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
                            json.loads(getattr(protocol, inputParams[1]).get())
 
-        prevList = getattr(protocol, outputParam[0]).get()
-        if prevList == None:
-          prevList = ''
-        lenPrev = len(prevList.split('\n'))
+        prevList, lenPrev = self.getPrevList(protocol, outputParam)
 
         roiDef = '%s) Residues: {"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' % \
                  (lenPrev, chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
@@ -149,13 +156,15 @@ AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
                              inputs=['chain_name', 'resPosition'],
                              outputs=['inROIs'])
 
-class AddLigandWizard(VariableWizard):
+class AddLigandWizard(AddROIWizard):
   _targets, _inputs, _outputs = [], {}, {}
   
   def getPrevList(self, protocol, outputParam):
     prevList = getattr(protocol, outputParam[0]).get()
     if prevList == None:
       prevList = ''
+    elif not prevList.endswith('\n'):
+      prevList += '\n'
     lenPrev = len(prevList.split('\n'))
     return prevList, lenPrev
 
@@ -198,17 +207,14 @@ AddLigandWizard().addTarget(protocol=ProtDefineStructROIs,
                             inputs=['extLig', 'inSmallMols', 'ligName', 'molName'],
                             outputs=['inROIs', 'inputPointers'])
 
-class AddPPIsWizard(VariableWizard):
+class AddPPIsWizard(AddROIWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
   def show(self, form, *params):
     inputParams, outputParam = self.getInputOutput(form)
     protocol = form.protocol
 
-    prevList = getattr(protocol, outputParam[0]).get()
-    if prevList == None:
-      prevList = ''
-    lenPrev = len(prevList.split('\n'))
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
 
     chain1Dic, chain2Dic = json.loads(getattr(protocol, inputParams[0]).get()), \
                            json.loads(getattr(protocol, inputParams[1]).get())
