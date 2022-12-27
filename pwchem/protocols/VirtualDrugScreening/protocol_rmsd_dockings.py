@@ -32,6 +32,7 @@ available in the Open Drug Discovery Toolkit (ODDT, https://github.com/oddt/oddt
 
 """
 import os, re
+from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.utils import Message
 from pyworkflow.protocol import params
@@ -40,6 +41,8 @@ from pwem.objects import AtomStruct
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import *
+
+AS, MOLS = 0, 1
 
 class ProtocolRMSDDocking(EMProtocol):
     """
@@ -51,15 +54,26 @@ class ProtocolRMSDDocking(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputSmallMols', params.PointerParam,
-                       pointerClass='SetOfSmallMolecules', allowsNull=False,
-                       label="Input Docked Small Molecules: ",
+        form.addParam('inputSmallMolecules', params.PointerParam,
+                       pointerClass='SetOfSmallMolecules', label="Input Docked Small Molecules: ",
                        help='Select the docked molecules to measure the RMSD against the reference AtomStruct')
-        form.addParam('inputAtomStruct', params.PointerParam,
-                      pointerClass='AtomStruct',
-                      label="Input AtomStruct with ligand: ",
+
+        form.addParam('refOrigin', params.EnumParam, default=0,
+                      label='Reference molecule origin: ', choices=['AtomStruct', 'SmallMolecule'], 
+                      help='Where to extract the reference molecule from.')
+        
+        form.addParam('refAtomStruct', params.PointerParam, condition='refOrigin==0',
+                      pointerClass='AtomStruct', label="Input AtomStruct with ligand: ",
                       help='Select the AtomStruct with an attached ligand to measure the RMSD against the '
                            'input small molecules. ')
+        form.addParam('refLigName', params.StringParam, condition='refOrigin==0', label="Reference molecule: ",
+                      help='Select the reference molecule to measure the RMSD against')
+
+        form.addParam('refSmallMolecules', params.PointerParam, condition='refOrigin==1',
+                      pointerClass='SetOfSmallMolecules', label="Input reference molecules: ",
+                      help='Select the SetOfMolecules where the reference is included')
+        form.addParam('refMolName', params.StringParam, condition='refOrigin==1', label="Reference molecule: ",
+                      help='Select the reference molecule to measure the RMSD against')
 
         form.addParam('onlyHeavy', params.BooleanParam, default=True,
                       label='Use only heavy atoms for RMSD: ', expertLevel=params.LEVEL_ADVANCED,
@@ -73,15 +87,23 @@ class ProtocolRMSDDocking(EMProtocol):
 
     def rmsdStep(self):
         rmsdDic = {}
-        for mol in self.inputSmallMols.get():
-            AS = self.inputAtomStruct.get()
-            posDic1, posDic2 = self.getLigandPosDic(mol), self.getLigandPosDic(AS)
+        if self.refOrigin.get() == AS:
+            refPosDic = self.getLigandPosDic(self.refAtomStruct.get(), self.refLigName.get())
+        else:
+            for mol in self.refSmallMolecules.get():
+                if self.refMolName.get() == mol.__str__():
+                    refPosDic = self.getLigandPosDic(mol)
+                    break
+        
+        for mol in self.inputSmallMolecules.get():
+            posDic = self.getLigandPosDic(mol)
             if hasattr(mol, '_mappingFile'):
-                posDic1 = self.mapLabels(mol, posDic1)
-            k1, k2 = list(posDic1.keys()), list(posDic2.keys())
+                posDic = self.mapLabels(mol, posDic)
+
+            k1, k2 = list(posDic.keys()), list(refPosDic.keys())
             k1.sort(), k2.sort()
-            if self.checkSameKeys(posDic1, posDic2):
-                rmsd = calculateRMSDKeys(posDic1, posDic2)
+            if self.checkSameKeys(posDic, refPosDic):
+                rmsd = calculateRMSDKeys(posDic, refPosDic)
                 rmsdDic[mol.getPoseFile()] = rmsd
                 print('Mol: {}. RMSD: {}'.format(os.path.basename(mol.getPoseFile()), rmsd))
             else:
@@ -96,8 +118,8 @@ class ProtocolRMSDDocking(EMProtocol):
             for line in f:
                 rmsdDic[line.split()[0]] = line.split()[1]
 
-        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMols.get(), self._getPath(), copyInfo=True)
-        for mol in self.inputSmallMols.get():
+        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
+        for mol in self.inputSmallMolecules.get():
             #Specific attribute name for each score?
             k = mol.getPoseFile()
             if k in rmsdDic:
@@ -118,7 +140,7 @@ class ProtocolRMSDDocking(EMProtocol):
 
     def _validate(self):
         validations = []
-        if not self.inputSmallMols.get().isDocked():
+        if not self.inputSmallMolecules.get().isDocked():
             validations += ['Input Small Molecules is not docked yet\n']
 
         return validations
@@ -129,7 +151,7 @@ class ProtocolRMSDDocking(EMProtocol):
 
     ####################################### UTILS functions #############################
 
-    def mapLabels(self, mol, posDic1):
+    def mapLabels(self, mol, posDic):
         '''Map the atom labels which were normally reorganized during the ligand preparation to those in the original
         molecule'''
         mapDic, pDic = {}, {}
@@ -137,25 +159,40 @@ class ProtocolRMSDDocking(EMProtocol):
             for line in fIn:
                 sline = line.split()
                 mapDic[sline[1]] = sline[0]
-        for prevLabel in posDic1:
-            pDic[mapDic[prevLabel]] = posDic1[prevLabel]
+        for prevLabel in posDic:
+            pDic[mapDic[prevLabel]] = posDic[prevLabel]
         return pDic
 
+    def is_het(self, residue):
+        res = residue.id[0]
+        return res != " " and res != "W"
 
-    def getLigandPosDic(self, item):
+    def getLigandPosDic(self, item, molName=None):
         onlyHeavy = self.onlyHeavy.get()
         if issubclass(type(item), SmallMolecule):
             posDic = item.getAtomsPosDic(onlyHeavy)
+
         elif issubclass(type(item), AtomStruct):
             posDic = {}
-            with open(item.getFileName()) as fIn:
-                for line in fIn:
-                    if line.startswith('HETATM'):
-                        elements = splitPDBLine(line)
-                        atomId, atomType, coords = elements[2], elements[-1], elements[6:9]
-                        if atomType != 'H' or not onlyHeavy:
-                            posDic[atomId] = list(map(float, coords))
-            # if cif
+            ASFile = item.getFileName()
+            if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+                pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+                parser = PDBParser().get_structure(pdb_code, ASFile)
+            elif ASFile.endswith('.cif'):
+                pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+                parser = MMCIFParser().get_structure(pdb_code, ASFile)
+            else:
+                print('Unknown AtomStruct file format')
+
+            for model in parser:
+                for chain in model:
+                    for residue in chain:
+                        if self.is_het(residue) and residue.resname == molName:
+                            for atom in residue:
+                                atomId, coords = atom.get_id(), atom.get_coord()
+                                if not atomId.startswith('H') or not onlyHeavy:
+                                    posDic[atomId] = list(map(float, coords))
+
         return posDic
 
     def checkSameKeys(self, d1, d2):

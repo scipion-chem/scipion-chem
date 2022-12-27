@@ -97,19 +97,23 @@ SelectLigandWizard().addTarget(protocol=ProtDefineStructROIs,
                                inputs=['inputAtomStruct'],
                                outputs=['molName'])
 
+SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
+                               targets=['refLigName'],
+                               inputs=['refAtomStruct'],
+                               outputs=['refLigName'])
+
 
 class AddROIWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
   def getPrevList(self, protocol, outputParam):
     prevList = getattr(protocol, outputParam[0]).get()
-    if prevList == None:
+    if not prevList or not prevList.strip():
       prevList = ''
     elif not prevList.endswith('\n'):
       prevList += '\n'
     lenPrev = len(prevList.split('\n'))
     return prevList, lenPrev
-
 
 class AddCoordinatesWizard(AddROIWizard):
   _targets, _inputs, _outputs = [], {}, {}
@@ -159,15 +163,6 @@ AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
 class AddLigandWizard(AddROIWizard):
   _targets, _inputs, _outputs = [], {}, {}
   
-  def getPrevList(self, protocol, outputParam):
-    prevList = getattr(protocol, outputParam[0]).get()
-    if prevList == None:
-      prevList = ''
-    elif not prevList.endswith('\n'):
-      prevList += '\n'
-    lenPrev = len(prevList.split('\n'))
-    return prevList, lenPrev
-
   def getPrevPointersIds(self, prevPointers):
       ids = []
       for p in prevPointers:
@@ -559,6 +554,11 @@ SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
+
+SelectElementWizard().addTarget(protocol=ProtocolRMSDDocking,
+                                targets=['refMolName'],
+                                inputs=['refSmallMolecules'],
+                                outputs=['refMolName'])
 
 SelectElementMultiPointerWizard().addTarget(protocol=ProtocolPharmacophoreModification,
                                            targets=['currentFeatures'],

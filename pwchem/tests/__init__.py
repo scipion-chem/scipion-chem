@@ -30,12 +30,11 @@ from .tests_ligand_preparation import *
 from .tests_ligand_filtering import *
 from .tests_sequences import *
 from .tests_structROIs import *
+from .tests_docking import *
 
 
 #from .test_list_operate import TestListOperate
 from .test_export_csv import TestExportcsv
 
 from .test_converter import TestConverter
-from .test_protocol_consensus_docking import TestConsensusDocking
-from .test_protocol_score_docking import TestScoreDocking
 
