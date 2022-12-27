@@ -140,7 +140,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         if self.doConformers.get():
             for it, subset in enumerate(inputSubsets):
                 cSteps += [self._insertFunctionStep('conformersStep', subset, it, prerequisites=aSteps)]
-        self._insertFunctionStep('createOutput', prerequisites=cSteps)
+            aSteps = cSteps
+        self._insertFunctionStep('createOutput', prerequisites=aSteps)
 
     def addChargesStep(self, molSet, it):
         """ Assign the charges using a method available
