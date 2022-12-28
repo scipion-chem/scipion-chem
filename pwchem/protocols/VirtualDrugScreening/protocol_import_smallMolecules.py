@@ -2,6 +2,7 @@
 # *
 # * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
 # *              Alberto M. Parra Pérez (amparraperez@gmail.com)
+# *              Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *

@@ -56,9 +56,15 @@ class SelectLigandWizard(VariableWizard):
     res = residue.id[0]
     return res != " " and res != "W"
 
-  def extract_ligands(self, ASFile):
+  def extract_ligands(self, ASFile, protocol):
     """ Extraction of the heteroatoms of .pdb files """
-    molNames = []
+    if ASFile.endswith('.pdbqt'):
+        proj = protocol.getProject()
+        oFile = os.path.abspath(proj.getTmpPath('inputStructure.pdb'))
+        args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(ASFile), oFile)
+        runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
+        ASFile = oFile
+
     if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
       pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
       parser = PDBParser().get_structure(pdb_code, ASFile)
@@ -68,6 +74,8 @@ class SelectLigandWizard(VariableWizard):
     else:
       print('Unknown AtomStruct file format')
       return
+
+    molNames = []
     for model in parser:
       for chain in model:
         for residue in chain:
@@ -81,7 +89,7 @@ class SelectLigandWizard(VariableWizard):
     inputParam, outputParam = self.getInputOutput(form)
 
     ASFile = getattr(protocol, inputParam[0]).get().getFileName()
-    molNames = self.extract_ligands(ASFile)
+    molNames = self.extract_ligands(ASFile, protocol)
 
     finalList = []
     for i in molNames:
@@ -436,6 +444,11 @@ SelectMultiChainWizard().addTarget(protocol=ProtDefineStructROIs,
                                    targets=['keep_chain_name'],
                                    inputs=['inputAtomStruct'],
                                    outputs=['keep_chain_name'])
+
+SelectMultiChainWizard().addTarget(protocol=ProtChemPrepareReceptor,
+                                   targets=['chain_name'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['chain_name'])
 
 class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}

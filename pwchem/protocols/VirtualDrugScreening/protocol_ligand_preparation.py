@@ -44,7 +44,7 @@ import os, re, glob, shutil
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2, \
-  splitPDBLine, natural_sort, makeSubsets
+  splitPDBLine, natural_sort, makeSubsets, getBaseFileName
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):
@@ -148,9 +148,9 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             in the open-access and free program openbabel
         """
         for mol in molSet:
-            fnSmall = mol.clone().getFileName()
-            fnMol = os.path.split(fnSmall)[1]      # Name of complete file
-            fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
+            fnSmall = mol.getFileName()
+            fnRoot = getBaseFileName(fnSmall)
+            _, fnFormat = os.path.splitext(fnSmall)
 
             try:
                 fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
@@ -182,8 +182,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         # 3. Generate mol2 conformers file for each molecule with OpenBabel
         with open(self._getExtraPath('failed_{}.txt'.format(it)), 'w') as fEr:
             for mol in molSet:
-                fnSmall = mol.clone().getFileName()
-                fnRoot = os.path.splitext(os.path.basename(fnSmall))[0]
+                fnSmall = mol.getFileName()
+                fnRoot = getBaseFileName(fnSmall)
                 file = os.path.abspath(self._getExtraPath("{}_prep.mol2".format(fnRoot)))
 
                 if not os.path.exists(file) or os.path.getsize(file) == 0:
@@ -211,7 +211,10 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
         for mol in self.inputSmallMols.get():
-            fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
+            fnSmall = mol.getFileName()
+            fnRoot = getBaseFileName(fnSmall)
+            fnSmall = self._getExtraPath("{}_prep.mol2".format(fnRoot))
+            print('Look for ', fnSmall)
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:
                 mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
                 if self.doConformers:

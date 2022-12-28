@@ -27,6 +27,8 @@
 # **************************************************************************
 
 from pyworkflow.tests import *
+from pwem.protocols import ProtImportPdb
+
 from pwchem.protocols import *
 
 from .tests_imports import TestImportBase
@@ -127,3 +129,34 @@ class TestRDKitLigandPreparation(TestImportBase):
     for p in protsShape:
         self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
         self.assertIsNotNone(getattr(p, 'outputSmallMolecules', None))
+
+class TestPrepareReceptor(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+      cls.ds = DataSet.getDataSet('model_building_tutorial')
+      setupTestProject(cls)
+      cls._runImportPDB()
+      cls._waitOutput(cls.protImportPDB, 'outputPdb', sleepTime=5)
+
+    @classmethod
+    def _runImportPDB(cls):
+      cls.protImportPDB = cls.newProtocol(
+        ProtImportPdb,
+        inputPdbData=0, pdbId='4erf')
+      cls.proj.launchProtocol(cls.protImportPDB, wait=False)
+
+    @classmethod
+    def _runPrepareReceptor(cls):
+      cls.protPrepareReceptor = cls.newProtocol(
+        ProtChemPrepareReceptor,
+        inputAtomStruct=cls.protImportPDB.outputPdb,
+        HETATM=True, rchains=True,
+        chain_name='{"model": 0, "chain": "C", "residues": 93}')
+
+      cls.launchProtocol(cls.protPrepareReceptor)
+
+    def test(self):
+      self._runPrepareReceptor()
+
+      self._waitOutput(self.protPrepareReceptor, 'outputStructure', sleepTime=10)
+      self.assertIsNotNone(getattr(self.protPrepareReceptor, 'outputStructure', None))

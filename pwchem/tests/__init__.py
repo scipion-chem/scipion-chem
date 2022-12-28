@@ -26,7 +26,7 @@
 
 from pyworkflow.tests import *
 from .tests_imports import *
-from .tests_ligand_preparation import *
+from .tests_preparations import *
 from .tests_ligand_filtering import *
 from .tests_sequences import *
 from .tests_structROIs import *

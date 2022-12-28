@@ -28,14 +28,51 @@ import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 from pyworkflow.object import Pointer
 
-from pwchem.protocols import ProtocolConsensusDocking, ProtChemOBabelPrepareLigands, \
-  ProtChemImportSmallMolecules, ProtDefineStructROIs, ProtocolScoreDocking, ProtocolRMSDDocking
+from pwchem.protocols import *
 from pwchem.tests import TestDefineStructROIs
 
 defRoiStr = '''1) Coordinate: {"X": 51, "Y": 76, "Z": 61}'''
 
+defRoiStrLig = '''1) Ext-Ligand: {"pointerIdx": "0", "ligName": "SmallMolecule (g1_4erf_0R3-1_1 molecule)"}'''
+
 wSteps = "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'Vina', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}\n" \
          "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'RFScore', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}"
+
+prepRec = '{"model": 0, "chain": "C", "residues": 93}'
+
+class TestExtractLigand(BaseTest):
+  @classmethod
+  def setUpClass(cls):
+    tests.setupTestProject(cls)
+    cls.ds = DataSet.getDataSet('model_building_tutorial')
+    cls._runImportPDB()
+
+  @classmethod
+  def _runImportPDB(cls):
+    protImportPDB = cls.newProtocol(
+      ProtImportPdb,
+      inputPdbData=0, pdbId='4erf')
+    cls.launchProtocol(protImportPDB)
+    cls.protImportPDB = protImportPDB
+
+  @classmethod
+  def _runExtractLigand(cls, inputProt):
+      protExtLig = cls.newProtocol(
+        ProtExtractLigands,
+        cleanPDB=True, rchains=True, chain_name='{"model": 0, "chain": "C", "residues": 93}')
+
+      protExtLig.inputStructure.set(inputProt)
+      protExtLig.inputStructure.setExtended('outputPdb')
+
+      cls.proj.launchProtocol(protExtLig, wait=True)
+      cls.protExtLig = protExtLig
+      return protExtLig
+
+  def test(self):
+    protExtract = self._runExtractLigand(self.protImportPDB)
+    self._waitOutput(protExtract, 'outputSmallMolecules', sleepTime=5)
+    self.assertIsNotNone(protExtract.outputSmallMolecules,
+                         "There was a problem with the ligand extraction")
 
 
 class TestScoreDocking(TestDefineStructROIs):
@@ -86,7 +123,7 @@ class TestScoreDocking(TestDefineStructROIs):
         ProtChemADTPrepareReceptor,
         inputAtomStruct=cls.protImportPDB.outputPdb,
         HETATM=True, rchains=True,
-        chain_name='{"model": 0, "chain": "C", "residues": 93}',
+        chain_name=prepRec,
         repair=3)
 
       cls.launchProtocol(cls.protPrepareReceptor)
@@ -272,26 +309,94 @@ class TestConsensusDocking(TestScoreDocking):
           print('No docking plugins found installed. Try installing AutoDock')
 
 
-class TestRMSDDocking(TestScoreDocking):
+class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
+  @classmethod
+  def setUpClass(cls):
+    tests.setupTestProject(cls)
+    cls.ds = DataSet.getDataSet('model_building_tutorial')
+    cls._runImportPDB()
 
-  def _runRMSDDocking(self, inputMolsProt, inputAS=None):
+  @classmethod
+  def _runImportPDB(cls):
+      protImportPDB = cls.newProtocol(
+        ProtImportPdb,
+        inputPdbData=0, pdbId='4erf')
+      cls.launchProtocol(protImportPDB)
+      cls.protImportPDB = protImportPDB
+
+  @classmethod
+  def _runPrepareTarget(cls, inProt):
+    protPrepRec = cls.newProtocol(
+      ProtChemPrepareReceptor,
+      HETATM=False, rchains=True, chain_name=prepRec)
+
+    protPrepRec.inputAtomStruct.set(inProt)
+    protPrepRec.inputAtomStruct.setExtended('outputPdb')
+
+    cls.proj.launchProtocol(protPrepRec, wait=False)
+    return protPrepRec
+
+  @classmethod
+  def _runPrepareLigandsOBabel(cls, inProt):
+    protOBabel = cls.newProtocol(
+      ProtChemOBabelPrepareLigands,
+      inputType=0, method_charges=0, doConformers=False)
+
+    protOBabel.inputSmallMols.set(inProt)
+    protOBabel.inputSmallMols.setExtended('outputSmallMolecules')
+
+    cls.proj.launchProtocol(protOBabel, wait=False)
+    return protOBabel
+
+  @classmethod
+  def _runDefStructROIs(cls, inProtAS, inProtLig, defStr):
+    protDef = cls.newProtocol(
+      ProtDefineStructROIs,
+      inROIs=defStr, surfaceCoords=False)
+
+    protDef.inputAtomStruct.set(inProtAS)
+    protDef.inputAtomStruct.setExtended('outputStructure')
+
+    protDef.inputPointers.append(inProtLig)
+    protDef.inputPointers[0].setExtended('outputSmallMolecules')
+
+    cls.proj.launchProtocol(protDef, wait=False)
+    return protDef
+
+  def _runRMSDDocking(self, inputMolsProt, inputProt, mode=0):
     pRMSD = self.newProtocol(ProtocolRMSDDocking,
-                             refOrigin=1)
-
-    molName = inputMolsProt.outputSmallMolecules.getFirstItem().__str__()
-    pRMSD.refMolName.set(molName)
+                             refOrigin=mode)
 
     pRMSD.inputSmallMolecules.set(inputMolsProt)
     pRMSD.inputSmallMolecules.setExtended('outputSmallMolecules')
-    pRMSD.refSmallMolecules.set(inputMolsProt)
-    pRMSD.refSmallMolecules.setExtended('outputSmallMolecules')
 
-    self.launchProtocol(pRMSD, wait=True)
+    if mode == 0:
+        pRMSD.refAtomStruct.set(inputProt)
+        pRMSD.refAtomStruct.setExtended('outputStructure')
+
+        pRMSD.refLigName.set('0R3')
+    else:
+        pRMSD.refSmallMolecules.set(inputProt)
+        pRMSD.refSmallMolecules.setExtended('outputSmallMolecules')
+
+        molName = inputProt.outputSmallMolecules.getFirstItem().__str__()
+        pRMSD.refMolName.set(molName)
+
+    self.proj.launchProtocol(pRMSD, wait=False)
     return pRMSD
 
   def test(self):
-    protPockets = self._runDefStructROIs(defRoiStr)
+    protPrep = self._runPrepareTarget(self.protImportPDB)
+    protExtLig = self._runExtractLigand(self.protImportPDB)
+
+    self._waitOutput(protPrep, 'outputStructure', sleepTime=5)
+    self._waitOutput(protExtLig, 'outputSmallMolecules', sleepTime=5)
+
+    protPockets = self._runDefStructROIs(protPrep, protExtLig, defRoiStrLig)
+    self.protOBabel = self._runPrepareLigandsOBabel(protExtLig)
+
     self._waitOutput(protPockets, 'outputStructROIs', sleepTime=5)
+    self._waitOutput(self.protOBabel, 'outputSmallMolecules', sleepTime=5)
 
     inputDockProts = []
     doVina, doLe = False, False
@@ -319,8 +424,14 @@ class TestRMSDDocking(TestScoreDocking):
       self._waitOutput(p, 'outputSmallMolecules', sleepTime=5)
 
     if len(inputDockProts) >= 1:
-      pRMSD = self._runRMSDDocking(inputDockProts[0])
-      self.assertIsNotNone(pRMSD.outputSmallMolecules,
+      pRMSDs = []
+      pInputs = [protPrep, protExtLig]
+      for i in range(2):
+          pRMSDs.append(self._runRMSDDocking(inputDockProts[0], pInputs[i], mode=i))
+
+      for p in pRMSDs:
+          self._waitOutput(p, 'outputSmallMolecules', sleepTime=5)
+          self.assertIsNotNone(p.outputSmallMolecules,
                            "There was a problem with the consensus")
     else:
       print('No docking plugins found installed. Try installing AutoDock')
