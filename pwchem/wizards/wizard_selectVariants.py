@@ -191,7 +191,7 @@ class CheckSequencesAccesibility(EmWizard):
 
   def show(self, form, *params):
     protocol = form.protocol
-    consValues = protocol.getAccesibilityValues()
+    consValues = protocol.getAccesibilityValues(inProt=False)
 
     xs = np.arange(len(consValues))
 

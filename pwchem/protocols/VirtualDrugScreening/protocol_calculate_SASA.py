@@ -60,9 +60,6 @@ class ProtCalculateSASA(EMProtocol):
         group.addParam('inputAtomStruct', params.PointerParam, pointerClass='AtomStruct',
                       allowsNull=False, label="Input AtomStruct: ",
                       help='Select the AtomStruct object where the structural ROIs will be defined')
-        form.addParam('mapStructure', params.BooleanParam, default=False,
-                      label='Map SASA to structure: ',
-                      help='Whether to map the SASA into an output AtomStruct which can be visualized')
 
         form.addParam('extractRegions', params.BooleanParam, default=False,
                       label='Extract sequence conservation regions: ',
@@ -106,15 +103,22 @@ class ProtCalculateSASA(EMProtocol):
         self._insertFunctionStep('calculateSASAStep')
         self._insertFunctionStep('defineOutputStep')
 
-    def calculateSASAStep(self):
-        outSASA = self.getSASAFile()
+    def calculateSASAStep(self, inProt=True):
+        outSASA = self.getSASAFile(inProt)
         if not os.path.exists(outSASA):
             inputAS = self.inputAtomStruct.get().getFileName()
-            # Removes HETATM (sometimes yiled error in Biopython)
-            clean_PDB(inputAS, self._getExtraPath('inpdb.pdb'), waters=True, HETATM=True)
 
-            args = '{} {}'.format(os.path.abspath(self._getExtraPath('inpdb.pdb')), outSASA)
-            pwchemPlugin.runScript(self, 'calculate_SASA.py', args, env='plip', cwd=self._getExtraPath())
+            if inProt:
+                inFile = os.path.abspath(self._getExtraPath('inpdb.pdb'))
+                outDir = self._getExtraPath()
+            else:
+                inFile = os.path.abspath(self.getProject().getTmpPath('inpdb.pdb'))
+                outDir = self.getProject().getTmpPath()
+            # Removes HETATM (sometimes yiled error in Biopython)
+            clean_PDB(inputAS, inFile, waters=True, HETATM=True)
+
+            args = ' {} {}'.format(inFile, outSASA)
+            pwchemPlugin.runScript(self, 'calculate_SASA.py', args, env='plip', cwd=outDir, popen=not inProt)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
@@ -122,15 +126,14 @@ class ProtCalculateSASA(EMProtocol):
         # Write conservation in a section of the output cif file
         ASH = AtomicStructHandler()
 
-        if self.mapStructure.get():
-            sasaDic = self.getSASADic()
-            inpAS = toCIF(self.inputAtomStruct.get().getFileName(), self._getTmpPath('inputStruct.cif'))
-            cifDic = ASH.readLowLevel(inpAS)
-            cifDic = addScipionAttribute(cifDic, sasaDic, self._ATTRNAME)
-            ASH._writeLowLevel(outStructFileName, cifDic)
+        sasaDic = self.getSASADic()
+        inpAS = toCIF(self.inputAtomStruct.get().getFileName(), self._getTmpPath('inputStruct.cif'))
+        cifDic = ASH.readLowLevel(inpAS)
+        cifDic = addScipionAttribute(cifDic, sasaDic, self._ATTRNAME)
+        ASH._writeLowLevel(outStructFileName, cifDic)
 
-            AS = AtomStruct(filename=outStructFileName)
-            self._defineOutputs(outputAtomStruct=AS)
+        AS = AtomStruct(filename=outStructFileName)
+        self._defineOutputs(outputAtomStruct=AS)
 
         if self.extractRegions.get():
             inFile = self.inputAtomStruct.get().getFileName()
@@ -165,8 +168,12 @@ class ProtCalculateSASA(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
-    def getSASAFile(self):
-        return os.path.abspath(self._getPath('sasa.txt'))
+    def getSASAFile(self, inProt=True):
+        if inProt:
+            inFile = self._getPath('sasa.txt')
+        else:
+            inFile = self.getProject().getTmpPath('sasa.txt')
+        return os.path.abspath(inFile)
 
     def getSASADic(self):
         sasaDic = {}
@@ -183,11 +190,12 @@ class ProtCalculateSASA(EMProtocol):
           chain = ''
       return chain
 
-    def getAccesibilityValues(self):
+    def getAccesibilityValues(self, inProt=True):
       chain = self.getChain()
-      if not os.path.exists(self.getSASAFile()):
-          self.calculateSASAStep()
-      with open(self.getSASAFile()) as f:
+      SASAFile = self.getSASAFile(inProt=inProt)
+      if not os.path.exists(SASAFile):
+          self.calculateSASAStep(inProt=inProt)
+      with open(SASAFile) as f:
         consValues = []
         for line in f:
           spec, value = line.split()

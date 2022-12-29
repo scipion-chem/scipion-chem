@@ -31,6 +31,7 @@ from .tests_ligand_filtering import *
 from .tests_sequences import *
 from .tests_structROIs import *
 from .tests_docking import *
+from .tests_attributes import *
 
 
 #from .test_list_operate import TestListOperate
