@@ -377,6 +377,12 @@ class SetOfSmallMolecules(data.EMSet):
         s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
         return s
 
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self)
+        clone.copyInfo(self)
+        return clone
+
     def copyInfo(self, other):
         self._molClass = other._molClass
         self.proteinFile = other.proteinFile
@@ -1327,6 +1333,12 @@ class PharmacophoreChem(data.EMSet):
     def __str__(self):
         s = '{} ({} features)'.format(self.getClassName(), self.getSize())
         return s
+
+    def clone(self):
+        clone = self.getClass()()
+        clone.copy(self)
+        clone.copyInfo(self)
+        return clone
 
     def copyInfo(self, other):
         self._proteinFile = other._proteinFile

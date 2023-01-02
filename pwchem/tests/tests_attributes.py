@@ -29,7 +29,45 @@ from pwem.protocols import ProtImportPdb
 from pyworkflow.object import Pointer
 
 from pwchem.protocols import *
-from pwchem.tests import TestDefineStructROIs
+from pwchem.tests import TestDefineStructROIs, TestImportBase
+
+solStr = '''1, 0.05
+2, 0.24
+3, 0.5
+4, 0.15'''
+
+class TestAddAttribute(TestImportBase):
+  @classmethod
+  def _runAddAttribute(cls, inputProt, mode=0, inputFile=None):
+    protAdd = cls.newProtocol(
+      ProtAddAttribute,
+      fromInput=mode, atKey='Solubility')
+
+    if mode == 0:
+        protAdd.atValue.set("0.5")
+        protAdd.inputObject.set(inputProt)
+        protAdd.inputObject.setExtended('outputSmallMolecules')
+    else:
+        protAdd.mapKey.set('_objId')
+        protAdd.inputFile.set(inputFile)
+        protAdd.inputSet.set(inputProt)
+        protAdd.inputSet.setExtended('outputSmallMolecules')
+
+    cls.proj.launchProtocol(protAdd, wait=False)
+    return protAdd
+
+  def test(self):
+    protAdd1 = self._runAddAttribute(self.protImportSmallMols, mode=0)
+
+    inFile = self.proj.getTmpPath('attributeMapping.csv')
+    with open(inFile, 'w') as f:
+        f.write(solStr)
+    protAdd2 = self._runAddAttribute(self.protImportSmallMols, mode=1, inputFile=inFile)
+
+    self._waitOutput(protAdd1, 'outputObject', sleepTime=5)
+    self._waitOutput(protAdd2, 'outputSet', sleepTime=5)
+    self.assertIsNotNone(getattr(protAdd1, 'outputObject', None))
+    self.assertIsNotNone(getattr(protAdd2, 'outputSet', None))
 
 
 class TestCalculateSASA(BaseTest):
@@ -61,7 +99,6 @@ class TestCalculateSASA(BaseTest):
 
   def test(self):
     protSASA = self._runCalculateSASA(self.protImportPDB)
-    self._waitOutput(protSASA, 'outputSmallMolecules', sleepTime=5)
-    self.assertIsNotNone(protSASA.outputSmallMolecules,
-                         "There was a problem with the ligand extraction")
+    self._waitOutput(protSASA, 'outputAtomStruct', sleepTime=5)
+    self.assertIsNotNone(protSASA.outputAtomStruct, "Test failed")
 

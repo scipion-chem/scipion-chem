@@ -36,14 +36,27 @@ information such as name and number of residues.
 from pwem.wizards import SelectAttributeWizard
 import pwchem.protocols as chemprot
 
-SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolConsensusDocking,
-                                  targets=['repAttr'],
-                                  inputs=['inputMoleculesSets'],
-                                  outputs=['repAttr'])
-SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
-                                  targets=['corrAttribute'],
-                                  inputs=['inputMoleculesSets'],
-                                  outputs=['corrAttribute'])
+
+class SelectAttributeWizardChem(SelectAttributeWizard):
+    def getInputAttributes(self, form, inputParam):
+      attrNames = ['_objId']
+      item = self.getFirstItem(form, inputParam[0])
+      for key, attr in item.getAttributesToStore():
+        attrNames.append(key)
+      return attrNames
+
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtAddAttribute,
+                                      targets=['mapKey'],
+                                      inputs=['inputSet'],
+                                      outputs=['mapKey'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolConsensusDocking,
+                                      targets=['repAttr'],
+                                      inputs=['inputMoleculesSets'],
+                                      outputs=['repAttr'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
+                                      targets=['corrAttribute'],
+                                      inputs=['inputMoleculesSets'],
+                                      outputs=['corrAttribute'])
 
 
 

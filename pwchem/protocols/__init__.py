@@ -86,5 +86,6 @@ from pwchem.protocols.General.protocol_ZINC_filter import ProtChemZINCFilter
 from pwchem.protocols.General.protocol_pubchem_search import ProtChemPubChemSearch
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_extract_ligands import ProtExtractLigands
+from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
 
 
