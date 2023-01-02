@@ -32,6 +32,7 @@ from .tests_sequences import *
 from .tests_structROIs import *
 from .tests_docking import *
 from .tests_attributes import *
+from .tests_pharmacophores import *
 
 
 #from .test_list_operate import TestListOperate
