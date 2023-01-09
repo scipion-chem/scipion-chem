@@ -51,9 +51,13 @@ def Mol2MolSupplier(file=None,sanitize=True):
                         mol.append(line)
                         break
                 mol[-1] = mol[-1].rstrip() # removes blank line at file end
-                block = ",".join(mol).replace(',','')
+                block = "".join(mol)
                 m=Chem.MolFromMol2Block(block, sanitize=sanitize)
-            mols.append(m)
+            if m:
+                mols.append(m)
+            else:
+                print('Error parsing mol2 file {} with RDKit. Mol2 format is sometimes tricky to parse, use Corina '
+                      'typing for RDKit'.format(file))
     return mols
 
 def decompressFile(inFile):
@@ -158,6 +162,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     inputFile, outFormat = args.inputFilename, args.outputFormat
+    outFormat = outFormat if not outFormat.startswith('.') else outFormat[1:]
     inFormat = os.path.splitext(inputFile)[1][1:]
 
     if args.outputName:
@@ -176,33 +181,34 @@ if __name__ == "__main__":
     nt = args.nthreads
 
     mols, nameKey = getMolsFromFile(inputFile)
-    if make3d:
-        mols = performBatchThreading(make3DCoords, mols, nt, clone=False, errBase=os.path.join(outDir, 'errors3D'))
+    if len(mols) > 0:
+        if make3d:
+            mols = performBatchThreading(make3DCoords, mols, nt, clone=False, errBase=os.path.join(outDir, 'errors3D'))
 
-    if outFormat == 'smi' or outFormat == 'smiles':
-        writter, ext = Chem.SmilesWriter, 'smi'
-    elif outFormat == 'pdb':
-        writter, ext = Chem.PDBWriter, 'pdb'
-    else:
-        writter, ext = Chem.SDWriter, 'sdf'
+        if outFormat == 'smi' or outFormat == 'smiles':
+            writter, ext = Chem.SmilesWriter, 'smi'
+        elif outFormat == 'pdb':
+            writter, ext = Chem.PDBWriter, 'pdb'
+        else:
+            writter, ext = Chem.SDWriter, 'sdf'
 
-    if singleOutFile:
-        outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
-        with writter(outFile) as f:
-            for mol in mols:
-                f.write(mol)
-
-    else:
-        outBase = args.outputBase if args.outputBase else 'molecule'
-        for i, mol in enumerate(mols):
-            if mol.HasProp(nameKey):
-                molName = mol.GetProp(nameKey)
-            else:
-                molName = '{}_{}'.format(outBase, i+1)
-
-            outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
+        if singleOutFile:
+            outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
             with writter(outFile) as f:
-                f.write(mol)
+                for mol in mols:
+                    f.write(mol)
+
+        else:
+            outBase = args.outputBase if args.outputBase else 'molecule'
+            for i, mol in enumerate(mols):
+                if mol.HasProp(nameKey):
+                    molName = mol.GetProp(nameKey)
+                else:
+                    molName = '{}_{}'.format(outBase, i+1)
+
+                outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
+                with writter(outFile) as f:
+                    f.write(mol)
 
 
 
