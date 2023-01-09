@@ -26,69 +26,24 @@
 # **************************************************************************
 
 
-import os
+import os, shutil
 
 from pyworkflow.protocol.params import PointerParam, EnumParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
+from pwem.convert.atom_struct import toCIF, toPdb
 
+from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel
 
-
-def inputArg(fn):  # Input format file (fn)
-
-    if fn.endswith('.pdb'):    # Protein Data Bank
-        args = "-ipdb"
-    elif fn.endswith('.cif'):  # cif (crystallography information)
-        args = "-icif"
-
-    elif fn.endswith('.sdf'):  # MDL MOL FORMAT
-        args = "-isdf"
-    elif fn.endswith('.sd'):   # MDL MOL FORMAT
-        args = "-isd"
-
-    elif fn.endswith('.mol2'): # Sybyl Mol2 format (3D)
-        args = "-imol2"
-    elif fn.endswith('.smi') or fn.endswith('.smiles'):  # Smiles format (2D)
-        args = "-ismi"
-    else:
-        error = " Input format was not recognize (The allowed format are pdb, cif, mol2, sdf and smi)"
-        raise Exception(error)
-    return args + " %s" %fn
-
-
-
-def outputArg(fnRoot, format, protocol):
-    # Output format and final file path. OpenBabel recognize the format depending on the file extension
-
-    if format == 0:
-        fnOut = protocol._getExtraPath(fnRoot + ".pdb")
-        args = " -O %s" % (fnRoot + ".pdb")
-    elif format == 1:
-        fnOut = protocol._getExtraPath(fnRoot + ".cif")
-        args = " -O  %s" % (fnRoot + ".cif")
-    elif format == 2:
-        fnOut = protocol._getExtraPath(fnRoot + ".mol2")
-        args = " -O  %s" % (fnRoot + ".mol2")
-    elif format == 3:
-        fnOut = protocol._getExtraPath(fnRoot + ".sdf")
-        args = " -O  %s" % (fnRoot + ".sdf")
-    elif format == 4:
-        fnOut = protocol._getExtraPath(fnRoot + ".smi")
-        args = " -O  %s" % (fnRoot + ".smi")
-
-    return fnOut, args
-
-
-
-
+RDKIT, OBABEL = 'RDKit', 'OpenBabel'
+extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
 
 class ConvertStructures(EMProtocol):
     """
     Convert a set of input ligands or a protein structure to a specific file format
     """
-
 
     _label = 'Convert format'
     _program = ""
@@ -104,21 +59,20 @@ class ConvertStructures(EMProtocol):
                       help="The allowed format are pdb, cif, mol2, sdf and smi")
 
         form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
-                       choices=['PDB', 'cif', 'Mol2', 'SDF', 'Smiles'],
+                       choices=['PDB', 'Mol2', 'SDF', 'Smiles'],
                        label='Output format',
-                       help = "If you try to convert a 2D format (ex. smi) to 3D format,"
-                              "you will be able to do this but it is wrong")
+                       help="Output format for the converted molecules")
 
+        form.addParam('useManager', EnumParam, default=0, label='Convert using: ',
+                      condition='inputType==0', choices=[RDKIT, OBABEL],
+                      help='Whether to convert the input molecules using RDKit or OpenBabel')
 
         form.addParam('inputStructure', PointerParam, pointerClass= "AtomStruct",
-                      condition='inputType==1',
-                      label='Input structure:', allowsNull=False,
-                      help="The allowed format are pdb and cif")
+                      condition='inputType==1', label='Input structure:', allowsNull=False,
+                      help="The allowed format are pdb or cif")
 
-        form.addParam('outputFormatTarget', EnumParam, default=2,
-                      condition='inputType==1',
-                       choices=['PDB', 'cif', 'Mol2'],
-                       label='Output format')
+        form.addParam('outputFormatTarget', EnumParam, default=0,
+                      condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
 
 
 
@@ -132,52 +86,78 @@ class ConvertStructures(EMProtocol):
         if self.inputType==0:  # Small molecules
             outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
 
-            error = []  # Save the file paths that could not be transformed
+            self.convErrors = []  # Save the file paths that could not be transformed
             for mol in self.inputSmallMols.get():
+                fnSmall = os.path.abspath(mol.smallMoleculeFile.get())
+                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
 
-                try:
-                    # Input file
-                    fnSmall = os.path.abspath(mol.smallMoleculeFile.get())
-                    fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-                    args = inputArg(fnSmall)
+                outFormat = extDic[self.getEnumText('outputFormatSmall')]
+                outDir = os.path.abspath(self._getExtraPath())
+                fnOut = os.path.join(outDir, fnRoot + outFormat)
 
-                    # Output file
-                    fnOut, argout = outputArg(fnRoot, self.outputFormatSmall.get(), self)
-                    args += argout
+                args = ' -i "{}" -of {} -o {} --outputDir {}'.format(fnSmall, outFormat, fnOut, outDir)
+                if self.getEnumText('useManager') == OBABEL:
+                    Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                else:
+                    Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
 
-                    runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-
+                if os.path.exists(fnOut):
                     smallMolecule = SmallMolecule(smallMolFilename=fnOut, molName='guess')
                     outputSmallMolecules.append(smallMolecule)
-
-                except:
-                    error.append(mol.smallMoleculeFile.get())
-
-
+                else:
+                    self.convErrors.append(fnRoot)
 
             if len(outputSmallMolecules) > 0:
-                print("The following entries could not be converted: %s" % error)
                 self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
                 self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
 
+            if len(self.convErrors) > 0:
+                print("The following entries could not be converted: %s" % ','.join(self.convErrors))
+
         else:
-            fnStructure = self.inputStructure.get().getFileName()
-            args = inputArg(os.path.abspath(fnStructure))
+            fnStructure = os.path.abspath(self.inputStructure.get().getFileName())
+            args = self.inputArg(os.path.abspath(fnStructure))
             fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
 
-            fnOut, argout = outputArg(fnRoot, self.outputFormatTarget.get(), self)
+            outFormat = extDic[self.getEnumText('outputFormatTarget')]
+            outDir = os.path.abspath(self._getExtraPath())
+            fnOut = os.path.join(outDir, fnRoot + outFormat)
 
-            args += argout
+            if outFormat == '.pdb':
+                convFn = toPdb(fnStructure, fnOut)
+            elif outFormat == '.cif':
+                convFn = toCIF(fnStructure, fnOut)
 
-            runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getPath()))
+            if convFn == fnStructure:
+                shutil.copy(convFn, fnOut)
 
-            target = AtomStruct(filename=fnOut)
-            self._defineOutputs(outputStructure=target)
-            self._defineSourceRelation(self.inputStructure, target)
+            if os.path.exists(fnOut):
+                target = AtomStruct(filename=fnOut)
+                self._defineOutputs(outputStructure=target)
+                self._defineSourceRelation(self.inputStructure, target)
 
+    def inputArg(self, fn):  # Input format file (fn)
+
+        if fn.endswith('.pdb'):  # Protein Data Bank
+            args = "-ipdb"
+        elif fn.endswith('.cif'):  # cif (crystallography information)
+            args = "-icif"
+
+        elif fn.endswith('.sdf'):  # MDL MOL FORMAT
+            args = "-isdf"
+        elif fn.endswith('.sd'):  # MDL MOL FORMAT
+            args = "-isd"
+
+        elif fn.endswith('.mol2'):  # Sybyl Mol2 format (3D)
+            args = "-imol2"
+        elif fn.endswith('.smi') or fn.endswith('.smiles'):  # Smiles format (2D)
+            args = "-ismi"
+        else:
+            error = " Input format was not recognize (The allowed format are pdb, cif, mol2, sdf and smi)"
+            raise Exception(error)
+        return args + " %s" % os.path.abspath(fn)
 
     # --------------------------- Summary functions --------------------
-
     def _summary(self):
         summary=[]
 
