@@ -50,28 +50,31 @@ class ConvertStructures(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputType', EnumParam, default=0,
+        group = form.addGroup('Input')
+        group.addParam('inputType', EnumParam, default=0,
                        choices=["Small molecules", 'Target structure'],
                        label='Input type')
 
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
+        group.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
                       label='Set of small molecules:', allowsNull=False,
                       help="The allowed format are pdb, cif, mol2, sdf and smi")
 
-        form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
+        group.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
+                      condition='inputType==1', label='Input structure:', allowsNull=False,
+                      help="The allowed format are pdb or cif")
+
+        group = form.addGroup('Output')
+        group.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
                        choices=['PDB', 'Mol2', 'SDF', 'Smiles'],
                        label='Output format',
                        help="Output format for the converted molecules")
 
-        form.addParam('useManager', EnumParam, default=0, label='Convert using: ',
+        group.addParam('useManager', EnumParam, default=0, label='Convert using: ',
                       condition='inputType==0', choices=[RDKIT, OBABEL],
                       help='Whether to convert the input molecules using RDKit or OpenBabel')
 
-        form.addParam('inputStructure', PointerParam, pointerClass= "AtomStruct",
-                      condition='inputType==1', label='Input structure:', allowsNull=False,
-                      help="The allowed format are pdb or cif")
 
-        form.addParam('outputFormatTarget', EnumParam, default=0,
+        group.addParam('outputFormatTarget', EnumParam, default=0,
                       condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
 
 
