@@ -36,6 +36,7 @@ from pwem.objects.data import Sequence, Object, String, Integer, Float
 
 from pwchem.constants import *
 from pwchem import Plugin as pwchemPlugin
+from .scriptUtils import *
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -53,21 +54,6 @@ def getVarName(var):
 
 def getBaseName(file):
     return os.path.splitext(os.path.basename(file.strip()))[0]
-
-def makeSubsets(oriSet, nt):
-    '''Returns a list of subsets, given a set and the number of subsets'''
-    subsets = []
-    nObjs = len(oriSet) // nt
-    it, curSet = 0, []
-    for obj in oriSet:
-        curSet.append(obj.clone())
-        if len(curSet) == nObjs and it < nt - 1:
-            subsets.append(curSet)
-            curSet, it = [], it + 1
-
-    if len(curSet) > 0:
-        subsets.append(curSet)
-    return subsets
 
 def getLigCoords(ASFile, ligName):
     '''Return the coordinates of the ligand specified in the atomic structure file'''
