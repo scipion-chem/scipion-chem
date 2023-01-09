@@ -28,19 +28,113 @@
 '''Script to convert molecule files using the rdkit Chem module in the rdkit-env.
 Mainly used for parsinf mae files (which openbabel is not able to read)'''
 
-import sys, os, argparse, shutil, gzip
+import sys, os, argparse, shutil, gzip, threading
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-def make3DCoords(mol):
-    '''Optimize the 3D coordinates of a rdkit molecule'''
-    mol2 = Chem.AddHs(mol, addCoords=True)
-    mol2 = AllChem.EmbedMolecule(mol2)
-    mol2 = AllChem.MMFFOptimizeMolecule(mol2)
-    if len(mol.GetAtoms()) != len(mol2.GetAtoms()):
-        mol2 = Chem.RemoveHs(mol2)
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from scriptUtils import *
 
-    return mol2
+def Mol2MolSupplier(file=None,sanitize=True):
+    mols=[]
+    with open(file, 'r') as f:
+        line =f.readline()
+        while not f.tell() == os.fstat(f.fileno()).st_size:
+            if line.startswith("@<TRIPOS>MOLECULE"):
+                mol = []
+                mol.append(line)
+                line = f.readline()
+                while not line.startswith("@<TRIPOS>MOLECULE"):
+                    mol.append(line)
+                    line = f.readline()
+                    if f.tell() == os.fstat(f.fileno()).st_size:
+                        mol.append(line)
+                        break
+                mol[-1] = mol[-1].rstrip() # removes blank line at file end
+                block = ",".join(mol).replace(',','')
+                m=Chem.MolFromMol2Block(block, sanitize=sanitize)
+            mols.append(m)
+    return mols
+
+def decompressFile(inFile):
+    if inFile.endswith('.gz'):
+        newInputFile = inputFile.replace('.gz', '')
+    elif inFile.endswith('gz'):
+        newInputFile = inputFile.replace('gz', '')
+    else:
+        print('Decompress failed for file {}'.format(inFile))
+
+    with gzip.open(inputFile) as fIn:
+        with open(newInputFile, 'wb') as f:
+            shutil.copyfileobj(fIn, f)
+
+    return newInputFile
+
+def getMolsFromFile(inFile, ext=None, nameKey=None):
+    '''Parse molecules stored in a file based on extension'''
+    if not ext:
+        ext = os.path.splitext(inFile)[1][1:]
+
+    if not nameKey:
+        nameKey = '_name'
+
+    if ext == 'maegz' or ext == 'gz':
+        inFile = decompressFile(inFile)
+
+    mols = []
+    if ext == 'mae':
+        mols = list(Chem.MaeMolSupplier(inFile))
+
+    elif ext == 'smi' or ext == 'smiles':
+        with open(inFile) as f:
+            for line in f:
+                smi, name = line.strip().split()
+                mol = Chem.MolFromSmiles(smi)
+                mol.SetProp(nameKey, name)
+                mols.append(mol)
+
+    elif ext == 'mol2':
+        mols = Mol2MolSupplier(inFile)
+
+    elif ext == 'sdf' or ext == 'sd':
+        mols = list(Chem.SDMolSupplier(inFile))
+
+    elif ext == 'pdb':
+        for pdbBlock in divideMultiPDB(inFile):
+            mols.append(Chem.MolFromPDBBlock(pdbBlock))
+
+    else:
+        print('Unrecognized format {} for file {}'.format(ext, inFile))
+
+    return mols, nameKey
+
+def getMolName(mol, nameKey, outBase):
+    if mol.HasProp(nameKey):
+        molName = mol.GetProp(nameKey)
+    else:
+        molName = '{}_{}'.format(outBase, i + 1)
+    return molName
+
+def make3DCoords(mols, mols3dLists, it, errBase):
+    '''Optimize the 3D coordinates of a rdkit molecule'''
+    for i, mol in enumerate(mols):
+        mol2 = Chem.AddHs(mol, addCoords=True)
+        AllChem.EmbedMolecule(mol2)
+        try:
+            AllChem.MMFFOptimizeMolecule(mol2)
+        except:
+            if mol.HasProp('_name'):
+                print('Could not optimize 3D structure of molecule: {}'.format(mol.GetProp('_name')))
+                errFile = '{}_{}.txt'.format(errBase, it)
+                mode = 'a' if os.path.exists(errFile) else 'w'
+                with open(errFile, mode) as f:
+                    f.write(mol.GetProp('_name') + '\n')
+
+        if len(mol.GetAtoms()) != len(mol2.GetAtoms()):
+            mol2 = Chem.RemoveHs(mol2)
+
+        mols3dLists[it].append(mol2)
+    return mols3dLists[it]
 
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputFilename <mol(s)File> -of/--outputFormat <outputFormat> 
@@ -53,12 +147,14 @@ if __name__ == "__main__":
     '''
     parser = argparse.ArgumentParser(description='Handles the IO for molecule files using openbabel')
     parser.add_argument('-i', '--inputFilename', type=str, help='Input molecule file')
-    parser.add_argument('-of', '--outputFormat', type=str, required=False, default='mol2', help='Output format')
+    parser.add_argument('-of', '--outputFormat', type=str, required=False, default='sdf', help='Output format')
     parser.add_argument('-o', '--outputName', type=str, required=False, help='Output name')
     parser.add_argument('-ob', '--outputBase', type=str, required=False, help='Output basename for multiple outputs')
     parser.add_argument('-od', '--outputDir', type=str, required=False, help='Output directory')
     parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
     parser.add_argument('--overWrite', default=False, action='store_true', help='Overwrite output')
+    parser.add_argument('--nameKey', type=str, required=False, help='molecule name key in file')
+    parser.add_argument('-nt', '--nthreads', default=1, type=int, required=False, help='Number of threads')
 
     args = parser.parse_args()
     inputFile, outFormat = args.inputFilename, args.outputFormat
@@ -76,37 +172,37 @@ if __name__ == "__main__":
 
     overW = args.overWrite
     make3d = args.make3D
+    nameKey = args.nameKey
+    nt = args.nthreads
 
-    if inFormat == 'maegz':
-        newInputFile = inputFile.replace('.maegz', '.mae')
-        with gzip.open(inputFile) as fIn:
-            with open(newInputFile, 'wb') as f:
-                shutil.copyfileobj(fIn, f)
-        inputFile, inFormat = newInputFile, 'mae'
+    mols, nameKey = getMolsFromFile(inputFile)
+    if make3d:
+        mols = performBatchThreading(make3DCoords, mols, nt, clone=False, errBase=os.path.join(outDir, 'errors3D'))
 
-    if inFormat == 'mae':
-        if singleOutFile:
-            outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, 'sdf')))
-            with Chem.SDWriter(outFile) as f:
-                for mol in Chem.MaeMolSupplier(inputFile):
-                    if make3d:
-                        mol = make3DCoords(mol)
-                    f.write(mol)
-
-        else:
-            if args.outputBase:
-                outBase = args.outputBase
-            else:
-                outBase = 'molecule'
-
-            for i, mol in enumerate(Chem.MaeMolSupplier(inputFile)):
-                molName = '{}_{}'.format(outBase, i+1)
-                outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, 'sdf')))
-                with Chem.SDWriter(outFile) as f:
-                    if make3d:
-                        mol = make3DCoords(mol)
-                    f.write(mol)
+    if outFormat == 'smi' or outFormat == 'smiles':
+        writter, ext = Chem.SmilesWriter, 'smi'
+    elif outFormat == 'pdb':
+        writter, ext = Chem.PDBWriter, 'pdb'
     else:
-        print('Script currently only prepared to convert from mae / maegz files to sdf using rdkit')
+        writter, ext = Chem.SDWriter, 'sdf'
+
+    if singleOutFile:
+        outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
+        with writter(outFile) as f:
+            for mol in mols:
+                f.write(mol)
+
+    else:
+        outBase = args.outputBase if args.outputBase else 'molecule'
+        for i, mol in enumerate(mols):
+            if mol.HasProp(nameKey):
+                molName = mol.GetProp(nameKey)
+            else:
+                molName = '{}_{}'.format(outBase, i+1)
+
+            outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
+            with writter(outFile) as f:
+                f.write(mol)
+
 
 

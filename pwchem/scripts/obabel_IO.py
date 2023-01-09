@@ -31,36 +31,61 @@ import sys, os, argparse, glob
 
 from openbabel import pybel
 
-def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, outBase=None,
-                     overW=True, make3d=False, nameKey=None):
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from scriptUtils import *
+
+def getPDBMols(inFile):
+    mols = []
+    pdbStrs = divideMultiPDB(inFile)
+    for i, pdbStr in enumerate(pdbStrs):
+        tFile = 'molecule_{}'.format(i)
+        with open(tFile, 'w') as f:
+            f.write(pdbStr)
+        mols.append(pybel.readfile('pdb', tFile))
+        os.remove(tFile)
+    return mols
+
+def parseMols(inFile):
     inFormat = os.path.splitext(inputFile)[1][1:]
+    if inFormat == 'pdb':
+        mols = getPDBMols(inputFile)
+    else:
+        mols = pybel.readfile(inFormat, inputFile)
+    return mols
+
+def make3DCoords(mols, mols3dLists, it):
+    '''Optimize the 3D coordinates of a rdkit molecule'''
+    for i, mol in enumerate(mols):
+        mol.make3D()
+        mols3dLists[it].append(mol)
+    return mols3dLists[it]
+
+def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, outBase=None,
+                     overW=True, make3d=False, nameKey=None, nt=1):
+    mols = parseMols(inputFile)
+    inFormat = os.path.splitext(inputFile)[1][1:]
+    if inFormat in ['smi', 'smiles'] or make3d:
+        mols = performBatchThreading(make3DCoords, mols, nt, clone=False)
 
     if singleOutFile:
         outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat)))
         outObj = pybel.Outputfile(outFormat, outFile, overwrite=overW)
-        for mol in pybel.readfile(inFormat, inputFile):
-            if inFormat in ['smi', 'smiles'] or make3d:
-                mol.make3D()
+
+        for mol in mols:
             outObj.write(mol)
         outObj.close()
         return outFile
 
     else:
-        if inFormat == 'pdb':
-            print('Warning: openbabel is not able to parse combo pdb files')
-
-        if not outBase:
-            outBase = 'molecule'
-
         names = []
-        for i, mol in enumerate(pybel.readfile(inFormat, inputFile)):
-            if inFormat in ['smi', 'smiles'] or make3d:
-                mol.make3D()
+        for i, mol in enumerate(mols):
             if nameKey and nameKey in mol.data:
                 molName = mol.data[nameKey]
             elif mol.title and not mol.title in names and not outBase:
                 molName = os.path.splitext(os.path.basename(mol.title))[0]
             else:
+                if not outBase:
+                    outBase = 'molecule'
                 molName = '{}_{}'.format(outBase, i + 1)
             names.append(molName)
             mol.write(outFormat, os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, outFormat))),
@@ -89,6 +114,7 @@ if __name__ == "__main__":
     parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
     parser.add_argument('--overWrite', default=True, action='store_true', help='Overwrite output')
     parser.add_argument('--nameKey', type=str, required=False, help='molecule name key in file')
+    parser.add_argument('-nt', '--nthreads', default=1, type=int, required=False, help='Number of threads')
 
     args = parser.parse_args()
     if args.outputDir:
@@ -100,6 +126,7 @@ if __name__ == "__main__":
     overW = args.overWrite
     make3d = args.make3D
     nameKey = args.nameKey
+    nt = args.nthreads
 
     if not args.multiFiles:
         inputFile, outFormat = args.inputFilename, args.outputFormat
@@ -109,11 +136,11 @@ if __name__ == "__main__":
         else:
             singleOutFile, outName = False, None
 
-        oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW, make3d, nameKey)
+        oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW, make3d, nameKey, nt)
 
     else:
         inputDir, pattern, outFormat = args.inputDir, args.pattern, args.outputFormat
         pattern = os.path.join(inputDir, pattern)
         for inFile in glob.glob(pattern):
             outName = os.path.splitext(os.path.basename(inFile))[0]
-            oBabelConversion(inFile, outFormat, True, outDir, outName, outBase, overW, make3d, nameKey)
+            oBabelConversion(inFile, outFormat, True, outDir, outName, outBase, overW, make3d, nameKey, nt)
