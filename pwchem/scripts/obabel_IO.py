@@ -41,7 +41,7 @@ def getPDBMols(inFile):
         tFile = 'molecule_{}'.format(i)
         with open(tFile, 'w') as f:
             f.write(pdbStr)
-        mols.append(pybel.readfile('pdb', tFile))
+        mols += list(pybel.readfile('pdb', tFile))
         os.remove(tFile)
     return mols
 
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     parser.add_argument('-pat', '--pattern', type=str, required=False, default='',
                         help='Input molecule files directory if multiFiles')
 
-    parser.add_argument('-i', '--inputFilename', type=str, help='Input molecule file')
+    parser.add_argument('-i', '--inputFilename', default='', type=str, help='Input molecule file')
     parser.add_argument('-of', '--outputFormat', type=str, default='mol2', help='Output format')
     parser.add_argument('-o', '--outputName', type=str, required=False, help='Output name')
     parser.add_argument('-ob', '--outputBase', type=str, required=False, help='Output basename for multiple outputs')
@@ -117,10 +117,15 @@ if __name__ == "__main__":
     parser.add_argument('-nt', '--nthreads', default=1, type=int, required=False, help='Number of threads')
 
     args = parser.parse_args()
+
+    inputFile = args.inputFilename
     if args.outputDir:
         outDir = args.outputDir
     else:
         outDir = os.path.dirname(inputFile)
+
+    outFormat = args.outputFormat
+    outFormat = outFormat if not outFormat.startswith('.') else outFormat[1:]
 
     outBase = args.outputBase
     overW = args.overWrite
@@ -129,7 +134,6 @@ if __name__ == "__main__":
     nt = args.nthreads
 
     if not args.multiFiles:
-        inputFile, outFormat = args.inputFilename, args.outputFormat
 
         if args.outputName:
             singleOutFile, outName = True, os.path.splitext(args.outputName)[0]
@@ -139,7 +143,7 @@ if __name__ == "__main__":
         oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName, outBase, overW, make3d, nameKey, nt)
 
     else:
-        inputDir, pattern, outFormat = args.inputDir, args.pattern, args.outputFormat
+        inputDir, pattern = args.inputDir, args.pattern
         pattern = os.path.join(inputDir, pattern)
         for inFile in glob.glob(pattern):
             outName = os.path.splitext(os.path.basename(inFile))[0]
