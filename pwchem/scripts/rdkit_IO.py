@@ -157,7 +157,7 @@ if __name__ == "__main__":
     parser.add_argument('-od', '--outputDir', type=str, required=False, help='Output directory')
     parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
     parser.add_argument('--overWrite', default=False, action='store_true', help='Overwrite output')
-    parser.add_argument('--nameKey', type=str, required=False, help='molecule name key in file')
+    parser.add_argument('--nameKey', default='', type=str, required=False, help='molecule name key in file')
     parser.add_argument('-nt', '--nthreads', default=1, type=int, required=False, help='Number of threads')
 
     args = parser.parse_args()
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     nameKey = args.nameKey
     nt = args.nthreads
 
-    mols, nameKey = getMolsFromFile(inputFile)
+    mols, nameKey = getMolsFromFile(inputFile, nameKey=nameKey)
     if len(mols) > 0:
         if make3d:
             mols = performBatchThreading(make3DCoords, mols, nt, clone=False, errBase=os.path.join(outDir, 'errors3D'))
@@ -196,19 +196,21 @@ if __name__ == "__main__":
             outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
             with writter(outFile) as f:
                 for mol in mols:
-                    f.write(mol)
+                    if mol:
+                        f.write(mol)
 
         else:
             outBase = args.outputBase if args.outputBase else 'molecule'
             for i, mol in enumerate(mols):
-                if mol.HasProp(nameKey):
-                    molName = mol.GetProp(nameKey)
-                else:
-                    molName = '{}_{}'.format(outBase, i+1)
-
-                outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
-                with writter(outFile) as f:
-                    f.write(mol)
+                if mol:
+                    if mol.HasProp(nameKey):
+                        molName = mol.GetProp(nameKey)
+                    else:
+                        molName = '{}_{}'.format(outBase, i+1)
+                    molName = molName.replace('/', '-')
+                    outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
+                    with writter(outFile) as f:
+                        f.write(mol)
 
 
 
