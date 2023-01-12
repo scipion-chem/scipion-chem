@@ -73,7 +73,6 @@ from pwchem.protocols.General.protocol_converter import ConvertStructures
 from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from pwchem.protocols.General.protocol_dali import ProtChemDali
 from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetching
-from pwchem.protocols.General.protocol_listIDs_operate import ProtChemListIDOperate
 from pwchem.protocols.General.protocol_list_operate import ProtChemListOperate
 from pwchem.protocols.General.protocol_smallMolecules_pdb import ProtChemSmallMoleculesPDB
 from pwchem.protocols.General.protocol_pdb_uniprot import ProtChemPDBUniprot
