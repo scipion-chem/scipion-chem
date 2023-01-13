@@ -24,16 +24,17 @@
 # *
 # **************************************************************************
 
-import glob
-import os
+import glob, os, urllib
 
-
-from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, EnumParam
-from pwchem import Plugin
+from pyworkflow.protocol import params
+
+from pwem.protocols import EMProtocol
 from pwem.objects import Sequence, SetOfSequences
+
+from pwchem import Plugin
+
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory
@@ -42,9 +43,11 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('multiple', BooleanParam, default=True,
+        form.addParam('fromFile', params.BooleanParam, default=True, label='Download from file')
+        group = form.addGroup('From file', condition='fromFile')
+        group.addParam('multiple', params.BooleanParam, default=True, condition='fromFile',
                       label='Each file is a sequence')
-        form.addParam('filesPath', PathParam, condition='multiple',
+        group.addParam('filesPath', params.PathParam, condition='fromFile and multiple',
                       label="Sequences files directory: ",
                       help="Directory with the files you want to import.\n\n"
                            "The path can also contain wildcards to select"
@@ -59,7 +62,7 @@ class ProtChemImportSetOfSequences(EMProtocol):
                            "file ID\n\n"
                            "NOTE: wildcard characters ('*', '?', '#') "
                            "cannot appear in the actual path.)")
-        form.addParam('filesPattern', StringParam,  condition='multiple',
+        group.addParam('filesPattern', params.StringParam,  condition='fromFile and multiple',
                       label='Pattern',
                       default="*",
                       help="Pattern of the files to be imported.\n\n"
@@ -72,17 +75,27 @@ class ProtChemImportSetOfSequences(EMProtocol):
                            "You may create small molecules from Smiles (.smi), Tripos Mol2 (.mol2), "
                            "SDF (.sdf), Maestro (.mae, .maegz), or PDB blocks (.pdb)")
 
-        form.addParam('filePath', PathParam, condition='not multiple',
+        group.addParam('filePath', params.PathParam, condition='fromFile and not multiple',
                       label='Sequences file: ',
                       help='Fasta file containing a set of sequences to import')
 
-        form.addParam('seqType', EnumParam, default=0,
-                       choices=['Protein', 'Nucleotide'], display=EnumParam.DISPLAY_HLIST,
+        group.addParam('seqType', params.EnumParam, default=0, condition='fromFile',
+                       choices=['Protein', 'Nucleotide'], display=params.EnumParam.DISPLAY_HLIST,
                        label='Type of sequences: ')
+
+        group = form.addGroup('From database', condition='not fromFile')
+        group.addParam('database', params.EnumParam, default=0, condition='not fromFile',
+                       label='Input  database: ', choices=['Uniprot', 'ENA'])
+        group.addParam('inputListID', params.PointerParam, pointerClass="SetOfDatabaseID",
+                      label='List of Database Ids:',
+                      help="List of input Ids for downloading")
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('importStep')
+        if self.fromFile:
+            self._insertFunctionStep('importStep')
+        else:
+            self._insertFunctionStep('downloadStep')
 
     def importStep(self):
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
@@ -99,3 +112,45 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
         self._defineOutputs(outputSequences=outputSequences)
 
+    def downloadStep(self):
+        outputSequences = SetOfSequences().create(outputPath=self._getPath())
+        outFns = []
+
+        for item in self.inputListID.get():
+            inId = item.getDbId()
+            print("Processing %s" % inId)
+            fnFasta = self._getExtraPath("%s.fasta" % inId)
+
+            url = self.getUrl(inId)
+            if not os.path.exists(fnFasta):
+                try:
+                    urllib.request.urlretrieve(url, fnFasta)
+                    outFns.append(fnFasta)
+                except: # The library raises an exception when the web is not found
+                    print('Could not download {} from {} database'.
+                          format(inId, self.getEnumText('database')))
+
+        isAmino = self.database.get() in [1]
+        for outFn in outFns:
+            newSeq = Sequence()
+            newSeq.importFromFile(outFn, isAmino=isAmino)
+            outputSequences.append(newSeq)
+
+        self._defineOutputs(outputSequences=outputSequences)
+        self._defineSourceRelation(self.inputListID, outputSequences)
+
+    def getUrl(self, dbId):
+        if self.database.get() == 0:
+            return "https://rest.uniprot.org/uniprotkb/%s.fasta" % dbId
+        elif self.database.get() == 1:
+            return "https://www.ebi.ac.uk/ena/browser/api/fasta/%s" % dbId
+
+    def _warnings(self):
+        ws = []
+        if not self.fromFile:
+            targetDB = self.getEnumText('database')
+            for dbId in self.inputListID.get():
+                if not dbId.getDatabase().strip().lower() == targetDB.lower():
+                    ws.append('Some IDs seems not to be from {} db'.format(targetDB))
+                    break
+        return ws

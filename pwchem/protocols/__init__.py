@@ -76,9 +76,7 @@ from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetch
 from pwchem.protocols.General.protocol_list_operate import ProtChemListOperate
 from pwchem.protocols.General.protocol_smallMolecules_pdb import ProtChemSmallMoleculesPDB
 from pwchem.protocols.General.protocol_pdb_uniprot import ProtChemPDBUniprot
-from pwchem.protocols.General.protocol_uniprot_download import ProtChemUniprotDownload
 from pwchem.protocols.General.protocol_uniprot_crossref import ProtChemUniprotCrossRef
-from pwchem.protocols.General.protocol_ena_download import ProtChemEnaDownload
 from pwchem.protocols.General.protocol_ZL_predict import ProtChemZLPredict
 from pwchem.protocols.General.protocol_raptorX import ProtChemRaptorX
 from pwchem.protocols.General.protocol_ZINC_filter import ProtChemZINCFilter
