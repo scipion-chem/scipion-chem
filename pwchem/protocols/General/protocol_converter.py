@@ -26,15 +26,16 @@
 # **************************************************************************
 
 
-import os, shutil
+import os, shutil, mdtraj
 
 from pyworkflow.protocol.params import PointerParam, EnumParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toCIF, toPdb
+from pwem.viewers import VmdView
 
 from pwchem import Plugin
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
 from pwchem.utils import runOpenBabel
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
@@ -45,7 +46,7 @@ class ConvertStructures(EMProtocol):
     Convert a set of input ligands or a protein structure to a specific file format
     """
 
-    _label = 'Convert format'
+    _label = 'Convert structure format'
     _program = ""
 
     def _defineParams(self, form):
@@ -184,3 +185,56 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatTarget.get() == 2:
                 summary.append('Converted to Mol2')
         return summary
+    
+    
+class ConvertMDSystem(EMProtocol):
+    """
+    Convert an MD simulation to a specific file format using VMD
+    """
+
+
+    _label = 'Convert MD system format'
+    _program = ""
+
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+
+        form.addParam('inputSystem', PointerParam, pointerClass="MDSystem",
+                      label='MD System:', allowsNull=False,
+                      help="Any system with a system file and trajectory file that VMD can read")
+
+        form.addParam('outputFormat', EnumParam, default=0,
+                       choices=['DCD'],
+                       label='Output format',
+                       help = "The only allowed output format is currently dcd")
+
+    # --------------------------- Steps functions --------------------
+
+    def _insertAllSteps(self):
+        self._insertFunctionStep('convertStep')
+
+    def convertStep(self):
+        inSystem = self.inputSystem.get()
+        
+        fnStructure = inSystem.getSystemFile()
+        fnStructRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
+        fnStructOut = self._getPath(fnStructRoot + '.pdb')
+        
+        traj_empty = mdtraj.load(fnStructure, top=fnStructure) 
+        traj_empty.save_pdb(fnStructOut)
+
+        outSystem = MDSystem(filename=fnStructOut)
+
+        if inSystem.hasTrajectory():
+            fnTrj = inSystem.getTrajectoryFile()
+            
+            traj = mdtraj.load(fnTrj, top=fnStructOut)
+            
+            fnTrjRoot = os.path.splitext(os.path.split(fnTrj)[1])[0]
+            fnTrjOut = self._getPath(fnTrjRoot + '.dcd')
+            traj.save_dcd(fnTrjOut)
+            
+            outSystem.setTrajectoryFile(fnTrjOut)
+        
+        self._defineOutputs(outputSystem=outSystem)
+        self._defineSourceRelation(self.inputSystem, outSystem)
