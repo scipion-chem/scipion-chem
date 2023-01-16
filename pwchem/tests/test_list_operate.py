@@ -31,7 +31,7 @@ from pathlib import Path
 from pyworkflow.tests import *
 from pyworkflow.protocol import *
 from pwem.protocols.protocol_import import ProtImportPdb
-from pwchem.protocols import ProtChemListOperate as LOperate
+from pwchem.protocols import ProtChemOperateSet as LOperate
 from pwchem.protocols import ProtChemDali as DALI
 
 
