@@ -117,8 +117,7 @@ class ProtCalculateSASA(EMProtocol):
             # Removes HETATM (sometimes yiled error in Biopython)
             clean_PDB(inputAS, inFile, waters=True, HETATM=True)
 
-            args = ' {} {}'.format(inFile, outSASA)
-            pwchemPlugin.runScript(self, 'calculate_SASA.py', args, env='plip', cwd=outDir, popen=not inProt)
+            calculate_SASA(inFile, outSASA)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
