@@ -56,7 +56,29 @@ class AddElementWizard(VariableWizard):
             prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
             form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
 
+class Add_FilterExpression(AddElementWizard):
+    """Add ID or keyword in NCBI fetch protocol to the list"""
+    _targets, _inputs, _outputs = [], {}, {}
 
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        keep = protocol.getEnumText(inputParam[0])
+        subset = protocol.getEnumText(inputParam[1])
+
+        if subset and subset.strip() != '':
+            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+            towrite = prevList + '{} if in {}\n'.format(keep, subset)
+            form.setVar(outputParam[0], towrite)
+
+
+subGroups = list(ProtChemZINCFilter.subGroups.keys())
+subChoices = ['subset_{}'.format(sb) for sb in subGroups]
+Add_FilterExpression().addTarget(protocol=ProtChemZINCFilter,
+                                 targets=['addFilter'],
+                                 inputs=['mode', {'subGroup': subChoices}],
+                                 outputs=['filterList'])
 
 
 class AddElementSummaryWizard(VariableWizard):
