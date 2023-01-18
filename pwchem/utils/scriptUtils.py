@@ -56,6 +56,8 @@ def divideMultiPDB(file):
 def makeSubsets(oriSet, nt, cloneItem=True, copySet=False):
   '''Returns a list of subsets, given a set and the number of subsets'''
   subsets = []
+  if nt > len(oriSet):
+      nt = len(oriSet)
   nObjs = len(oriSet) // nt
   it, curSet = 0, []
   for obj in oriSet:
@@ -82,8 +84,7 @@ def performBatchThreading(task, inSet, nt, clone=True, copySet=False, *args, **k
   subsets = makeSubsets(list(inSet), nt, cloneItem=clone)
 
   for it, curSet in enumerate(subsets):
-    t = threading.Thread(target=task, args=(curSet, outLists, it), kwargs=kwargs,
-                         daemon=False)
+    t = threading.Thread(target=task, args=(curSet, outLists, it), kwargs=kwargs, daemon=False)
     threads.append(t)
     t.start()
 

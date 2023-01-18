@@ -80,7 +80,7 @@ from pwchem.protocols.General.protocol_uniprot_crossref import ProtChemUniprotCr
 from pwchem.protocols.General.protocol_ZL_predict import ProtChemZLPredict
 from pwchem.protocols.General.protocol_raptorX import ProtChemRaptorX
 from pwchem.protocols.General.protocol_ZINC_filter import ProtChemZINCFilter
-from pwchem.protocols.General.protocol_pubchem_search import ProtChemPubChemSearch
+from pwchem.protocols.General.protocol_smallMol_identify import ProtChemSmallMolIdentify
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_extract_ligands import ProtExtractLigands
 from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
