@@ -65,7 +65,7 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
     mols = parseMols(inputFile)
     inFormat = os.path.splitext(inputFile)[1][1:]
     if inFormat in ['smi', 'smiles'] or make3d:
-        mols = performBatchThreading(make3DCoords, mols, nt, clone=False)
+        mols = performBatchThreading(make3DCoords, mols, nt, cloneItem=False)
 
     if singleOutFile:
         outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat)))

@@ -36,7 +36,7 @@ from pwchem.utils import runOpenBabel, performBatchThreading
 
 RDKIT, OPENBABEL = 0, 1
 PUBCHEMID, PUBCHEMNAME, ZINC, CHEMBL = 1, 2, 3, 4
-DbChoices = ['PubChemID', 'PubChemName', 'ZINC', 'ChEMBL']
+DbChoices = ['PubChemID', 'PubChemName', 'ZINC_ID', 'ChEMBL_ID']
 
 class ProtChemSmallMolIdentify(EMProtocol):
     """Uses the PubChem search tools to identify the ligands from their SMILES.
@@ -79,7 +79,7 @@ class ProtChemSmallMolIdentify(EMProtocol):
                 molDic[smi] = [mol.clone()]
 
         simBase, outDir = 'similarIds', os.path.abspath(self._getTmpPath())
-        smisDics = performBatchThreading(self.identifySMI, list(molDic.keys()), nt, clone=False,
+        smisDics = performBatchThreading(self.identifySMI, list(molDic.keys()), nt, cloneItem=False,
                                          similarBase=os.path.join(outDir, simBase))
 
         allSimFile = self._getPath('{}.txt'.format(simBase))
@@ -198,9 +198,9 @@ class ProtChemSmallMolIdentify(EMProtocol):
                     idsDic['PubChemName'] = line.strip()
 
                 if line.upper().startswith('ZINC'):
-                    idsDic['ZINC'] = line.strip()
+                    idsDic['ZINC_ID'] = line.strip()
                 elif line.upper().startswith('CHEMBL'):
-                    idsDic['ChEMBL'] = line.strip()
+                    idsDic['ChEMBL_ID'] = line.strip()
         return idsDic
 
     def _validate(self):

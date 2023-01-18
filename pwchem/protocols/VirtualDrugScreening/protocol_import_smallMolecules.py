@@ -277,7 +277,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     def downloadSDFZINCThread(self, zIDs):
         nt = self.numberOfThreads.get()
-        performBatchThreading(self.downloadSDFZINC, zIDs, nt, clone=False)
+        performBatchThreading(self.downloadSDFZINC, zIDs, nt, cloneItem=False)
 
     def downloadSDFZINC(self, zIds, outLists, it):
         for zId in zIds:
