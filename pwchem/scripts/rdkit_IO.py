@@ -183,7 +183,8 @@ if __name__ == "__main__":
     mols, nameKey = getMolsFromFile(inputFile, nameKey=nameKey)
     if len(mols) > 0:
         if make3d:
-            mols = performBatchThreading(make3DCoords, mols, nt, clone=False, errBase=os.path.join(outDir, 'errors3D'))
+            mols = performBatchThreading(make3DCoords, mols, nt, cloneItem=False,
+                                         errBase=os.path.join(outDir, 'errors3D'))
 
         if outFormat == 'smi' or outFormat == 'smiles':
             writter, ext = Chem.SmilesWriter, 'smi'

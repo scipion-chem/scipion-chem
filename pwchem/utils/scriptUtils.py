@@ -56,6 +56,8 @@ def divideMultiPDB(file):
 def makeSubsets(oriSet, nt, cloneItem=True, copySet=False):
   '''Returns a list of subsets, given a set and the number of subsets'''
   subsets = []
+  if nt > len(oriSet):
+      nt = len(oriSet)
   nObjs = len(oriSet) // nt
   it, curSet = 0, []
   for obj in oriSet:
@@ -71,7 +73,7 @@ def makeSubsets(oriSet, nt, cloneItem=True, copySet=False):
     subsets.append(curSet)
   return subsets
 
-def performBatchThreading(task, inSet, nt, clone=True, copySet=False, *args, **kwargs):
+def performBatchThreading(task, inSet, nt, cloneItem=True, copySet=False, *args, **kwargs):
   '''Uses threading to divide a task over an input set among a number of threads
   Input:
       -task: function. Task to perform
@@ -79,11 +81,10 @@ def performBatchThreading(task, inSet, nt, clone=True, copySet=False, *args, **k
       -nt: int. Number of threads to use
   '''
   threads, outLists = [], [[] for i in range(nt)]
-  subsets = makeSubsets(list(inSet), nt, cloneItem=clone)
+  subsets = makeSubsets(inSet, nt, cloneItem=cloneItem, copySet=copySet)
 
   for it, curSet in enumerate(subsets):
-    t = threading.Thread(target=task, args=(curSet, outLists, it), kwargs=kwargs,
-                         daemon=False)
+    t = threading.Thread(target=task, args=(curSet, outLists, it), kwargs=kwargs, daemon=False)
     threads.append(t)
     t.start()
 

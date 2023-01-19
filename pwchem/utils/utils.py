@@ -29,6 +29,7 @@ import random as rd
 import os, shutil, json, requests
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser
+from Bio.PDB.SASA import ShrakeRupley
 
 from pwem.convert import AtomicStructHandler, SequenceHandler
 from pwem.convert.atom_struct import cifToPdb
@@ -574,6 +575,25 @@ def getChainIds(chainStr):
       modelChains = chainJson["model-chain"].upper().strip()
       chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
     return chain_ids
+
+def calculate_SASA(structFile, outFile):
+    if structFile.endswith('.pdb') or structFile.endswith('.ent'):
+        p = PDBParser(QUIET=1)
+    elif structFile.endswith('.cif'):
+        p = MMCIFParser(QUIET=1)
+    struct = p.get_structure("SASAstruct", structFile)
+
+    sr = ShrakeRupley()
+    sr.compute(struct, level="R")
+
+    with open(outFile, 'w') as f:
+        for model in struct:
+            modelID = model.get_id()
+            for chain in model:
+                chainID = chain.get_id()
+                for residue in chain:
+                    resId = residue.get_id()[1]
+                    f.write('{}:{}\t{}\n'.format(chainID, resId, residue.sasa))
 
 
 
