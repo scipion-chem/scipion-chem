@@ -32,7 +32,6 @@ from pyworkflow.protocol.params import PointerParam, EnumParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toCIF, toPdb
-from pwem.viewers import VmdView
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
