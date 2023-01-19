@@ -69,8 +69,7 @@ from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtC
 
 
 # General protocols
-from pwchem.protocols.General.protocol_converter import ConvertStructures
-from pwchem.protocols.General.protocol_converter import ConvertMDSystem
+from pwchem.protocols.General.protocol_converter import ConvertStructures, ConvertMDSystem
 from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from pwchem.protocols.General.protocol_dali import ProtChemDali
 from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetching
