@@ -74,8 +74,6 @@ from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemIm
 from pwchem.protocols.General.protocol_dali import ProtChemDali
 from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetching
 from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
-from pwchem.protocols.General.protocol_smallMolecules_pdb import ProtChemSmallMoleculesPDB
-from pwchem.protocols.General.protocol_pdb_uniprot import ProtChemPDBUniprot
 from pwchem.protocols.General.protocol_uniprot_crossref import ProtChemUniprotCrossRef
 from pwchem.protocols.General.protocol_ZL_predict import ProtChemZLPredict
 from pwchem.protocols.General.protocol_raptorX import ProtChemRaptorX
