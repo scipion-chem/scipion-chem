@@ -27,6 +27,7 @@
 # Virtual Drug Screening protocols
 from pwchem.protocols.VirtualDrugScreening.protocol_import_smallMolecules import ProtChemImportSmallMolecules
 from pwchem.protocols.VirtualDrugScreening.protocol_drawSmallMol import ProtDrawMolecules
+from pwchem.protocols.VirtualDrugScreening.protocol_extract_ligands import ProtExtractLigands
 
 from pwchem.protocols.VirtualDrugScreening.protocol_receptor_preparation import ProtChemPrepareReceptor
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_preparation import ProtChemOBabelPrepareLigands
@@ -67,20 +68,18 @@ from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import Prot
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
 
+# Databases protocols
+from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
+from pwchem.protocols.Databases.protocol_fetch_ligands import ProtocolLigandsFetching
+from pwchem.protocols.Databases.protocol_smallMol_identify import ProtChemSmallMolIdentify
+from pwchem.protocols.Databases.protocol_uniprot_crossref import ProtChemUniprotCrossRef
+from pwchem.protocols.Databases.protocol_ZINC_filter import ProtChemZINCFilter
 
 # General protocols
 from pwchem.protocols.General.protocol_converter import ConvertStructures
-from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
-from pwchem.protocols.General.protocol_dali import ProtChemDali
-from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetching
-from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
-from pwchem.protocols.General.protocol_uniprot_crossref import ProtChemUniprotCrossRef
-from pwchem.protocols.General.protocol_ZL_predict import ProtChemZLPredict
-from pwchem.protocols.General.protocol_raptorX import ProtChemRaptorX
-from pwchem.protocols.General.protocol_ZINC_filter import ProtChemZINCFilter
-from pwchem.protocols.General.protocol_smallMol_identify import ProtChemSmallMolIdentify
-from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
-from pwchem.protocols.General.protocol_extract_ligands import ProtExtractLigands
 from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
+from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
+from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
+
 
 
