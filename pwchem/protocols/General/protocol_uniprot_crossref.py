@@ -31,150 +31,135 @@ import urllib.request
 
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
-from pyworkflow.protocol.params import PointerParam, EnumParam
+from pyworkflow.protocol import params
+
 from pwchem.objects import DatabaseID, SetOfDatabaseID
+from pwchem.utils import performBatchThreading
+
+
+dbChoices = ['PDB', 'UniProtKB', 'EMBL', 'ChEMBL', 'DrugBank', 'BindingDB', 'GO', 'Gene3D', 'InterPro', 'Pfam',
+             'DOI', 'PubMed', 'Other']
 
 class ProtChemUniprotCrossRef(EMProtocol):
     """Extract cross references from uniprot"""
     _label = 'uniprot crossref'
 
+    def __init__(self, *args, **kwargs):
+        EMProtocol.__init__(self, *args, **kwargs)
+        self.stepsExecutionMode = params.STEPS_PARALLEL
+
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputListID', PointerParam, pointerClass="SetOfDatabaseID",
-                       label='List of Uniprot Ids:', allowsNull=False,
-                       help="List of atomic structures for the query")
-        form.addParam('extract', EnumParam, choices=['PDB (structure)', 'ENA (RNA sequence)', 'GO (Gene Ontology)',
-                                                     'Family or domain'],
-                       default=0, label='What to extract:')
+        form.addParam('inputListID', params.PointerParam, pointerClass="SetOfDatabaseID",
+                      label='List of Uniprot Ids:', allowsNull=False,
+                      help="List of atomic structures for the query")
+        form.addParam('extract', params.EnumParam, default=0,
+                      choices=dbChoices, label='Database info to extract: ',
+                      help='Choose among some of these database examples or decide your own')
+        form.addParam('extractOther', params.StringParam, default='', label='Other database info to extract: ',
+                      condition='extract=={}'.format(len(dbChoices) -1),
+                      help='Specify the name of the database to extract info from. Uniprot must have information from '
+                            'this database to extract any information')
+
+        form.addParam('storeProps', params.BooleanParam, default=False, label='Store properties: ',
+                      help='Whether to store additional properties of the crossreferences')
+        form.addParam('crossMain', params.BooleanParam, default=False, label='Cross reference as main ID: ',
+                      help='Whether to store the crossreference IDs as the main ID of the output or as crossRefID')
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('extractStep')
 
     def extractStep(self):
-        outputDatabaseID = SetOfDatabaseID().create(path=self._getPath())
-        for item in self.inputListID.get():
+        nt = self.numberOfThreads.get()
+        allProps, dbName = set([]), self.getDBName()
+        outputIds = performBatchThreading(self.fetchCrossRef, self.inputListID.get(), nt, cloneItem=True,
+                                          allProps=allProps)
+        outputIds = {item: itemDic[item] for itemDic in outputIds for item in itemDic}
 
-            uniprotId = item._uniprotId.get()
-            print("Processing %s"%uniprotId)
+        print()
+        outputDatabaseIDs = SetOfDatabaseID().create(self._getPath())
+        if len(outputIds)>0:
+            for item in outputIds:
+                uniprotId = item.getDbId()
 
-            urlId = "https://www.uniprot.org/uniprot/%s.xml" % uniprotId
+                if len(outputIds[item]) == 0:
+                    print('Warning: {} uniprot ID has no cross references with {} database so it will not be included'
+                          ' in the output'.format(uniprotId, dbName))
 
-            fnXML=self._getExtraPath("%s.xml"%uniprotId)
-            if not os.path.exists(fnXML):
-                print("Fetching uniprot: %s"%urlId)
-                for i in range(3):
-                    try:
-                        urllib.request.urlretrieve(urlId,fnXML)
-                    except: # The library raises an exception when the web is not found
-                        pass
-            if os.path.exists(fnXML):
-                tree = ET.parse(fnXML)
+                for crossId in outputIds[item]:
+                    newItem = DatabaseID()
+                    newItem.copy(item, copyId=False)
+                    if self.crossMain.get():
+                        newItem._crossId = pwobj.String(uniprotId)
+                        newItem._crossDatabase = pwobj.String('UniProt')
+                        newItem.setDbId(crossId)
+                        newItem.setDatabase(dbName)
+                        prefix = ''
+                    else:
+                        newItem._crossId = pwobj.String(crossId)
+                        newItem._crossDatabase = pwobj.String(dbName)
+                        prefix = 'cross_'
 
-                outputId = []
-                for child in tree.getroot().iter():
-                    if child.tag.endswith("dbReference"):
-                        if self.extract.get()==0:
-                            if child.attrib['type']=='PDB':
-                                outputId.append(child.attrib['id'])
-                        elif self.extract.get()==1:
-                            if child.attrib['type'] == 'EMBL':
-                                moleculeType="Not available"
-                                for childChild in child.iter():
-                                    if childChild.tag.endswith("property"):
-                                        if childChild.attrib["type"]=="molecule type":
-                                            moleculeType=childChild.attrib["value"]
-                                outputId.append((child.attrib['id'],moleculeType))
-                        elif self.extract.get()==2:
-                            if child.attrib['type'] == 'GO':
-                                goTerm="Not available"
-                                for childChild in child.iter():
-                                    if childChild.tag.endswith("property"):
-                                        if childChild.attrib["type"]=="term":
-                                            goTerm=childChild.attrib["value"]
-                                outputId.append((child.attrib['id'],goTerm))
-                        elif self.extract.get()==3:
-                            if child.attrib['type'] == 'Gene3D':
-                                famId = child.attrib['id']
-                                url = 'http://www.cathdb.info/version/latest/superfamily/%s'%famId
-                                outputId.append(('Gene3D', famId,'Not available',url))
-                            elif child.attrib['type'] == 'HAMAP':
-                                famId = child.attrib['id']
-                                superfamily="Not available"
-                                for childChild in child.iter():
-                                    if childChild.tag.endswith("property"):
-                                        if childChild.attrib["type"]=="entry name":
-                                            superfamily=childChild.attrib["value"]
-                                            break
-                                url = 'https://hamap.expasy.org/signature/%s'%famId
-                                outputId.append(('HAMAP',child.attrib['id'],superfamily,url))
-                            elif child.attrib['type'] == 'InterPro':
-                                famId = child.attrib['id']
-                                superfamily="Not available"
-                                for childChild in child.iter():
-                                    if childChild.tag.endswith("property"):
-                                        if childChild.attrib["type"]=="entry name":
-                                            superfamily=childChild.attrib["value"]
-                                url = 'https://www.ebi.ac.uk/interpro/entry/InterPro/%s'%famId
-                                outputId.append(('InterPro',child.attrib['id'],superfamily,url))
-                            elif child.attrib['type'] == 'Pfam':
-                                famId = child.attrib['id']
-                                superfamily="Not available"
-                                for childChild in child.iter():
-                                    if childChild.tag.endswith("property"):
-                                        if childChild.attrib["type"]=="entry name":
-                                            superfamily=childChild.attrib["value"]
-                                url = 'http://pfam.xfam.org/family/%s'%famId
-                                outputId.append(('Pfam',child.attrib['id'],superfamily,url))
-                            elif child.attrib['type'] == 'SUPFAM':
-                                famId = child.attrib['id']
-                                superfamily="Not available"
-                                for childChild in child.iter():
-                                    if childChild.tag.endswith("property"):
-                                        if childChild.attrib["type"]=="entry name":
-                                            superfamily=childChild.attrib["value"]
-                                url = 'http://supfam.org/SUPERFAMILY/cgi-bin/scop.cgi?ipid=%s'%famId
-                                outputId.append(('Supfam',child.attrib['id'],superfamily,url))
+                    if self.storeProps.get():
+                        for prop in allProps:
+                            if prop in outputIds[item][crossId]:
+                                value = pwobj.String(outputIds[item][crossId][prop])
+                            else:
+                                value = pwobj.String('None')
+                            setattr(newItem, '_{}{}'.format(prefix, prop.replace(' ', '_')), value)
 
-                if len(outputId)>0:
-                    if self.extract.get() == 0:
-                        for outId in outputId:
-                            newItem = DatabaseID()
-                            newItem.copy(item, copyId=False)
-                            newItem._pdbId = pwobj.String(outId)
-                            newItem._PDBLink = pwobj.String("https://www.rcsb.org/structure/%s" % outId)
-                            outputDatabaseID.append(newItem)
-                    elif self.extract.get()==1:
-                        for outId, moleculeType in outputId:
-                            newItem = DatabaseID()
-                            newItem.copy(item, copyId=False)
-                            newItem._enaId = pwobj.String(outId)
-                            newItem._enaLink = pwobj.String("https://www.ebi.ac.uk/ena/data/view/%s" % outId)
-                            newItem._enaMoleculeType = pwobj.String(moleculeType)
-                            outputDatabaseID.append(newItem)
-                    elif self.extract.get()==2:
-                        for outId, goTerm in outputId:
-                            newItem = DatabaseID()
-                            newItem.copy(item, copyId=False)
-                            newItem._goId = pwobj.String(outId)
-                            newItem._goLink = pwobj.String("http://amigo.geneontology.org/amigo/term/%s" % outId)
-                            newItem._goTerm = pwobj.String(goTerm)
-                            outputDatabaseID.append(newItem)
-                    elif self.extract.get()==3:
-                        for familyDb, outId, superfamily, url in outputId:
-                            newItem = DatabaseID()
-                            newItem.copy(item, copyId=False)
-                            newItem._familyDb = pwobj.String(familyDb)
-                            newItem._familyId = pwobj.String(outId)
-                            newItem._familyLink = pwobj.String(url)
-                            newItem._familyName = pwobj.String(superfamily)
-                            outputDatabaseID.append(newItem)
+                    outputDatabaseIDs.append(newItem)
 
-        self._defineOutputs(outputUniprot=outputDatabaseID)
-        self._defineSourceRelation(self.inputListID, outputDatabaseID)
+        self._defineOutputs(outputUniprot=outputDatabaseIDs)
+        self._defineSourceRelation(self.inputListID, outputDatabaseIDs)
 
     def _validate(self):
         errors=[]
-        if not hasattr(self.inputListID.get().getFirstItem(),"_uniprotId"):
-            errors.append("The set does not have an _uniprotId")
+        for dbId in self.inputListID.get():
+            if not dbId.getDatabase().lower() == "uniprot":
+                errors.append("{} is not labeled as an Uniprot ID".format(dbId.getDbId()))
+                break
         return errors
+
+    def getDBName(self):
+        if self.extract.get() != len(dbChoices) - 1:
+            return self.getEnumText('extract')
+        else:
+            return self.extractOther.get()
+
+    def fetchCrossRef(self, dbIds, outputLists, it, allProps):
+        for item in dbIds:
+            nItem = item.clone()
+            outputIds = {nItem: {}}
+            uniprotId = item.getDbId()
+
+            fnXML = self.fetchUniprotXML(uniprotId)
+            if os.path.exists(fnXML):
+                tree = ET.parse(fnXML)
+                for child in tree.getroot().iter():
+                    if child.tag.endswith("dbReference") and child.attrib['type'] == self.getDBName():
+                        crossId = child.attrib['id']
+                        outputIds[nItem][crossId] = {}
+
+                        if self.storeProps.get():
+                            for childChild in child.iter():
+                                if childChild.tag.endswith("property"):
+                                    prop = childChild.attrib["type"]
+                                    allProps.add(prop)
+                                    outputIds[nItem][crossId][prop] = childChild.attrib["value"]
+            outputLists[it].append(outputIds)
+        return outputLists[it]
+
+    def fetchUniprotXML(self, uniprotId):
+        print("Processing %s" % uniprotId)
+        urlId = "https://www.uniprot.org/uniprot/%s.xml" % uniprotId
+        fnXML = self._getExtraPath("%s.xml" % uniprotId)
+        if not os.path.exists(fnXML):
+            for i in range(3):
+                try:
+                    urllib.request.urlretrieve(urlId, fnXML)
+                except:  # The library raises an exception when the web is not found
+                    pass
+        return fnXML
