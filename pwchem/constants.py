@@ -460,3 +460,49 @@ elements_mass = {'H' : 1.008,'HE' : 4.003, 'LI' : 6.941, 'BE' : 9.012,\
                  'HS' : 269, 'MT' : 268, 'DS' : 271, 'RG' : 272, 'CN' : 285,\
                  'NH' : 284, 'FL' : 289, 'MC' : 288, 'LV' : 292, 'TS' : 294,\
                  'OG' : 294}
+
+
+#  MOLECULAR DYNAMICS
+
+TCL_MD_STR = '''
+mol addrep 0
+mol new {%s} type {%s} first 0 last -1 step 1 waitfor 1
+mol addfile {%s} type {%s} first 0 last -1 step 1 waitfor 1 0
+
+mol color Name
+mol representation NewCartoon 0.300000 10.000000 4.100000 0
+mol selection protein
+mol material Opaque
+mol modrep 0 0
+
+mol addrep 0
+mol color Name
+mol representation Points 1.000000
+mol selection hetero within 3 of protein
+mol material Opaque
+mol modrep 1 0
+'''
+
+PML_MD_STR = '''load {}
+load_traj {}
+hide everything, not br. all within 3 of (byres polymer & name CA)
+set movie_fps, 15
+'''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

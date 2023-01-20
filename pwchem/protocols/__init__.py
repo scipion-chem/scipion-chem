@@ -76,10 +76,7 @@ from pwchem.protocols.Databases.protocol_uniprot_crossref import ProtChemUniprot
 from pwchem.protocols.Databases.protocol_ZINC_filter import ProtChemZINCFilter
 
 # General protocols
-from pwchem.protocols.General.protocol_converter import ConvertStructures, ConvertMDSystem
-from pwchem.protocols.General.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
-from pwchem.protocols.General.protocol_dali import ProtChemDali
-from pwchem.protocols.General.protocol_fetch_ligands import ProtocolLigandsFetching
+from pwchem.protocols.General.protocol_converter import ConvertStructures
 from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
 from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
