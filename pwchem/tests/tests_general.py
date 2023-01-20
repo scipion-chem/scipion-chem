@@ -1,5 +1,7 @@
 # **************************************************************************
 # *
+# * Name:     TEST OF PROTOCOL_EXPORT_CSV.PY
+# *
 # * Authors:    Alberto M. Parra Pérez (amparraperez@gmail.com)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
@@ -24,19 +26,28 @@
 # *
 # **************************************************************************
 
+import os, csv
 from pyworkflow.tests import *
-from .tests_imports import *
-from .tests_preparations import *
-from .tests_ligand_filtering import *
-from .tests_sequences import *
-from .tests_structROIs import *
-from .tests_docking import *
-from .tests_attributes import *
-from .tests_pharmacophores import *
+
+from pwchem.tests.tests_imports import TestImportBase
+from pwchem.protocols import ProtChemExportCSV
 
 
-#from .test_list_operate import TestListOperate
-from .tests_general import TestExportcsv
+class TestExportcsv(TestImportBase):
+    @classmethod
+    def _runExport(cls, inProt):
+        protExport = cls.newProtocol(
+            ProtChemExportCSV,
+        )
+        protExport.inputSet.set(inProt)
+        protExport.inputSet.setExtended('outputSmallMolecules')
 
-from .test_converter import TestConverter
+        cls.proj.launchProtocol(protExport, wait=True)
+        return protExport
+
+    def test(self):
+        pExp = self._runExport(inProt=self.protImportSmallMols)
+
+        csvFile = os.path.abspath(pExp._getPath('output.csv'))
+        self.assertTrue(os.path.exists(csvFile), "CSV file was not create. Check if its location changed")
 
