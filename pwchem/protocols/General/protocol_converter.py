@@ -180,7 +180,7 @@ class ConvertStructures(EMProtocol):
                     topFile = self._getPath('{}.{}'.format(getBaseFileName(topFile),
                                                             self.getEnumText('outputTopFormat').lower()))
                     top.save(topFile)
-                outSystem.setTopologyFile(fnTrjOut)
+                outSystem.setTopologyFile(topFile)
             
             if inSystem.hasTrajectory():
                 trjFile = inSystem.getTrajectoryFile()
