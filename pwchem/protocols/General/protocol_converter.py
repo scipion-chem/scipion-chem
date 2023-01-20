@@ -52,8 +52,8 @@ class ConvertStructures(EMProtocol):
         form.addSection(label='Input')
         group = form.addGroup('Input')
         group.addParam('inputType', EnumParam, default=0,
-                       choices=["Small molecules", 'Target structure'],
-                       label='Input type')
+                       choices=["Small molecules", 'Target structure', 'MDSystem'],
+                       label='Input type: small molecule, protein structure or Molecular Dynamics system.')
 
         group.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
                       label='Set of small molecules:', allowsNull=False,
@@ -62,6 +62,10 @@ class ConvertStructures(EMProtocol):
         group.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                       condition='inputType==1', label='Input structure:', allowsNull=False,
                       help="The allowed format are pdb or cif")
+
+        group.addParam('inputMDSystem', PointerParam, pointerClass="MDSystem",
+                       condition='inputType==2', label='Input MDSystem:', allowsNull=False,
+                       help="Any system with a system file and trajectory file that VMD can read")
 
         group = form.addGroup('Output')
         group.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
@@ -77,7 +81,9 @@ class ConvertStructures(EMProtocol):
         group.addParam('outputFormatTarget', EnumParam, default=0,
                       condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
 
-
+        group.addParam('outputTrjFormat', EnumParam, default=0, label='Trajectory output format',
+                       condition='inputType==2', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
+                       help="Output format for the trajectory.")
 
     # --------------------------- Steps functions --------------------
 
@@ -117,7 +123,7 @@ class ConvertStructures(EMProtocol):
             if len(self.convErrors) > 0:
                 print("The following entries could not be converted: %s" % ','.join(self.convErrors))
 
-        else:
+        elif self.inputType == 1:
             fnStructure = os.path.abspath(self.inputStructure.get().getFileName())
             args = self.inputArg(os.path.abspath(fnStructure))
             fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
@@ -138,6 +144,23 @@ class ConvertStructures(EMProtocol):
                 target = AtomStruct(filename=fnOut)
                 self._defineOutputs(outputStructure=target)
                 self._defineSourceRelation(self.inputStructure, target)
+
+        elif self.inputType == 2:
+            inSystem = self.inputMDSystem.get()
+            if inSystem.hasTrajectory():
+                fnStruct = inSystem.getSystemFile()
+                fnTrj = inSystem.getTrajectoryFile()
+                traj = mdtraj.load(fnTrj, top=fnStruct)
+
+                fnTrjRoot = os.path.splitext(os.path.split(fnTrj)[1])[0]
+                fnTrjOut = self._getPath('{}.{}'.format(fnTrjRoot, self.getEnumText('outputTrjFormat').lower()))
+                traj.save(fnTrjOut)
+
+                outSystem = MDSystem(filename=fnStruct, topoFile=inSystem.getTopologyFile())
+                outSystem.setTrajectoryFile(fnTrjOut)
+
+            self._defineOutputs(outputSystem=outSystem)
+            self._defineSourceRelation(self.inputMDSystem, outSystem)
 
     def inputArg(self, fn):  # Input format file (fn)
 
@@ -176,7 +199,7 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatSmall.get() == 4:
                 summary.append('Converted to Smiles')
 
-        else:
+        elif self.inputType.get()==1:
             if self.outputFormatTarget.get() == 0:
                 summary.append('Converted to PDB')
             elif self.outputFormatTarget.get() == 1:
@@ -186,54 +209,3 @@ class ConvertStructures(EMProtocol):
         return summary
     
     
-class ConvertMDSystem(EMProtocol):
-    """
-    Convert an MD simulation to a specific file format using VMD
-    """
-
-
-    _label = 'Convert MD system format'
-    _program = ""
-
-    def _defineParams(self, form):
-        form.addSection(label='Input')
-
-        form.addParam('inputSystem', PointerParam, pointerClass="MDSystem",
-                      label='MD System:', allowsNull=False,
-                      help="Any system with a system file and trajectory file that VMD can read")
-
-        form.addParam('outputFormat', EnumParam, default=0,
-                       choices=['DCD'],
-                       label='Output format',
-                       help = "The only allowed output format is currently dcd")
-
-    # --------------------------- Steps functions --------------------
-
-    def _insertAllSteps(self):
-        self._insertFunctionStep('convertStep')
-
-    def convertStep(self):
-        inSystem = self.inputSystem.get()
-        
-        fnStructure = inSystem.getSystemFile()
-        fnStructRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
-        fnStructOut = self._getPath(fnStructRoot + '.pdb')
-        
-        traj_empty = mdtraj.load(fnStructure, top=fnStructure) 
-        traj_empty.save_pdb(fnStructOut)
-
-        outSystem = MDSystem(filename=fnStructOut)
-
-        if inSystem.hasTrajectory():
-            fnTrj = inSystem.getTrajectoryFile()
-            
-            traj = mdtraj.load(fnTrj, top=fnStructOut)
-            
-            fnTrjRoot = os.path.splitext(os.path.split(fnTrj)[1])[0]
-            fnTrjOut = self._getPath(fnTrjRoot + '.dcd')
-            traj.save_dcd(fnTrjOut)
-            
-            outSystem.setTrajectoryFile(fnTrjOut)
-        
-        self._defineOutputs(outputSystem=outSystem)
-        self._defineSourceRelation(self.inputSystem, outSystem)
