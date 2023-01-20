@@ -28,14 +28,14 @@
 
 import os, shutil, mdtraj
 
-from pyworkflow.protocol.params import PointerParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toCIF, toPdb
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
-from pwchem.utils import runOpenBabel
+from pwchem.utils import runOpenBabel, getBaseFileName
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
 extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
@@ -81,8 +81,16 @@ class ConvertStructures(EMProtocol):
         group.addParam('outputFormatTarget', EnumParam, default=0,
                       condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
 
-        group.addParam('outputTrjFormat', EnumParam, default=0, label='Trajectory output format',
-                       condition='inputType==2', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
+        group.addParam('convSysFile', BooleanParam, default=False, label='Convert coordinates file: ',
+                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+        group.addParam('outputSysFormat', EnumParam, default=0, label='System coordinates output format: ',
+                       condition='inputType==2 and convSysFile', choices=['PDB'],
+                       help="Output format for the coordinates of the system.")
+
+        group.addParam('convTrjFile', BooleanParam, default=True, label='Convert trajectory file: ',
+                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+        group.addParam('outputTrjFormat', EnumParam, default=0, label='Trajectory output format: ',
+                       condition='inputType==2 and convTrjFile', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
                        help="Output format for the trajectory.")
 
     # --------------------------- Steps functions --------------------
@@ -147,17 +155,25 @@ class ConvertStructures(EMProtocol):
 
         elif self.inputType == 2:
             inSystem = self.inputMDSystem.get()
+            sysFile = inSystem.getSystemFile()
+
+            if self.convSysFile.get():
+                system = mdtraj.load(sysFile, top=sysFile)
+                sysFile = self._getPath('{}.{}'.format(getBaseFileName(sysFile),
+                                                        self.getEnumText('outputSysFormat').lower()))
+                system.save(sysFile)
+
+            outSystem = MDSystem(filename=sysFile, topoFile=inSystem.getTopologyFile())
             if inSystem.hasTrajectory():
-                fnStruct = inSystem.getSystemFile()
-                fnTrj = inSystem.getTrajectoryFile()
-                traj = mdtraj.load(fnTrj, top=fnStruct)
+                trjFile = inSystem.getTrajectoryFile()
 
-                fnTrjRoot = os.path.splitext(os.path.split(fnTrj)[1])[0]
-                fnTrjOut = self._getPath('{}.{}'.format(fnTrjRoot, self.getEnumText('outputTrjFormat').lower()))
-                traj.save(fnTrjOut)
+                if self.convTrjFile.get():
+                    traj = mdtraj.load(trjFile, top=sysFile)
+                    trjFile = self._getPath('{}.{}'.format(getBaseFileName(trjFile),
+                                                            self.getEnumText('outputTrjFormat').lower()))
+                    traj.save(trjFile)
 
-                outSystem = MDSystem(filename=fnStruct, topoFile=inSystem.getTopologyFile())
-                outSystem.setTrajectoryFile(fnTrjOut)
+                outSystem.setTrajectoryFile(trjFile)
 
             self._defineOutputs(outputSystem=outSystem)
             self._defineSourceRelation(self.inputMDSystem, outSystem)
