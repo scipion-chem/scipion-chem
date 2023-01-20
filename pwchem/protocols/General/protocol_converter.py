@@ -2,6 +2,7 @@
 # **************************************************************************
 # *
 # * Authors:  Alberto Manuel Parra Pérez (amparraperez@gmail.com)
+# *           James Krieger (jamesmkrieger@gmail.com)
 # *
 # * Biocomputing Unit, CNB-CSIC
 # *
@@ -26,7 +27,7 @@
 # **************************************************************************
 
 
-import os, shutil, mdtraj
+import os, shutil, parmed, mdtraj
 
 from pyworkflow.protocol.params import PointerParam, EnumParam
 from pwem.objects.data import AtomStruct
@@ -215,14 +216,24 @@ class ConvertMDSystem(EMProtocol):
     def convertStep(self):
         inSystem = self.inputSystem.get()
         
+        if inSystem.hasTopology():
+            fnTop = inSystem.getTopologyFile()
+            fnTopRoot = os.path.splitext(os.path.split(fnTop)[1])[0]
+            fnTopOut = self._getPath(fnTopRoot + '.psf')
+            
+            top = parmed.load_file(fnTop)
+            top.save(fnTopOut)
+            
+            outSystem.setTopologyFile(fnTrjOut)
+        
         fnStructure = inSystem.getSystemFile()
         fnStructRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
         fnStructOut = self._getPath(fnStructRoot + '.pdb')
         
-        traj_empty = mdtraj.load(fnStructure, top=fnStructure) 
-        traj_empty.save_pdb(fnStructOut)
+        struct = parmed.load_file(fnStructure) 
+        struct.save(fnStructOut)
 
-        outSystem = MDSystem(filename=fnStructOut)
+        outSystem = MDSystem(filename=fnStructOut, topoFile=fnTopOut)
 
         if inSystem.hasTrajectory():
             fnTrj = inSystem.getTrajectoryFile()
