@@ -109,26 +109,27 @@ class ProtocolLigandsFetching(EMProtocol):
                        choices=['ChEMBL', 'BindingDB', 'ZINC', 'PubChem'], default=0, condition='inputType in [2]',
                        help='Select database for fetching of the ligand')
 
-        group.addParam('uniprotID', params.StringParam, label="Uniprot entry ID: ", default='',
-                       condition='inputType == 0',
-                       help='Uniprot ID to look for related targets in the selected database and then fetch ligands '
-                            'on those targets')
-        
-        group.addParam('targetID', params.StringParam, label="Target database ID: ", default='',
-                       condition='inputType == 1',
-                       help='Target ID in the selected database. '
-                            'Ligands associated with the target ID will be fetched if uniprot ID is empty')
+        group.addParam('inputIDs', params.PointerParam, label="Input entry IDs: ", pointerClass="SetOfDatabaseID",
+                       help='Set of IDs to perform the ligand fetching on according to the predefined parameters:'
+                            'IDs from Uniprot, from target or directly ligands.')
 
-        group.addParam('ligandID', params.StringParam, label="Ligand database ID: ", default='',
-                       condition='inputType == 2',
-                       help='Ligand ID in the selected database to be fetched')
+        # group.addParam('uniprotID', params.StringParam, label="Uniprot entry ID: ", default='',
+        #                condition='inputType == 0',
+        #                help='Uniprot ID to look for related targets in the selected database and then fetch ligands '
+        #                     'on those targets')
+        
+        # group.addParam('targetID', params.StringParam, label="Target database ID: ", default='',
+        #                condition='inputType == 1',
+        #                help='Target ID in the selected database. '
+        #                     'Ligands associated with the target ID will be fetched if uniprot ID is empty')
+        #
+        # group.addParam('ligandID', params.StringParam, label="Ligand database ID: ", default='',
+        #                condition='inputType == 2',
+        #                help='Ligand ID in the selected database to be fetched')
 
         group = form.addGroup('Managing')
-        group.addParam('doAlignStructures', params.BooleanParam, label="Download target structure: ",
-                       condition='inputType == 0 and inputDatabaseUniprot==0', default=False,
-                       help='Try aligning the target structures and outputing the ligands docked to one of those '
-                            'aligned structures')
-
+        group.addParam('nonRep', params.BooleanParam, default=True, label='Remove repeated ligands: ',
+                       help='Whether to remove repeated ligands by name, or to keep them all')
         group.addParam('structDatabase', params.EnumParam, label="Get ligand structure from: ",
                        choices=['PubChem', 'DrugBank', 'Smiles'], default=0,
                        condition='(inputType == 0 and inputDatabaseUniprot == 2) or '
@@ -141,20 +142,8 @@ class ProtocolLigandsFetching(EMProtocol):
                        choices=['RDKit', 'OpenBabel'],
                        help='Whether to manage the structure (parse and optimize if needed) using RDKit or OpenBabel')
 
-        group = form.addGroup('Clustering Descriptors',
-                              condition='inputType in [0, 1] and inputDatabaseTarget==0 and doAlignStructures')
-        group.addParam('eps', params.FloatParam, default=0, label='Maximum distance between instances: ',
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help="The maximum distance between two samples for one to be considered as in the neighborhood "
-                            "of the other. Molecules clustered in structural ROIs as in docking")
-
-        group.addParam('min_samples', params.IntParam, default=1, label='Minimum samples of a cluster: ',
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help="The number of samples in a neighborhood for a point to be considered as a core point."
-                            "Molecules clustered in structural ROIs as in docking")
-
         form.addSection(label='Filtering')
-        group = form.addGroup('Filters PDB', condition='inputType in [0, 1] and inputDatabaseTarget==0')
+        group = form.addGroup('Filters PDB', condition='inputType == 0 or (inputType == 1 and inputDatabaseTarget==0)')
         group.addParam('experimentalMethodChoice', params.EnumParam, default=0, label='Experimental method: ',
                        choices=self._experimentalMethodChoices,
                        help="Experimental method used to determine the protein structure")
@@ -171,7 +160,8 @@ class ProtocolLigandsFetching(EMProtocol):
                        label='Year : ', condition='dateBefore!=0',
                        help="Year for filtering")
 
-        group = form.addGroup('Filters ChEMBL', condition='inputType in [0, 1] and inputDatabaseTarget==1')
+        group = form.addGroup('Filters ChEMBL', condition='inputType == 0 or '
+                                                          '(inputType == 1 and inputDatabaseTarget==1)')
         group.addParam('assayTypeChoice', params.EnumParam, default=0, label='Assay type: ',
                        choices=self._assaytypeChoices,
                        help="Classification of the assay searched a. "
@@ -225,35 +215,39 @@ class ProtocolLigandsFetching(EMProtocol):
 
     def fetchStep(self):
         mapDBD = False
-        targetIds, ligandsDic = [], {}
+        targetsDic, ligandsDic = {}, {}
         if self.inputType.get() == 0:
-            # Download from Uniprot ID the target IDs or save ligands (DBD)
-            iBase = self.inputDatabaseUniprot.get()
-            uniprot_id = self.uniprotID.get().strip()
-            self.addRelationToFile('Uniprot', uniprot_id)
+            for dbId in self.inputIDs.get():
+                # Download from Uniprot ID the target IDs or save ligands (DBD)
+                iBase = self.inputDatabaseUniprot.get()
+                uniprot_id = dbId.getDbId()
 
-            if iBase in [0, 1]:
-                # Download related target IDs from PDB or ChEMBL
-                jsonDic = self.getJDic('Uniprot', None, uniprot_id)
-                targetIds = self.mapUniprot2TargetIds(jsonDic)
-            else:
-                # Download related ligands from BindingDB
-                ligDic = self.mapUniprot2SmilesDic(uniprot_id)
-                if self.structDatabase.get() == 2:
-                    # Formatting DBD ligands from SMI
-                    self.formatSMIs(ligDic, database='\t\tBindingDB')
+                if iBase in [0, 1]:
+                    # Download related target IDs from PDB or ChEMBL
+                    jsonDic = self.getJDic('Uniprot', None, uniprot_id)
+                    targetsDic[uniprot_id] = self.mapUniprot2TargetIds(jsonDic)
                 else:
-                    # Mapping DBD ligands to other DB and download
-                    mapDic = self.getDBDMapDic()
-                    self.saveMappedDBDLigands(ligDic, mapDic)
+                    # Download related ligands from BindingDB
+                    self.addRelationToFile('Uniprot', uniprot_id)
+                    ligDic = self.mapUniprot2SmilesDic(uniprot_id)
+                    if self.structDatabase.get() == 2:
+                        # Formatting DBD ligands from SMI
+                        self.formatSMIs(ligDic, database='\t\tBindingDB')
+                    else:
+                        # Mapping DBD ligands to other DB and download
+                        mapDic = self.getDBDMapDic()
+                        self.saveMappedDBDLigands(ligDic, mapDic)
 
         elif self.inputType.get() == 1:
             # Listing Target Ids
-            targetIds = [self.targetID.get().strip()]
+            for dbId in self.inputIDs.get():
+                targetsDic['Input'] = [dbId.getDbId()]
 
         elif self.inputType.get() == 2:
             # Listing and downloading ligand IDs
-            ligandsDic = {self.ligandID.get().strip(): ''}
+            for dbId in self.inputIDs.get():
+                ligandsDic[dbId.getDbId()] = ''
+
             iBase = self.inputDatabaseLigand.get()
 
             if iBase == 0:
@@ -277,39 +271,32 @@ class ProtocolLigandsFetching(EMProtocol):
                 ligandFiles = self.savePubChemLigands(ligandsDic)
 
 
-        if len(targetIds) > 0:
-            iBase = self.inputDatabaseTarget.get() if self.inputType.get() == 1 else iBase
-            ligandNames = self.fetchLigandsFromTargets(targetIds, iBase)
+        if len(targetsDic) > 0:
+            allLigandNames = []
+            for oriId in targetsDic:
+                if oriId != 'Input':
+                    self.addRelationToFile('Uniprot', oriId)
 
-            if iBase == 0:
-                alignedFns = self.alignStructures(targetIds, align=self.doAlignStructures.get())
-                self.savePDBLigands(ligandNames, alignedFns)
-            elif iBase == 1:
-                self.formatSMIs(self.getSMILigands(ligandNames), database=None)
+                targetIds = targetsDic[oriId]
+                if len(targetIds) > 0:
+                    iBase = self.inputDatabaseTarget.get() if self.inputType.get() == 1 else iBase
+                    ligandNames = self.fetchLigandsFromTargets(targetIds, iBase, allLigandNames)
 
+                    if iBase == 0:
+                        alignedFns = self.saveStructures(targetIds)
+                        self.savePDBLigands(ligandNames, alignedFns)
+                    elif iBase == 1:
+                        self.formatSMIs(self.getSMILigands(ligandNames), database=None)
+                else:
+                    print('No target targets found for Uniprot ID: ', oriId)
 
     def createOutputStep(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),
                                                             suffix='outputSmallMolecules')
-        if self.inputType.get() == 0 and self.inputDatabaseUniprot.get() == 0 and self.doAlignStructures.get():
-            clusters = self.clusterPDBLigands()
-            for i, cluster in enumerate(clusters):
-                for fnSmall in cluster:
-                    smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
-                    smallMolecule.setMolName(os.path.basename(fnSmall).split('_frag')[0])
-                    smallMolecule.setPoseId(1)
-                    smallMolecule.setPoseFile(fnSmall)
-                    smallMolecule.setGridId(i+1)
-                    smallMolecule.setDockId(self.getObjId())
-                    outputSmallMolecules.append(smallMolecule)
-                outputSmallMolecules.setProteinFile(self.getOriginalReceptorFile())
-                outputSmallMolecules.setDocked()
-
-        else:
-            for fnSmall in glob.glob(self._getExtraPath('*')):
-                if os.path.isfile(fnSmall) and not fnSmall.endswith('.txt'):
-                    smallMolecule = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
-                    outputSmallMolecules.append(smallMolecule)
+        for fnSmall in glob.glob(self._getExtraPath('*')):
+            if os.path.isfile(fnSmall) and not fnSmall.endswith('.txt'):
+                smallMolecule = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
+                outputSmallMolecules.append(smallMolecule)
 
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
@@ -328,6 +315,30 @@ class ProtocolLigandsFetching(EMProtocol):
             with open(errFile) as f:
                 err = f.read()
         return [summ, err]
+
+    def _validate(self):
+        vals = []
+        if self.inputType.get() == 0:
+            for dbId in self.inputIDs.get():
+                if not dbId.getDatabase().lower() == 'uniprot':
+                    vals.append('Seems like ID {} is not defined as an Uniprot ID'.format(dbId.getDbId()))
+                    break
+
+        elif self.inputType.get() == 1:
+            for dbId in self.inputIDs.get():
+                if not dbId.getDatabase().lower() == self.getEnumText('inputDatabaseTarget').lower():
+                    vals.append('Seems like ID {} is not defined as an {} ID'.
+                                format(dbId.getDbId(), self.getEnumText('inputDatabaseTarget')))
+                    break
+
+        elif self.inputType.get() == 2:
+            for dbId in self.inputIDs.get():
+                if not dbId.getDatabase().lower() == self.getEnumText('inputDatabaseLigand').lower():
+                    vals.append('Seems like ID {} is not defined as an {} ID'.
+                                format(dbId.getDbId(), self.getEnumText('inputDatabaseLigand')))
+                    break
+
+        return vals
 
     # --------------------------- UTILS functions -----------------------------------
     def getIDsRelationsFile(self):
@@ -378,7 +389,7 @@ class ProtocolLigandsFetching(EMProtocol):
             ligNames['noTarget'] = {ligandId: jDic['molecules'][0]['molecule_structures']['canonical_smiles']}
         return ligNames
 
-    def fetchLigandsFromTargets(self, targetIds, iBase):
+    def fetchLigandsFromTargets(self, targetIds, iBase, allLigandNames):
         if iBase == 0:
             # Fetch PDB info
             ligNames = {}
@@ -395,11 +406,13 @@ class ProtocolLigandsFetching(EMProtocol):
 
                             if self.checkLigandFilters(jLigDic, iBase):
                                 compId = jLigDic['pdbx_entity_nonpoly']['comp_id']
-                                self.addRelationToFile('\t\tPDB compound', compId)
-                                if not pdbId in ligNames:
-                                    ligNames[pdbId] = {compId: ''}
-                                else:
-                                    ligNames[pdbId][compId] = ''
+                                if not compId in allLigandNames or not self.nonRep.get():
+                                    allLigandNames.append(compId)
+                                    self.addRelationToFile('\t\tPDB compound', compId)
+                                    if not pdbId in ligNames:
+                                        ligNames[pdbId] = {compId: ''}
+                                    else:
+                                        ligNames[pdbId][compId] = ''
 
         elif iBase == 1:
             ligNames = {}
@@ -415,12 +428,14 @@ class ProtocolLigandsFetching(EMProtocol):
                         chembl_id = jLigDic['molecule_chembl_id']
                         jMolDic = self.getJDic('ChEMBL', 'molecule', chembl_id)
                         if self.checkLigandFilters(jMolDic, iBase):
-                            self.addRelationToFile('\t\tChEMBL compound', chembl_id)
+                            if not compId in allLigandNames or not self.nonRep.get():
+                                allLigandNames.append(compId)
+                                self.addRelationToFile('\t\tChEMBL compound', chembl_id)
 
-                            if not targetId in ligNames:
-                                ligNames[targetId] = {chembl_id: jLigDic['canonical_smiles']}
-                            else:
-                                ligNames[targetId][chembl_id] = jLigDic['canonical_smiles']
+                                if not targetId in ligNames:
+                                    ligNames[targetId] = {chembl_id: jLigDic['canonical_smiles']}
+                                else:
+                                    ligNames[targetId][chembl_id] = jLigDic['canonical_smiles']
 
         return ligNames
 
@@ -448,7 +463,7 @@ class ProtocolLigandsFetching(EMProtocol):
             clean_PDB(self.getRefProteinFile(), outFn=self.getOriginalReceptorFile(), waters=True, HETATM=True)
         return clusters
 
-    def alignStructures(self, pdbIds, align):
+    def saveStructures(self, pdbIds, align=False):
         # Align structures
         alignedFns = {}
         oriASH = emconv.AtomicStructHandler()
@@ -493,18 +508,12 @@ class ProtocolLigandsFetching(EMProtocol):
             io = PDBIO()
             io.set_structure(s)
             for ligId in ligNames[pdbId]:
-                self.addRelationToFile('\t\tPDB ligand', ligId)
                 ligi = 1
                 for residue in s.get_residues():
                     # Several HETATM residues with same name might be found. Stored in different structROIs
                     if residue.get_resname() == ligId:
                         if len(list(residue.get_atoms())) > self.minAtoms.get():
-                            if self.doAlignStructures:
-                                allLigId = '{}_{}_frag{}'.format(pdbId, ligId, ligi)
-                                ligandFiles[allLigId] = self._getExtraPath(allLigId + '.pdb')
-                                io.save(ligandFiles[allLigId], ResSelect(residue))
-                                ligi += 1
-                            elif not ligId in ligIds:
+                            if not ligId in ligIds:
                                 ligandFiles[ligId] = self._getExtraPath(ligId + '.pdb')
                                 io.save(ligandFiles[ligId], ResSelect(residue))
                                 ligIds.append(ligId)
@@ -614,8 +623,8 @@ class ProtocolLigandsFetching(EMProtocol):
         else:
             return glob.glob(self._getPath('*.pdb'))[0]
 
-    def getOriginalReceptorFile(self):
-        return self._getPath(self.targetID.get() + '.pdb')
+    def getOriginalReceptorFile(self, targetID):
+        return self._getPath(targetID + '.pdb')
 
     def checkStructureFilters(self, jDic, iBase):
         checks = []
