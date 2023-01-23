@@ -98,8 +98,8 @@ class ProtChemZINCFilter(EMProtocol):
 
         allPresFile = self.getSummaryFile()
         with open(allPresFile, 'w') as f:
-            f.write('{}\t{}\t|\t{}\t|\t{}\n'.
-                    format('ZINC_ID', '\t'.join(filDic['Keep']), '\t'.join(filDic['Remove']), 'Add'))
+            f.write('{}\tKEEP:\t{}\tREMOVE:\t{}\tADD\n'.
+                    format('ZINC_ID', '\t'.join(filDic['Keep']), '\t'.join(filDic['Remove'])))
             for presFile in glob.glob(os.path.join(outDir, '{}_*'.format(presBase))):
                 presFile = os.path.join(outDir, presFile)
                 with open(presFile) as fcur:
@@ -174,11 +174,11 @@ class ProtChemZINCFilter(EMProtocol):
                 keepBools, remBools = [str(sb in presentSubsets) for sb in filDic['Keep']], \
                                       [str(sb in presentSubsets) for sb in filDic['Remove']]
                 with open(presFile, 'a') as f:
-                    f.write('{}\t{}\t-\t{}\t-\t{}\n'.format(zincId, '\t'.join(keepBools), '\t'.join(remBools), add))
+                    f.write('{}\t-\t{}\t-\t{}\t{}\n'.format(zincId, '\t'.join(keepBools), '\t'.join(remBools), add))
             except:
                 print("Could not retrieve {} information from ZINC. Keeping the molecule by default".format(zincId))
                 with open(presFile, 'a') as f:
-                    f.write('{}\t{}\t-\t{}\t-\t{}\n'.format(zincId, '\t'.join(['Not_found'] * len(keepBools)),
+                    f.write('{}\t-\t{}\t-\t{}\t{}\n'.format(zincId, '\t'.join(['Not_found'] * len(keepBools)),
                                                             '\t'.join(['Not_found'] * len(remBools)), add))
 
             if add:
@@ -199,7 +199,7 @@ class ProtChemZINCFilter(EMProtocol):
 
     def getZINC_ID(self, mol):
         zincID = None
-        if hasattr(mol, 'ZINC_ID'):
+        if hasattr(mol, 'ZINC_ID') and getattr(mol, 'ZINC_ID').get():
             zincID = getattr(mol, 'ZINC_ID').get()
         elif 'ZINC' in mol.getMolName():
             zincID = mol.getMolName()
