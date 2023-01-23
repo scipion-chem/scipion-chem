@@ -79,12 +79,15 @@ class ProtChemSmallMolIdentify(EMProtocol):
                 molDic[smi] = [mol.clone()]
 
         simBase, outDir = 'similarIds', os.path.abspath(self._getTmpPath())
-        smisDics = performBatchThreading(self.identifySMI, list(molDic.keys()), nt, cloneItem=False,
+        smisDics = performBatchThreading(self.identifySMI, molDic, nt, cloneItem=False,
                                          similarBase=os.path.join(outDir, simBase))
+
+        # DEBUG
+        # smiDic = self.identifySMI(molDic, [[]], 0, simBase)
 
         allSimFile = self._getPath('{}.txt'.format(simBase))
         with open(allSimFile, 'w') as f:
-            f.write('SMI\tSimilar PubChemIds\n')
+            f.write('SMI\tPubChemIds\n')
             for simFile in glob.glob(os.path.join(outDir, '{}_*'.format(simBase))):
                 simFile = os.path.join(outDir, simFile)
                 with open(simFile) as fcur:
@@ -101,7 +104,7 @@ class ProtChemSmallMolIdentify(EMProtocol):
 
                     # Setting molname
                     chdbName = self.getEnumText('nameDatabase')
-                    if chdbName != 'None' and chdbName in smiDic[smi]:
+                    if chdbName != 'None' and chdbName in smiDic[smi] and smiDic[smi][chdbName]:
                         mol.setMolName(smiDic[smi][chdbName])
                     outputSet.append(mol)
 
@@ -116,15 +119,17 @@ class ProtChemSmallMolIdentify(EMProtocol):
         for molSMI in smis:
             cid = self.getCIDFromSmiles(molSMI)
             if cid == "0":
-                print('No exact match found for SMILES: {}\nLooking for smilar compounds'.format(molSMI))
+                print('No exact match found for SMILES: {}\nLooking for similar compounds'.format(molSMI))
                 listKey = self.getSimilarityListKey(molSMI)
                 simCids = self.getSimilarIds(listKey)
                 cid = simCids[0]
+            else:
+                simCids = [cid]
 
-                similarFile = '{}_{}.txt'.format(similarBase, it)
-                mode = 'a' if os.path.exists(similarFile) else 'w'
-                with open(similarFile, mode) as f:
-                    f.write('{}\t{}\n'.format(molSMI, '; '.join(simCids)))
+            similarFile = '{}_{}.txt'.format(similarBase, it)
+            mode = 'a' if os.path.exists(similarFile) else 'w'
+            with open(similarFile, mode) as f:
+                f.write('{}\t{}\n'.format(molSMI, '; '.join(simCids)))
 
             idsDic = self.getNamesFromCID(cid)
             smiDic = {molSMI: idsDic}
@@ -190,17 +195,20 @@ class ProtChemSmallMolIdentify(EMProtocol):
     def getNamesFromCID(self, cid):
         idsDic = {'PubChemID': cid}
         url = "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{}/synonyms/TXT".format(cid)
-        
-        with urlopen(url) as response:
-            r = response.read().decode('utf-8')
-            for i, line in enumerate(r.split('\n')):
-                if i == 0:
-                    idsDic['PubChemName'] = line.strip()
+        try:
+            with urlopen(url) as response:
+                r = response.read().decode('utf-8')
+                for i, line in enumerate(r.split('\n')):
+                    if i == 0:
+                        idsDic['PubChemName'] = line.strip()
 
-                if line.upper().startswith('ZINC'):
-                    idsDic['ZINC_ID'] = line.strip()
-                elif line.upper().startswith('CHEMBL'):
-                    idsDic['ChEMBL_ID'] = line.strip()
+                    if line.upper().startswith('ZINC'):
+                        idsDic['ZINC_ID'] = line.strip()
+                    elif line.upper().startswith('CHEMBL'):
+                        idsDic['ChEMBL_ID'] = line.strip()
+        except:
+            print('No synonims found for CID: {}'.format(cid))
+            idsDic['PubChemName'], idsDic['ZINC_ID'], idsDic['ChEMBL_ID'] = [None] * 3
         return idsDic
 
     def _validate(self):
