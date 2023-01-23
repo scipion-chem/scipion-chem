@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# *              Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,10 +25,8 @@
 # *
 # **************************************************************************
 
-import lxml.etree as ET
-import os
-import sys
-import urllib.request
+import json
+from urllib.request import urlopen
 
 from pwem.protocols import EMProtocol
 import pyworkflow.object as pwobj
@@ -112,7 +111,7 @@ class ProtChemUniprotCrossRef(EMProtocol):
 
                     outputDatabaseIDs.append(newItem)
 
-        self._defineOutputs(outputUniprot=outputDatabaseIDs)
+        self._defineOutputs(outputDatabaseIDs=outputDatabaseIDs)
         self._defineSourceRelation(self.inputListID, outputDatabaseIDs)
 
     def _validate(self):
@@ -135,31 +134,23 @@ class ProtChemUniprotCrossRef(EMProtocol):
             outputIds = {nItem: {}}
             uniprotId = item.getDbId()
 
-            fnXML = self.fetchUniprotXML(uniprotId)
-            if os.path.exists(fnXML):
-                tree = ET.parse(fnXML)
-                for child in tree.getroot().iter():
-                    if child.tag.endswith("dbReference") and child.attrib['type'] == self.getDBName():
-                        crossId = child.attrib['id']
-                        outputIds[nItem][crossId] = {}
+            jsonDic = self.fetchUniprotJSON(uniprotId)
+            for cross in jsonDic['uniProtKBCrossReferences']:
+                if cross['database'] == self.getDBName():
+                    crossId = cross['id']
+                    outputIds[nItem][crossId] = {}
+                    if self.storeProps.get():
+                        for propDic in cross['properties']:
+                            prop = propDic["key"]
+                            allProps.add(prop)
+                            outputIds[nItem][crossId][prop] = propDic["value"]
 
-                        if self.storeProps.get():
-                            for childChild in child.iter():
-                                if childChild.tag.endswith("property"):
-                                    prop = childChild.attrib["type"]
-                                    allProps.add(prop)
-                                    outputIds[nItem][crossId][prop] = childChild.attrib["value"]
             outputLists[it].append(outputIds)
         return outputLists[it]
 
-    def fetchUniprotXML(self, uniprotId):
+    def fetchUniprotJSON(self, uniprotId):
         print("Processing %s" % uniprotId)
-        urlId = "https://www.uniprot.org/uniprot/%s.xml" % uniprotId
-        fnXML = self._getExtraPath("%s.xml" % uniprotId)
-        if not os.path.exists(fnXML):
-            for i in range(3):
-                try:
-                    urllib.request.urlretrieve(urlId, fnXML)
-                except:  # The library raises an exception when the web is not found
-                    pass
-        return fnXML
+        url = "https://www.uniprot.org/uniprot/%s.json" % uniprotId
+        with urlopen(url) as response:
+            jDic = json.loads(response.read())
+        return jDic
