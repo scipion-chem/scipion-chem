@@ -39,7 +39,7 @@ from .bibtex import _bibtexStr
 
 from .constants import *
 
-_logo = 'scipion-chem.png'
+_logo = 'pwchem_logo.png'
 RDKIT = 'rdkit'
 
 class Plugin(pwem.Plugin):

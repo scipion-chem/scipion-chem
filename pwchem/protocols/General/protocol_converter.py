@@ -56,7 +56,7 @@ class ConvertStructures(EMProtocol):
                        choices=["Small molecules", 'Target structure', 'MDSystem'],
                        label='Input type: small molecule, protein structure or Molecular Dynamics system.')
 
-        group.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
+        group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
                       label='Set of small molecules:', allowsNull=False,
                       help="The allowed format are pdb, cif, mol2, sdf and smi")
 
@@ -111,7 +111,7 @@ class ConvertStructures(EMProtocol):
             outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
 
             self.convErrors = []  # Save the file paths that could not be transformed
-            for mol in self.inputSmallMols.get():
+            for mol in self.inputSmallMolecules.get():
                 fnSmall = os.path.abspath(mol.smallMoleculeFile.get())
                 fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
 
@@ -133,7 +133,7 @@ class ConvertStructures(EMProtocol):
 
             if len(outputSmallMolecules) > 0:
                 self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-                self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+                self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
             if len(self.convErrors) > 0:
                 print("The following entries could not be converted: %s" % ','.join(self.convErrors))

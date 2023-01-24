@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Alberto M. Parra Pérez (amparraperez@gmail.com)
+# * Authors:     Daniel Del Hoyo Gomez (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 
-from pyworkflow.tests import *
 from .tests_imports import *
 from .tests_preparations import *
 from .tests_ligand_filtering import *

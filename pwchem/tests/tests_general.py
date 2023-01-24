@@ -75,7 +75,7 @@ class TestConverter(TestImportBoth):
         # Import SetOfSmallMolecules
         smallM = self.smallProt.outputSmallMolecules
         args = {'inputType': 0,  # SmallMolecules
-                'inputSmallMols': smallM, "useManager": 1,
+                'inputSmallMolecules': smallM, "useManager": 1,
                 'outputFormatSmall': 0,  # PDB
                 }
 
@@ -107,7 +107,7 @@ class TestConverter(TestImportBoth):
         smallM = self.smallProt.outputSmallMolecules
 
         args = {'inputType': 0,  # SmallMolecules
-                'inputSmallMols': smallM, "useManager": 1,
+                'inputSmallMolecules': smallM, "useManager": 1,
                 'outputFormatSmall': 3,  # smiles or smi
                 }
 

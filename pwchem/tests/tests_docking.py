@@ -110,7 +110,7 @@ class TestScoreDocking(TestDefineStructROIs):
     cls.protOBabel = cls.newProtocol(
       ProtChemOBabelPrepareLigands,
       inputType=0, method_charges=0,
-      inputSmallMols=cls.protImportSmallMols.outputSmallMolecules,
+      inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
       doConformers=False)
 
     cls.proj.launchProtocol(cls.protOBabel, wait=False)
@@ -342,8 +342,8 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
       ProtChemOBabelPrepareLigands,
       inputType=0, method_charges=0, doConformers=False)
 
-    protOBabel.inputSmallMols.set(inProt)
-    protOBabel.inputSmallMols.setExtended('outputSmallMolecules')
+    protOBabel.inputSmallMolecules.set(inProt)
+    protOBabel.inputSmallMolecules.setExtended('outputSmallMolecules')
 
     cls.proj.launchProtocol(protOBabel, wait=False)
     return protOBabel

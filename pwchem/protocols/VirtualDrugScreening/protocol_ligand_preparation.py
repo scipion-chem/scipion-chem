@@ -71,7 +71,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """ Define the input parameters that will be used.
         """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputSmallMols', params.PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
                       help='It must be in pdb or mol2 format, you may use the converter')
 
@@ -134,7 +134,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         aSteps, cSteps = [], []
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
-        inputSubsets = makeSubsets(self.inputSmallMols.get(), nt - 1)
+        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('addChargesStep', subset, it, prerequisites=[])]
         if self.doConformers.get():
@@ -210,7 +210,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         self.mergeErrorFiles()
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for mol in self.inputSmallMols.get():
+        for mol in self.inputSmallMolecules.get():
             fnSmall = mol.getFileName()
             fnRoot = getBaseFileName(fnSmall)
             fnSmall = self._getExtraPath("{}_prep.mol2".format(fnRoot))
@@ -242,7 +242,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
         if outputSmallMolecules is not None:
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+            self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
 
     # --------------------------- UTILS functions ------------------------------

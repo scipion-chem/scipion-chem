@@ -33,7 +33,7 @@ setup(
     install_requires=[requirements],
     include_package_data=True,
     package_data={
-       'pwchem': ['scipion-chem.png'],
+       'pwchem': ['pwchem_logo.png'],
     },
     entry_points={
         'pyworkflow.plugin': 'pwchem = pwchem'

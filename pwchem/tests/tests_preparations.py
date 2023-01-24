@@ -43,7 +43,7 @@ class TestOBLigandPreparation(TestImportBase):
 
         inputMols = self.protImportSmallMols.outputSmallMolecules
         args = {'inputType': 0,  # SmallMolecules
-                'inputSmallMols': inputMols,
+                'inputSmallMolecules': inputMols,
                 'method_charges': 0,  # gasteiger
                 'doConformers': True,
                 "method_conf": 0,
@@ -79,7 +79,7 @@ class TestOBLigandPreparation(TestImportBase):
 
         inputMols = self.protImportSmallMols.outputSmallMolecules
         args = {'inputType': 0,  # SmallMolecules
-                'inputSmallMols': inputMols,
+                'inputSmallMolecules': inputMols,
                 'method_charges': 1,  # mmff94
                 'doConformers': True,
                 "method_conf": 1,
