@@ -1246,6 +1246,12 @@ class MDSystem(data.EMFile):
     def setTopologyFile(self, value):
         self._topoFile.set(value)
 
+    def hasTopology(self):
+        if self.getTopologyFile():
+            return True
+        else:
+            return False
+        
     def hasTrajectory(self):
         if self.getTrajectoryFile():
             return True
