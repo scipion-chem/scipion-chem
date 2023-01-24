@@ -87,7 +87,7 @@ class ProtChemImportSetOfSequences(EMProtocol):
         group.addParam('database', params.EnumParam, default=0, condition='not fromFile',
                        label='Input  database: ', choices=['Uniprot', 'ENA'])
         group.addParam('inputListID', params.PointerParam, pointerClass="SetOfDatabaseID",
-                      label='List of Database Ids:',
+                      label='List of Database Ids:', allowsNull=True,
                       help="List of input Ids for downloading")
 
     # --------------------------- INSERT steps functions --------------------

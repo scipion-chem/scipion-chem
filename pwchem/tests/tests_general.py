@@ -1,7 +1,5 @@
 # **************************************************************************
 # *
-# * Name:     TEST OF PROTOCOL_EXPORT_CSV.PY
-# *
 # * Authors:     Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
@@ -26,12 +24,135 @@
 # *
 # **************************************************************************
 
-import os, csv
+import os, csv, glob
 from pyworkflow.tests import *
 
-from pwchem.tests.tests_imports import TestImportBase
-from pwchem.protocols import ProtChemExportCSV
+from pwem.protocols import ProtImportPdb
 
+from pwchem.tests.tests_imports import TestImportBase
+from pwchem.protocols import *
+
+
+class TestImportBoth(BaseTest):
+
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.dsLig = DataSet.getDataSet("smallMolecules")
+        cls.lig_data = cls.dsLig.getFile('mix')
+
+        cls.pdbProt, cls.smallProt = cls._importPDB(), cls._importSmallM(cls.lig_data)
+
+    @classmethod
+    def _importPDB(cls):
+        inputPdbData = 1  # file
+        args = {'inputPdbData': 0,
+                'pdbId': '4erf'
+                }
+
+        protocol = cls.newProtocol(ProtImportPdb, **args)
+        cls.launchProtocol(protocol)
+        return protocol
+
+    @classmethod
+    def _importSmallM(cls, path):
+        args = {'multiple': True,
+                'filesPath': path,
+                'filesPattern': '*'}
+
+        protocol = cls.newProtocol(ProtChemImportSmallMolecules, **args)
+        cls.launchProtocol(protocol)
+        return protocol
+
+
+class TestConverter(TestImportBoth):
+
+    def test_1(self):
+        """ Convert a mix of small molecules file into pdb format
+        """
+        print("\nConvert a mix of small molecules file into pdb format \n")
+
+        # Import SetOfSmallMolecules
+        smallM = self.smallProt.outputSmallMolecules
+        args = {'inputType': 0,  # SmallMolecules
+                'inputSmallMols': smallM, "useManager": 1,
+                'outputFormatSmall': 0,  # PDB
+                }
+
+        protocol = self.newProtocol(ConvertStructures, **args)
+        self.launchProtocol(protocol)
+
+        small_1 = protocol.outputSmallMolecules
+        convert_file = glob.glob(protocol._getExtraPath("*"))
+
+        self.assertIsNotNone(small_1, "There was a problem with the import")
+        self.assertTrue(small_1.getSize()==4,
+                        "There was a problem with the import or conversion and the SetOfSmallMolecules is empty")
+
+        files = ""
+        for file in convert_file:
+            if not file.endswith(".pdb"):
+                files += "%s; "
+
+        self.assertTrue(files == "",
+                        "The conversion was incorrect and those files have a wrong format : %s" %files)
+
+
+    def test_2(self):
+        """ Convert a mix of small molecules file into smi format
+        """
+        print("\nConvert a mix of small molecules file into smi format \n")
+
+        # Import SetOfSmallMolecules
+        smallM = self.smallProt.outputSmallMolecules
+
+        args = {'inputType': 0,  # SmallMolecules
+                'inputSmallMols': smallM, "useManager": 1,
+                'outputFormatSmall': 3,  # smiles or smi
+                }
+
+        protocol = self.newProtocol(ConvertStructures, **args)
+        self.launchProtocol(protocol)
+        small_1 = protocol.outputSmallMolecules
+        convert_file = glob.glob(protocol._getExtraPath("*"))
+
+
+        self.assertIsNotNone(small_1, "There was a problem with the import")
+        self.assertTrue(small_1.getSize()==4,
+                        "There was a problem with the import or conversion and the SetOfSmallMolecules is empty")
+
+        files = ""
+        for file in convert_file:
+            if not file.endswith(".smi"):
+                files += "%s; "
+
+        self.assertTrue(files == "",
+                        "The conversion was incorrect and those files have a wrong format : %s" %files)
+
+
+    def test_3(self):
+        """ Convert a cif protein file into pdb format
+        """
+        print("\nConvert a pdb protein file into mol2 format \n")
+
+        # Import PDB as Scipion object
+        target = self.pdbProt.outputPdb
+
+        args = {'inputType': 1,  # Protein structure
+                'inputStructure': target,
+                'outputFormatTarget': 0,  # pdb
+                }
+
+        protocol = self.newProtocol(ConvertStructures, **args)
+        self.launchProtocol(protocol)
+        prot = protocol.outputStructure
+
+
+        self.assertIsNotNone(prot, "There was a problem with the conversion and the new file not exist")
+
+        prot_end = prot.getFileName()
+        self.assertTrue(prot_end.endswith(".pdb"),
+                        "The conversion was incorrect and this file have a wrong format : %s" %os.path.basename(prot_end))
 
 class TestExportcsv(TestImportBase):
     @classmethod
@@ -51,267 +172,105 @@ class TestExportcsv(TestImportBase):
         csvFile = os.path.abspath(pExp._getPath('output.csv'))
         self.assertTrue(os.path.exists(csvFile), "CSV file was not create. Check if its location changed")
 
-class TestOperateSet(TestImportBase):
-    # todo: redo
-    def test_1filter(self):
-        """1. Filter a column using different ways
+
+class TestOperateSet(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+      setupTestProject(cls)
+      cls.dsLig = DataSet.getDataSet("smallMolecules")
+
+      cls.smallProtAll, cls.smallProtPart = cls._importSmallM(cls.dsLig.getFile('mol2')), \
+                                            cls._importSmallM(cls.dsLig.getFile('mol2'), pattern='*9.mol2')
+
+    @classmethod
+    def _importSmallM(cls, path, pattern='*'):
+      args = {'multiple': True,
+              'filesPath': path,
+              'filesPattern': pattern}
+
+      protocol = cls.newProtocol(ProtChemImportSmallMolecules, **args)
+      cls.launchProtocol(protocol)
+      return protocol
+
+    @classmethod
+    def _runSingleInputOperation(cls, inProt, op, refCol, extended='outputSmallMolecules', remDup=False, **kwargs):
+      protOp = cls.newProtocol(
+        ProtChemOperateSet,
+        operation=op, refColumn=refCol, removeDuplicates=remDup, **kwargs
+      )
+      protOp.inputSet.set(inProt)
+      protOp.inputSet.setExtended(extended)
+
+      cls.proj.launchProtocol(protOp, wait=False)
+      return protOp
+
+    @classmethod
+    def _runMultiInputOperation(cls, inProts, op, refCol, extended='outputSmallMolecules', remDup=False, **kwargs):
+      protOp = cls.newProtocol(
+        ProtChemOperateSet,
+        operation=op, refColumn=refCol, removeDuplicates=remDup, **kwargs
+      )
+      for p in inProts:
+          protOp.inputMultiSet.append(p)
+          protOp.inputMultiSet[-1].setExtended(extended)
+
+      cls.proj.launchProtocol(protOp, wait=False)
+      return protOp
+
+    @classmethod
+    def _runDoubleInputOperation(cls, inProts, op, refCol, extended='outputSmallMolecules', remDup=False, **kwargs):
+      protOp = cls.newProtocol(
+        ProtChemOperateSet,
+        operation=op, refColumn=refCol, removeDuplicates=remDup, **kwargs
+      )
+      protOp.inputSet.set(inProts[0])
+      protOp.inputSet.setExtended(extended)
+
+      protOp.secondSet.set(inProts[1])
+      protOp.secondSet.setExtended(extended)
+
+      cls.proj.launchProtocol(protOp, wait=False)
+      return protOp
+
+    def test(self):
+        """1. Union of several sets + 0. Unique operation
+        2. Intersection of several sets
+        3. Difference between a first and a second set
+        4. Filter a set by the values of the items for one of the columns
+        5. Remove specified columns
+        6. Ranking according to reference column: higher / lower values
         """
+        inProts = [self.smallProtAll, self.smallProtPart]
+        outProts = []
 
-        print("\n Filtering a SetOfDatabaseID object by a column")
+        protUnion = self._runMultiInputOperation(inProts, op=1, refCol='molName')
+        outProts.append(protUnion)
 
-        # Import a pdb file
-        path = self.dsModBuild.getFile(os.path.join("proteinpdb", "5xjh.pdb"))
-        pdb = self._importPDB(path)
+        self._waitOutput(protUnion, 'outputSet', sleepTime=5)
+        self.assertIsNotNone(getattr(protUnion, 'outputSet', None))
+        protUniq = self._runSingleInputOperation(protUnion, op=0, refCol='molName', extended='outputSet')
+        outProts.append(protUniq)
 
-        #Dali
-        args = {'inputStructure': pdb,
-                'method': 0, #search
-                'title': 'test_dali_5xjh',
-                'email': 'amparraperez@gmail.com'}
+        protInter = self._runMultiInputOperation(inProts, op=2, refCol='molName')
+        outProts.append(protInter)
 
-        prot1 = self.newProtocol(DALI, **args)
-        prot1._store()
-        self.getDalioutputs(prot1)
-        prot1.setStatus(STATUS_FINISHED)
+        protDiff = self._runDoubleInputOperation(inProts, op=3, refCol='molName')
+        outProts.append(protDiff)
 
-        global outputDali; global outputDali2
-        outputDali = prot1.outputDatabaseIds90
-        outputDali2 = prot1.outputDatabaseIds50
+        kw = {'filterColumn': 'smallMoleculeFile', 'filterOp': 9, 'filterValue': '9.mol2'}
+        protFilt = self._runSingleInputOperation(inProts[0], op=4, refCol='molName', **kw)
+        outProts.append(protFilt)
 
-        self.assertIsNotNone(outputDali, "Error in creation of SetOfDatabaseID by DALI - It is NONE")
-        self.assertTrue(outputDali.getSize() == 432, "The size of the SetOfDatabaseID is wrong. It should be 432 ")
-        n_columns = len(list(outputDali.getFirstItem().getAttributes()))
-        self.assertTrue(n_columns == 11)  # 2 fixed columns + 9 given
+        kw = {'remColumns': 'confId;gridId;poseId;dockId'}
+        protRem = self._runSingleInputOperation(inProts[0], op=5, refCol='molName', **kw)
+        outProts.append(protRem)
 
+        kw = {'filterColumn': 'molName', 'threshold': '2'}
+        protRank = self._runSingleInputOperation(inProts[0], op=6, refCol='molName', **kw)
+        outProts.append(protRank)
 
-        # SET filtering :  _DaliZscore column ( >= 40)
-        args = {'operation': 0,  # Filter
-                'inputSet':outputDali,
-                'filterColumn': '_DaliZscore',
-                'filterOp': 2,  # >=
-                'filterValue': 40}
+        for p in outProts:
+            self._waitOutput(p, 'outputSet', sleepTime=5)
+            self.assertIsNotNone(getattr(p, 'outputSet', None))
 
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new filtered SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 7, "Error in filtering >= 40 of _DaliZscore column")
-
-
-        # SET filtering :  _DaliZscore column ( 25 >= value <= 52 )
-        args = {'operation': 0,  # Filter
-                'inputSet': outputDali,
-                'filterColumn': '_DaliZscore',
-                'filterOp': 6,  # between
-                'filterValue': 52,
-                'filterValue2': 25}
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new filtered SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize()==8, "Error in filtering 25 >= value <= 52 of _DaliZscore column")
-
-        # SET filtering :  _DaliZscore column ( >= 40)
-        args = {'operation': 0,  # Filter
-                'inputSet': outputDali,
-                'filterColumn': '_pdbId',
-                'filterOp': 7,  # startwith
-                'filterValue': "6"}
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new filtered SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 57, "Error in filtering >_pdbId column. Startwith does not work")
-
-        # SET filtering :  _DaliZscore column ( >= 40)
-        args = {'operation': 0,  # Filter
-                'inputSet': outputDali,
-                'filterColumn': '_DaliDescription',
-                'filterOp': 9,  # contains
-                'filterValue': "ESTERASE"}
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new filtered SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 104, "Error in filtering _DaliDescription column searching the ESTERASE word")
-
-
-    def test_2keepcolumns(self):
-        """2. Keep only 2 columns and all entries
-        """
-        print("\n Keeping 2 interesting columns in a new SetOfDatabaseID")
-
-        # Keep_column :  _pdbId column
-        args = {'operation': 1,
-                'inputSet': outputDali,
-                'keepColumns': '_pdbId ; _DaliZscore'
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 432, "Error in creation of a new SetOfDatabaseID. It is different from the original regarding the number of entries")
-        n_columns = len(list(setf.getFirstItem().getAttributes()))
-        self.assertTrue(n_columns == 2+2) #2 fixed columns + 2 given
-
-
-    def test_3unique(self):
-        """3. Keep unique entries in 1 column
-        """
-        print("\n Keeping unique entries in 1 column in a new SetOfDatabaseID. No biological sense")
-
-
-        args = {'operation': 2,  # Unique
-                'inputSet': outputDali,
-                'filterColumn': '_DaliDescription'
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 302, "Error in creation of a new SetOfDatabaseID. There is not unique entries")
-
-
-    def test_4top(self):
-        """4. Keep 10 top and 10 top 5% entries regarding 1 column
-        """
-        print("\n Keeping a number (10 or 5%) of entries regarding if it is in the top  regarding 1 column")
-
-        # Keep 10 top entries :
-        args = {'operation': 3,
-                'inputSet': outputDali,
-                'filterColumn': '_DaliZscore',
-                'N': 10
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 10, "Error in creation of a new SetOfDatabaseID. The number of entries is not the indicated one")
-
-        for entry in setf:
-            first_value = entry.getAttributeValue('_DaliZscore')
-            break
-
-        self.assertTrue(first_value == 51.4, "Failed to extract all top 10 entries regarding _DaliZscorecolumn")
-
-        # Keep 5 % top entries :
-        args = {'operation': 5,
-                'inputSet': outputDali,
-                'filterColumn': '_DaliZscore',
-                'N': 10
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 23, "Error in creation of a new SetOfDatabaseID. There is not unique entries")
-
-        for entry in setf:
-            first_value = entry.getAttributeValue('_DaliZscore')
-            break
-
-        self.assertTrue(first_value == 51.4, "Failed to extract all 5% top 10 entries regarding _DaliZscorecolumn")
-
-
-    def test_5count(self):
-        """5. Count the number of same entries
-        """
-        print("\n Count the number of same entries regarding 1 column")
-
-
-        args = {'operation': 7,
-                'inputSet': outputDali,
-                'filterColumn': '_DaliZscore'
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 432, "Error in creation of a new SetOfDatabaseID.")
-        n_columns = len(list(setf.getFirstItem().getAttributes()))
-        self.assertTrue(n_columns == 2+9+1, "Column count was not created") #2 fixed columns + 9 given + 1 count
-
-
-    def test_6intersect(self):
-        """6. Intersect 2 SetOfDatabaseID using the column called _pdbId
-        """
-        print("\n Intersect 2 SetOfDatabaseID using 1 column")
-
-        args = {'operation': 8,
-                'inputSet': outputDali,
-                'secondSet': outputDali2,
-                'filterColumn': '_pdbId' # Without chain information. With that info there is only 1 difference (311 in intersection 312 in 50%)
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 314, "Error in creation of a new SetOfDatabaseID. The intersection was wrong")
-
-
-    def test_7sort(self):
-        """6. Sort (Ascending or Descending way) a SetOfDatabaseID regarding 1 column (_DaliZscore)
-        """
-        print("\n Sort a SetOfDatabaseID regarding 1 column (Ascending or Descending way)")
-
-        args = {'operation': 9,
-                'inputSet': outputDali,
-                'filterColumn': '_DaliZscore',# Without chain information. With that info there is only 1 difference (311 in intersection 312 in 50%)
-                'direction': 0 #ascending
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 432, "Error in creation of a new SetOfDatabaseID")
-
-        for entry in setf:
-            first_value = entry.getAttributeValue('_DaliZscore')
-            break
-
-        self.assertTrue(first_value == 2.1, "Failed to sort (ascending) the SetDatabaseID regarding _DaliZscorecolumn")
-
-
-        args = {'operation': 9,
-                'inputSet': outputDali,
-                'filterColumn': '_DaliZscore',# Without chain information. With that info there is only 1 difference (311 in intersection 312 in 50%)
-                'direction': 1 #descending
-                }
-
-        setf = self.newProtocol(LOperate, **args)
-        self.launchProtocol(setf)
-        setf = setf.output
-
-        self.assertIsNotNone(setf, "Error in creation of a new SetOfDatabaseID - It is NONE")
-        self.assertTrue(setf.getSize() == 432, "Error in creation of a new SetOfDatabaseID")
-
-        for entry in setf:
-            first_value = entry.getAttributeValue('_DaliZscore')
-            break
-
-        self.assertTrue(first_value == 51.4, "Failed to sort (descending) the SetDatabaseID regarding _DaliZscorecolumn")
 

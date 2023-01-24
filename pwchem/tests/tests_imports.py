@@ -30,6 +30,7 @@ import os
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
 from pwchem.protocols import *
+from pwchem.constants import *
 
 iedb_csv_str = '''Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object
 Epitope ID,Object Type,Description,Epitope Modified Residue(s),Epitope Modification(s),Starting Position,Ending Position,Non-peptidic epitope Accession,Epitope Synonyms,Antigen Name,Antigen Accession,Parent Protein,Parent Protein Accession,Organism Name,Parent Organism,Parent Organism ID,Epitope Comments,Epitope Relationship,Object Type,Description,Starting Position,Ending Position,Non-peptidic object Accession,Synonyms,Antigen Name,Parent Protein,Organism Name,Parent Organism
@@ -130,23 +131,58 @@ class TestImportSmallMolecules(TestImportBase):
 
 
 class TestImportSequences(BaseTest):
-  @classmethod
-  def setUpClass(cls):
-    setupTestProject(cls)
-    cls.ds = DataSet.getDataSet('model_building_tutorial')
+    @classmethod
+    def setUpClass(cls):
+      setupTestProject(cls)
+      cls.ds = DataSet.getDataSet('model_building_tutorial')
 
-  @classmethod
-  def _runImportSeqs(cls):
-    protImportSeqs = cls.newProtocol(
-      ProtChemImportSetOfSequences,
-      multiple=False,
-      filePath=cls.ds.getFile('Sequences/Several_sequences.fasta'))
-    cls.launchProtocol(protImportSeqs)
-    cls.protImportSeqs = protImportSeqs
+      cls.pImpDBs = cls._runImportDBIds()
+      cls._waitOutput(cls.pImpDBs, 'outputDatabaseIDs', sleepTime=5)
 
-  def test(self):
-    self._runImportSeqs()
-    self.assertIsNotNone(self.protImportSeqs.outputSequences)
+    @classmethod
+    def getIdsFilePath(cls, inType=0, dbName='UniProt'):
+      return os.path.abspath(cls.proj.getPath('inputIDs_{}_{}.txt'.format(inType, dbName)))
+
+    @classmethod
+    def _runImportDBIds(cls, inType=0, dbName='UniProt'):
+      idsFile = cls.getIdsFilePath(inType, dbName)
+      with open(idsFile, 'w') as f:
+        f.write('\n'.join(DB_IDS[inType][dbName]))
+
+      protImport = cls.newProtocol(
+        ProtChemImportSetOfDatabaseIDs,
+        filePath=idsFile, databaseName=dbName
+      )
+      cls.proj.launchProtocol(protImport, wait=False)
+      return protImport
+
+    @classmethod
+    def _runImportSeqs(cls):
+      protImportSeqs = cls.newProtocol(
+        ProtChemImportSetOfSequences,
+        multiple=False,
+        filePath=cls.ds.getFile('Sequences/Several_sequences.fasta'))
+      cls.launchProtocol(protImportSeqs)
+      cls.protImportSeqs = protImportSeqs
+
+    @classmethod
+    def _runImportSeqsFromDB(cls, inProt):
+      protImportSeqs = cls.newProtocol(
+        ProtChemImportSetOfSequences,
+        fromFile=False, database=0)
+
+      protImportSeqs.inputListID.set(inProt)
+      protImportSeqs.inputListID.setExtended('outputDatabaseIDs')
+
+      cls.launchProtocol(protImportSeqs)
+      cls.protImportSeqsDB = protImportSeqs
+
+    def test(self):
+      self._runImportSeqs()
+      self._runImportSeqsFromDB(inProt=self.pImpDBs)
+
+      self.assertIsNotNone(getattr(self.protImportSeqs, 'outputSequences', None))
+      self.assertIsNotNone(getattr(self.protImportSeqsDB, 'outputSequences', None))
 
 class TestImportVariants(BaseTest):
     @classmethod

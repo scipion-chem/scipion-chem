@@ -46,7 +46,7 @@ class TestImportDBIDs(BaseTest):
         return os.path.abspath(cls.proj.getPath('inputIDs_{}_{}.txt'.format(inType, dbName)))
 
     @classmethod
-    def _runImport(cls, inType=0, dbName='UniProt'):
+    def _runImportDBIds(cls, inType=0, dbName='UniProt'):
       idsFile = cls.getIdsFilePath(inType, dbName)
       with open(idsFile, 'w') as f:
           f.write('\n'.join(DB_IDS[inType][dbName]))
@@ -59,7 +59,7 @@ class TestImportDBIDs(BaseTest):
       return protImport
   
     def test(self):
-      pImp = self._runImport()
+      pImp = self._runImportDBIds()
   
       self._waitOutput(pImp, 'outputDatabaseIDs', sleepTime=5)
       self.assertIsNotNone(getattr(pImp, 'outputDatabaseIDs', None))
@@ -120,7 +120,7 @@ class TestUniProtCrossRef(TestImportDBIDs):
     return protFilter
 
   def test(self):
-    pImp = self._runImport()
+    pImp = self._runImportDBIds()
     self._waitOutput(pImp, 'outputDatabaseIDs', sleepTime=5)
 
     pCrossRef = self._runCrossRef(pImp)
@@ -154,7 +154,7 @@ class TestFetchLigands(TestImportDBIDs):
       impProts, fetchProts = {}, []
       for inType, inDic in enumerate(DB_IDS):
           for iBase, dbName in enumerate(inDic):
-              impProts[(inType, iBase)] = self._runImport(inType=inType, dbName=dbName)
+              impProts[(inType, iBase)] = self._runImportDBIds(inType=inType, dbName=dbName)
 
       for p in impProts.values():
           self._waitOutput(p, 'outputDatabaseIDs', sleepTime=5)

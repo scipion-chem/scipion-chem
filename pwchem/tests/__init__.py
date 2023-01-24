@@ -33,10 +33,6 @@ from .tests_structROIs import *
 from .tests_docking import *
 from .tests_attributes import *
 from .tests_pharmacophores import *
-
-
-#from .test_list_operate import TestListOperate
-from .tests_general import TestExportcsv
-
-from .test_converter import TestConverter
+from .tests_general import *
+from .tests_databases import *
 

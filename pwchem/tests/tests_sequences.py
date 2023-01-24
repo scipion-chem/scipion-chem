@@ -144,7 +144,7 @@ class TestExtractSequenceROIs(TestGenerateSequences):
 
         protExtSeqROIs = cls.newProtocol(
             ProtExtractSeqsROI,
-            thres=0.2, flexThres=fThres, minSize=minSize
+            thres=0.2, flexThres=fThres, minSize=minSize, direction=1
         )
         protExtSeqROIs.inputSequences.set(inProt)
         protExtSeqROIs.inputSequences.setExtended('outputSequences')
@@ -156,7 +156,7 @@ class TestExtractSequenceROIs(TestGenerateSequences):
         pGen = self._runGenerateSequences(self.protImportVariants)
         self._waitOutput(pGen, 'outputSequences', sleepTime=10)
 
-        p = self._runExtractROIs(pGen)
+        p = self._runExtractROIs(pGen, minSize=1)
 
         self._waitOutput(p, 'outputROIs', sleepTime=10)
         self.assertIsNotNone(getattr(p, 'outputROIs', None))

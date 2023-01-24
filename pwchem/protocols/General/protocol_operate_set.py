@@ -113,13 +113,13 @@ class ProtChemOperateSet(EMProtocol):
                 curList = []
                 for item in inSet.get():
                     opId = self.getAttrValue(item, opAttr)
-                    tmpDict[opId] = item
+                    tmpDict[opId] = item.clone()
                     curList.append(opId)
                 idsLists.append(curList)
 
             interIds = set(idsLists[0])
-            for idList in idsLists:
-                interIds.intersection(set(idList))
+            for idList in idsLists[1:]:
+                interIds = interIds.intersection(set(idList))
 
             for interId in interIds:
                 self.addItem(outputDict, interId, tmpDict[interId])
@@ -206,7 +206,7 @@ class ProtChemOperateSet(EMProtocol):
             i = 1
             for itemId in outputDict:
                 for item in outputDict[itemId]:
-                    if self.operation.get() == UNION:
+                    if self.operation.get() in [UNION, INTERSECTION]:
                         item.setObjId(i)
                         i += 1
                     outputSet.append(item)

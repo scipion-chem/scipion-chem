@@ -46,11 +46,11 @@ def getPDBMols(inFile):
     return mols
 
 def parseMols(inFile):
-    inFormat = os.path.splitext(inputFile)[1][1:]
+    inFormat = os.path.splitext(inFile)[1][1:]
     if inFormat == 'pdb':
-        mols = getPDBMols(inputFile)
+        mols = getPDBMols(inFile)
     else:
-        mols = pybel.readfile(inFormat, inputFile)
+        mols = pybel.readfile(inFormat, inFile)
     return mols
 
 def make3DCoords(mols, mols3dLists, it):
@@ -62,7 +62,7 @@ def make3DCoords(mols, mols3dLists, it):
 
 def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, outBase=None,
                      overW=True, make3d=False, nameKey=None, nt=1):
-    mols = parseMols(inputFile)
+    mols = list(parseMols(inputFile))
     inFormat = os.path.splitext(inputFile)[1][1:]
     if inFormat in ['smi', 'smiles'] or make3d:
         mols = performBatchThreading(make3DCoords, mols, nt, cloneItem=False)
