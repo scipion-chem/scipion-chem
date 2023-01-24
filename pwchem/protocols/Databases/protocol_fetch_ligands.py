@@ -113,20 +113,6 @@ class ProtocolLigandsFetching(EMProtocol):
                        help='Set of IDs to perform the ligand fetching on according to the predefined parameters:'
                             'IDs from Uniprot, from target or directly ligands.')
 
-        # group.addParam('uniprotID', params.StringParam, label="Uniprot entry ID: ", default='',
-        #                condition='inputType == 0',
-        #                help='Uniprot ID to look for related targets in the selected database and then fetch ligands '
-        #                     'on those targets')
-        
-        # group.addParam('targetID', params.StringParam, label="Target database ID: ", default='',
-        #                condition='inputType == 1',
-        #                help='Target ID in the selected database. '
-        #                     'Ligands associated with the target ID will be fetched if uniprot ID is empty')
-        #
-        # group.addParam('ligandID', params.StringParam, label="Ligand database ID: ", default='',
-        #                condition='inputType == 2',
-        #                help='Ligand ID in the selected database to be fetched')
-
         group = form.addGroup('Managing')
         group.addParam('nonRep', params.BooleanParam, default=True, label='Remove repeated ligands: ',
                        help='Whether to remove repeated ligands by name, or to keep them all')
@@ -428,8 +414,8 @@ class ProtocolLigandsFetching(EMProtocol):
                         chembl_id = jLigDic['molecule_chembl_id']
                         jMolDic = self.getJDic('ChEMBL', 'molecule', chembl_id)
                         if self.checkLigandFilters(jMolDic, iBase):
-                            if not compId in allLigandNames or not self.nonRep.get():
-                                allLigandNames.append(compId)
+                            if not chembl_id in allLigandNames or not self.nonRep.get():
+                                allLigandNames.append(chembl_id)
                                 self.addRelationToFile('\t\tChEMBL compound', chembl_id)
 
                                 if not targetId in ligNames:

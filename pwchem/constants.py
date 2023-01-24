@@ -460,3 +460,10 @@ elements_mass = {'H' : 1.008,'HE' : 4.003, 'LI' : 6.941, 'BE' : 9.012,\
                  'HS' : 269, 'MT' : 268, 'DS' : 271, 'RG' : 272, 'CN' : 285,\
                  'NH' : 284, 'FL' : 289, 'MC' : 288, 'LV' : 292, 'TS' : 294,\
                  'OG' : 294}
+
+############### DB IDS #####################
+
+DB_IDS = [{'UniProt': ['A1A4S6', 'A2RUC4']},                      # UniProt
+          {'PDB': ['5ni1', '4erf'], 'ChEMBL': ['CHEMBL5061', 'CHEMBL3881']},    # Targets
+          {'ChEMBL': ['CHEMBL25', 'CHEMBL353472'], 'BindingDB': ['429291', '4444'],
+           'ZINC': ['ZINC480', 'ZINC1019'], 'PubChem': ['98514', '55748', '8739']}]    # Ligands
