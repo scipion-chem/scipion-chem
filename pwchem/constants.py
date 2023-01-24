@@ -467,3 +467,33 @@ DB_IDS = [{'UniProt': ['A1A4S6', 'A2RUC4']},                      # UniProt
           {'PDB': ['5ni1', '4erf'], 'ChEMBL': ['CHEMBL5061', 'CHEMBL3881']},    # Targets
           {'ChEMBL': ['CHEMBL25', 'CHEMBL353472'], 'BindingDB': ['429291', '4444'],
            'ZINC': ['ZINC480', 'ZINC1019'], 'PubChem': ['98514', '55748', '8739']}]    # Ligands
+
+#  MOLECULAR DYNAMICS
+
+TCL_MD_STR = '''
+mol addrep 0
+mol new {%s} type {%s} first 0 last -1 step 1 waitfor 1
+mol addfile {%s} type {%s} first 0 last -1 step 1 waitfor 1 0
+
+mol color Name
+mol representation NewCartoon 0.300000 10.000000 4.100000 0
+mol selection protein
+mol material Opaque
+mol modrep 0 0
+
+mol addrep 0
+mol color Name
+mol representation Points 1.000000
+mol selection hetero within 3 of protein
+mol material Opaque
+mol modrep 1 0
+'''
+
+PML_MD_STR = '''load {}
+load_traj {}
+hide everything, not br. all within 3 of (byres polymer & name CA)
+set movie_fps, 15
+'''
+
+
+

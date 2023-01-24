@@ -2,6 +2,7 @@
 # **************************************************************************
 # *
 # * Authors:  Alberto Manuel Parra Pérez (amparraperez@gmail.com)
+# *           James Krieger (jamesmkrieger@gmail.com)
 # *
 # * Biocomputing Unit, CNB-CSIC
 # *
@@ -26,16 +27,16 @@
 # **************************************************************************
 
 
-import os, shutil
+import os, shutil, parmed, mdtraj
 
-from pyworkflow.protocol.params import PointerParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toCIF, toPdb
 
 from pwchem import Plugin
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
+from pwchem.utils import runOpenBabel, getBaseFileName
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
 extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
@@ -45,15 +46,15 @@ class ConvertStructures(EMProtocol):
     Convert a set of input ligands or a protein structure to a specific file format
     """
 
-    _label = 'Convert format'
+    _label = 'Convert structure format'
     _program = ""
 
     def _defineParams(self, form):
         form.addSection(label='Input')
         group = form.addGroup('Input')
         group.addParam('inputType', EnumParam, default=0,
-                       choices=["Small molecules", 'Target structure'],
-                       label='Input type')
+                       choices=["Small molecules", 'Target structure', 'MDSystem'],
+                       label='Input type: small molecule, protein structure or Molecular Dynamics system.')
 
         group.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
                       label='Set of small molecules:', allowsNull=False,
@@ -62,6 +63,10 @@ class ConvertStructures(EMProtocol):
         group.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
                       condition='inputType==1', label='Input structure:', allowsNull=False,
                       help="The allowed format are pdb or cif")
+
+        group.addParam('inputMDSystem', PointerParam, pointerClass="MDSystem",
+                       condition='inputType==2', label='Input MDSystem:', allowsNull=False,
+                       help="Any system with a system file and trajectory file that mdtraj can read")
 
         group = form.addGroup('Output')
         group.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
@@ -77,7 +82,23 @@ class ConvertStructures(EMProtocol):
         group.addParam('outputFormatTarget', EnumParam, default=0,
                       condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
 
+        group.addParam('convSysFile', BooleanParam, default=False, label='Convert coordinates file: ',
+                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+        group.addParam('outputSysFormat', EnumParam, default=0, label='System coordinates output format: ',
+                       condition='inputType==2 and convSysFile', choices=['PDB'],
+                       help="Output format for the coordinates of the system.")
+        
+        group.addParam('convTopFile', BooleanParam, default=True, label='Convert topology file: ',
+                       condition='inputType==2', help="Convert topology file from the MDSystem")
+        group.addParam('outputTopFormat', EnumParam, default=0, label='Trajectory output format: ',
+                       condition='inputType==2 and convTopFile', choices=['PSF', 'TOP', 'PRMTOP'],
+                       help="Output format for the topology.")
 
+        group.addParam('convTrjFile', BooleanParam, default=True, label='Convert trajectory file: ',
+                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+        group.addParam('outputTrjFormat', EnumParam, default=0, label='Trajectory output format: ',
+                       condition='inputType==2 and convTrjFile', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
+                       help="Output format for the trajectory.")
 
     # --------------------------- Steps functions --------------------
 
@@ -117,7 +138,7 @@ class ConvertStructures(EMProtocol):
             if len(self.convErrors) > 0:
                 print("The following entries could not be converted: %s" % ','.join(self.convErrors))
 
-        else:
+        elif self.inputType == 1:
             fnStructure = os.path.abspath(self.inputStructure.get().getFileName())
             args = self.inputArg(os.path.abspath(fnStructure))
             fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
@@ -138,6 +159,41 @@ class ConvertStructures(EMProtocol):
                 target = AtomStruct(filename=fnOut)
                 self._defineOutputs(outputStructure=target)
                 self._defineSourceRelation(self.inputStructure, target)
+
+        elif self.inputType == 2:
+            inSystem = self.inputMDSystem.get()
+            sysFile = inSystem.getSystemFile()
+
+            if self.convSysFile.get():
+                system = mdtraj.load(sysFile, top=sysFile)
+                sysFile = self._getPath('{}.{}'.format(getBaseFileName(sysFile),
+                                                        self.getEnumText('outputSysFormat').lower()))
+                system.save(sysFile)
+            outSystem = MDSystem(filename=sysFile)
+            outSystem.setSystemFile(sysFile)
+            
+            if inSystem.hasTopology():
+                topFile = inSystem.getTopologyFile()
+                
+                if self.convTopFile.get():
+                    top = parmed.load_file(topFile)
+                    topFile = self._getPath('{}.{}'.format(getBaseFileName(topFile),
+                                                            self.getEnumText('outputTopFormat').lower()))
+                    top.save(topFile)
+                outSystem.setTopologyFile(topFile)
+            
+            if inSystem.hasTrajectory():
+                trjFile = inSystem.getTrajectoryFile()
+
+                if self.convTrjFile.get():
+                    traj = mdtraj.load(trjFile, top=sysFile)
+                    trjFile = self._getPath('{}.{}'.format(getBaseFileName(trjFile),
+                                                            self.getEnumText('outputTrjFormat').lower()))
+                    traj.save(trjFile)
+                outSystem.setTrajectoryFile(trjFile)
+
+            self._defineOutputs(outputSystem=outSystem)
+            self._defineSourceRelation(self.inputMDSystem, outSystem)
 
     def inputArg(self, fn):  # Input format file (fn)
 
@@ -176,7 +232,7 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatSmall.get() == 4:
                 summary.append('Converted to Smiles')
 
-        else:
+        elif self.inputType.get()==1:
             if self.outputFormatTarget.get() == 0:
                 summary.append('Converted to PDB')
             elif self.outputFormatTarget.get() == 1:
@@ -184,3 +240,5 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatTarget.get() == 2:
                 summary.append('Converted to Mol2')
         return summary
+    
+    
