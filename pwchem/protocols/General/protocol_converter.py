@@ -53,8 +53,8 @@ class ConvertStructures(EMProtocol):
         form.addSection(label='Input')
         group = form.addGroup('Input')
         group.addParam('inputType', EnumParam, default=0,
-                       choices=["Small molecules", 'Target structure', 'MDSystem'],
-                       label='Input type: small molecule, protein structure or Molecular Dynamics system.')
+                       choices=["Small molecules", 'Target structure', 'MDSystem'], label='Input type: ',
+                       help='Input type to convert: small molecule, protein structure or Molecular Dynamics system.')
 
         group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
                       label='Set of small molecules:', allowsNull=False,
