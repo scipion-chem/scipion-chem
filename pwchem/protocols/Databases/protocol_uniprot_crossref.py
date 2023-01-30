@@ -49,21 +49,31 @@ class ProtChemUniprotCrossRef(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputListID', params.PointerParam, pointerClass="SetOfDatabaseID",
-                      label='List of Uniprot Ids:', allowsNull=False,
-                      help="List of atomic structures for the query")
-        form.addParam('extract', params.EnumParam, default=0,
-                      choices=dbChoices, label='Database info to extract: ',
-                      help='Choose among some of these database examples or decide your own')
-        form.addParam('extractOther', params.StringParam, default='', label='Other database info to extract: ',
-                      condition='extract=={}'.format(len(dbChoices) -1),
-                      help='Specify the name of the database to extract info from. Uniprot must have information from '
-                            'this database to extract any information')
+        group = form.addGroup('Input')
+        group.addParam('fromString', params.BooleanParam, default=False, label='Manually write input IDs: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Whether to input the IDs from a string or a SetOfDatabaseIds object')
+        group.addParam('inputListID', params.PointerParam, pointerClass="SetOfDatabaseID",
+                       label='List of Uniprot Ids:', condition='not fromString', allowsNull=True,
+                       help="List of atomic structures for the query")
+        group.addParam('inputIDsStr', params.StringParam, label="Input entry IDs (,): ",
+                       condition='fromString',
+                       help='Set of IDs to perform the ligand cross reference on according to the predefined'
+                            'parameters')
 
-        form.addParam('storeProps', params.BooleanParam, default=False, label='Store properties: ',
-                      help='Whether to store additional properties of the crossreferences')
-        form.addParam('crossMain', params.BooleanParam, default=False, label='Cross reference as main ID: ',
-                      help='Whether to store the crossreference IDs as the main ID of the output or as crossRefID')
+        group = form.addGroup('CrossRef')
+        group.addParam('extract', params.EnumParam, default=0,
+                       choices=dbChoices, label='Database info to extract: ',
+                       help='Choose among some of these database examples or decide your own')
+        group.addParam('extractOther', params.StringParam, default='', label='Other database info to extract: ',
+                       condition='extract=={}'.format(len(dbChoices) -1),
+                       help='Specify the name of the database to extract info from. Uniprot must have information from '
+                             'this database to extract any information')
+
+        group.addParam('storeProps', params.BooleanParam, default=False, label='Store properties: ',
+                       help='Whether to store additional properties of the crossreferences')
+        group.addParam('crossMain', params.BooleanParam, default=False, label='Cross reference as main ID: ',
+                       help='Whether to store the crossreference IDs as the main ID of the output or as crossRefID')
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- INSERT steps functions --------------------
@@ -73,23 +83,21 @@ class ProtChemUniprotCrossRef(EMProtocol):
     def extractStep(self):
         nt = self.numberOfThreads.get()
         allProps, dbName = set([]), self.getDBName()
-        outputIds = performBatchThreading(self.fetchCrossRef, self.inputListID.get(), nt, cloneItem=True,
+        outputIds = performBatchThreading(self.fetchCrossRef, self.getInputIds(), nt, cloneItem=False,
                                           allProps=allProps)
         outputIds = {item: itemDic[item] for itemDic in outputIds for item in itemDic}
 
         print()
         outputDatabaseIDs = SetOfDatabaseID().create(self._getPath())
         if len(outputIds)>0:
-            for item in outputIds:
-                uniprotId = item.getDbId()
-
-                if len(outputIds[item]) == 0:
+            for uniprotId in outputIds:
+                if len(outputIds[uniprotId]) == 0:
                     print('Warning: {} uniprot ID has no cross references with {} database so it will not be included'
                           ' in the output'.format(uniprotId, dbName))
 
-                for crossId in outputIds[item]:
+                for crossId in outputIds[uniprotId]:
                     newItem = DatabaseID()
-                    newItem.copy(item, copyId=False)
+
                     if self.crossMain.get():
                         newItem._crossId = pwobj.String(uniprotId)
                         newItem._crossDatabase = pwobj.String('UniProt')
@@ -99,12 +107,14 @@ class ProtChemUniprotCrossRef(EMProtocol):
                     else:
                         newItem._crossId = pwobj.String(crossId)
                         newItem._crossDatabase = pwobj.String(dbName)
+                        newItem.setDbId(uniprotId)
+                        newItem.setDatabase('UniProt')
                         prefix = 'cross_'
 
                     if self.storeProps.get():
                         for prop in allProps:
-                            if prop in outputIds[item][crossId]:
-                                value = pwobj.String(outputIds[item][crossId][prop])
+                            if prop in outputIds[uniprotId][crossId]:
+                                value = pwobj.String(outputIds[uniprotId][crossId][prop])
                             else:
                                 value = pwobj.String('None')
                             setattr(newItem, '_{}{}'.format(prefix, prop.replace(' ', '_')), value)
@@ -112,15 +122,25 @@ class ProtChemUniprotCrossRef(EMProtocol):
                     outputDatabaseIDs.append(newItem)
 
         self._defineOutputs(outputDatabaseIDs=outputDatabaseIDs)
-        self._defineSourceRelation(self.inputListID, outputDatabaseIDs)
 
     def _validate(self):
         errors=[]
-        for dbId in self.inputListID.get():
-            if not dbId.getDatabase().lower() == "uniprot":
-                errors.append("{} is not labeled as an Uniprot ID".format(dbId.getDbId()))
-                break
+        if not self.fromString.get():
+            for dbId in self.inputListID.get():
+                if not dbId.getDatabase().lower() == "uniprot":
+                    errors.append("{} is not labeled as an Uniprot ID".format(dbId.getDbId()))
+                    break
         return errors
+
+    def getInputIds(self):
+        if not self.fromString:
+            ids = []
+            for dbId in self.inputListID.get():
+                ids.append(dbId.getDbId())
+        else:
+            ids = self.inputIDsStr.get().split(',')
+        ids = [i.strip() for i in ids]
+        return ids
 
     def getDBName(self):
         if self.extract.get() != len(dbChoices) - 1:
@@ -129,21 +149,19 @@ class ProtChemUniprotCrossRef(EMProtocol):
             return self.extractOther.get()
 
     def fetchCrossRef(self, dbIds, outputLists, it, allProps):
-        for item in dbIds:
-            nItem = item.clone()
-            outputIds = {nItem: {}}
-            uniprotId = item.getDbId()
+        for uniprotId in dbIds:
+            outputIds = {uniprotId: {}}
 
             jsonDic = self.fetchUniprotJSON(uniprotId)
             for cross in jsonDic['uniProtKBCrossReferences']:
                 if cross['database'] == self.getDBName():
                     crossId = cross['id']
-                    outputIds[nItem][crossId] = {}
+                    outputIds[uniprotId][crossId] = {}
                     if self.storeProps.get():
                         for propDic in cross['properties']:
                             prop = propDic["key"]
                             allProps.add(prop)
-                            outputIds[nItem][crossId][prop] = propDic["value"]
+                            outputIds[uniprotId][crossId][prop] = propDic["value"]
 
             outputLists[it].append(outputIds)
         return outputLists[it]

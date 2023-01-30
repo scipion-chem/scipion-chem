@@ -109,9 +109,17 @@ class ProtocolLigandsFetching(EMProtocol):
                        choices=['ChEMBL', 'BindingDB', 'ZINC', 'PubChem'], default=0, condition='inputType in [2]',
                        help='Select database for fetching of the ligand')
 
-        group.addParam('inputIDs', params.PointerParam, label="Input entry IDs: ", pointerClass="SetOfDatabaseID",
+        group.addParam('fromString', params.BooleanParam, default=False, label='Manually write input IDs: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Whether to input the IDs from a string or a SetOfDatabaseIds object')
+        group.addParam('inputIDs', params.PointerParam, label="Input entry IDs: ",
+                       condition='not fromString', pointerClass="SetOfDatabaseID", allowsNull=True,
                        help='Set of IDs to perform the ligand fetching on according to the predefined parameters:'
                             'IDs from Uniprot, from target or directly ligands.')
+        group.addParam('inputIDsStr', params.StringParam, label="Input entry IDs (,): ",
+                       condition='fromString',
+                       help='Set of IDs to perform the ligand fetching on according to the predefined parameters:'
+                            'IDs from Uniprot, from target or directly ligands. Comma separated.')
 
         group = form.addGroup('Managing')
         group.addParam('nonRep', params.BooleanParam, default=True, label='Remove repeated ligands: ',
@@ -203,10 +211,9 @@ class ProtocolLigandsFetching(EMProtocol):
         mapDBD = False
         targetsDic, ligandsDic = {}, {}
         if self.inputType.get() == 0:
-            for dbId in self.inputIDs.get():
+            for uniprot_id in self.getInputIds():
                 # Download from Uniprot ID the target IDs or save ligands (DBD)
                 iBase = self.inputDatabaseUniprot.get()
-                uniprot_id = dbId.getDbId()
 
                 if iBase in [0, 1]:
                     # Download related target IDs from PDB or ChEMBL
@@ -226,13 +233,13 @@ class ProtocolLigandsFetching(EMProtocol):
 
         elif self.inputType.get() == 1:
             # Listing Target Ids
-            for dbId in self.inputIDs.get():
-                targetsDic['Input'] = [dbId.getDbId()]
+            for dbId in self.getInputIds():
+                targetsDic['Input'] = [dbId]
 
         elif self.inputType.get() == 2:
             # Listing and downloading ligand IDs
-            for dbId in self.inputIDs.get():
-                ligandsDic[dbId.getDbId()] = ''
+            for dbId in self.getInputIds():
+                ligandsDic[dbId] = ''
 
             iBase = self.inputDatabaseLigand.get()
 
@@ -304,29 +311,40 @@ class ProtocolLigandsFetching(EMProtocol):
 
     def _validate(self):
         vals = []
-        if self.inputType.get() == 0:
-            for dbId in self.inputIDs.get():
-                if not dbId.getDatabase().lower() == 'uniprot':
-                    vals.append('Seems like ID {} is not defined as an Uniprot ID'.format(dbId.getDbId()))
-                    break
+        if not self.fromString:
+            if self.inputType.get() == 0:
+                for dbId in self.inputIDs.get():
+                    if not dbId.getDatabase().lower() == 'uniprot':
+                        vals.append('Seems like ID {} is not defined as an Uniprot ID'.format(dbId.getDbId()))
+                        break
 
-        elif self.inputType.get() == 1:
-            for dbId in self.inputIDs.get():
-                if not dbId.getDatabase().lower() == self.getEnumText('inputDatabaseTarget').lower():
-                    vals.append('Seems like ID {} is not defined as an {} ID'.
-                                format(dbId.getDbId(), self.getEnumText('inputDatabaseTarget')))
-                    break
+            elif self.inputType.get() == 1:
+                for dbId in self.inputIDs.get():
+                    if not dbId.getDatabase().lower() == self.getEnumText('inputDatabaseTarget').lower():
+                        vals.append('Seems like ID {} is not defined as an {} ID'.
+                                    format(dbId.getDbId(), self.getEnumText('inputDatabaseTarget')))
+                        break
 
-        elif self.inputType.get() == 2:
-            for dbId in self.inputIDs.get():
-                if not dbId.getDatabase().lower() == self.getEnumText('inputDatabaseLigand').lower():
-                    vals.append('Seems like ID {} is not defined as an {} ID'.
-                                format(dbId.getDbId(), self.getEnumText('inputDatabaseLigand')))
-                    break
+            elif self.inputType.get() == 2:
+                for dbId in self.inputIDs.get():
+                    if not dbId.getDatabase().lower() == self.getEnumText('inputDatabaseLigand').lower():
+                        vals.append('Seems like ID {} is not defined as an {} ID'.
+                                    format(dbId.getDbId(), self.getEnumText('inputDatabaseLigand')))
+                        break
 
         return vals
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputIds(self):
+        if not self.fromString:
+            ids = []
+            for dbId in self.inputIDs.get():
+                ids.append(dbId.getDbId())
+        else:
+            ids = self.inputIDsStr.get().split(',')
+        ids = [i.strip() for i in ids]
+        return ids
+
     def getIDsRelationsFile(self):
         return self._getPath('idsRelations.txt')
 

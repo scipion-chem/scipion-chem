@@ -43,7 +43,7 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('fromFile', params.BooleanParam, default=True, label='Download from file')
+        form.addParam('fromFile', params.BooleanParam, default=True, label='Import from file')
         group = form.addGroup('From file', condition='fromFile')
         group.addParam('multiple', params.BooleanParam, default=True, condition='fromFile',
                       label='Each file is a sequence')
