@@ -55,16 +55,18 @@ class Plugin(pwem.Plugin):
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
+        cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
         cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
-        cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
+        # cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
     @classmethod
     def getEnvActivation(cls, env):
@@ -202,6 +204,21 @@ class Plugin(pwem.Plugin):
                      tar='void.tgz',
                      commands=seqs_commands,
                      default=True)
+
+    @classmethod
+    def addVMDPackage(cls, env, default=False):
+      VMD_INSTALLED = 'vmd_installed'
+
+      installationCmd = cls.getCondaActivationCmd()
+      installationCmd += ' conda create -y -c conda-forge -n vmd-env vmd &&'
+      installationCmd += ' touch %s' % VMD_INSTALLED
+      vmd_commands = [(installationCmd, VMD_INSTALLED)]
+
+      env.addPackage(VMD_DIC['name'], version=VMD_DIC['version'],
+                     tar='void.tgz',
+                     commands=vmd_commands,
+                     neededProgs=cls.getDependencies(),
+                     default=default)
 
 
     ##################### RUN CALLS #################33333

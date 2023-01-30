@@ -29,10 +29,9 @@ from subprocess import Popen
 
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
-from pwem.viewers import Vmd, VmdView
 
 from pwchem.objects import StructROI, SetOfStructROIs
-from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer
+from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.constants import *
 from pwchem.protocols import ProtocolConsensusStructROIs
 
@@ -62,15 +61,6 @@ class ContactSurfaceViewer(pwviewer.Viewer):
 
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
-
-
-class VmdViewPopen(VmdView):
-  def __init__(self, vmdArgs, **kwargs):
-    pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs,
-                                  env=Vmd.getEnviron(), **kwargs)
-
-  def show(self):
-    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron(), shell=True)
 
 
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
