@@ -236,6 +236,28 @@ AddPPIsWizard().addTarget(protocol=ProtDefineStructROIs,
                           inputs=['chain_name', 'chain_name2', 'ppiDistance'],
                           outputs=['inROIs'])
 
+class AddNResidueWizard(AddROIWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    resTypes, resDist = getattr(protocol, inputParams[0]).get(), \
+                        getattr(protocol, inputParams[1]).get()
+
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
+
+    roiDef = '%s) Near_Residues: {"residues": "%s", "distance": "%s"}\n' % \
+             (lenPrev, resTypes, resDist)
+
+    form.setVar(outputParam[0], prevList + roiDef)
+
+
+AddNResidueWizard().addTarget(protocol=ProtDefineStructROIs,
+                              targets=['addNRes'],
+                              inputs=['resNRes', 'resDistance'],
+                              outputs=['inROIs'])
+
 
 ######################## Variable wizards ####################
 

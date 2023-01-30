@@ -31,7 +31,9 @@ This protocol is used to manually define structural regions from coordinates, re
 
 """
 import os, json, math, sys
+from sklearn.metrics.pairwise import pairwise_distances
 from scipy.spatial import distance
+from scipy.cluster.hierarchy import linkage, fcluster
 from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
 from Bio.PDB.PDBParser import PDBParser
 
@@ -46,14 +48,14 @@ from pwchem.utils import *
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
-COORDS, RESIDUES, LIGANDS, PPI = 0, 1, 2, 3
+COORDS, RESIDUES, LIGANDS, PPI, NRES = 0, 1, 2, 3, 4
 
 class ProtDefineStructROIs(EMProtocol):
     """
     Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
     """
     _label = 'Define structural ROIs'
-    typeChoices = ['Coordinates', 'Residues', 'Ligand', 'Protein-Protein Interface']
+    typeChoices = ['Coordinates', 'Residues', 'Ligand', 'Protein-Protein Interface', 'Near Residues']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -109,6 +111,15 @@ class ProtDefineStructROIs(EMProtocol):
                        label='Interface distance (A): ', condition='origin=={}'.format(PPI),
                        help='Maximum distance between two chain atoms to considered them part of the interface')
 
+        group.addParam('resNRes', params.StringParam, default=0, label='Residue pattern: ',
+                       help='Define a ROI by specifying the number of residues of a specific type that must be near '
+                            'each other. Use the 3 letters code, comma separated. '
+                            '\ne.g: 3 cysteines: "CYS, CYS, CYS"')
+        group.addParam('resDistance', params.FloatParam, default='2.0',
+                       label='Maximum distance between the residues (A): ',
+                       help='Maximum distance between the center of mass of two residues to consider them part '
+                            'of the ROI.')
+
         group.addParam('addCoordinate', params.LabelParam, label='Add defined coordinate: ',
                        condition='origin=={}'.format(COORDS),
                        help='Here you can define a coordinate ROI which will be added to the list of ROIs below.')
@@ -121,6 +132,10 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('addPPI', params.LabelParam, label='Add defined PPI: ',
                        condition='origin=={}'.format(PPI),
                        help='Here you can define a PPI ROI which will be added to the list of ROIs below.')
+        group.addParam('addNRes', params.LabelParam, label='Add defined Near Residues: ',
+                       condition='origin=={}'.format(NRES),
+                       help='Here you can define a Near Residues ROI which will be added to the list of ROIs below.')
+
 
         group.addParam('inROIs', params.TextParam, width=70, default='',
                        label='List of input ROIs: ',
@@ -296,13 +311,39 @@ class ProtDefineStructROIs(EMProtocol):
                 for atom1 in chain1.get_atoms():
                     for atom2 in chain2.get_atoms():
                         coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
-                        dist = (math.dist(coord1, coord2)) ** (1/2)
+                        dist = math.dist(coord1, coord2)
                         if dist <= self.ppiDistance.get():
                             if c1:
                                 oCoords.append(coord1)
                             if c2:
                                 oCoords.append(coord2)
                             break
+
+        elif roiKey == 'Near_Residues:':
+            residueTypes, resDist = jDic['residues'].split(','), jDic['distance']
+            residueTypes = [res.strip() for res in residueTypes]
+            cMassResidues = {}
+            for res in self.structModel.get_residues():
+                if res.get_resname() in residueTypes:
+                    cMassResidues[res] = res.center_of_mass()
+
+            linked = linkage(list(cMassResidues.values()), 'single')
+            clusterIdxs = fcluster(linked, resDist, 'distance')
+
+            clusters = {}
+            for i, res in enumerate(cMassResidues):
+                resIdx = clusterIdxs[i]
+                if resIdx in clusters:
+                    clusters[resIdx] += [res]
+                else:
+                    clusters[resIdx] = [res]
+
+            for _, clust in clusters.items():
+                resNameList = [res.get_resname() for res in clust]
+                if self.isSublist(residueTypes, resNameList):
+                    oCoords += list(a.get_coord() for res in clust for a in res.get_atoms())
+                    for res in clust:
+                        print(res, cMassResidues[res])
 
         return oCoords
 
@@ -317,6 +358,14 @@ class ProtDefineStructROIs(EMProtocol):
 
         return sCoords
 
+    def isSublist(self, subList, lst):
+      isSub = True
+      countSub = {a: subList.count(a) for a in subList}
+      for item, count in countSub.items():
+          if not item in lst or lst.count(item) < countSub[item]:
+              isSub = False
+              break
+      return isSub
 
     def closerSurfaceCoords(self, coord):
         distances = distance.cdist([coord], self.structSurface)
