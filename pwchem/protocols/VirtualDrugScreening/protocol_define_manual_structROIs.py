@@ -321,22 +321,19 @@ class ProtDefineStructROIs(EMProtocol):
 
         elif roiKey == 'PPI:':
             chain1Id, chain2Id = jDic['chain1'].split('-')[1], jDic['chain2'].split('-')[1]
+            ppiDist = float(jDic['interDist'])
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
-            c1, c2 = True, True
-            if c1 or c2:
-                print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
-                sys.stdout.flush()
-                for atom1 in chain1.get_atoms():
-                    for atom2 in chain2.get_atoms():
-                        coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
-                        dist = math.dist(coord1, coord2)
-                        if dist <= self.ppiDistance.get():
-                            if c1:
-                                oCoords.append(coord1)
-                            if c2:
-                                oCoords.append(coord2)
-                            break
+            print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
+            sys.stdout.flush()
+            for atom1 in chain1.get_atoms():
+                for atom2 in chain2.get_atoms():
+                    coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
+                    dist = math.dist(coord1, coord2)
+                    if dist <= ppiDist:
+                        oCoords.append(coord1)
+                        oCoords.append(coord2)
+                        break
 
         elif roiKey == 'Near_Residues:':
             residueTypes, resDist, resLink = jDic['residues'].split(','), jDic['distance'], jDic['linkage']

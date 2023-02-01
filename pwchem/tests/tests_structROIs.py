@@ -29,7 +29,7 @@ from ..protocols import *
 defROIsStr = '''1) Coordinate: {"X": 45, "Y": 65, "Z": 60}
 2) Residues: {"model": 0, "chain": "A", "index": "1-4", "residues": "VLSP"}
 3) Ligand: {"molName": "HEM"}
-4) PPI: {"chain1": "0-A", "chain2": "0-B", "interDist": "3.0"}
+4) PPI: {"chain1": "0-A", "chain2": "0-B", "interDist": "5.0"}
 5) Near_Residues: {"residues": "cys, cys", "distance": "5.0", "linkage": "Single"}'''
 
 defROIsStr2 = '''1) Residues: {"model": 0, "chain": "A", "index": "61-63", "residues": "KVA"}
