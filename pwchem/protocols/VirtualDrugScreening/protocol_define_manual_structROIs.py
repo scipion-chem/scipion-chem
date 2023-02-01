@@ -111,14 +111,20 @@ class ProtDefineStructROIs(EMProtocol):
                        label='Interface distance (A): ', condition='origin=={}'.format(PPI),
                        help='Maximum distance between two chain atoms to considered them part of the interface')
 
-        group.addParam('resNRes', params.StringParam, default=0, label='Residue pattern: ',
+        group.addParam('resNRes', params.StringParam, default='', label='Residue pattern: ',
                        help='Define a ROI by specifying the number of residues of a specific type that must be near '
                             'each other. Use the 3 letters code, comma separated. '
                             '\ne.g: 3 cysteines: "CYS, CYS, CYS"')
-        group.addParam('resDistance', params.FloatParam, default='2.0',
+        group.addParam('resDistance', params.FloatParam, default='5.0',
                        label='Maximum distance between the residues (A): ',
                        help='Maximum distance between the center of mass of two residues to consider them part '
                             'of the ROI.')
+        group.addParam('linkNRes', params.EnumParam, default=0, label='Clustering linkage type for near residues: ',
+                       choices=['Single', 'Complete', 'Average', 'Centroid', 'Median', 'Ward'],
+                       help='Define the type of linkage oof the clustering that will define the Near Residues ROI.\n'
+                            'Single linkage will group residues where each of them is closer than the threshold to at '
+                            'least one other residue.\nComplete linkage will require all residue pairs to be closer '
+                            'than the threshold, which will lead to more "globular" regions')
 
         group.addParam('addCoordinate', params.LabelParam, label='Add defined coordinate: ',
                        condition='origin=={}'.format(COORDS),
@@ -232,6 +238,19 @@ class ProtDefineStructROIs(EMProtocol):
         errors = []
         if not self.getProteinFileName(inProtocol=False):
             errors.append('You must specify an input structure')
+
+        for roiStr in self.inROIs.get().split('\n'):
+          if roiStr.strip():
+            jSonStr = ':'.join(roiStr.split(':')[1:]).strip()
+            jDic = json.loads(jSonStr)
+            roiKey = roiStr.split()[1].strip()
+            if roiKey == 'Near_Residues:':
+              residueTypes = jDic['residues'].split(',')
+              residueTypes = [res.strip().upper() for res in residueTypes]
+              for res in residueTypes:
+                  if not res in RESIDUES3TO1:
+                      errors.append('Cannot recognize residue {}'.format(res))
+
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
@@ -320,14 +339,14 @@ class ProtDefineStructROIs(EMProtocol):
                             break
 
         elif roiKey == 'Near_Residues:':
-            residueTypes, resDist = jDic['residues'].split(','), jDic['distance']
-            residueTypes = [res.strip() for res in residueTypes]
+            residueTypes, resDist, resLink = jDic['residues'].split(','), jDic['distance'], jDic['linkage']
+            residueTypes = [res.strip().upper() for res in residueTypes]
             cMassResidues = {}
             for res in self.structModel.get_residues():
                 if res.get_resname() in residueTypes:
                     cMassResidues[res] = res.center_of_mass()
 
-            linked = linkage(list(cMassResidues.values()), 'single')
+            linked = linkage(list(cMassResidues.values()), resLink.lower())
             clusterIdxs = fcluster(linked, resDist, 'distance')
 
             clusters = {}

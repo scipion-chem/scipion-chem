@@ -244,18 +244,19 @@ class AddNResidueWizard(AddROIWizard):
     protocol = form.protocol
     resTypes, resDist = getattr(protocol, inputParams[0]).get(), \
                         getattr(protocol, inputParams[1]).get()
+    resLink = protocol.getEnumText(inputParams[2])
 
     prevList, lenPrev = self.getPrevList(protocol, outputParam)
 
-    roiDef = '%s) Near_Residues: {"residues": "%s", "distance": "%s"}\n' % \
-             (lenPrev, resTypes, resDist)
+    roiDef = '%s) Near_Residues: {"residues": "%s", "distance": "%s", "linkage": "%s"}\n' % \
+             (lenPrev, resTypes, resDist, resLink)
 
     form.setVar(outputParam[0], prevList + roiDef)
 
 
 AddNResidueWizard().addTarget(protocol=ProtDefineStructROIs,
                               targets=['addNRes'],
-                              inputs=['resNRes', 'resDistance'],
+                              inputs=['resNRes', 'resDistance', 'linkNRes'],
                               outputs=['inROIs'])
 
 
