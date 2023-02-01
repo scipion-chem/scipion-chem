@@ -63,11 +63,14 @@ class ProtocolPainsRdkitFiltering(EMProtocol):
                       help='Select the molecules to be filtered')
 
         form.addParam('referenceMolecule', params.BooleanParam, default=False,
-                      label='Custom PAINS file: ')
+                      label='Custom PAINS file: ',
+                      help='Whether to use RDKit default PAINS substructures or provide a file with custom PAINS'
+                           ' substructures.')
 
         form.addParam('painsFile', params.PathParam, condition='referenceMolecule',
                       label="Reference file: ",
-                      help='Custom PAINS file to use for filtering')
+                      help='Custom PAINS file to use for filtering. Each line must contain a first column with a '
+                           'SMARTS string and a second column with a short description.')
 
 
     # --------------------------- STEPS functions ------------------------------

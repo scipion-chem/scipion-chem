@@ -37,6 +37,9 @@ from pwchem.utils import *
 
 scriptName = 'ADME_script.py'
 
+LIPINSKI, RO3 = 'Lipinski Rule of 5', 'Rule of 3'
+_ruleChoices = [LIPINSKI, RO3]
+RDIC = {LIPINSKI: 'ro5', RO3: 'ro3'}
 
 class ProtocolADMEFiltering(EMProtocol):
     """
@@ -47,7 +50,7 @@ class ProtocolADMEFiltering(EMProtocol):
     It is possible to analyze molecules in  mol, mol2, pdb, sdf and smi format.
     """
     _label = 'ADME ligand filtering'
-    _ruleChoices = ['ro5', 'ro3']
+
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -60,7 +63,7 @@ class ProtocolADMEFiltering(EMProtocol):
 
         group = form.addGroup('Descriptors')
         group.addParam('ruleChoice', params.EnumParam, default=0, label='Filtering Rule: ',
-                       choices=self._ruleChoices,
+                       choices=_ruleChoices,
                        help="Chosen rule to perform the ADME (Absortion, Distribution, Metabolism, Excretion) filtering.\nro5: Lipinski's rule of five.\n"
                             "ro3: Rule of three\n"
                             "https://en.wikipedia.org/wiki/Lipinski%27s_rule_of_five")
@@ -122,7 +125,7 @@ class ProtocolADMEFiltering(EMProtocol):
         return paramsFile
 
     def getRule(self):
-        function = self.getEnumText('ruleChoice')
+        function = RDIC[self.getEnumText('ruleChoice')]
         return function
 
     def parseResults(self, outputFile):
