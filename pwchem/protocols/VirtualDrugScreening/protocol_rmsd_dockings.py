@@ -27,8 +27,6 @@
 
 
 """
-This protocol is used to score docking positions obtained by several software using descriptors and score functions
-available in the Open Drug Discovery Toolkit (ODDT, https://github.com/oddt/oddt)
 
 """
 import os, re
@@ -46,7 +44,8 @@ AS, MOLS = 0, 1
 
 class ProtocolRMSDDocking(EMProtocol):
     """
-    Executes the scoring of a set of molecules which have been previously docked.
+    Calculates the RMSD between a docked molecule and another molecule in the same receptor, either from an AtomStruct
+    or a docked SetOfSmallMolecules
     """
     _label = 'RMSD docking'
 
