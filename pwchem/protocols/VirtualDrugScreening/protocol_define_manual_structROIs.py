@@ -112,15 +112,17 @@ class ProtDefineStructROIs(EMProtocol):
                        help='Maximum distance between two chain atoms to considered them part of the interface')
 
         group.addParam('resNRes', params.StringParam, default='', label='Residue pattern: ',
+                       condition='origin=={}'.format(NRES),
                        help='Define a ROI by specifying the number of residues of a specific type that must be near '
                             'each other. Use the 3 letters code, comma separated. '
                             '\ne.g: 3 cysteines: "CYS, CYS, CYS"')
-        group.addParam('resDistance', params.FloatParam, default='5.0',
+        group.addParam('resDistance', params.FloatParam, default='5.0', condition='origin=={}'.format(NRES),
                        label='Maximum distance between the residues (A): ',
                        help='Maximum distance between the center of mass of two residues to consider them part '
                             'of the ROI.')
         group.addParam('linkNRes', params.EnumParam, default=0, label='Clustering linkage type for near residues: ',
                        choices=['Single', 'Complete', 'Average', 'Centroid', 'Median', 'Ward'],
+                       condition='origin=={}'.format(NRES),
                        help='Define the type of linkage oof the clustering that will define the Near Residues ROI.\n'
                             'Single linkage will group residues where each of them is closer than the threshold to at '
                             'least one other residue.\nComplete linkage will require all residue pairs to be closer '
