@@ -478,8 +478,18 @@ def removeNumberFromStr(s):
         if not i.isdigit():
             newS += i
         else:
-            break
+            pass
     return newS
+
+def getNumberFromStr(s):
+    num = ''
+    for i in s:
+        if not i.isdigit():
+            pass
+        else:
+            num += i
+    return num
+
 
 def calculateDistance(coord1, coord2):
     dist = 0

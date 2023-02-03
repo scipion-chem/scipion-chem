@@ -158,7 +158,8 @@ class SequenceVariants(data.EMFile):
         subsDic = {}
         for mutation in mutList:
             mutation = mutation.strip()
-            subsDic[int(mutation[1:-1])] = mutation[-1]
+            mutIdx = getNumberFromStr(mutation)
+            subsDic[int(mutIdx)] = mutation.split(mutIdx)[1]
 
         letters_sequence = list(sequence)
         for mutPos in subsDic:
@@ -166,6 +167,24 @@ class SequenceVariants(data.EMFile):
 
         mutatedSequence = ''.join(letters_sequence)
         return mutatedSequence
+
+    def exportToFile(self, outPath):
+        if os.path.exists(outPath):
+            os.remove(outPath)
+        wholeSeq = self.getSequence()
+        self._sequence.exportToFile(outPath)
+
+        var2Mut = self.getMutationsInLineage()
+        for var in var2Mut:
+            tmpSeq = ['-'] * len(wholeSeq)
+            for mut in var2Mut[var]:
+                mut = mut.strip()
+                mutIdx = getNumberFromStr(mut)
+                tmpSeq[int(mutIdx)-1] = mut.split(mutIdx)[1]
+            tmpSeq = ''.join(tmpSeq)
+
+            tmpSeqObj = Sequence(sequence=tmpSeq, id=var)
+            tmpSeqObj.appendToFile(outPath, doClean=False)
 
 
 class SmallMolecule(data.EMObject):
@@ -540,10 +559,12 @@ class SetOfSequenceROIs(data.EMSet):
         wholeSeq = self.getFirstItem().getSequence()
         self.getFirstItem()._sequence.exportToFile(outPath)
         for roi in self:
+            tmpSeq = ['-'] * len(wholeSeq)
             roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
-            tmpSeq = (roiIdx - 1) * '-' + roiSeq + (len(wholeSeq) - len(roiSeq) - roiIdx + 1) * '-'
-            tmpSeqObj = Sequence(sequence=tmpSeq, id=roi._ROISequence.getId())
-            tmpSeqObj.appendToFile(outPath)
+            tmpSeq[roiIdx-1] = roiSeq
+
+            tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
+            tmpSeqObj.appendToFile(outPath, doClean=False)
 
 
 class StructROI(data.EMFile):
