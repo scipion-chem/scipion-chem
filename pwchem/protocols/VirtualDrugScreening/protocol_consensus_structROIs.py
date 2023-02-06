@@ -77,6 +77,10 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimun number of overlapping structural regions',
                       help="Min number of structural regions to be considered consensus StructROIs")
+        form.addParam('sameClust', params.BooleanParam, default=True,
+                      label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Whether to count overlapping structural ROIs from the same input set when calculating the '
+                           'cluster size')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -88,14 +92,16 @@ class ProtocolConsensusStructROIs(EMProtocol):
         pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
         # Getting the representative of the clusters from any of the inputs
-        self.consensusPockets = self.cluster2representative(pocketClusters)
+        self.consensusPockets = self.cluster2representative(pocketClusters, pocketDic)
 
-        self.indepConsensusSets = {}
-        # Separating clusters by input set
-        indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
-        for inSetId in indepClustersDic:
-            # Getting independent representative for each input set
-            self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+        if self.outIndv.get():
+            self.indepConsensusSets = {}
+            # Separating clusters by input set
+            indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
+            for inSetId in indepClustersDic:
+                # Getting independent representative for each input set
+                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId],
+                                                                               pocketDic, minSize=1)
 
 
     def createOutputStep(self):
@@ -201,14 +207,14 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 clusters = newClusters.copy()
         return clusters
 
-    def getIndepClusters(self, clusters, molDic):
+    def getIndepClusters(self, clusters, pocketDic):
         indepClustersDic = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
                 curIndepCluster = {}
                 for pock in clust:
                     curPockFile = pock.getFileName()
-                    inSetId = molDic[curPockFile]
+                    inSetId = pocketDic[curPockFile]
                     if inSetId in curIndepCluster:
                         curIndepCluster[inSetId] += [pock]
                     else:
@@ -221,13 +227,21 @@ class ProtocolConsensusStructROIs(EMProtocol):
                         indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
         return indepClustersDic
 
-    def cluster2representative(self, clusters, minSize=None):
+    def countPocketsInCluster(self, cluster, pocketDic, sameClust=True):
+        setIds = []
+        for pock in cluster:
+            setId = pocketDic[pock.getFileName()]
+            if sameClust or not setId in setIds:
+                setIds.append(setId)
+        return len(setIds)
+
+    def cluster2representative(self, clusters, pocketDic, minSize=None):
         if minSize == None:
             minSize = self.numOfOverlap.get()
 
         representatives = []
         for clust in clusters:
-            if len(clust) >= minSize:
+            if self.countPocketsInCluster(clust, pocketDic, self.sameClust.get()) >= minSize:
                 if self.action.get() == MAXVOL:
                     outPocket = self.getMaxVolumePocket(clust)
                 elif self.action.get() == MAXSURF:
@@ -252,7 +266,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         maxArea, maxVol = 0, 0
         for pocket in cluster:
             pocketArea = pocket.getSurfaceConvexArea()
-            if pocketArea > maxArea:
+            if pocketArea >= maxArea:
                 maxArea = pocketArea
                 outPocket = pocket.clone()
         return outPocket

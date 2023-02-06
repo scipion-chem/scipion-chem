@@ -667,9 +667,9 @@ class StructROI(data.EMFile):
         self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
 
     # Complex pocket attributes functions
-    def buildContactAtoms(self, calculate=False, maxDistance=4):
+    def buildContactAtoms(self, calculate=False, maxDistance=5):
         '''Return the reported proteins atoms in contact with the structural ROI.
-        If not reported, returns the protein atoms at less than 4A than any ROI point'''
+        If not reported, returns the protein atoms at less than 5A than any ROI point'''
         contactCodes = self.getContactAtoms()
         contactAtoms = []
         if str(contactCodes) != 'None' and not calculate:
@@ -755,9 +755,11 @@ class StructROI(data.EMFile):
         '''Calculate the convex volume of the protein contact atoms'''
         cAtoms = self.buildContactAtoms()
         cCoords = self.getAtomsCoords(cAtoms)
-        if len(cCoords) >= 3:
+        if len(cCoords) >= 4:
             cHull = spatial.ConvexHull(cCoords)
             return cHull.volume
+        else:
+            return len(cCoords)
 
     def getSurfaceConvexArea(self):
         '''Calculate the convex area of the protein contact atoms'''
@@ -766,6 +768,8 @@ class StructROI(data.EMFile):
         if len(cCoords) >= 3:
             cHull = spatial.ConvexHull(cCoords)
             return cHull.area
+        else:
+            return len(cCoords)
 
     def getPocketBox(self):
         '''Return the coordinates of the 2 corners determining the box (ortogonal to axis) where the pocket fits in
@@ -1155,9 +1159,12 @@ class SetOfStructROIs(data.EMSet):
         rawStr = getRawPDBStr(pocketFile, ter=False).strip()
         if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
             for line in rawStr.split('\n'):
-                line = line.split()
-                replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], 'Ve']
-                pdbLine = writePDBLine(replacements)
+                try:
+                    pdbLine = writePDBLine(replacements)
+                except:
+                    sline = splitPDBLine(line)
+                    replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:-1], 'Ve']
+                    pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'P2Rank' or pocket.getPocketClass() == 'Standard':
