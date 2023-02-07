@@ -31,7 +31,7 @@ to select the radius of the sphere that contains the protein or a desired zone.
 """
 
 # Imports
-
+from pyworkflow.object import Pointer, PointerList
 from pwem.objects import AtomStruct
 from pwem.wizards.wizard import EmWizard, VariableWizard
 from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
@@ -48,11 +48,19 @@ class GetRadiusProtein(VariableWizard):
         elif issubclass(type(inputObj), SetOfSmallMolecules):
             return inputObj.getProteinFile()
 
+    def getInputObj(self, protocol, inputParams):
+        inputPointer = getattr(protocol, inputParams[0])
+        if type(inputPointer) == PointerList:
+            inpObj = inputPointer[0].get()
+        elif type(inputPointer) == Pointer:
+            inpObj = inputPointer.get()
+        return inpObj
+
     def show(self, form):
         inputParams, outputParam = self.getInputOutput(form)
         protocol = form.protocol
 
-        inputObj = getattr(protocol, inputParams[0]).get()
+        inputObj = self.getInputObj(protocol, inputParams)
         if not inputObj:
             print('You must specify input structure')
             return
