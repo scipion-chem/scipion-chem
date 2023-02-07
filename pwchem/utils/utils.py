@@ -382,18 +382,23 @@ def calculate_centerMass(atomStructFile):
         print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
         return
 
-def parseAtomTypes(pdbFile):
+def parseAtomTypes(pdbqtFile, allowed=None):
     atomTypes = set([])
-    with open(pdbFile) as f:
-        for line in f:
-            if line.startswith('ATOM') or line.startswith('HETATM'):
-              pLine = line.split()
-              try:
-                  at = pLine[12]
-              except:
-                  at = splitPDBLine(line, rosetta=True)[12]
+    if pdbqtFile.endswith('.pdbqt'):
+        with open(pdbqtFile) as f:
+            for line in f:
+                if line.startswith('ATOM') or line.startswith('HETATM'):
+                    pLine = line.split()
+                    at = pLine[-1]
+                    if allowed is None or at in allowed:
+                        atomTypes.add(at)
+    else:
+        struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
-              atomTypes.add(at)
+        for atom in struct.get_atoms():
+            atomId = atom.get_id()
+            atomTypes.add(removeNumberFromStr(atomId))
+
     return atomTypes
 
 
