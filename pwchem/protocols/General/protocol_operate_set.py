@@ -31,6 +31,8 @@ from pwem.protocols import EMProtocol
 from pyworkflow.object import Float, Integer
 from pyworkflow.protocol import params
 
+from pwchem.utils import fillEmptyAttributes
+
 UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK = list(range(7))
 
 class ProtChemOperateSet(EMProtocol):
@@ -101,15 +103,17 @@ class ProtChemOperateSet(EMProtocol):
                 opId = self.getAttrValue(item, opAttr)
                 self.addItem(outputDict, opId, item, allowDup=False)
                 
-        elif self.operation.get() == UNION:  
-            for inSet in self.inputMultiSet:
+        elif self.operation.get() == UNION:
+            inputSets = fillEmptyAttributes(self.inputMultiSet)
+            for inSet in inputSets:
                 for item in inSet.get():
                     opId = self.getAttrValue(item, opAttr)
                     self.addItem(outputDict, opId, item)
                   
         elif self.operation.get() == INTERSECTION:
             idsLists = []
-            for inSet in self.inputMultiSet:
+            inputSets = fillEmptyAttributes(self.inputMultiSet)
+            for inSet in inputSets:
                 curList = []
                 for item in inSet.get():
                     opId = self.getAttrValue(item, opAttr)
