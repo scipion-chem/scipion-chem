@@ -83,7 +83,7 @@ class ProtocolConsensusDocking(EMProtocol):
                       label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Creates an output set related to each input set, with the elements from each input'
                            'present in the consensus clusters')
-        form.addParam('sameClust', params.BooleanParam, default=False,
+        form.addParam('sameClust', params.BooleanParam, default=True,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping docked molecules from the same input set when calculating the '
                            'cluster size')
