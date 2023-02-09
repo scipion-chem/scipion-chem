@@ -206,7 +206,7 @@ class ProtChemOperateSet(EMProtocol):
                     self.addItem(outputDict, opId, item)
 
         if len(outputDict)>0:
-            outputSet = self.getRepInputSet().create(self._getPath())
+            outputSet = self.getRepInputSet().createCopy(self._getPath(), copyInfo=True)
             i = 1
             for itemId in outputDict:
                 for item in outputDict[itemId]:
