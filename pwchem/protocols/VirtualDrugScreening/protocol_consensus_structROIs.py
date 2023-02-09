@@ -77,7 +77,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimun number of overlapping structural regions',
                       help="Min number of structural regions to be considered consensus StructROIs")
-        form.addParam('sameClust', params.BooleanParam, default=True,
+        form.addParam('sameClust', params.BooleanParam, default=False,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping structural ROIs from the same input set when calculating the '
                            'cluster size')
@@ -227,11 +227,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
                         indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
         return indepClustersDic
 
-    def countPocketsInCluster(self, cluster, pocketDic, sameClust=True):
+    def countPocketsInCluster(self, cluster, pocketDic):
         setIds = []
         for pock in cluster:
             setId = pocketDic[pock.getFileName()]
-            if sameClust or not setId in setIds:
+            if self.sameClust.get() or not setId in setIds:
                 setIds.append(setId)
         return len(setIds)
 
@@ -241,7 +241,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
         representatives = []
         for clust in clusters:
-            if self.countPocketsInCluster(clust, pocketDic, self.sameClust.get()) >= minSize:
+            if self.countPocketsInCluster(clust, pocketDic) >= minSize:
                 if self.action.get() == MAXVOL:
                     outPocket = self.getMaxVolumePocket(clust)
                 elif self.action.get() == MAXSURF:
