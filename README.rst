@@ -52,12 +52,14 @@ The following comand will launch the installation of the plugin, together with s
 - **External software**
 
 External software currently installed by scipion-chem:
-    - PLIP: Docking visualization in PyMol
-    - OpenBabel: utils for small molecules
-    - RDKIT: utils for small molecules
-    - MGLTools: utils for small molecules, docking... (includes AutodockTools)
-    - JChemPaint: Java program to manually draw small molecules
-    - Pymol: installed as the main viewer of Scipion-chem
+
+- **OpenBabel** and **RDKit**: the main small molecule handlers and converters
+- **MGLTools**: additional utils for small molecules, docking, ... (includes AutoDockTools)
+- **JChemPaint**: Java program to manually draw small molecules.
+- **PyMol**: main viewer of Scipion-Chem for small molecules and structures
+- **VMD**: secondary viewer of Scipion-Chem for structures and Molecular Dynamics
+- **AliView**: main viewer for sequences
+- **PLIP**: specialized viewer for docking interactions in PyMol
 
 ===============
 Buildbot status
