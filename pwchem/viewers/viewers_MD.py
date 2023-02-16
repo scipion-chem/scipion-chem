@@ -58,7 +58,7 @@ class MDSystemViewer(pwviewer.Viewer):
         return [PyMolView(os.path.abspath(outPml), cwd=os.path.dirname(trjFile))]
 
 class MDSystemPViewer(pwviewer.ProtocolViewer):
-    """ Visualize the output of Desmond simulation """
+    """ Visualize the output of Molecular Dynamics simulation """
     _label = 'Viewer Molecular Dynamics System'
     _targets = [MDSystem]
 
