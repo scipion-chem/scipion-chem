@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors: Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# *          Carlos Oscar Sorzano (coss@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,9 +26,10 @@
 # **************************************************************************
 
 import random as rd
-import os, shutil
+import os, shutil, json, requests
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser
+from Bio.PDB.SASA import ShrakeRupley
 
 from pwem.convert import AtomicStructHandler, SequenceHandler
 from pwem.convert.atom_struct import cifToPdb
@@ -35,6 +37,7 @@ from pwem.objects.data import Sequence, Object, String, Integer, Float
 
 from pwchem.constants import *
 from pwchem import Plugin as pwchemPlugin
+from .scriptUtils import *
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt':'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -46,20 +49,12 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
-def makeSubsets(oriSet, nt):
-    '''Returns a list of subsets, given a set and the number of subsets'''
-    subsets = []
-    nObjs = len(oriSet) // nt
-    it, curSet = 0, []
-    for obj in oriSet:
-        curSet.append(obj.clone())
-        if len(curSet) == nObjs and it < nt - 1:
-            subsets.append(curSet)
-            curSet, it = [], it + 1
 
-    if len(curSet) > 0:
-        subsets.append(curSet)
-    return subsets
+def getVarName(var):
+    return [ i for i, a in locals().items() if a == var][0]
+
+def getBaseName(file):
+    return os.path.splitext(os.path.basename(file.strip()))[0]
 
 def getLigCoords(ASFile, ligName):
     '''Return the coordinates of the ligand specified in the atomic structure file'''
@@ -81,6 +76,20 @@ def getLigCoords(ASFile, ligName):
                     for atom in residue:
                         coords.append(list(atom.get_coord()))
     return coords
+
+def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
+    if not structureHandler:
+        structureHandler = AtomicStructHandler()
+
+    url = "https://www.rcsb.org/structure/" + str(pdbID)
+    try:
+        response = requests.get(url)
+    except:
+        raise Exception("Cannot connect to PDB server")
+    if (response.status_code >= 400) and (response.status_code < 500):
+        raise Exception("%s is a wrong PDB ID" % pdbID)
+    fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir=outDir)
+    return fileName
 
 def getRawPDBStr(pdbFile, ter=True):
     outStr=''
@@ -208,6 +217,32 @@ def writeSurfPML(pockets, pmlFileName):
     with open(pmlFileName, 'w') as f:
         f.write(createSurfacePml(pockets))
 
+def pdbqt2other(protocol, pdbqtFile, otherFile):
+    '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
+    inName, inExt = os.path.splitext(os.path.basename(otherFile))
+    if not inExt in ['.pdb', '.mol2', '.sdf', '.mol']:
+        inExt, otherFile = 'pdb', otherFile.replace(inExt, '.pdb')
+
+    args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
+    runOpenBabel(protocol=protocol, args=args, popen=True)
+    return os.path.abspath(otherFile)
+
+def convertToSdf(protocol,  molFile, sdfFile=None, overWrite=False):
+    '''Convert molecule files to sdf using openbabel'''
+    if molFile.endswith('.sdf'):
+        return molFile
+    if not sdfFile:
+        baseName = os.path.splitext(os.path.basename(molFile))[0]
+        outDir = os.path.abspath(protocol._getTmpPath())
+        sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
+    else:
+        baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+        outDir = os.path.abspath(os.path.dirname(sdfFile))
+    if not os.path.exists(sdfFile) or overWrite:
+        args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(molFile),
+                                                                              os.path.abspath(outDir), baseName)
+        pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+    return sdfFile
 
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
     pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
@@ -347,18 +382,23 @@ def calculate_centerMass(atomStructFile):
         print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
         return
 
-def parseAtomTypes(pdbFile):
+def parseAtomTypes(pdbqtFile, allowed=None):
     atomTypes = set([])
-    with open(pdbFile) as f:
-        for line in f:
-            if line.startswith('ATOM') or line.startswith('HETATM'):
-              pLine = line.split()
-              try:
-                  at = pLine[12]
-              except:
-                  at = splitPDBLine(line, rosetta=True)[12]
+    if pdbqtFile.endswith('.pdbqt'):
+        with open(pdbqtFile) as f:
+            for line in f:
+                if line.startswith('ATOM') or line.startswith('HETATM'):
+                    pLine = line.split()
+                    at = pLine[-1]
+                    if allowed is None or at in allowed:
+                        atomTypes.add(at)
+    else:
+        struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
-              atomTypes.add(at)
+        for atom in struct.get_atoms():
+            atomId = atom.get_id()
+            atomTypes.add(removeNumberFromStr(atomId))
+
     return atomTypes
 
 
@@ -443,8 +483,18 @@ def removeNumberFromStr(s):
         if not i.isdigit():
             newS += i
         else:
-            break
+            pass
     return newS
+
+def getNumberFromStr(s):
+    num = ''
+    for i in s:
+        if not i.isdigit():
+            pass
+        else:
+            num += i
+    return num
+
 
 def calculateDistance(coord1, coord2):
     dist = 0
@@ -523,3 +573,42 @@ def getAllAttributes(inputSets):
                 attributes[attrK] = value.clone()
                 attributes[attrK].set(None)
     return attributes
+
+def getBaseFileName(filename):
+    return os.path.splitext(os.path.basename(filename))[0]
+
+
+
+################# Wizard utils #####################
+
+def getChainIds(chainStr):
+    '''Parses a line of json with the description of a chain or chains and returns the ids'''
+    chainJson = json.loads(chainStr)
+    if 'chain' in chainJson:
+      chain_ids = [chainJson["chain"].upper().strip()]
+    elif 'model-chain' in chainJson:
+      modelChains = chainJson["model-chain"].upper().strip()
+      chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+    return chain_ids
+
+def calculate_SASA(structFile, outFile):
+    if structFile.endswith('.pdb') or structFile.endswith('.ent'):
+        p = PDBParser(QUIET=1)
+    elif structFile.endswith('.cif'):
+        p = MMCIFParser(QUIET=1)
+    struct = p.get_structure("SASAstruct", structFile)
+
+    sr = ShrakeRupley()
+    sr.compute(struct, level="R")
+
+    with open(outFile, 'w') as f:
+        for model in struct:
+            modelID = model.get_id()
+            for chain in model:
+                chainID = chain.get_id()
+                for residue in chain:
+                    resId = residue.get_id()[1]
+                    f.write('{}:{}\t{}\n'.format(chainID, resId, residue.sasa))
+
+
+

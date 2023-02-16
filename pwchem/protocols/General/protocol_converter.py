@@ -2,6 +2,7 @@
 # **************************************************************************
 # *
 # * Authors:  Alberto Manuel Parra Pérez (amparraperez@gmail.com)
+# *           James Krieger (jamesmkrieger@gmail.com)
 # *
 # * Biocomputing Unit, CNB-CSIC
 # *
@@ -26,101 +27,78 @@
 # **************************************************************************
 
 
-import os
+import os, shutil, parmed, mdtraj
 
-from pyworkflow.protocol.params import PointerParam, EnumParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
+from pwem.convert.atom_struct import toCIF, toPdb
 
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel
+from pwchem import Plugin
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
+from pwchem.utils import runOpenBabel, getBaseFileName
 
-
-def inputArg(fn):  # Input format file (fn)
-
-    if fn.endswith('.pdb'):    # Protein Data Bank
-        args = "-ipdb"
-    elif fn.endswith('.cif'):  # cif (crystallography information)
-        args = "-icif"
-
-    elif fn.endswith('.sdf'):  # MDL MOL FORMAT
-        args = "-isdf"
-    elif fn.endswith('.sd'):   # MDL MOL FORMAT
-        args = "-isd"
-
-    elif fn.endswith('.mol2'): # Sybyl Mol2 format (3D)
-        args = "-imol2"
-    elif fn.endswith('.smi') or fn.endswith('.smiles'):  # Smiles format (2D)
-        args = "-ismi"
-    else:
-        error = " Input format was not recognize (The allowed format are pdb, cif, mol2, sdf and smi)"
-        raise Exception(error)
-    return args + " %s" %fn
-
-
-
-def outputArg(fnRoot, format, protocol):
-    # Output format and final file path. OpenBabel recognize the format depending on the file extension
-
-    if format == 0:
-        fnOut = protocol._getExtraPath(fnRoot + ".pdb")
-        args = " -O %s" % (fnRoot + ".pdb")
-    elif format == 1:
-        fnOut = protocol._getExtraPath(fnRoot + ".cif")
-        args = " -O  %s" % (fnRoot + ".cif")
-    elif format == 2:
-        fnOut = protocol._getExtraPath(fnRoot + ".mol2")
-        args = " -O  %s" % (fnRoot + ".mol2")
-    elif format == 3:
-        fnOut = protocol._getExtraPath(fnRoot + ".sdf")
-        args = " -O  %s" % (fnRoot + ".sdf")
-    elif format == 4:
-        fnOut = protocol._getExtraPath(fnRoot + ".smi")
-        args = " -O  %s" % (fnRoot + ".smi")
-
-    return fnOut, args
-
-
-
-
+RDKIT, OBABEL = 'RDKit', 'OpenBabel'
+extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
 
 class ConvertStructures(EMProtocol):
     """
     Convert a set of input ligands or a protein structure to a specific file format
     """
 
-
-    _label = 'Convert format'
+    _label = 'Convert structure format'
     _program = ""
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputType', EnumParam, default=0,
-                       choices=["Small molecules", 'Target structure'],
-                       label='Input type')
+        group = form.addGroup('Input')
+        group.addParam('inputType', EnumParam, default=0,
+                       choices=["Small molecules", 'Target structure', 'MDSystem'], label='Input type: ',
+                       help='Input type to convert: small molecule, protein structure or Molecular Dynamics system.')
 
-        form.addParam('inputSmallMols', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
+        group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
                       label='Set of small molecules:', allowsNull=False,
                       help="The allowed format are pdb, cif, mol2, sdf and smi")
 
-        form.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
-                       choices=['PDB', 'cif', 'Mol2', 'SDF', 'Smiles'],
+        group.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
+                      condition='inputType==1', label='Input structure:', allowsNull=False,
+                      help="The allowed format are pdb or cif")
+
+        group.addParam('inputMDSystem', PointerParam, pointerClass="MDSystem",
+                       condition='inputType==2', label='Input MDSystem:', allowsNull=False,
+                       help="Any system with a system file and trajectory file that mdtraj can read")
+
+        group = form.addGroup('Output')
+        group.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
+                       choices=['PDB', 'Mol2', 'SDF', 'Smiles'],
                        label='Output format',
-                       help = "If you try to convert a 2D format (ex. smi) to 3D format,"
-                              "you will be able to do this but it is wrong")
+                       help="Output format for the converted molecules")
+
+        group.addParam('useManager', EnumParam, default=0, label='Convert using: ',
+                      condition='inputType==0', choices=[RDKIT, OBABEL],
+                      help='Whether to convert the input molecules using RDKit or OpenBabel')
 
 
-        form.addParam('inputStructure', PointerParam, pointerClass= "AtomStruct",
-                      condition='inputType==1',
-                      label='Input structure:', allowsNull=False,
-                      help="The allowed format are pdb and cif")
+        group.addParam('outputFormatTarget', EnumParam, default=0,
+                      condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
 
-        form.addParam('outputFormatTarget', EnumParam, default=2,
-                      condition='inputType==1',
-                       choices=['PDB', 'cif', 'Mol2'],
-                       label='Output format')
+        group.addParam('convSysFile', BooleanParam, default=False, label='Convert coordinates file: ',
+                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+        group.addParam('outputSysFormat', EnumParam, default=0, label='System coordinates output format: ',
+                       condition='inputType==2 and convSysFile', choices=['PDB'],
+                       help="Output format for the coordinates of the system.")
+        
+        group.addParam('convTopFile', BooleanParam, default=True, label='Convert topology file: ',
+                       condition='inputType==2', help="Convert topology file from the MDSystem")
+        group.addParam('outputTopFormat', EnumParam, default=0, label='Trajectory output format: ',
+                       condition='inputType==2 and convTopFile', choices=['PSF', 'TOP', 'PRMTOP'],
+                       help="Output format for the topology.")
 
-
+        group.addParam('convTrjFile', BooleanParam, default=True, label='Convert trajectory file: ',
+                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+        group.addParam('outputTrjFormat', EnumParam, default=0, label='Trajectory output format: ',
+                       condition='inputType==2 and convTrjFile', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
+                       help="Output format for the trajectory.")
 
     # --------------------------- Steps functions --------------------
 
@@ -132,52 +110,113 @@ class ConvertStructures(EMProtocol):
         if self.inputType==0:  # Small molecules
             outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
 
-            error = []  # Save the file paths that could not be transformed
-            for mol in self.inputSmallMols.get():
+            self.convErrors = []  # Save the file paths that could not be transformed
+            for mol in self.inputSmallMolecules.get():
+                fnSmall = os.path.abspath(mol.smallMoleculeFile.get())
+                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
 
-                try:
-                    # Input file
-                    fnSmall = os.path.abspath(mol.smallMoleculeFile.get())
-                    fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-                    args = inputArg(fnSmall)
+                outFormat = extDic[self.getEnumText('outputFormatSmall')]
+                outDir = os.path.abspath(self._getExtraPath())
+                fnOut = os.path.join(outDir, fnRoot + outFormat)
 
-                    # Output file
-                    fnOut, argout = outputArg(fnRoot, self.outputFormatSmall.get(), self)
-                    args += argout
+                args = ' -i "{}" -of {} -o {} --outputDir {}'.format(fnSmall, outFormat, fnOut, outDir)
+                if self.getEnumText('useManager') == OBABEL:
+                    Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                else:
+                    Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
 
-                    runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-
-                    smallMolecule = SmallMolecule(smallMolFilename=fnOut)
+                if os.path.exists(fnOut):
+                    smallMolecule = SmallMolecule(smallMolFilename=fnOut, molName='guess')
                     outputSmallMolecules.append(smallMolecule)
-
-                except:
-                    error.append(mol.smallMoleculeFile.get())
-
-
+                else:
+                    self.convErrors.append(fnRoot)
 
             if len(outputSmallMolecules) > 0:
-                print("The following entries could not be converted: %s" % error)
                 self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-                self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+                self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
-        else:
-            fnStructure = self.inputStructure.get().getFileName()
-            args = inputArg(os.path.abspath(fnStructure))
+            if len(self.convErrors) > 0:
+                print("The following entries could not be converted: %s" % ','.join(self.convErrors))
+
+        elif self.inputType == 1:
+            fnStructure = os.path.abspath(self.inputStructure.get().getFileName())
+            args = self.inputArg(os.path.abspath(fnStructure))
             fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
 
-            fnOut, argout = outputArg(fnRoot, self.outputFormatTarget.get(), self)
+            outFormat = extDic[self.getEnumText('outputFormatTarget')]
+            outDir = os.path.abspath(self._getExtraPath())
+            fnOut = os.path.join(outDir, fnRoot + outFormat)
 
-            args += argout
+            if outFormat == '.pdb':
+                convFn = toPdb(fnStructure, fnOut)
+            elif outFormat == '.cif':
+                convFn = toCIF(fnStructure, fnOut)
 
-            runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getPath()))
+            if convFn == fnStructure:
+                shutil.copy(convFn, fnOut)
 
-            target = AtomStruct(filename=fnOut)
-            self._defineOutputs(outputStructure=target)
-            self._defineSourceRelation(self.inputStructure, target)
+            if os.path.exists(fnOut):
+                target = AtomStruct(filename=fnOut)
+                self._defineOutputs(outputStructure=target)
+                self._defineSourceRelation(self.inputStructure, target)
 
+        elif self.inputType == 2:
+            inSystem = self.inputMDSystem.get()
+            sysFile = inSystem.getSystemFile()
+
+            if self.convSysFile.get():
+                system = mdtraj.load(sysFile, top=sysFile)
+                sysFile = self._getPath('{}.{}'.format(getBaseFileName(sysFile),
+                                                        self.getEnumText('outputSysFormat').lower()))
+                system.save(sysFile)
+            outSystem = MDSystem(filename=sysFile)
+            outSystem.setSystemFile(sysFile)
+            
+            if inSystem.hasTopology():
+                topFile = inSystem.getTopologyFile()
+                
+                if self.convTopFile.get():
+                    top = parmed.load_file(topFile)
+                    topFile = self._getPath('{}.{}'.format(getBaseFileName(topFile),
+                                                            self.getEnumText('outputTopFormat').lower()))
+                    top.save(topFile)
+                outSystem.setTopologyFile(topFile)
+            
+            if inSystem.hasTrajectory():
+                trjFile = inSystem.getTrajectoryFile()
+
+                if self.convTrjFile.get():
+                    traj = mdtraj.load(trjFile, top=sysFile)
+                    trjFile = self._getPath('{}.{}'.format(getBaseFileName(trjFile),
+                                                            self.getEnumText('outputTrjFormat').lower()))
+                    traj.save(trjFile)
+                outSystem.setTrajectoryFile(trjFile)
+
+            self._defineOutputs(outputSystem=outSystem)
+            self._defineSourceRelation(self.inputMDSystem, outSystem)
+
+    def inputArg(self, fn):  # Input format file (fn)
+
+        if fn.endswith('.pdb'):  # Protein Data Bank
+            args = "-ipdb"
+        elif fn.endswith('.cif'):  # cif (crystallography information)
+            args = "-icif"
+
+        elif fn.endswith('.sdf'):  # MDL MOL FORMAT
+            args = "-isdf"
+        elif fn.endswith('.sd'):  # MDL MOL FORMAT
+            args = "-isd"
+
+        elif fn.endswith('.mol2'):  # Sybyl Mol2 format (3D)
+            args = "-imol2"
+        elif fn.endswith('.smi') or fn.endswith('.smiles'):  # Smiles format (2D)
+            args = "-ismi"
+        else:
+            error = " Input format was not recognize (The allowed format are pdb, cif, mol2, sdf and smi)"
+            raise Exception(error)
+        return args + " %s" % os.path.abspath(fn)
 
     # --------------------------- Summary functions --------------------
-
     def _summary(self):
         summary=[]
 
@@ -193,7 +232,7 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatSmall.get() == 4:
                 summary.append('Converted to Smiles')
 
-        else:
+        elif self.inputType.get()==1:
             if self.outputFormatTarget.get() == 0:
                 summary.append('Converted to PDB')
             elif self.outputFormatTarget.get() == 1:
@@ -201,3 +240,5 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatTarget.get() == 2:
                 summary.append('Converted to Mol2')
         return summary
+    
+    

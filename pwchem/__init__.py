@@ -39,7 +39,7 @@ from .bibtex import _bibtexStr
 
 from .constants import *
 
-_logo = 'scipion-chem.png'
+_logo = 'pwchem_logo.png'
 RDKIT = 'rdkit'
 
 class Plugin(pwem.Plugin):
@@ -50,19 +50,23 @@ class Plugin(pwem.Plugin):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        # cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
+        cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
         cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
+        # cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
     @classmethod
     def getEnvActivation(cls, env):
@@ -87,13 +91,11 @@ class Plugin(pwem.Plugin):
       plip_commands = 'conda create -y -n plip-env python=3.6 && '
       plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation())
       #Installing openbabel
-      plip_commands += 'conda install -y -c conda-forge/label/cf202003 openbabel && '
+      plip_commands += 'conda install -y -c conda-forge openbabel && '
       #Installing swig
       plip_commands += 'conda install -y -c conda-forge swig && '
       #Installing Pymol
       plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol && '
-      #Installing Biopython
-      plip_commands += 'conda install -y biopython=1.79 && '
       #Installing PLIP
       plip_commands += 'conda install -y -c conda-forge plip && touch {}'.format(PLIP_INSTALLED)
 
@@ -169,6 +171,22 @@ class Plugin(pwem.Plugin):
                        vars=installEnvVars)
 
     @classmethod
+    def addShapeitPackage(cls, env, default=False):
+      SHAPEIT_INSTALLED = 'shapeit_installed'
+
+      installationCmd = ' git clone https://github.com/rdkit/shape-it.git && cd shape-it && mkdir build && cd build &&'
+      installationCmd += ' cmake -DCMAKE_INSTALL_PREFIX=. .. && make && make install && cd ../.. &&'
+      installationCmd += ' mv shape-it/* . && rm -rf shape-it && mv build/shape-it . && mv build/libshapeit_lib.so . &&'
+      installationCmd += ' touch %s' % SHAPEIT_INSTALLED
+      installationCmd = [(installationCmd, SHAPEIT_INSTALLED)]
+
+      env.addPackage(SHAPEIT_DIC['name'], version=SHAPEIT_DIC['version'],
+                     tar='void.tgz',
+                     commands=installationCmd,
+                     neededProgs=cls.getDependencies(),
+                     default=default)
+
+    @classmethod
     def addAliViewPackage(cls, env, default=False):
       SEQS_INSTALLED = 'aliview_installed'
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
@@ -187,15 +205,23 @@ class Plugin(pwem.Plugin):
                      commands=seqs_commands,
                      default=True)
 
+    @classmethod
+    def addVMDPackage(cls, env, default=False):
+      VMD_INSTALLED = 'vmd_installed'
+
+      installationCmd = cls.getCondaActivationCmd()
+      installationCmd += ' conda create -y -c conda-forge -n vmd-env vmd &&'
+      installationCmd += ' touch %s' % VMD_INSTALLED
+      vmd_commands = [(installationCmd, VMD_INSTALLED)]
+
+      env.addPackage(VMD_DIC['name'], version=VMD_DIC['version'],
+                     tar='void.tgz',
+                     commands=vmd_commands,
+                     neededProgs=cls.getDependencies(),
+                     default=default)
+
 
     ##################### RUN CALLS #################33333
-
-    @classmethod
-    def runRDKit(cls, protocol, program, args, cwd=None):
-        """ Run rdkit command from a given protocol. """
-        fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
-        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
-
     @classmethod
     def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
       """ Run rdkit command from a given protocol. """
@@ -205,6 +231,21 @@ class Plugin(pwem.Plugin):
           protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
       else:
           subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+
+    @classmethod
+    def runShapeIt(cls, protocol, program, args, cwd=None):
+      """ Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
+      progDir = cls.getProgramHome(SHAPEIT_DIC)
+      progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
+      outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
+      protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
+      os.rename(progFile, outFile)
+
+    @classmethod
+    def runRDKit(cls, protocol, program, args, cwd=None):
+      """ Run rdkit command from a given protocol. """
+      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
+      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
     def runJChemPaint(cls, protocol, cwd=None):

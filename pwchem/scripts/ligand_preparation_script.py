@@ -110,7 +110,6 @@ if __name__ == "__main__":
             AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
 
             if 'numConf' in paramsDic:
-                print(8)
                 mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
                                                  paramsDic['numConf'], paramsDic['rmsThres'])
                 for cid, cMol in enumerate(mol.GetConformers()):

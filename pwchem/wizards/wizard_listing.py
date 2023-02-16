@@ -33,10 +33,55 @@ information such as name and number of residues.
 """
 
 # Imports
-import pwchem.protocols as chemprot
+from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
 
 class AddElementWizard(VariableWizard):
+    """Add the content of a parameter to another"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def curePrevList(self, prevList):
+        if not prevList:
+            prevList = ''
+        elif not prevList.endswith('\n'):
+            prevList += '\n'
+        return prevList
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        inParam = getattr(protocol, inputParam[0]).get()
+        if inParam and inParam.strip() != '':
+            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+            form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
+
+class Add_FilterExpression(AddElementWizard):
+    """Add ID or keyword in NCBI fetch protocol to the list"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        keep = protocol.getEnumText(inputParam[0])
+        subset = protocol.getEnumText(inputParam[1])
+
+        if subset and subset.strip() != '':
+            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+            towrite = prevList + '{} if in {}\n'.format(keep, subset)
+            form.setVar(outputParam[0], towrite)
+
+
+subGroups = list(ProtChemZINCFilter.subGroups.keys())
+subChoices = ['subset_{}'.format(sb) for sb in subGroups]
+Add_FilterExpression().addTarget(protocol=ProtChemZINCFilter,
+                                 targets=['addFilter'],
+                                 inputs=['mode', {'subGroup': subChoices}],
+                                 outputs=['filterList'])
+
+
+class AddElementSummaryWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""
     _targets, _inputs, _outputs = [], {}, {}
 
@@ -90,12 +135,12 @@ class DeleteElementWizard(VariableWizard):
             print('Incorrect index')
 
 
-AddElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])
 
-DeleteElementWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
+DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])

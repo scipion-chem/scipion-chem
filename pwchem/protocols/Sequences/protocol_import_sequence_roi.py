@@ -164,8 +164,8 @@ class ProtImportSeqROI(EMProtocol):
         roiID, roiDesc, seqDesc, uniprotID = sline[0], sline[10], sline[11], sline[12]
         if uniprotID.strip():
             if not uniprotID in roiDic:
-                print('Looking for {} in uniprot'.format(uniprotID))
-                seqDic, error = SequenceHandler().downloadSeqFromDatabase(uniprotID)
+                print('Looking for {} in UniProt'.format(uniprotID))
+                seqDic, error = SequenceHandler().downloadSeqFromDatabase(uniprotID, dataBase='UniProt')
                 if seqDic is None:
                     print("Error: ", error)
                 else:

@@ -44,7 +44,7 @@ import os, re, glob, shutil
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2, \
-  splitPDBLine, natural_sort, makeSubsets
+  splitPDBLine, natural_sort, makeSubsets, getBaseFileName
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):
@@ -71,7 +71,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """ Define the input parameters that will be used.
         """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputSmallMols', params.PointerParam, pointerClass="SetOfSmallMolecules",
+        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
                       label='Set of small molecules:', allowsNull=False,
                       help='It must be in pdb or mol2 format, you may use the converter')
 
@@ -134,24 +134,29 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         aSteps, cSteps = [], []
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
-        inputSubsets = makeSubsets(self.inputSmallMols.get(), nt - 1)
+        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('addChargesStep', subset, it, prerequisites=[])]
         if self.doConformers.get():
             for it, subset in enumerate(inputSubsets):
                 cSteps += [self._insertFunctionStep('conformersStep', subset, it, prerequisites=aSteps)]
-        self._insertFunctionStep('createOutput', prerequisites=cSteps)
+            aSteps = cSteps
+        self._insertFunctionStep('createOutput', prerequisites=aSteps)
 
     def addChargesStep(self, molSet, it):
         """ Assign the charges using a method available
             in the open-access and free program openbabel
         """
         for mol in molSet:
-            fnSmall = mol.clone().getFileName()
-            fnMol = os.path.split(fnSmall)[1]      # Name of complete file
-            fnRoot, fnFormat = os.path.splitext(fnMol)    # Molecule name: ID, format
+            fnSmall = mol.getFileName()
+            fnRoot = getBaseFileName(fnSmall)
+            _, fnFormat = os.path.splitext(fnSmall)
 
-            fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
+            try:
+                fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
+            except:
+                print('Atom reordering could not be performed in {}, this could lead to errors in ahead protocols'
+                      .format(fnRoot))
 
             # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
             # 2. Add and calculate partial charges with different methods
@@ -177,8 +182,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         # 3. Generate mol2 conformers file for each molecule with OpenBabel
         with open(self._getExtraPath('failed_{}.txt'.format(it)), 'w') as fEr:
             for mol in molSet:
-                fnSmall = mol.clone().getFileName()
-                fnRoot = os.path.splitext(os.path.basename(fnSmall))[0]
+                fnSmall = mol.getFileName()
+                fnRoot = getBaseFileName(fnSmall)
                 file = os.path.abspath(self._getExtraPath("{}_prep.mol2".format(fnRoot)))
 
                 if not os.path.exists(file) or os.path.getsize(file) == 0:
@@ -204,9 +209,12 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """
         self.mergeErrorFiles()
 
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
-        for mol in self.inputSmallMols.get():
-            fnSmall = self._getExtraPath("{}_prep.mol2".format(mol.getMolName()))
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
+        for mol in self.inputSmallMolecules.get():
+            fnSmall = mol.getFileName()
+            fnRoot = getBaseFileName(fnSmall)
+            fnSmall = self._getExtraPath("{}_prep.mol2".format(fnRoot))
+            print('Look for ', fnSmall)
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:
                 mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
                 if self.doConformers:
@@ -217,18 +225,24 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                     confDir = splitConformerFile(confFile, outDir=outDir)
                     for molFile in os.listdir(confDir):
                         molFile = os.path.abspath(os.path.join(confDir, molFile))
-                        newSmallMol = SmallMolecule(smallMolFilename=molFile)
+                        confId = os.path.splitext(molFile)[0].split('-')[-1]
+
+                        newSmallMol = SmallMolecule()
+                        newSmallMol.copy(mol, copyId=False)
+
+                        newSmallMol.setFileName(molFile)
+                        newSmallMol.setConfId(confId)
                         newSmallMol._ConformersFile = pwobj.String(confFile)
                         newSmallMol._mappingFile = pwobj.String(mapFile)
                         outputSmallMolecules.append(newSmallMol)
                 else:
-                    newSmallMol = SmallMolecule(smallMolFilename=fnSmall)
+                    newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
                     newSmallMol._mappingFile = pwobj.String(mapFile)
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMols, outputSmallMolecules)
+            self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
 
     # --------------------------- UTILS functions ------------------------------
@@ -257,7 +271,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
     def writeMapFile(self, refMol, probMol, outFile=None):
       if not outFile:
-          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getMolBase()))
+          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getMolName()))
 
       mapDic = refMol.mapLabels(probMol)
       with open(outFile, 'w') as f:

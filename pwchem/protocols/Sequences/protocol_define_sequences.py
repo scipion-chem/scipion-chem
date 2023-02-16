@@ -50,12 +50,12 @@ class ProtDefineSetOfSequences(EMProtocol):
     # -------------------------- DEFINE param functions ----------------------
     def _addInputForm(self, form):
         form.addParam('inputSequence', params.PointerParam,
-                      pointerClass='Sequence',
+                      pointerClass='Sequence', allowsNull=True,
                       label="Input sequence: ", condition='inputOrigin==0',
                       help='Select the sequence object to add to the set')
 
         form.addParam('inputAtomStruct', params.PointerParam,
-                      pointerClass='AtomStruct',
+                      pointerClass='AtomStruct', allowsNull=True,
                       label="Input structure: ", condition='inputOrigin==1',
                       help='Select the AtomStruct object whose sequence to add to the set')
 
@@ -85,6 +85,20 @@ class ProtDefineSetOfSequences(EMProtocol):
         group.addParam('inputList', params.TextParam, width=100,
                       default='', label='List of inputs: ',
                       help='The list of input to use for the final output set.')
+
+        form.addSection(label='Input Pointers')
+        form.addParam('inputPointerLabels', params.LabelParam, important=True,
+                      label='Records of inputs. Do not modificate manually',
+                      help='This is a list of the input pointer to keep track of the inputs received.\n'
+                           'It is automatically updated with the first section wizards.\n'
+                           'Manual modification (adding inputs from the lens) will have no actual impact on the '
+                           'protocol performance')
+        form.addParam('inputPointers', params.MultiPointerParam, pointerClass="Sequence, AtomStruct",
+                      label='Input Pointers: ', allowsNull=True,
+                      help='This is a list of the input pointer to keep track of the inputs received.\n'
+                           'It is automatically updated with the first section wizards.\n'
+                           'Manual modification (adding inputs from the lens) will have no actual impact on the '
+                           'protocol performance')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):

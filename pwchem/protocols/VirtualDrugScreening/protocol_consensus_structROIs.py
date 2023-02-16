@@ -71,11 +71,16 @@ class ProtocolConsensusStructROIs(EMProtocol):
                            "overlapping")
         form.addParam('action', params.EnumParam, default=MAXSURF,
                       label='Action on overlapping', choices=self.actionChoices,
+                      expertLevel=params.LEVEL_ADVANCED,
                       help='Action to take on overlapping structural regions, whether to merge them or keep just one '
                            'with some condition')
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimun number of overlapping structural regions',
                       help="Min number of structural regions to be considered consensus StructROIs")
+        form.addParam('sameClust', params.BooleanParam, default=True,
+                      label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Whether to count overlapping structural ROIs from the same input set when calculating the '
+                           'cluster size')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -87,14 +92,16 @@ class ProtocolConsensusStructROIs(EMProtocol):
         pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
         # Getting the representative of the clusters from any of the inputs
-        self.consensusPockets = self.cluster2representative(pocketClusters)
+        self.consensusPockets = self.cluster2representative(pocketClusters, pocketDic)
 
-        self.indepConsensusSets = {}
-        # Separating clusters by input set
-        indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
-        for inSetId in indepClustersDic:
-            # Getting independent representative for each input set
-            self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+        if self.outIndv.get():
+            self.indepConsensusSets = {}
+            # Separating clusters by input set
+            indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
+            for inSetId in indepClustersDic:
+                # Getting independent representative for each input set
+                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId],
+                                                                               pocketDic, minSize=1)
 
 
     def createOutputStep(self):
@@ -200,14 +207,14 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 clusters = newClusters.copy()
         return clusters
 
-    def getIndepClusters(self, clusters, molDic):
+    def getIndepClusters(self, clusters, pocketDic):
         indepClustersDic = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
                 curIndepCluster = {}
                 for pock in clust:
                     curPockFile = pock.getFileName()
-                    inSetId = molDic[curPockFile]
+                    inSetId = pocketDic[curPockFile]
                     if inSetId in curIndepCluster:
                         curIndepCluster[inSetId] += [pock]
                     else:
@@ -220,45 +227,48 @@ class ProtocolConsensusStructROIs(EMProtocol):
                         indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
         return indepClustersDic
 
-    def cluster2representative(self, clusters, minSize=None):
+    def countPocketsInCluster(self, cluster, pocketDic):
+        setIds = []
+        for pock in cluster:
+            setId = pocketDic[pock.getFileName()]
+            if self.sameClust.get() or not setId in setIds:
+                setIds.append(setId)
+        return len(setIds)
+
+    def cluster2representative(self, clusters, pocketDic, minSize=None):
         if minSize == None:
             minSize = self.numOfOverlap.get()
 
         representatives = []
         for clust in clusters:
-            if len(clust) >= minSize:
+            if self.countPocketsInCluster(clust, pocketDic) >= minSize:
                 if self.action.get() == MAXVOL:
                     outPocket = self.getMaxVolumePocket(clust)
                 elif self.action.get() == MAXSURF:
-                    outPocket = self.getMaxVolumePocket(clust)
+                    outPocket = self.getMaxSurfacePocket(clust)
                 representatives.append(outPocket)
         return representatives
 
     def getMaxVolumePocket(self, cluster):
-        '''Return the pocket with max volume in a cluster'''
+        '''Return the pocket with max volume in a cluster
+        The volume is calculated from the convex hull of the contact atoms'''
         maxVol = 0
         for pocket in cluster:
-            pocketVol = pocket.getPocketVolume()
+            pocketVol = pocket.getSurfaceConvexVolume()
             if pocketVol > maxVol:
                 maxVol = pocketVol
                 outPocket = pocket.clone()
         return outPocket
 
     def getMaxSurfacePocket(self, cluster):
-        '''Return the pocket with max surface in a cluster.
-        The surface is just interpolated to the number of contact atoms. In case of even, volume is used'''
-        maxSurf, maxVol = 0, 0
+        '''Return the pocket with max surface area in a cluster.
+        The surface is calculated from the convex hull of the contact atoms'''
+        maxArea, maxVol = 0, 0
         for pocket in cluster:
-            pocketSurf = len(pocket.getDecodedCAtoms())
-            pocketVol = pocket.getSurfaceConvexVolume()
-            if pocketSurf > maxSurf:
-                maxSurf, maxVol = pocketSurf, pocketVol
+            pocketArea = pocket.getSurfaceConvexArea()
+            if pocketArea >= maxArea:
+                maxArea = pocketArea
                 outPocket = pocket.clone()
-            elif pocketSurf == maxSurf:
-                if pocketVol > maxVol:
-                    maxSurf, maxVol = pocketSurf, pocketVol
-                    outPocket = pocket.clone()
-
         return outPocket
 
     def calculateResiduesOverlap(self, pock1, pock2):

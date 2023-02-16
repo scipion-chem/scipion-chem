@@ -29,6 +29,7 @@
 
 """
 
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -36,7 +37,7 @@ from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
-from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI
+from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI, ProtCalculateSASA
 from pwem.wizards.wizard import VariableWizard
 
 ################# Sequence variants ###############################
@@ -170,12 +171,11 @@ class CheckSequencesConservation(EmWizard):
     protocol = form.protocol
     consValues = self.getConservationValues(protocol)
 
-    xs = list(map(str, range(1, len(consValues) + 1)))
-    y_pos = np.arange(len(xs))
+    xs = np.arange(len(consValues))
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.bar(y_pos, consValues)
+    ax.bar(xs, consValues)
     yloc = plt.MaxNLocator(10)
     ax.yaxis.set_major_locator(yloc)
     ax.set_ylim(0, 1)
@@ -183,6 +183,27 @@ class CheckSequencesConservation(EmWizard):
     plt.xlabel("Sequence position")
     plt.ylabel("Variability value")
     plt.title('Variability values along sequence')
+
+    plt.show()
+
+class CheckSequencesAccesibility(EmWizard):
+  _targets = [(ProtCalculateSASA, ['thres'])]
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    consValues = protocol.getAccesibilityValues(inProt=False)
+
+    xs = np.arange(len(consValues))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(xs, consValues)
+    yloc = plt.MaxNLocator(10)
+    ax.yaxis.set_major_locator(yloc)
+
+    plt.xlabel("Sequence position")
+    plt.ylabel("Accesibility value")
+    plt.title('Accesibility values along sequence')
 
     plt.show()
 

@@ -2,6 +2,8 @@
 CHEM scipion plugin
 ================================
 
+**Documentation under development, sorry for the inconvenience**
+
 Base Scipion plugin defining objects and protocols for CHEMoinformatics and virtual drug screening
 
 ===================
@@ -23,13 +25,25 @@ OR
       
 - **Developer's version** 
 
-1. Download repository: 
+1. **Download repository**:
 
 .. code-block::
 
             git clone https://github.com/scipion-chem/scipion-chem.git
 
-2. Install:
+2. **Switch to the desired branch** (master or devel):
+
+Scipion-chem is constantly under development.
+If you want a relatively older an more stable version, use master branch (default).
+If you want the latest changes and developments, user devel branch.
+
+.. code-block::
+
+            cd scipion-chem
+            git checkout devel
+
+3. **Install**:
+The following comand will launch the installation of the plugin, together with some third-party programs
 
 .. code-block::
 
@@ -38,12 +52,14 @@ OR
 - **External software**
 
 External software currently installed by scipion-chem:
-    - PLIP: Docking visualization in PyMol
-    - OpenBabel: utils for small molecules
-    - RDKIT: utils for small molecules
-    - MGLTools: utils for small molecules, docking... (includes AutodockTools)
-    - JChemPaint: Java program to manually draw small molecules
-    - Pymol: installed as the main viewer of Scipion-chem
+
+- **OpenBabel** and **RDKit**: the main small molecule handlers and converters
+- **MGLTools**: additional utils for small molecules, docking, ... (includes AutoDockTools)
+- **JChemPaint**: Java program to manually draw small molecules.
+- **PyMol**: main viewer of Scipion-Chem for small molecules and structures
+- **VMD**: secondary viewer of Scipion-Chem for structures and Molecular Dynamics
+- **AliView**: main viewer for sequences
+- **PLIP**: specialized viewer for docking interactions in PyMol
 
 ===============
 Buildbot status

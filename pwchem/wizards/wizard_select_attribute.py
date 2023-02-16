@@ -33,17 +33,83 @@ information such as name and number of residues.
 """
 
 # Imports
+import pyworkflow.object as pwobj
+from pyworkflow.gui.tree import ListTreeProviderString
+from pyworkflow.gui import dialog
+
 from pwem.wizards import SelectAttributeWizard
 import pwchem.protocols as chemprot
 
-SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolConsensusDocking,
-                                  targets=['repAttr'],
-                                  inputs=['inputMoleculesSets'],
-                                  outputs=['repAttr'])
-SelectAttributeWizard().addTarget(protocol=chemprot.ProtocolScoreDocking,
-                                  targets=['corrAttribute'],
-                                  inputs=['inputMoleculesSets'],
-                                  outputs=['corrAttribute'])
+
+class SelectAttributeWizardChem(SelectAttributeWizard):
+    _targets, _inputs, _outputs = [], {}, {}
+    def getInputAttributes(self, form, inputParam):
+      attrNames = ['_objId']
+      item = self.getFirstItem(form, inputParam[0])
+      for key, attr in item.getAttributesToStore():
+        attrNames.append(key)
+      return attrNames
+
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtAddAttribute,
+                                      targets=['mapKey'],
+                                      inputs=['inputSet'],
+                                      outputs=['mapKey'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolConsensusDocking,
+                                      targets=['repAttr'],
+                                      inputs=['inputMoleculesSets'],
+                                      outputs=['repAttr'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
+                                      targets=['corrAttribute'],
+                                      inputs=['inputMoleculesSets'],
+                                      outputs=['corrAttribute'])
 
 
+class SelectMultiAttributeWizardChem(SelectAttributeWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    attrsList = self.getInputAttributes(form, inputParam)
+    finalAttrsList = []
+    for i in attrsList:
+      finalAttrsList.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalAttrsList)
+    dlg = dialog.ListDialog(form.root, "Filter set", provider,
+                            "Select one of the attributes")
+    form.setVar(outputParam[0], ';'.join([val.get() for val in dlg.values]))
+
+SelectMultiAttributeWizardChem().addTarget(protocol=chemprot.ProtChemOperateSet,
+                                           targets=['remColumns'],
+                                           inputs=['inputSet'],
+                                           outputs=['remColumns'])
+
+
+class SelectAttributeWizardListOperate(SelectAttributeWizardChem):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    operation = getattr(form.protocol, inputParam[0]).get()
+    if not operation in [1, 2]:
+      inputParam = [inputParam[1]]
+    else:
+      inputParam = [inputParam[2]]
+
+    attrsList = self.getInputAttributes(form, inputParam)
+    finalAttrsList = []
+    for i in attrsList:
+      finalAttrsList.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalAttrsList)
+    dlg = dialog.ListDialog(form.root, "Filter set", provider,
+                            "Select one of the attributes")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtChemOperateSet,
+                                      targets=['refColumn'],
+                                      inputs=['operation', 'inputSet', 'inputMultiSet'],
+                                      outputs=['refColumn'])
+SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtChemOperateSet,
+                                      targets=['filterColumn'],
+                                      inputs=['operation', 'inputSet', 'inputMultiSet'],
+                                      outputs=['filterColumn'])
 

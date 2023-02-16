@@ -53,4 +53,15 @@ _bibtexStr = """
    Volume="87",
    Pages="1149-1164"
 }
+
+@Article{Wójcikowski2015,
+    author = "Wójcikowski, Maciej and Zielenkiewicz, Piotr and Siedlecki, Pawel",
+    year = "2015",
+    month = "12",
+    title = "Open Drug Discovery Toolkit (ODDT): A new open-source player in the drug discovery field",
+    volume = "7",
+    journal = "Journal of Cheminformatics",
+    doi = "10.1186/s13321-015-0078-2"
+}
+
 """

@@ -49,29 +49,31 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [Sequence, SetOfSequences, SetOfSequencesChem, SequenceVariants, SetOfSequenceROIs]
+    _targets = [SetOfSequencesChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
         self._views = []
+
+    def showDefView(self, obj):
+        outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
+        if os.path.exists(outPath):
+            os.remove(outPath)
+        obj.exportToFile(outPath)
+        return outPath
 
     def _visualize(self, obj, **kwargs):
         views = []
         cls = type(obj)
         seqFiles = []
         if issubclass(cls, SetOfSequences) or issubclass(cls, Sequence):
-            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
-            seqFiles += [outPath]
-            if os.path.exists(outPath):
-                os.remove(outPath)
-            obj.exportToFile(outPath)
+            if hasattr(obj, '_aligned') and getattr(obj, '_aligned'):
+                seqFiles += [obj.getAlignmentFileName()]
+            else:
+                seqFiles += [self.showDefView(obj)]
 
         elif issubclass(cls, SequenceVariants):
-            outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences.fasta'))
-            seqFiles += [outPath]
-            if os.path.exists(outPath):
-                os.remove(outPath)
-            obj._sequence.exportToFile(outPath)
+            seqFiles += [self.showDefView(obj)]
 
         elif issubclass(cls, SetOfSequenceROIs):
             outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.

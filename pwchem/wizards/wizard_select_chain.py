@@ -40,24 +40,224 @@ from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
 from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, VariableWizard
 from pwem.convert import AtomicStructHandler
-from pwem.objects import AtomStruct, Sequence
+from pwem.objects import AtomStruct, Sequence, Pointer
 
-from pwchem.protocols import ProtDefineStructROIs, ProtChemPairWiseAlignment, ProtDefineSeqROI, ProtMapSequenceROI, \
-  ProtDefineSetOfSequences, ProtExtractSeqsROI
-from pwchem.objects import SequenceVariants
+from pwchem.protocols import *
+from pwchem.objects import SequenceVariants, SetOfStructROIs
 from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
-class AddResidueWizard(EmWizard):
-    _targets = [(ProtDefineStructROIs, ['addResidue'])]
+
+class SelectLigandWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def is_het(self, residue):
+    res = residue.id[0]
+    return res != " " and res != "W"
+
+  def extract_ligands(self, ASFile, protocol):
+    """ Extraction of the heteroatoms of .pdb files """
+    if ASFile.endswith('.pdbqt'):
+        proj = protocol.getProject()
+        oFile = os.path.abspath(proj.getTmpPath('inputStructure.pdb'))
+        args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(ASFile), oFile)
+        runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
+        ASFile = oFile
+
+    if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+      pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+      parser = PDBParser().get_structure(pdb_code, ASFile)
+    elif ASFile.endswith('.cif'):
+      pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+      parser = MMCIFParser().get_structure(pdb_code, ASFile)
+    else:
+      print('Unknown AtomStruct file format')
+      return
+
+    molNames = []
+    for model in parser:
+      for chain in model:
+        for residue in chain:
+          if self.is_het(residue):
+            if not residue.resname in molNames:
+              molNames.append(residue.resname)
+    return molNames
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+
+    ASFile = getattr(protocol, inputParam[0]).get().getFileName()
+    molNames = self.extract_ligands(ASFile, protocol)
+
+    finalList = []
+    for i in molNames:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Ligand Names", provider,
+                            "Select one of the ligands")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+
+SelectLigandWizard().addTarget(protocol=ProtDefineStructROIs,
+                               targets=['molName'],
+                               inputs=['inputAtomStruct'],
+                               outputs=['molName'])
+
+SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
+                               targets=['refLigName'],
+                               inputs=['refAtomStruct'],
+                               outputs=['refLigName'])
+
+
+class AddROIWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getPrevList(self, protocol, outputParam):
+    prevList = getattr(protocol, outputParam[0]).get()
+    if not prevList or not prevList.strip():
+      prevList = ''
+    elif not prevList.endswith('\n'):
+      prevList += '\n'
+    lenPrev = len(prevList.split('\n'))
+    return prevList, lenPrev
+
+class AddCoordinatesWizard(AddROIWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
+
+    coords = []
+    for i in range(3):
+        coords.append(getattr(protocol, inputParams[i]).get())
+
+    roiDef = '%s) Coordinate: {"X": %s, "Y": %s, "Z": %s}\n' % \
+             (lenPrev, coords[0], coords[1], coords[2])
+
+    form.setVar(outputParam[0], prevList + roiDef)
+
+AddCoordinatesWizard().addTarget(protocol=ProtDefineStructROIs,
+                                 targets=['addCoordinate'],
+                                 inputs=['coordX', 'coordY', 'coordZ'],
+                                 outputs=['inROIs'])
+
+class AddResidueWizard(AddROIWizard):
+    _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
+        inputParams, outputParam = self.getInputOutput(form)
         protocol = form.protocol
-        chainDic, resDic = json.loads(protocol.chain_name.get()), json.loads(protocol.resPosition.get())
-        form.setVar('inResidues', protocol.inResidues.get() +
-                    '{"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' %
-                    (chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues']))
+        chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
+                           json.loads(getattr(protocol, inputParams[1]).get())
+
+        prevList, lenPrev = self.getPrevList(protocol, outputParam)
+
+        roiDef = '%s) Residues: {"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' % \
+                 (lenPrev, chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
+
+        form.setVar(outputParam[0], prevList + roiDef)
+
+
+AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
+                             targets=['addResidue'],
+                             inputs=['chain_name', 'resPosition'],
+                             outputs=['inROIs'])
+
+class AddLigandWizard(AddROIWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+  
+  def getPrevPointersIds(self, prevPointers):
+      ids = []
+      for p in prevPointers:
+          ids.append(p.get().getObjId())
+      return ids
+  
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
+    
+    if not getattr(protocol, inputParams[0]):
+        roiDef = '%s) Ligand: {"molName": "%s"}\n' % \
+                 (lenPrev, getattr(protocol, inputParams[3]).get())
+    else:
+        prevPointers = getattr(protocol, outputParam[1])
+        prevIds = self.getPrevPointersIds(prevPointers)
+        newObj = getattr(protocol, inputParams[1]).get()
+        newId = newObj.getObjId()
+
+        if not newId in prevIds:
+            newIndex = len(prevPointers)
+            prevPointers.append(Pointer(newObj))
+        else:
+            newIndex = prevIds.index(newId)
+
+        roiDef = '%s) Ext-Ligand: {"pointerIdx": "%s", "ligName": "%s"}\n' % \
+                 (lenPrev, newIndex, getattr(protocol, inputParams[2]).get())
+        form.setVar(outputParam[1], prevPointers)
+
+    form.setVar(outputParam[0], prevList + roiDef)
+
+
+
+AddLigandWizard().addTarget(protocol=ProtDefineStructROIs,
+                            targets=['addLigand'],
+                            inputs=['extLig', 'inSmallMols', 'ligName', 'molName'],
+                            outputs=['inROIs', 'inputPointers'])
+
+class AddPPIsWizard(AddROIWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
+
+    chain1Dic, chain2Dic = json.loads(getattr(protocol, inputParams[0]).get()), \
+                           json.loads(getattr(protocol, inputParams[1]).get())
+    iDist = getattr(protocol, inputParams[2]).get()
+
+    c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
+             '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
+
+    roiDef = '%s) PPI: {"chain1": "%s", "chain2": "%s", "interDist": "%s"}\n' % \
+             (lenPrev, c1, c2, iDist)
+
+    form.setVar(outputParam[0], prevList + roiDef)
+
+AddPPIsWizard().addTarget(protocol=ProtDefineStructROIs,
+                          targets=['addPPI'],
+                          inputs=['chain_name', 'chain_name2', 'ppiDistance'],
+                          outputs=['inROIs'])
+
+class AddNResidueWizard(AddROIWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    resTypes, resDist = getattr(protocol, inputParams[0]).get(), \
+                        getattr(protocol, inputParams[1]).get()
+    resLink = protocol.getEnumText(inputParams[2])
+
+    prevList, lenPrev = self.getPrevList(protocol, outputParam)
+
+    roiDef = '%s) Near_Residues: {"residues": "%s", "distance": "%s", "linkage": "%s"}\n' % \
+             (lenPrev, resTypes, resDist, resLink)
+
+    form.setVar(outputParam[0], prevList + roiDef)
+
+
+AddNResidueWizard().addTarget(protocol=ProtDefineStructROIs,
+                              targets=['addNRes'],
+                              inputs=['resNRes', 'resDistance', 'linkNRes'],
+                              outputs=['inROIs'])
 
 
 ######################## Variable wizards ####################
@@ -87,15 +287,19 @@ class SelectChainWizardQT(SelectChainWizard):
 
     elif str(type(inputObj).__name__) == 'SchrodingerAtomStruct':
         fileName = os.path.abspath(inputObj.convert2PDB())
-    elif inputObj.getFileName().endswith('.pdbqt'):
-      proteinFile = inputObj.getFileName()
-      inName, inExt = os.path.splitext(os.path.basename(proteinFile))
-      fileName = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
-      args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), fileName)
-      runOpenBabel(protocol=protocol, args=args, popen=True)
+
+    elif str(type(inputObj).__name__) == 'SetOfStructROIs':
+        fileName = inputObj.getProteinFile()
 
     else:
         fileName = os.path.abspath(inputObj.getFileName())
+
+    if fileName.endswith('.pdbqt'):
+      inName, inExt = os.path.splitext(os.path.basename(fileName))
+      pdbFile = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+      args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
+      runOpenBabel(protocol=protocol, args=args, popen=True)
+      fileName = pdbFile
 
     structureHandler.read(fileName)
     structureHandler.getStructure()
@@ -107,10 +311,35 @@ class SelectResidueWizardQT(SelectResidueWizard):
   def getModelsChainsStep(cls, protocol, inputObj):
       return SelectChainWizardQT().getModelsChainsStep(protocol, inputObj)
 
+  def checkNoPDBQT(self, form, fileName):
+      if fileName.endswith('.pdbqt'):
+        protocol = form.protocol
+        inName, inExt = os.path.splitext(os.path.basename(fileName))
+        pdbFile = os.path.abspath(os.path.join(protocol.getProject().getPath(inName + '.pdb')))
+        args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
+        runOpenBabel(protocol=protocol, args=args, popen=True)
+        fileName = pdbFile
+      return fileName
+
+  def getResidues(self, form, inputObj, chainStr):
+    if issubclass(type(inputObj), SetOfStructROIs):
+        inputObj = inputObj.getProteinFile()
+        inputObj = self.checkNoPDBQT(form, inputObj)
+    elif issubclass(type(inputObj), AtomStruct):
+        inputObj = inputObj.getFileName()
+        inputObj = self.checkNoPDBQT(form, inputObj)
+
+    return super().getResidues(form, inputObj, chainStr)
+
+
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
+                              targets=['chain_name2'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name2'])
 
 SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               targets=['chain_name1'],
@@ -125,6 +354,16 @@ SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
 SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
                               targets=['chain_name'],
                               inputs=['inputAS'],
+                              outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtExtractLigands,
+                              targets=['chain_name'],
+                              inputs=['inputStructure'],
+                              outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
 
 
@@ -224,6 +463,15 @@ class SelectMultiChainWizard(SelectChainWizardQT):
         chainInfo = dlg.values[0].get()
       form.setVar(outputParam[0], chainInfo)
 
+SelectMultiChainWizard().addTarget(protocol=ProtDefineStructROIs,
+                                   targets=['keep_chain_name'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['keep_chain_name'])
+
+SelectMultiChainWizard().addTarget(protocol=ProtChemPrepareReceptor,
+                                   targets=['chain_name'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['chain_name'])
 
 class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
@@ -267,55 +515,6 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
                                    outputs=[])
 
 
-class SelectLigandWizard(VariableWizard):
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def is_het(self, residue):
-      res = residue.id[0]
-      return res != " " and res != "W"
-
-    def extract_ligands(self, ASFile):
-        """ Extraction of the heteroatoms of .pdb files """
-        molNames = []
-        if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
-            pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-            parser = PDBParser().get_structure(pdb_code, ASFile)
-        elif ASFile.endswith('.cif'):
-            pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-            parser = MMCIFParser().get_structure(pdb_code, ASFile)
-        else:
-            print('Unknown AtomStruct file format')
-            return
-        for model in parser:
-            for chain in model:
-                for residue in chain:
-                    if self.is_het(residue):
-                        if not residue.resname in molNames:
-                            molNames.append(residue.resname)
-        return molNames
-
-    def show(self, form, *params):
-      protocol = form.protocol
-      inputParam, outputParam = self.getInputOutput(form)
-
-      ASFile = getattr(protocol, inputParam[0]).get().getFileName()
-      molNames = self.extract_ligands(ASFile)
-
-      finalList = []
-      for i in molNames:
-        finalList.append(String(i))
-      provider = ListTreeProviderString(finalList)
-      dlg = dialog.ListDialog(form.root, "Ligand Names", provider,
-                              "Select one of the ligands")
-      form.setVar(outputParam[0], dlg.values[0].get())
-
-
-SelectLigandWizard().addTarget(protocol=ProtDefineStructROIs,
-                               targets=['molName'],
-                               inputs=['inputAtomStruct'],
-                               outputs=['molName'])
-
-
 class SelectElementWizard(VariableWizard):
     """Lists the items in a SetOfX and choose one"""
     _targets, _inputs, _outputs = [], {}, {}
@@ -345,11 +544,62 @@ class SelectElementWizard(VariableWizard):
                               "Select one of items in the set")
       form.setVar(outputParam[0], dlg.values[0].get())
 
+class SelectElementMultiPointerWizard(SelectElementWizard):
+    """Lists the items in a multipointer of SetOfX and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, scipionSet, i):
+      eleList = []
+      if scipionSet is not None:
+        for element in scipionSet:
+            eleList.append('Set {} | {}'.format(i, element.__str__()))
+      return eleList
+
+    def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+      try:
+        listOfElements = []
+        scipionMultiSet = getattr(protocol, inputParam[0])
+        for i, scipionPointer in enumerate(scipionMultiSet):
+            listOfElements += self.getListOfElements(protocol, scipionPointer.get(), i)
+      except Exception as e:
+        print("ERROR: ", e)
+        return
+
+      finalList = []
+      for i in listOfElements:
+        finalList.append(String(i))
+      provider = ListTreeProviderString(finalList)
+      dlg = dialog.ListDialog(form.root, "Sets items", provider,
+                              "Select one of items in the sets")
+      form.setVar(outputParam[0], dlg.values[0].get())
+
 
 SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                targets=['ligName'],
                                inputs=['inSmallMols'],
                                outputs=['ligName'])
+
+SelectElementWizard().addTarget(protocol=ProtocolShapeDistancesFiltering,
+                               targets=['inputReferenceMolecule'],
+                               inputs=['inputRefSmallMolecules'],
+                               outputs=['inputReferenceMolecule'])
+
+SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
+                               targets=['inputReferenceMolecule'],
+                               inputs=['inputRefSmallMolecules'],
+                               outputs=['inputReferenceMolecule'])
+
+SelectElementWizard().addTarget(protocol=ProtocolRMSDDocking,
+                                targets=['refMolName'],
+                                inputs=['refSmallMolecules'],
+                                outputs=['refMolName'])
+
+SelectElementMultiPointerWizard().addTarget(protocol=ProtocolPharmacophoreModification,
+                                           targets=['currentFeatures'],
+                                           inputs=['inputPharmacophores'],
+                                           outputs=['currentFeatures'])
 
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineSetOfSequences,
@@ -374,10 +624,10 @@ class AddSequenceWizard(SelectResidueWizard):
 
         # StructName
         inputObj = getattr(protocol, inputParams[0]).get()
-        pdbFile, AS = '', False
+        pdbFile, AS, addPointer = '', False, True
         if issubclass(type(inputObj), str):
             outStr = [inputObj]
-            AS = True
+            AS, addPointer = True, False
         elif issubclass(type(inputObj), AtomStruct):
             pdbFile = inputObj.getFileName()
             outStr = [os.path.splitext(os.path.basename(pdbFile))[0]]
@@ -404,9 +654,10 @@ class AddSequenceWizard(SelectResidueWizard):
             idxs = [json.loads(finalResiduesList[0].get())['index'], json.loads(finalResiduesList[-1].get())['index']]
             seq = self.getSequence(finalResiduesList, idxs)
 
-        chainStr = ''
+        chainStr, chainFileId = '', ''
         if AS:
           chainStr = ', "chain": "{}"'.format(chainId)
+          chainFileId = '_{}'.format(chainId)
 
         prevStr = getattr(protocol, outputParam[0]).get()
         lenPrev = len(prevStr.strip().split('\n')) + 1
@@ -415,7 +666,7 @@ class AddSequenceWizard(SelectResidueWizard):
         elif not prevStr.endswith('\n'):
           prevStr += '\n'
 
-        seqFile = protocol.getProject().getTmpPath('{}_{}_{}.fa'.format(outStr[0], lenPrev, outStr[1]))
+        seqFile = protocol.getProject().getTmpPath('{}{}_{}.fa'.format(outStr[0], chainFileId, outStr[1]))
         with open(seqFile, 'w') as f:
             f.write('>{}\n{}\n'.format(outStr[0], seq))
 
@@ -423,9 +674,16 @@ class AddSequenceWizard(SelectResidueWizard):
                   (lenPrev, outStr[0], chainStr, outStr[1], seqFile)
         form.setVar(outputParam[0], prevStr + jsonStr)
 
+        if addPointer:
+            outPointers = outputParam[1]
+            prevPointers = getattr(protocol, outPointers)
+            prevPointers.append(Pointer(inputObj))
+            form.setVar(outPointers, prevPointers)
+
+
 
 AddSequenceWizard().addTarget(protocol=ProtDefineSetOfSequences,
                               targets=['addInput'],
                               inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
                                       'inpChain', 'inpPositions'],
-                              outputs=['inputList'])
+                              outputs=['inputList', 'inputPointers'])

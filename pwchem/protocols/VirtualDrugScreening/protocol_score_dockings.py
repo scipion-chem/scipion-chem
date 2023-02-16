@@ -52,7 +52,7 @@ class ProtocolScoreDocking(EMProtocol):
     _label = 'ODDT score docking'
     actionChoices = ['MaxScore', 'MinEnergy']
 
-    _paramNames = ['rfSpr', 'depthProt', 'depthLig', 'fingerSize', 'isReference']
+    _paramNames = ['rfSpr', 'depthProt', 'depthLig', 'fingerSize']
     _enumParamNames = ['scoreChoice', 'scoreVersionRF', 'scoreVersionPLEC', 'trainData']
     _defParams = {'scoreChoice': 'Vina', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016',
                   'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False}
@@ -70,24 +70,7 @@ class ProtocolScoreDocking(EMProtocol):
                        label="Input Docked Small Molecules: ",
                        help='Select the docked molecules to be scored')
 
-        group = form.addGroup('Correlation filter')
-        group.addParam('correlationFilter', params.BooleanParam, default=False,
-                       label="Perform correlation analysis: ",
-                       help='Perform correlation analysis to a reference to discard uncorrelated scores.')
-        group.addParam('minPearson', params.FloatParam, default=0.5,
-                       label="Pearson coefficient threshold: ", condition='correlationFilter',
-                       help='Minimum absolute value of the Pearson coefficient to consider a score correlated '
-                            'to the reference.')
-        group.addParam('corrAttribute', params.StringParam, default='', expertLevel=params.LEVEL_ADVANCED,
-                       label="Previous attribute as reference: ", condition='correlationFilter',
-                       help='Use an attribute of the input as reference for the correlation filter.'
-                            'If empty, one of the scores should be chosen as a reference.')
-
         group = form.addGroup('Scoring function')
-        group.addParam('isReference', params.BooleanParam, default=False,
-                       label="Reference for correlation analysis: ", condition='correlationFilter',
-                       help='Use this score as reference for the correlation analysis.'
-                            'Only one score can be used')
         group.addParam('scoreChoice', params.EnumParam, default=VINA, label='Score to calculate: ',
                        choices=['Vina', 'RFScore', 'NNScore', 'PLECscore'],
                        help="Name of the score to calculate. \nIf the model has been trained previously, it is loaded "
@@ -135,88 +118,40 @@ class ProtocolScoreDocking(EMProtocol):
         group.addParam('deleteStep', params.StringParam, default='',
                        label='Delete score number: ',
                        help='Delete the score of the specified index from the workflow.')
-        group.addParam('showWorkflow', params.BooleanParam, default=False, expertLevel=params.LEVEL_ADVANCED,
-                       label="Show workflow param: ", help='Show workflow param, while wizards released to scipion-em')
-        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='showWorkflow')
+        group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='False')
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self.molFiles = []
         self.createGUISummary()
-        sSteps = []
+        self.getPoseFilesStr()
+        sSteps, wSteps = [], []
         #Performing every score listed in the form
-        if self.workFlowSteps.get():
-            for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-                sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
-        else:
-            msjDic = self.createMSJDic()
-            sSteps.append(self._insertFunctionStep('scoringStep', str(msjDic), 1, prerequisites=[]))
-
-        #Extracting only correlated scores if applicable
-        if self.correlationFilter.get():
-            sSteps = [self._insertFunctionStep('correlationStep', prerequisites=sSteps)]
+        for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
+            if wStep.strip():
+                if not wStep in wSteps:
+                    sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
+                    wSteps.append(wStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
 
     def scoringStep(self, wStep, i):
+        # Perform the scoring using the ODDT package
         receptorFile = self.getInputReceptorFile()
-        msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
-
-        #Perform the scoring using the ODDT package
-        results = self.scoreDockings(receptorFile, msjDic, i)
-
-    def correlationStep(self):
-        molFiles, refs = [], []
-        for mol in self.yieldAllInputMols():
-            molFiles.append(os.path.abspath(mol.getPoseFile()))
-            if self.corrAttribute.get() != '':
-                refs.append(getattr(mol, self.corrAttribute.get()).get())
-
-        scoresDic = {}
-        for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-            msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
-            scoresDic[i+1] = self.parseResults(i+1)
-            if self.corrAttribute.get() == '' and refs == []:
-                refs = list(scoresDic[i+1].values())
-
-        correlated = []
-        maxR, maxI = 0, 0
-        for i in scoresDic:
-            scores = list(scoresDic[i].values())
-            pR, pVal = pearsonr(scores, refs)
-            print('Score {}, R: {}, pVal: {}'.format(i, pR, pVal))
-            if abs(pR) >= self.minPearson.get():
-                correlated.append(i)
-            if maxR < abs(pR):
-                maxR = abs(pR)
-                maxI = i
-
-        if len(correlated) == 0:
-            print('No score was correlated over the desired threshold of {}\n'
-                  'Using the most correlated: Score {} with R: {}'.format(self.minPearson.get(), maxI, maxR))
-            correlated.append(maxI)
-
-        #Storing the indexes of the correlated scores into a file for posterior parsing
-        with open(self._getPath('correlated.tsv'), 'w') as f:
-            for i in correlated:
-                f.write('{}\t'.format(i))
-            f.write('\n')
-
+        results = self.scoreDockings(receptorFile, eval(wStep), i)
 
     def createOutputStep(self):
-
         self.relabelDic = {}
         consensusMols = self.fillEmptyAttributes(self.getAllInputMols())
         consensusMols, idsDic = self.reorderIds(consensusMols)
 
-        #Calculating zScores for each score for being able to combine them
-        zDic = self.getZScores()
-        finalDic = self.combineZScores(zDic)
+        sDic = self.getScoresDic()
         newMols = self.defineOutputSet()
         for mol in consensusMols:
-            #Specific attribute name for each score?
-            setattr(mol, "_oddtScore", Float(finalDic[os.path.abspath(mol.getPoseFile())]))
+            inFile = os.path.abspath(mol.getPoseFile())
+            for resIdx, oddtScore in sDic[inFile].items():
+                setattr(mol, "_oddtScore_{}".format(resIdx), Float(oddtScore))
             newMols.append(mol)
 
         newMols.updateMolClass()
@@ -239,53 +174,23 @@ class ProtocolScoreDocking(EMProtocol):
                 validations.append('Sets of input molecules must be docked first.\n'
                                    'Set: {} has not been docked'.format(pSet))
 
-        if self.correlationFilter.get():
-            if self.corrAttribute.get() == '':
-                refs = []
-                for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-                    msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
-                    if msjDic['isReference']:
-                        refs.append(i+1)
-                if len(refs) == 0:
-                    validations += ['You need to specify a reference for the correlation analysis\n']
-
         return validations
 
     def _warnings(self):
         warnings = []
-        if self.correlationFilter.get():
-            refs = []
-            if self.corrAttribute.get() == '':
-                for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-                    msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
-                    if msjDic['isReference']:
-                        refs.append(i+1)
-                if len(refs) > 1:
-                    warnings += ['You have specified several scores as references for the correlation analysis. '
-                                 'Only the first one will be used\n']
-            else:
-                if len(self.inputMoleculesSets) > 1:
-                    warnings += ['The attribute {} will be used as a reference for the correlation analysis, but be '
-                                 'aware that it may have different origins for the different input sets.\n'
-                                     .format(self.corrAttribute.get())]
-
-                for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-                    msjDic = self.createMSJDic() if wStep in ['', None] else eval(wStep)
-                    if msjDic['isReference']:
-                        refs.append(i + 1)
-                if len(refs) > 0:
-                    warnings += ['In addittion to the attribute {}, you have specified some score as reference for '
-                                    'the correlation analysis. Only the first one will be used\n'.
-                                      format(self.corrAttribute.get())]
+        wSteps = []
+        for i, wStep in enumerate(self.workFlowSteps.get().split('\n')):
+            if wStep.strip():
+                if wStep in wSteps:
+                    warnings.append('{} Score line is repeated. It will not be performed twice'.format(i+1))
+                else:
+                    wSteps.append(wStep)
 
         return warnings
 
     def createGUISummary(self):
         with open(self._getExtraPath("summary.txt"), 'w') as f:
-            if self.workFlowSteps.get():
-                f.write(self.createSummary())
-            else:
-                f.write(self.createSummary(self.createMSJDic()))
+            f.write(self.createSummary())
 
     # --------------------------- UTILS functions -----------------------------------
     def getInputReceptorFile(self):
@@ -346,40 +251,40 @@ class ProtocolScoreDocking(EMProtocol):
         self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
         Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
 
-    def parseResults(self, i):
+    def parseResults(self, resFile):
         resDic = {}
-        with open(self._getPath('results_{}.tsv'.format(i))) as f:
+        resIdx = resFile.split('results_')[1].split('.')[0]
+        with open(resFile) as f:
             for line in f:
                 resDic[line.split()[0]] = float(line.split()[1])
-        return resDic
+        return resIdx, resDic
 
-    def getZScores(self):
-        corFile = self._getPath('correlated.tsv')
-        if self.workFlowSteps.get():
-            correlated = list(range(1, len(self.workFlowSteps.get().strip().split('\n')) + 1))
-        else:
-            correlated = [1]
-        if os.path.exists(corFile):
-            with open(corFile) as f:
-                correlated = f.readline().split()
+    def getResultFiles(self):
+        rFiles = []
+        for file in os.listdir(self._getPath()):
+            if file.startswith('results'):
+                rFiles.append(self._getPath(file))
+        rFiles = natural_sort(rFiles)
+        return rFiles
 
-        zDic = {}
-        for i in correlated:
-            scoreDic = self.parseResults(i)
-            scores = np.array(list(scoreDic.values()))
-            zScores = zscore(scores)
-            for i, file in enumerate(scoreDic):
-                if file in zDic:
-                    zDic[file].append(zScores[i])
+    def getScoreTitles(self, idxs):
+        steps = self.summarySteps.get().strip().split('\n')
+        titles = []
+        for i, st in enumerate(steps):
+            if i in idxs:
+                titles.append(st.split(':')[1].split('.')[0])
+        return titles
+
+    def getScoresDic(self):
+        sDic = {}
+        for resFile in self.getResultFiles():
+            resIdx, resDic = self.parseResults(resFile)
+            for file in resDic:
+                if file in sDic:
+                    sDic[file][resIdx] = resDic[file]
                 else:
-                  zDic[file] = [zScores[i]]
-        return zDic
-
-    def combineZScores(self, zDic):
-        finalDic = {}
-        for molFile in zDic:
-            finalDic[molFile] = np.average(zDic[molFile])
-        return finalDic
+                    sDic[file] = {resIdx: resDic[file]}
+        return sDic
 
     def getScoreFunction(self, msjDic):
         scoreChoice = msjDic['scoreChoice']
@@ -406,14 +311,21 @@ class ProtocolScoreDocking(EMProtocol):
             fName = ''
         return fName
 
-    def getPoseFiles(self):
-        if self.molFiles == []:
-            for mol in self.yieldAllInputMols():
-                self.molFiles.append(os.path.abspath(mol.getPoseFile()))
-        return self.molFiles
+    def getPoseFilesStr(self):
+        poseFilesFile = self._getTmpPath('poseFIles.txt')
+        allMols = self.getAllInputMols()
+        if not os.path.exists(poseFilesFile):
+            poseFilesStr = ' '.join([os.path.abspath(mol.getPoseFile()) for mol in allMols])
+            with open(poseFilesFile, 'w') as f:
+                f.write(poseFilesStr)
+        else:
+            with open(poseFilesFile) as f:
+                poseFilesStr = f.read()
+
+        return poseFilesStr
 
     def writeParamsFile(self, paramsFile, recFile, msjDic, i):
-        molFiles = self.getPoseFiles()
+        poseFilesStr = self.getPoseFilesStr()
         with open(paramsFile, 'w') as f:
             scoreChoice = msjDic['scoreChoice']
 
@@ -434,7 +346,7 @@ class ProtocolScoreDocking(EMProtocol):
                     f.write('fingerSize: {}\n'.format(msjDic['fingerSize']))
 
             f.write('receptorFile: {}\n'.format(os.path.abspath(recFile)))
-            f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
+            f.write('ligandFiles: {}\n'.format(poseFilesStr))
 
         return paramsFile
 
@@ -445,40 +357,24 @@ class ProtocolScoreDocking(EMProtocol):
         steps = stepsStr.split('\n')
         return len(steps) - 1
 
-    def createSummary(self, msjDic=None):
+    def createSummary(self):
         '''Creates the displayed summary from the internal state of the steps'''
         sumStr = ''
-        if not msjDic:
-            for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
-                if dicLine != '':
-                    msjDic = eval(dicLine)
-                    msjDic = self.addDefaultForMissing(msjDic)
-                    scoreChoice = msjDic['scoreChoice']
-                    sumStr += '{}) Score: {}'.format(i+1, scoreChoice)
+        for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
+            if dicLine.strip():
+                msjDic = eval(dicLine)
+                msjDic = self.addDefaultForMissing(msjDic)
+                scoreChoice = msjDic['scoreChoice']
+                sumStr += '{}) Score: {}'.format(i+1, scoreChoice)
 
-                    if scoreChoice == 'RFScore':
-                        sumStr += ', version {}'.format(msjDic['scoreVersionRF'])
-                    elif scoreChoice == 'PLECscore':
-                        sumStr += ', version {}'.format(msjDic['scoreVersionPLEC'])
+                if scoreChoice == 'RFScore':
+                    sumStr += ', version {}'.format(msjDic['scoreVersionRF'])
+                elif scoreChoice == 'PLECscore':
+                    sumStr += ', version {}'.format(msjDic['scoreVersionPLEC'])
 
-                    if scoreChoice != 'Vina':
-                        sumStr += '. PDBbind {}'.format(msjDic['trainData'])
-                    if msjDic['isReference']:
-                        sumStr += '. Corr reference'
-                    sumStr += '\n'
-        else:
-            msjDic = self.addDefaultForMissing(msjDic)
-            scoreChoice = msjDic['scoreChoice']
-            sumStr += 'Score: {}'.format(scoreChoice)
-
-            if scoreChoice == 'RFScore':
-              sumStr += ', version {}'.format(msjDic['scoreVersionRF'])
-            elif scoreChoice == 'PLECscore':
-              sumStr += ', version {}'.format(msjDic['scoreVersionPLEC'])
-
-            if scoreChoice == 'Vina':
-              sumStr += '. PDBbind {}'.format(msjDic['trainData'])
-            sumStr += '\n'
+                if scoreChoice != 'Vina':
+                    sumStr += '. PDBbind {}'.format(msjDic['trainData'])
+                sumStr += '\n'
         return sumStr
 
     def addDefaultForMissing(self, msjDic):

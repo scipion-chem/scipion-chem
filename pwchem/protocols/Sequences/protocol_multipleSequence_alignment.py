@@ -29,9 +29,8 @@ import os
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwem.protocols import EMProtocol
 
-from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat
+from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat, parseFasta, parseAlnFile
 from pwchem.objects import SetOfSequencesChem, Sequence
-from pwchem.utils.utilsFasta import parseAlnFile
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
@@ -43,7 +42,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         form.addSection(label='Input')
         group = form.addGroup('Input')
-        group.addParam('setOfSequences', PointerParam, pointerClass='SetOfSequences',
+        group.addParam('inputSequences', PointerParam, pointerClass='SetOfSequences',
                       label='Input Set of Sequence File: ', allowsNull=False,
                       help="Set of sequences to be alignment ")
 
@@ -78,7 +77,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
     def multipleAlignment(self):
         programName = self.getEnumText('programList')
         print('Aligning with: ', programName)
-        setForAlignment = self.setOfSequences.get()
+        setForAlignment = self.inputSequences.get()
         input_file = os.path.abspath(self._getPath('SequencesForAlignment.fasta'))
         setForAlignment.exportToFile(input_file)
         extraArgs = self.getExtraArgs()
@@ -99,7 +98,11 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
 
         self.runJob(cline, '')
 
-        outSeqDic = parseAlnFile(output_file)
+        if programName == MUSCLE:
+            outSeqDic = parseFasta(output_file)
+        else:
+            outSeqDic = parseAlnFile(output_file)
+
         outSeqs = SetOfSequencesChem.create(outputPath=self._getPath())
         for seqId in outSeqDic:
             outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))

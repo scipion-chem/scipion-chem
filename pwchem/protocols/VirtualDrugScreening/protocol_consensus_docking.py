@@ -79,6 +79,14 @@ class ProtocolConsensusDocking(EMProtocol):
                        label='Check only cluster representative: ', condition='not doScipy',
                        help='If True, the RMSD is only calculated on the cluster representative, speeding up '
                             'the process but making it less restrictive')
+        form.addParam('outIndv', params.BooleanParam, default=False, condition='doScipy or not checkRep',
+                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Creates an output set related to each input set, with the elements from each input'
+                           'present in the consensus clusters')
+        form.addParam('sameClust', params.BooleanParam, default=True,
+                      label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Whether to count overlapping docked molecules from the same input set when calculating the '
+                           'cluster size')
 
         group.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
                       help="Maximum RMSD for clustering different docked molecules")
@@ -93,10 +101,6 @@ class ProtocolConsensusDocking(EMProtocol):
                       label='Keep maximum values: ',
                       help='True to keep the maximum values. False to get the minimum')
 
-        form.addParam('outIndv', params.BooleanParam, default=False, condition='doScipy or not checkRep',
-                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
-                      help='Creates an output set related to each input set, with the elements from each input'
-                           'present in the consensus clusters')
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
@@ -107,16 +111,18 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def consensusStep(self):
         molDic = self.buildMolDic()
+        minSize = self.numOfOverlap.get()
+
         doInd = True
         if self.doScipy:
             molClusters = self.generateDockingClustersScipy()
-            self.consensusMols = self.cluster2representative(molClusters)
+            self.consensusMols = self.cluster2representative(molClusters, molDic, minSize)
         else:
             if not self.checkRep:
                 molClusters = self.generateDockingClusters()
-                self.consensusMols = self.cluster2representative(molClusters)
+                self.consensusMols = self.cluster2representative(molClusters, molDic, minSize)
             else:
-                self.consensusMols = self.buildRepresentativeClusters()
+                self.consensusMols = self.buildRepresentativeClusters(molDic)
                 doInd = False
 
         if self.outIndv.get() and doInd:
@@ -174,6 +180,10 @@ class ProtocolConsensusDocking(EMProtocol):
             if not pSet.isDocked():
                 validations.append('Sets of input molecules must be docked first.\n'
                                 'Set: {} has not been docked'.format(pSet))
+
+        if not self.repAttr.get() or not self.repAttr.get().strip():
+            validations.append('You must specify an attribute to choose a ligand representative of the generated '
+                               'cluster. Typically, the energy or the score, to choose the best out of the cluster')
 
         return validations
 
@@ -239,7 +249,7 @@ class ProtocolConsensusDocking(EMProtocol):
                 clusters = newClusters.copy()
         return clusters
 
-    def buildRepresentativeClusters(self):
+    def buildRepresentativeClusters(self, molDic):
         clusters = []
         # For each set of molecules
         for i, molSet in enumerate(self.inputMoleculesSets):
@@ -271,7 +281,8 @@ class ProtocolConsensusDocking(EMProtocol):
         #Getting representatives
         reps = []
         for cl in clusters:
-            reps.append(cl[0])
+            if self.countMolsInCluster(cl, molDic) >= self.numOfOverlap.get():
+                reps.append(cl[0])
         return reps
 
     def generateDockingClustersScipy(self):
@@ -319,7 +330,7 @@ class ProtocolConsensusDocking(EMProtocol):
     def getIndepClusters(self, clusters, molDic):
         indepClustersDic = {}
         for clust in clusters:
-            if len(clust) >= self.numOfOverlap.get():
+            if self.countMolsInCluster(clust, molDic) >= self.numOfOverlap.get():
                 curIndepCluster = {}
                 for mol in clust:
                     curMolFile = mol.getPoseFile()
@@ -336,13 +347,18 @@ class ProtocolConsensusDocking(EMProtocol):
                         indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
         return indepClustersDic
 
-    def cluster2representative(self, clusters, minSize=None):
-        if minSize == None:
-            minSize = self.numOfOverlap.get()
+    def countMolsInCluster(self, cluster, molDic):
+        setIds = []
+        for mol in cluster:
+            setId = molDic[mol.getPoseFile()]
+            if self.sameClust.get() or not setId in setIds:
+                setIds.append(setId)
+        return len(setIds)
 
+    def cluster2representative(self, clusters, molDic, minSize):
         representatives = []
         for clust in clusters:
-            if len(clust) >= minSize:
+            if self.countMolsInCluster(clust, molDic) >= minSize:
                 repr = self.getRepresentativeMolecule(clust)
                 representatives.append(repr)
         return representatives

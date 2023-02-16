@@ -29,10 +29,9 @@ from subprocess import Popen
 
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
-from pwem.viewers import Vmd, VmdView
 
 from pwchem.objects import StructROI, SetOfStructROIs
-from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer
+from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.constants import *
 from pwchem.protocols import ProtocolConsensusStructROIs
 
@@ -64,15 +63,6 @@ class ContactSurfaceViewer(pwviewer.Viewer):
     return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
 
 
-class VmdViewPopen(VmdView):
-  def __init__(self, vmdArgs, **kwargs):
-    pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs,
-                                  env=Vmd.getEnviron(), **kwargs)
-
-  def show(self):
-    Popen(self._cmd, cwd=self._cwd, env=Vmd.getEnviron(), shell=True)
-
-
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
 
@@ -85,17 +75,18 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
   def _defineParams(self, form):
     form.addSection(label='Visualization of structural ROIs')
-    form.addParam('displayAtomStruct', params.EnumParam,
+    group = form.addGroup('Pymol General Viewer')
+    group.addParam('displayAtomStruct', params.EnumParam,
                   choices=['PyMol (ROI Points)', 'PyMol (Contact Surface)'],
                   default=VOLUME_PYMOL,
                   display=params.EnumParam.DISPLAY_HLIST,
                   label='Display output AtomStruct with',
                   help='*PyMol*: display AtomStruct and structural ROIs as points / surface.'
                   )
-    form.addParam('displayBBoxes', params.BooleanParam,
+    group.addParam('displayBBoxes', params.BooleanParam,
                   default=False, label='Display ROIs bounding boxes',
                   help='Display the bounding boxes in pymol to check the size for the localized docking')
-    form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
+    group.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
                   default=1.1, condition='displayBBoxes',
                   help='The radius * n of each ROI will be used as grid radius')
 

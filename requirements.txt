@@ -1,2 +1,4 @@
 lxml
 scipy
+mdtraj
+parmed

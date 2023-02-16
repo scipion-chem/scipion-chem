@@ -73,6 +73,16 @@ class PyMolViewer(pwviewer.Viewer):
     view = PyMolView(pymolFile, cwd)
     return [view]
 
+class VmdViewPopen(pwviewer.CommandView):
+  def __init__(self, vmdArgs, **kwargs):
+    pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs, **kwargs)
+
+  def show(self):
+      fullProgram = '%s %s && %s' % (pwchem_plugin.getCondaActivationCmd(),
+                                     pwchem_plugin.getEnvActivation('vmd'), self._cmd)
+      Popen(fullProgram, cwd=self._cwd, shell=True)
+
+
 class AtomStructPymolViewer(PyMolViewer):
     _label = 'Viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
