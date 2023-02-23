@@ -89,7 +89,7 @@ class Plugin(pwem.Plugin):
     def addPLIPPackage(cls, env, default=False):
       PLIP_INSTALLED = 'plip_installed'
 
-      installationCmd = '{} && '.format(cls.getCondaActivationCmd())
+      installationCmd = cls.getCondaActivationCmd()
       installationCmd += 'conda create --name plip-env --file {} && '.format(cls.getEnvSpecsPath('plip'))
       installationCmd += 'touch {}'.format(PLIP_INSTALLED)
 
