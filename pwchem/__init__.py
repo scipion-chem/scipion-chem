@@ -88,21 +88,15 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addPLIPPackage(cls, env, default=False):
       PLIP_INSTALLED = 'plip_installed'
-      plip_commands = 'conda create -y -n plip-env python=3.6 && '
-      plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation())
-      #Installing openbabel
-      plip_commands += 'conda install -y -c conda-forge openbabel && '
-      #Installing swig
-      plip_commands += 'conda install -y -c conda-forge swig && '
-      #Installing Pymol
-      plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol && '
-      #Installing PLIP
-      plip_commands += 'conda install -y -c conda-forge plip && touch {}'.format(PLIP_INSTALLED)
 
-      plip_commands = [(plip_commands, PLIP_INSTALLED)]
+      installationCmd = '{} && '.format(cls.getCondaActivationCmd())
+      installationCmd += 'conda create --name plip-env --file {} && '.format(cls.getEnvSpecsPath('plip'))
+      installationCmd += 'touch {}'.format(PLIP_INSTALLED)
+
+      installationCmd = [(installationCmd, PLIP_INSTALLED)]
       env.addPackage(PLIP_DIC['name'], version=PLIP_DIC['version'],
                      tar='void.tgz',
-                     commands=plip_commands,
+                     commands=installationCmd,
                      default=True)
 
     @classmethod
@@ -155,9 +149,9 @@ class Plugin(pwem.Plugin):
     def addRDKitPackage(cls, env, default=False):
         RDKIT_INSTALLED = 'rdkit_installed'
 
-        installationCmd = cls.getCondaActivationCmd()
-        installationCmd += ' conda create -y -c conda-forge -n rdkit-env rdkit oddt &&'
-        installationCmd += ' mkdir oddtModels && touch %s' % RDKIT_INSTALLED
+        installationCmd = '{} && '.format(cls.getCondaActivationCmd())
+        installationCmd += 'conda create --name rdkit-env --file {} && '.format(cls.getEnvSpecsPath('rdkit'))
+        installationCmd += 'mkdir oddtModels && touch %s' % RDKIT_INSTALLED
 
         rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
 
@@ -301,6 +295,11 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getScriptsDir(cls, scriptName):
       return cls.getPluginHome('scripts/%s' % scriptName)
+
+    @classmethod
+    def getEnvSpecsPath(cls, env=None):
+      envFile = '/{}_env_spec.txt'.format(env) if env else ''
+      return cls.getPluginHome('envs%s' % envFile)
 
     @classmethod
     def getMGLEnviron(cls):
