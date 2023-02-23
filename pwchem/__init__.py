@@ -149,7 +149,7 @@ class Plugin(pwem.Plugin):
     def addRDKitPackage(cls, env, default=False):
         RDKIT_INSTALLED = 'rdkit_installed'
 
-        installationCmd = '{} && '.format(cls.getCondaActivationCmd())
+        installationCmd = cls.getCondaActivationCmd()
         installationCmd += 'conda create --name rdkit-env --file {} && '.format(cls.getEnvSpecsPath('rdkit'))
         installationCmd += 'mkdir oddtModels && touch %s' % RDKIT_INSTALLED
 
