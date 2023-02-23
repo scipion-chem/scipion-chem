@@ -186,10 +186,7 @@ class Plugin(pwem.Plugin):
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
                       '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
       seqs_commands += 'tar -xf {} && rm {} &&'.format(*[cls.getDefTar(ALIVIEW_DIC)]*2)
-      seqs_commands += ' conda install -y -c bioconda clustalo &&'
-      seqs_commands += ' conda install -y -c bioconda muscle &&'
-      seqs_commands += ' conda install -y -c bioconda mafft &&'
-      seqs_commands += ' conda install -y -c bioconda emboss &&'
+      seqs_commands += ' conda create --name bioconda-env --file {} && '.format(cls.getEnvSpecsPath('bioconda'))
       seqs_commands += ' touch %s' % SEQS_INSTALLED
 
       seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
