@@ -62,6 +62,7 @@ class Plugin(pwem.Plugin):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
         cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
+        cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
