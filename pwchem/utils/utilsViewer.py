@@ -27,7 +27,7 @@
 import os
 from ..viewers import PyMolViewer
 
-def buildPMLDockingSingleStr(viewer, mol, molName, addTarget=True, disable=True):
+def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=True):
     pmlStr = ''
     if addTarget:
         pmlStr = 'load {}\n'.format(os.path.abspath(viewer.protocol.getOriginalReceptorFile()))
@@ -36,21 +36,7 @@ def buildPMLDockingSingleStr(viewer, mol, molName, addTarget=True, disable=True)
     if disable:
         disableStr = '\ndisable {}'.format(molName)
 
-    pdbFile = os.path.abspath(mol.getPoseFile())
-    pmlStr += 'load {}, {}{}\nhide spheres, {}\nshow sticks, {}\n'. \
-        format(pdbFile, molName, disableStr, molName, molName)
-    return pmlStr
-
-def buildPMLFileNameSingleStr(viewer, mol, molName, addTarget=True, disable=True):
-    pmlStr = ''
-    if addTarget:
-        pmlStr = 'load {}\n'.format(os.path.abspath(viewer.protocol.getOriginalReceptorFile()))
-
-    disableStr = ''
-    if disable:
-        disableStr = '\ndisable {}'.format(molName)
-
-    pdbFile = os.path.abspath(mol.getFileName())
+    pdbFile = os.path.abspath(molFile)
     pmlStr += 'load {}, {}{}\nhide spheres, {}\nshow sticks, {}\n'. \
         format(pdbFile, molName, disableStr, molName, molName)
     return pmlStr
