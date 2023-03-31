@@ -79,7 +79,7 @@ class VmdViewPopen(pwviewer.CommandView):
 
   def show(self):
       fullProgram = '%s %s && %s' % (pwchem_plugin.getCondaActivationCmd(),
-                                     pwchem_plugin.getEnvActivation('vmd'), self._cmd)
+                                     pwchem_plugin.getEnvActivation('biosimspace'), self._cmd)
       Popen(fullProgram, cwd=self._cwd, shell=True)
 
 

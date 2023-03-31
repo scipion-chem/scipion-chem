@@ -55,13 +55,14 @@ class Plugin(pwem.Plugin):
         cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
         cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
+
+        cls.addBioSimSpacePackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
-        cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
+        cls._defineVar("BIOSIMSPACE_ENV_ACTIVATION", 'conda activate biosimspace-env')
         cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
@@ -198,20 +199,23 @@ class Plugin(pwem.Plugin):
                      default=True)
 
     @classmethod
-    def addVMDPackage(cls, env, default=False):
-      VMD_INSTALLED = 'vmd_installed'
+    def addBioSimSpacePackage(cls, env, default=False):
+      BIOSIM_INSTALLED = 'biosimspace_installed'
 
       installationCmd = cls.getCondaActivationCmd()
-      installationCmd += ' conda create -y -c conda-forge -n vmd-env vmd &&'
-      installationCmd += ' touch %s' % VMD_INSTALLED
-      vmd_commands = [(installationCmd, VMD_INSTALLED)]
+      installationCmd += 'conda create -y -c conda-forge -n biosimspace-env mamba "python<3.10" && '
+      installationCmd += '{} {} && '.format(cls.getCondaActivationCmd(), cls.getEnvActivation('BIOSIMSPACE'))
+      installationCmd += 'mamba install -c openbiosim biosimspace={} vmd ambertools=22 compilers && '.\
+        format(BIOSIMSPACE_DIC['version'])
 
-      env.addPackage(VMD_DIC['name'], version=VMD_DIC['version'],
+      installationCmd += 'touch %s' % BIOSIM_INSTALLED
+      biosim_commands = [(installationCmd, BIOSIM_INSTALLED)]
+
+      env.addPackage(BIOSIMSPACE_DIC['name'], version=BIOSIMSPACE_DIC['version'],
                      tar='void.tgz',
-                     commands=vmd_commands,
+                     commands=biosim_commands,
                      neededProgs=cls.getDependencies(),
                      default=default)
-
 
     ##################### RUN CALLS #################33333
     @classmethod
