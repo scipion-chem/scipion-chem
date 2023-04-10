@@ -812,12 +812,14 @@ class StructROI(data.EMFile):
         ids = []
         for atom in atoms:
             ids.append(atom.atomId)
+        ids = natural_sort(ids)
         return ids
 
     def getResiduesIds(self, residues):
         ids = set([])
         for res in residues:
             ids.add(res.residueId)
+        ids = natural_sort(list(ids))
         return ids
 
     def getAtomsResidues(self, atoms):
