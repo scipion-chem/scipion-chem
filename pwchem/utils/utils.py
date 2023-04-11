@@ -564,6 +564,18 @@ def cleanPipeIds(idStr):
     seqId = seqId.split('|')[1]
   return seqId
 
+def groupConsecutiveIdxs(idxs):
+    idxs.sort()
+    groups, newGroup = [], []
+    for idx in idxs:
+      idx = int(idx)
+      if not newGroup or idx - 1 == newGroup[-1]:
+        newGroup.append(idx)
+      else:
+        groups.append(newGroup)
+        newGroup = [idx]
+    groups.append(newGroup)
+    return groups
 
 def natural_sort(listi, rev=False):
   import re
