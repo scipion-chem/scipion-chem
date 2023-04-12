@@ -234,12 +234,6 @@ class Plugin(pwem.Plugin):
       os.rename(progFile, outFile)
 
     @classmethod
-    def runRDKit(cls, protocol, program, args, cwd=None):
-      """ Run rdkit command from a given protocol. """
-      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
-      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
-
-    @classmethod
     def runJChemPaint(cls, protocol, cwd=None):
       """ Run jchempaint command from a given protocol. """
       protocol.runJob('java -jar {}'.format(cls.getProgramHome(JCHEM_DIC, 'jchempaint-{}.jar'.
