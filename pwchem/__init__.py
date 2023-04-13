@@ -36,8 +36,8 @@ import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 import pwem
 from .bibtex import _bibtexStr
-
 from .constants import *
+from pwchem.install_helper import InstallHelper
 
 _logo = 'pwchem_logo.png'
 RDKIT = 'rdkit'
@@ -48,14 +48,14 @@ class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
         #PLIP environment (with pymol bundle)
-        cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addPLIPPackage(env)
+        #cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         # cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
@@ -87,18 +87,16 @@ class Plugin(pwem.Plugin):
 
 ######################## PACKAGES #########################
     @classmethod
-    def addPLIPPackage(cls, env, default=False):
-      PLIP_INSTALLED = 'plip_installed'
+    def addPLIPPackage(cls, env):
+      PLIP_VERSION = '2.2'
+      installer = InstallHelper()
 
-      installationCmd = cls.getCondaActivationCmd()
-      installationCmd += 'conda create --name plip-env --file {} && '.format(cls.getEnvSpecsPath('plip'))
-      installationCmd += 'touch {}'.format(PLIP_INSTALLED)
-
-      installationCmd = [(installationCmd, PLIP_INSTALLED)]
-      env.addPackage(PLIP_DIC['name'], version=PLIP_DIC['version'],
-                     tar='void.tgz',
-                     commands=installationCmd,
-                     default=True)
+      installer.getCondaEnvCommand('plip', requirementsFile=False, binaryVersion=PLIP_VERSION)\
+        .addCondaPackages('plip', ['openbabel', 'swig', 'plip'], channel='conda-forge', binaryVersion=PLIP_VERSION)\
+        .getExtraFile('https://pymol.org/installers/PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
+        .addCommand('tar -jxf PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
+        .addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
+        .addProtocolPackage(env, 'plip', protocolVersion=PLIP_VERSION, dependencies=['tar', 'wget'])
 
     @classmethod
     def addPyMolPackage(cls, env, default=False):
