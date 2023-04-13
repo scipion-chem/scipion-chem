@@ -20,8 +20,10 @@ class InstallHelper():
         """
         This private function returns the neccessary command to create a target file given its name.
         Targets are always in uppercase and underscore format.
+
         Parameters:
         targetName (str): Name of the target file.
+
         Returns:
         (str): The command needed to create the target file.
         """
@@ -30,10 +32,12 @@ class InstallHelper():
     def __getBinaryEnvName(self, protocolName: str, version: str=DEFAULT_VERSION, binaryName: str=None) -> str:
         """
         This function returns the env name for a given protocol and repo.
+
         Parameters:
         protocolName (str): Name of the protocol.
         version (str): Binary's version.
         repoName (str): Optional. Name of the binary inside the protocol. Intended for protocols whose binaries' name differs from protocol's.
+
         Returns:
         (str): The enviroment name for this binary.
         """
@@ -42,6 +46,7 @@ class InstallHelper():
     def __getEnvActivationCommand(self, protocolName: str, binaryName: str=None, binaryVersion: str=DEFAULT_VERSION) -> str:
         """
         Returns the conda activation command for the given enviroment.
+
         Parameters:
         protocolName (str): Name of the protocol.
         binaryName (str): Optional. Name of the binary inside the protocol. Intended for protocols whose binaries' name differs from protocol's.
@@ -53,6 +58,7 @@ class InstallHelper():
     def getCommandList(self) -> List[Tuple[str, str]]:
         """
         This function returns the list of commands with targets for debugging purposes.
+
         Returns:
         (list[tuple[str, str]]): Command list with target files.
         """
@@ -61,6 +67,7 @@ class InstallHelper():
     def addCommand(self, command: str, targetName: str, workDir: str='', protocolPath: str=''):
         """
         This function adds the given command with target to the command list.
+
         Parameters:
         command (str): Command to be added.
         targetName (str): Name of the target file to be produced after commands are completed successfully.
@@ -78,6 +85,7 @@ class InstallHelper():
     def addCommands(self, protocolName: str, commandList: List[str], binaryName: str=None, workDir:str='', protocolPath: str='', targetNames: List[str]=[]):
         """
         This function adds the given commands with targets to the command list.
+
         Parameters:
         protocolName (str): Name of the protocol.
         commandList (list[str]): List containing the commands to add.
@@ -102,6 +110,7 @@ class InstallHelper():
     def getCloneCommand(self, protocolName: str, protocolHome: str, url: str, binaryFolderName: str=None, targeName: str=None):
         """
         This function creates the neccessary command to clone a repository from Github.
+
         Parameters:
         protocolName (str): Name of the protocol.
         protocolHome (str): Path to the protocol. It can be absolute or relative to current directory.
@@ -124,6 +133,7 @@ class InstallHelper():
                            requirementFileName: str='requirements.txt', requirementList: List[str]=[], extraCommands: List[str]=[], targetName: str=None):
         """
         This function creates the command string for creating a Conda enviroment and installing required dependencies for a given binary inside a protocol.
+
         Parameters:
         protocolName (str): Name of the protocol.
         binaryPath (str): Path to the binary. It can be absolute or relative to current directory.
@@ -172,6 +182,7 @@ class InstallHelper():
     def addCondaPackages(self, protocolName: str, packets: List[str], binaryName: str=None, binaryVersion: str=DEFAULT_VERSION, channel: str=None, targetName: str=None):
         """
         This function returns the command used for installing extra packages in a conda enviroment.
+
         Parameters:
         protocolName (str): Name of the protocol.
         packets (list[str]): List of conda packages to install.
@@ -199,6 +210,7 @@ class InstallHelper():
         This function creates the command to download with wget the file in the given link into the given path.
         The downloaded file will overwrite a local one if they have the same name.
         This is done to overwrite potential corrupt files whose download was not fully completed.
+
         Parameters:
         url (str): URL of the resource to download.
         targetName (str): Name of the target file for this command.
@@ -220,15 +232,14 @@ class InstallHelper():
         This function creates the command to download with wget the file in the given link into the given path.
         The downloaded file will overwrite a local one if they have the same name.
         This is done to overwrite potential corrupt files whose download was not fully completed.
+
         Parameters:
         protocolName (str): Name of the protocol.
-        fileList (list[tuple[str, str]]): List containing files to be downloaded.
+        fileList (list[tuple[str, str]]): List containing files to be downloaded. Example: [(url1, path1), (url2, path2)]
         binaryName (str): Optional. Name of the binary.
         Each file is a list contaning url and location to download it. Paths can be an empty string for default location.
         workDir (str): Optional. Directory where the files will be downloaded from.
         targetNames (list[str]): Optional. List containing the name of the target files for this commands.
-        Example fileLst:
-        [(url1, path1), (url2, path2)]
         """
         # Defining binary name
         binaryName = binaryName if binaryName else protocolName
@@ -246,6 +257,7 @@ class InstallHelper():
     def addProtocolPackage(self, env, protocolName: str, protocolVersion: str=DEFAULT_VERSION, dependencies: List[str]=[], default: bool=True):
         """
         This function adds the given protocol to scipion installation with some provided parameters.
+        
         Parameters:
         env: Scipion enviroment.
         protocolName (str): Name of the protocol.
