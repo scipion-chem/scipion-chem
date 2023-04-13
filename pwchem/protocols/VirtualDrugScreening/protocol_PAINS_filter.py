@@ -25,17 +25,16 @@
 # *
 # **************************************************************************
 
-import os, glob
+import os
 
 import pyworkflow.object as pwobj
 from pyworkflow.protocol import params
 from pyworkflow.utils.path import copyFile
-from pyworkflow.utils import Message
 
 from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 
 

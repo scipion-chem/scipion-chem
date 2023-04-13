@@ -31,12 +31,11 @@ This protocol is used to define a set of sequences from AtomStruct, Sequence or 
 
 """
 
-import os, json, shutil
+import os, json
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
-from pwem.objects.data import AtomStruct, SetOfSequences, Sequence
-import pwem.convert as emconv
+from pwem.objects.data import SetOfSequences, Sequence
 
 from pwchem.utils.utilsFasta import parseFasta
 

@@ -27,9 +27,8 @@
 import os, glob
 from urllib.request import urlopen
 
-import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, TextParam, LabelParam, STEPS_PARALLEL
+from pyworkflow.protocol.params import PointerParam, EnumParam, TextParam, LabelParam, STEPS_PARALLEL
 
 from pwchem.utils import performBatchThreading
 

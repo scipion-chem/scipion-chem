@@ -38,14 +38,12 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pyworkflow.protocol.params import LEVEL_ADVANCED
 from pyworkflow.utils import Message
-import pyworkflow.object as pwobj
 
-import os, re, glob, shutil
+import os, glob
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2, \
-  splitPDBLine, natural_sort, makeSubsets
+from pwchem.utils import natural_sort, makeSubsets
 
 scriptName = 'ligand_preparation_script.py'
 

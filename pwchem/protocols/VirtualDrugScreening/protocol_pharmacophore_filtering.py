@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, json
+import os
 from os.path import abspath
 
 from pyworkflow.protocol import params

@@ -36,11 +36,9 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
-from scipy.stats import pearsonr, zscore
+import os
 
 from pwchem import Plugin
-from pwchem.utils import fillEmptyAttributes
 
 scriptName = 'scores_docking_oddt.py'
 VINA, RFSCORE, NNSCORE, PLECSCORE = 0, 1, 2, 3

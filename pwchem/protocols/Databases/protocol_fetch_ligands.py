@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-import os, re, csv, glob, json
+import os, re, glob, json
 import numpy as np
 from urllib.request import urlopen
 from Bio.PDB import PDBIO, Select
@@ -33,7 +33,6 @@ from sklearn.cluster import DBSCAN
 
 import pwem.convert as emconv
 
-from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
@@ -42,8 +41,6 @@ from pwchem.utils import *
 from pwchem.constants import elements_mass
 
 from pwchem import Plugin as pwchemPlugin
-from pwchem.utils import fillEmptyAttributes
-import pyworkflow.object as pwobj
 from pwchem.utils import clean_PDB
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2

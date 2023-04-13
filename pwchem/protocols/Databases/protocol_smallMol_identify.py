@@ -24,15 +24,15 @@
 # *
 # **************************************************************************
 
-import os, time, json, sys, glob
-from urllib.request import urlopen, urlretrieve
+import os, time, json, glob
+from urllib.request import urlopen
 
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
 from pwchem import Plugin
-from pwchem.utils import runOpenBabel, performBatchThreading
+from pwchem.utils import performBatchThreading
 
 RDKIT, OPENBABEL = 0, 1
 PUBCHEMID, PUBCHEMNAME, ZINC, CHEMBL = 1, 2, 3, 4

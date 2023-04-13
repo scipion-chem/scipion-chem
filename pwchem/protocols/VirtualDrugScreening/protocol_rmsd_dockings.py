@@ -29,7 +29,7 @@
 """
 
 """
-import os, re
+import os
 from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.utils import Message

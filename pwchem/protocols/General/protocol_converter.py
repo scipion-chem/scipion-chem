@@ -36,7 +36,7 @@ from pwem.convert.atom_struct import toCIF, toPdb
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
-from pwchem.utils import runOpenBabel, getBaseFileName
+from pwchem.utils import getBaseFileName
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
 extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}

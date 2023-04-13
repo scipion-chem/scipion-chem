@@ -29,17 +29,11 @@
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
+import os
 from pwchem import Plugin
-from pyworkflow.utils.path import copyFile
-from pwchem.utils import fillEmptyAttributes
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
-import csv
-import glob
+from pwchem.objects import SetOfSmallMolecules
 
 scriptName = 'fingerprint_filtering.py'
 

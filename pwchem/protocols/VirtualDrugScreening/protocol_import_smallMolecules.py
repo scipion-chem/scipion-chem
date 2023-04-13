@@ -30,13 +30,12 @@ import os, requests, glob, sys, json
 
 
 from pwem.protocols import EMProtocol
-import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam, STEPS_PARALLEL
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
-from pwchem.utils import runOpenBabel, performBatchThreading
+from pwchem.utils import performBatchThreading
 
 RDKIT, OPENBABEL = 0, 1
 DEFAULT_FORMAT = 'sdf'

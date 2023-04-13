@@ -36,7 +36,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
+import os
 
 from pwchem import Plugin
 from pwchem.utils import fillEmptyAttributes

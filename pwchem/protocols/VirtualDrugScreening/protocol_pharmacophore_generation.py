@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-import os, re, pickle
+import os, pickle
 from os.path import abspath
 
 from pyworkflow.protocol import params

@@ -29,7 +29,7 @@ import os
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwem.protocols import EMProtocol
 
-from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat, parseFasta, parseAlnFile
+from pwchem.utils.utilsFasta import EMBOSS_FORMATS, parseFasta, parseAlnFile
 from pwchem.objects import SetOfSequencesChem, Sequence
 from pwchem import Plugin
 

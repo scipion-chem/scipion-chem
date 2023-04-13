@@ -24,12 +24,8 @@
 # *
 # **************************************************************************
 
-from math import ceil
-import numpy as np
-
 from pwem.protocols import EMProtocol
-from pyworkflow.object import Float, Integer
-from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, IntParam, FloatParam
+from pyworkflow.protocol.params import PointerParam
 
 class ProtChemExportCSV(EMProtocol):
     """Export a set as a csv. It is located in the Run directory"""
