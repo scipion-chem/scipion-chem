@@ -25,10 +25,8 @@
 # **************************************************************************
 
 import os
-import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params
 from pwem.viewers import ChimeraAttributeViewer
-from pwem.objects import Sequence
 from pwchem.protocols import ProtExtractSeqsROI, ProtCalculateSASA
 from pwchem.viewers.viewers_sequences import SequenceAliView
 

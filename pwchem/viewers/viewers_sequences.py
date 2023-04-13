@@ -32,7 +32,6 @@ from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem
 from pwchem.constants import *
 
-
 class SequenceAliView(pwviewer.CommandView):
     """ View for calling an external command. """
 

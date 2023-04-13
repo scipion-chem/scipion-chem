@@ -25,12 +25,11 @@
 # **************************************************************************
 
 import os
-from subprocess import Popen
 
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 
-from pwchem.objects import StructROI, SetOfStructROIs
+from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.constants import *
 from pwchem.protocols import ProtocolConsensusStructROIs
