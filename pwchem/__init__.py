@@ -41,6 +41,7 @@ from pwchem.install_helper import InstallHelper
 
 _logo = 'pwchem_logo.png'
 RDKIT = 'rdkit'
+DEFAULT_VERSION = '1.0'
 
 class Plugin(pwem.Plugin):
     _rdkitHome = os.path.join(pwem.Config.EM_ROOT, RDKIT)
@@ -49,18 +50,18 @@ class Plugin(pwem.Plugin):
     def defineBinaries(cls, env):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env)
-        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addRDKitPackage(env)
         # cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addMGLToolsPackage(env)
+        cls.addJChemPaintPackage(env)
+        cls.addPyMolPackage(env)
+        cls.addAliViewPackage(env)
+        cls.addVMDPackage(env)
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
-        cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-2.2')
+        cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-' + DEFAULT_VERSION)
+        cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-' + PLIP_DIC['version'])
         cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
         cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
@@ -88,33 +89,26 @@ class Plugin(pwem.Plugin):
 ######################## PACKAGES #########################
     @classmethod
     def addPLIPPackage(cls, env):
-      PLIP_VERSION = '2.2'
+      PLIP_VERSION = PLIP_DIC['version']
       installer = InstallHelper()
 
         #.addCondaPackages('plip', ['clustalo'], channel='bioconda', binaryVersion=PLIP_VERSION, targetName='CLUSTALO_INSTALLED')\
       installer.getCondaEnvCommand('plip', requirementsFile=False, binaryVersion=PLIP_VERSION)\
         .addCondaPackages('plip', ['openbabel', 'swig', 'plip'], channel='conda-forge', binaryVersion=PLIP_VERSION)\
-        .getExtraFile('https://pymol.org/installers/PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
-        .addCommand('tar -jxf PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
-        .addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
         .addProtocolPackage(env, 'plip', protocolVersion=PLIP_VERSION, dependencies=['tar', 'wget'])
 
     @classmethod
-    def addPyMolPackage(cls, env, default=False):
-      PYMOL_INSTALLED = 'pymol_installed'
-      pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
-        format(cls.getDefTar(PYMOL_DIC, ext='tar.bz2'))
-      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.\
-        format(*[cls.getDefTar(PYMOL_DIC, ext='tar.bz2')]*2)
-      pymol_commands += 'touch ' + PYMOL_INSTALLED
-      pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
-      env.addPackage(PYMOL_DIC['name'], version=PYMOL_DIC['version'],
-                     tar='void.tgz',
-                     commands=pymol_commands,
-                     default=True)
+    def addPyMolPackage(cls, env):
+      PYMOL_VERSION = PYMOL_DIC['version']
+      installer = InstallHelper()
+
+      installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_VERSION + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
+        .addCommand('tar -jxf PyMOL-' + PYMOL_VERSION + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
+        .addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
+        .addProtocolPackage(env, 'pymol', protocolVersion=PYMOL_VERSION, dependencies=['tar', 'wget'])
 
     @classmethod
-    def addMGLToolsPackage(cls, env, default=False):
+    def addMGLToolsPackage(cls, env):
         MGL_INSTALLED = "initMGLtools.sh"
         mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
             format(cls.getDefTar(MGL_DIC))
@@ -130,7 +124,7 @@ class Plugin(pwem.Plugin):
                        default=True)
 
     @classmethod
-    def addJChemPaintPackage(cls, env, default=False):
+    def addJChemPaintPackage(cls, env):
         JCHEM_INSTALLED = 'jchem_installed'
         jchem_commands = 'wget https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar -O {} && '.\
           format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version'])))
@@ -146,7 +140,7 @@ class Plugin(pwem.Plugin):
                        default=True)
 
     @classmethod
-    def addRDKitPackage(cls, env, default=False):
+    def addRDKitPackage(cls, env):
         RDKIT_INSTALLED = 'rdkit_installed'
 
         installationCmd = cls.getCondaActivationCmd()
@@ -161,11 +155,11 @@ class Plugin(pwem.Plugin):
                        tar='void.tgz',
                        commands=rdkit_commands,
                        neededProgs=cls.getDependencies(),
-                       default=default,
+                       default=True,
                        vars=installEnvVars)
 
     @classmethod
-    def addShapeitPackage(cls, env, default=False):
+    def addShapeitPackage(cls, env):
       SHAPEIT_INSTALLED = 'shapeit_installed'
 
       installationCmd = ' git clone https://github.com/rdkit/shape-it.git && cd shape-it && mkdir build && cd build &&'
@@ -178,10 +172,10 @@ class Plugin(pwem.Plugin):
                      tar='void.tgz',
                      commands=installationCmd,
                      neededProgs=cls.getDependencies(),
-                     default=default)
+                     default=True)
 
     @classmethod
-    def addAliViewPackage(cls, env, default=False):
+    def addAliViewPackage(cls, env):
       SEQS_INSTALLED = 'aliview_installed'
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
                       '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
@@ -197,7 +191,7 @@ class Plugin(pwem.Plugin):
                      default=True)
 
     @classmethod
-    def addVMDPackage(cls, env, default=False):
+    def addVMDPackage(cls, env):
       VMD_INSTALLED = 'vmd_installed'
 
       installationCmd = cls.getCondaActivationCmd()
@@ -209,7 +203,7 @@ class Plugin(pwem.Plugin):
                      tar='void.tgz',
                      commands=vmd_commands,
                      neededProgs=cls.getDependencies(),
-                     default=default)
+                     default=True)
 
 
     ##################### RUN CALLS #################33333
