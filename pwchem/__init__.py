@@ -49,18 +49,18 @@ class Plugin(pwem.Plugin):
     def defineBinaries(cls, env):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env)
-        #cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
         # cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        #cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
-        #cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
-        #cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
-        #cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
-        #cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
+        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
 
     @classmethod
     def _defineVariables(cls):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
-        cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
+        cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-2.2')
         cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
         cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
@@ -91,6 +91,7 @@ class Plugin(pwem.Plugin):
       PLIP_VERSION = '2.2'
       installer = InstallHelper()
 
+        #.addCondaPackages('plip', ['clustalo'], channel='bioconda', binaryVersion=PLIP_VERSION, targetName='CLUSTALO_INSTALLED')\
       installer.getCondaEnvCommand('plip', requirementsFile=False, binaryVersion=PLIP_VERSION)\
         .addCondaPackages('plip', ['openbabel', 'swig', 'plip'], channel='conda-forge', binaryVersion=PLIP_VERSION)\
         .getExtraFile('https://pymol.org/installers/PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
