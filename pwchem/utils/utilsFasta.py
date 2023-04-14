@@ -114,8 +114,8 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False
         fmt = 'clu'
 
     # Alignment
-    cline = str(alignClustalSequences(oriFasta, outPath))
-    cline += ' --outfmt={}'.format(fmt)
+    activateEnvLine = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+    cline = '{} {} --outfmt={}'.format(activateEnvLine, alignClustalSequences(oriFasta, outPath), fmt)
     if force:
         cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)
