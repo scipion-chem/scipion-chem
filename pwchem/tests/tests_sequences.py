@@ -46,11 +46,11 @@ genSeqsStr = '''1) Variant: Original
 '''
 
 defSetASChain, defSetPDBChain = 'A', 'B'
-defSetSeqFile = 'Tmp/P0DTC2_FIRST-LAST.fa'
-defSetASFile = 'Tmp/4erf_{}_FIRST-LAST.fa'.format(defSetASChain)
+defSetSeqFile = 'Tmp/Seq_1aoi_A_mutated_FIRST-LAST.fa'
+defSetASFile = 'Tmp/1aoi_A_{}_FIRST-LAST.fa'.format(defSetASChain)
 defSetPDBFile = 'Tmp/5ni1_{}_FIRST-LAST.fa'.format(defSetPDBChain)
 
-names = ['P0DTC2', '4erf', '5ni1']
+names = ['Seq_1aoi_A_mutated', '1aoi', '5ni1']
 defSetChains = [None, defSetASChain, defSetPDBChain]
 defSetFiles = [defSetSeqFile, defSetASFile, defSetPDBFile]
 
@@ -209,10 +209,19 @@ class TestDefineSetSequences(TestDefineSequenceROIs):
         cls._waitOutput(cls.protImportPDB, 'outputPdb', sleepTime=5)
 
     @classmethod
+    def _runImportSequence(cls):
+        args = {'inputSequenceName': 'User_seq',
+                'inputProteinSequence': ProtImportSequence.IMPORT_FROM_FILES,
+                'fileSequence': cls.dsModBuild.getFile('Sequences/1aoi_A_mutated.fasta')
+                }
+        cls.protImportSeq = cls.newProtocol(ProtImportSequence, **args)
+        cls.proj.launchProtocol(cls.protImportSeq, wait=False)
+
+    @classmethod
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=0, pdbId='4erf')
+            inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
         cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
@@ -243,7 +252,7 @@ class TestDefineSetSequences(TestDefineSequenceROIs):
             inputList=defSetSeqs
         )
 
-        inpObjs = [cls.protImportSeq.outputSequence, cls.protImportPDB.outputPdb, '5ni1']
+        inpObjs = [cls.protImportSeq.outputSequence, cls.protImportPDB.outputPdb, '1aoi']
         for i, inObj in enumerate(inpObjs):
             cls._writeSeqFiles(inObj, defSetFiles[i], defSetChains[i], names[i])
             if i < 2:
@@ -263,7 +272,7 @@ class TestMapSeqROIs(TestDefineSetSequences):
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=0, pdbId='6vsb')
+            inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
         cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
@@ -295,14 +304,14 @@ class TestPairwiseAlign(TestDefineSetSequences):
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=0, pdbId='6vsb')
+            inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
         cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
     def _runPairwiseAlign(cls, inProts):
         protAlign = cls.newProtocol(
             ProtChemPairWiseAlignment,
-            condAtomStruct1=False, chain_name2='{"model": 0, "chain": "A", "residues": 92}'
+            condAtomStruct1=False, chain_name2='{"model": 0, "chain": "A", "residues": 98}'
         )
         protAlign.inputSequence1.set(inProts[0])
         protAlign.inputSequence1.setExtended('outputSequence')
