@@ -33,12 +33,15 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
+
+from pwem.wizards.wizard import VariableWizard, EmWizard
+from pwem.objects import SetOfSequences, Pointer
+
 from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI, ProtCalculateSASA
-from pwem.wizards.wizard import VariableWizard
+
 
 ################# Sequence variants ###############################
 class SelectVariant(VariableWizard):
@@ -121,31 +124,58 @@ class AddSequenceROIWizard(VariableWizard):
             return 'Variant'
         elif inParamName == 'selectMutation':
             return 'Mutations'
+        elif inParamName == 'inputSubsequences':
+            return 'SubSequences'
+
+    def getPrevPointersIds(self, prevPointers):
+      ids = []
+      for p in prevPointers:
+        ids.append(p.get().getObjId())
+      return ids
 
     def show(self, form, *params):
-      protocol = form.protocol
-      inputParams, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+        inputParams, outputParam = self.getInputOutput(form)
 
-      inList = getattr(protocol, inputParams[1]).get()
-      num = len(inList.strip().split('\n'))
-      if inList.strip() != '':
-        num += 1
+        inList = getattr(protocol, inputParams[1]).get()
+        num = len(inList.strip().split('\n'))
+        if inList.strip() != '':
+          num += 1
 
-      inParamName = inputParams[0]
-      label = self.getOriginLabel(inParamName)
+        inParamName = inputParams[0]
+        label = self.getOriginLabel(inParamName)
 
-      roiInfo = getattr(protocol, inParamName).get()
-      if len(inputParams) > 2 and hasattr(protocol, inputParams[2]):
-          roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (getattr(protocol, inputParams[2]).get()))
+        if label == 'SubSequences':
+            prevPointers = getattr(protocol, outputParam[1])
+            prevIds = self.getPrevPointersIds(prevPointers)
+            newSet = getattr(protocol, inputParams[0]).get()
+            newId = newSet.getObjId()
 
-      form.setVar(outputParam[0], getattr(protocol, inputParams[1]).get() + '{}) {}: {}\n'.format(num, label, roiInfo))
+            if not newId in prevIds:
+                newIndex = len(prevPointers)
+                prevPointers.append(Pointer(newSet))
+            else:
+                newIndex = prevIds.index(newId)
+            form.setVar(outputParam[1], prevPointers)
+
+        roiInfo = getattr(protocol, inParamName).get()
+        if label == 'SubSequences':
+            roiInfo = '{"PointerIdx": "%s", "Name": "%s"}' % (newIndex, roiInfo.__str__())
+        elif len(inputParams) > 2 and hasattr(protocol, inputParams[2]):
+            try:
+                roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (getattr(protocol, inputParams[2]).get()))
+            except:
+                return
+
+        form.setVar(outputParam[0], getattr(protocol, inputParams[1]).get() + '{}) {}: {}\n'.format(num, label, roiInfo))
 
 
 AddSequenceROIWizard().addTarget(protocol=ProtDefineSeqROI,
                                  targets=['addROI'],
-                                 inputs=[{'whichToAdd': ['resPosition', 'selectVariant', 'selectMutation']},
+                                 inputs=[{'whichToAdd': ['resPosition', 'inputSubsequences',
+                                                         'selectVariant', 'selectMutation']},
                                          'inROIs', 'descrip'],
-                                 outputs=['inROIs'])
+                                 outputs=['inROIs', 'inputPointers'])
 
 AddSequenceROIWizard().addTarget(protocol=ProtChemGenerateVariants,
                                  targets=['addVariant'],
