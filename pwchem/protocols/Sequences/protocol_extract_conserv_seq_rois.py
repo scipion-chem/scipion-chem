@@ -122,15 +122,12 @@ class ProtExtractSeqsROI(EMProtocol):
                        help='Main threshold that checks the values of the conservation and defines that a position is '
                             'or is not conserved depending on its conservation values.\n'
                             'Conservation values are normalized from 0 (high conservation) to 1 (low conservation)')
-        group.addParam('flexThres', params.FloatParam,
-                       label='Flexible threshold for conserved region: ', allowsNull=True,
-                       help='This threshold allows an already started conserved region to keep growing if the '
-                            'conservation values passes it even if it does not pass the main threshold.\n'
-                            'Conservation values are normalized from 0 (high conservation) to 1 (low conservation)')
-        group.addParam('numFlex', params.IntParam, default=1,
-                       label='Number of consecutive flexible: ', expertLevel=params.LEVEL_ADVANCED,
-                       help='Number of consecutive times that the main threshold can be violated and the flexible '
-                            'threshold stands.')
+        group.addParam('performSoftening', params.BooleanParam, default=True, label='Perform softening: ',
+                       help='Use a Gaussian sliding window filter to soften the variability values')
+        line = group.addLine('Gaussian softening: ', condition='performSoftening',
+                             help='Perform Gaussian softening with this parameters')
+        line.addParam('wSize', params.FloatParam, label="Window size (odd number): ", default=3)
+        line.addParam('gStd', params.FloatParam, label="Gaussian deviation: ", default=1)
 
         group.addParam('minSize', params.IntParam, default=1,
                        label='Minimum region size: ',
@@ -219,6 +216,9 @@ class ProtExtractSeqsROI(EMProtocol):
         warns = []
         if not hasattr(self.inputSequences.get(), 'aligned') or not getattr(self.inputSequences.get(), 'aligned'):
             warns.append('Input sequences must be aligned to perform the conservation analysis.')
+        if self.performSoftening.get() and self.wSize.get() % 2 != 1:
+            warns.append('The size of the softenning window must be an odd number. Using {} instead of {}'.
+                          format(self.wSize.get() - 1, self.wSize.get()))
         return warns
 
     def _validate(self):
@@ -236,6 +236,30 @@ class ProtExtractSeqsROI(EMProtocol):
         summary_align = AlignInfo.SummaryInfo(alignment)
         return summary_align.gap_consensus(0.5)
 
+    def performSoft(self, values, wSize=3, gStd=1):
+        from scipy import signal
+        if wSize % 2 != 1:
+            wSize = wSize - 1
+        if wSize <= 0:
+            return values
+        window, values = signal.windows.gaussian(wSize, std=gStd), np.array(values)
+        nValues, size = [], len(window) // 2
+        for i in range(len(values)):
+            cValues = values[i - size: i + size + 1]
+            if i - size < 0:
+                # Left border
+                cValues = values[:i + size + 1]
+                cWindow = window[-len(cValues):]
+            elif len(cValues) < len(window):
+                #  Right border
+                cWindow = window[:len(cValues)]
+            else:
+                cWindow = window
+
+            cWindow = cWindow / sum(window)
+            nValues.append(np.dot(cValues, cWindow))
+        return nValues
+
     def calcConservation(self):
         seqsArr = self.getSequencesArray()
         if self.getEnumText('method') == SHANNON:
@@ -247,6 +271,10 @@ class ProtExtractSeqsROI(EMProtocol):
         elif self.getEnumText('method') == PROP:
             values = self.calcProp(seqsArr)
 
+        if self.performSoftening.get():
+            wSize, gStd = self.wSize.get(), self.gStd.get()
+            values = self.performSoft(values, wSize, gStd )
+
         outFile = self.getConservationFile()
         with open(outFile, 'w') as f:
             for value in values:
@@ -256,10 +284,6 @@ class ProtExtractSeqsROI(EMProtocol):
     def getROIs(self):
         with open(self.getConservationFile()) as f:
             consValues = f.readline().split()
-
-        flexThres = self.flexThres.get()
-        if not flexThres:
-            flexThres = self.thres.get()
 
         rois = []
         inRoi, fails = False, 0
@@ -271,14 +295,6 @@ class ProtExtractSeqsROI(EMProtocol):
                 if not inRoi:
                     inRoi = True
                     iniRoi = i + 1
-
-            elif ((v > flexThres and self.direction.get() == 1) or \
-                    (v < flexThres and self.direction.get() == 0)) and inRoi:
-                if fails >= self.numFlex.get():
-                    rois.append([iniRoi, i + 1])
-                    inRoi = False
-                else:
-                    fails += 1
 
             elif inRoi:
                 rois.append([iniRoi, i + 1])

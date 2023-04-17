@@ -188,8 +188,8 @@ AddSequenceROIWizard().addTarget(protocol=ProtChemGenerateVariants,
 
 ########################## Sequence conservation ####################################
 
-class CheckSequencesConservation(EmWizard):
-  _targets = [(ProtExtractSeqsROI, ['thres'])]
+class CheckSequencesConservation(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
 
   def getConservationValues(self, protocol):
       protocol.calcConservation()
@@ -199,7 +199,11 @@ class CheckSequencesConservation(EmWizard):
 
   def show(self, form, *params):
     protocol = form.protocol
+    inputParams, outputParam = self.getInputOutput(form)
+    thres = getattr(protocol, inputParams[0]).get()
+
     consValues = self.getConservationValues(protocol)
+    maxY = max(consValues)
 
     xs = np.arange(len(consValues))
 
@@ -208,13 +212,19 @@ class CheckSequencesConservation(EmWizard):
     ax.bar(xs, consValues)
     yloc = plt.MaxNLocator(10)
     ax.yaxis.set_major_locator(yloc)
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, maxY + 0.1)
+    ax.axhline(y=thres, color='r', linestyle='-', linewidth=1)
 
     plt.xlabel("Sequence position")
     plt.ylabel("Variability value")
     plt.title('Variability values along sequence')
 
     plt.show()
+
+CheckSequencesConservation().addTarget(protocol=ProtExtractSeqsROI,
+                                 targets=['thres'],
+                                 inputs=['thres'],
+                                 outputs=[])
 
 class CheckSequencesAccesibility(EmWizard):
   _targets = [(ProtCalculateSASA, ['thres'])]
