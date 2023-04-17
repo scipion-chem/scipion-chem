@@ -40,8 +40,7 @@ from pyworkflow.object import String
 from pwem.wizards.wizard import VariableWizard, EmWizard
 from pwem.objects import SetOfSequences, Pointer
 
-from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI, ProtCalculateSASA
-
+from pwchem.protocols import ProtChemGenerateVariants, ProtDefineSeqROI
 
 ################# Sequence variants ###############################
 class SelectVariant(VariableWizard):
@@ -182,95 +181,4 @@ AddSequenceROIWizard().addTarget(protocol=ProtChemGenerateVariants,
                                  inputs=[{'fromVariant': ['selectVariant', 'selectMutation']},
                                          'toMutateList'],
                                  outputs=['toMutateList'])
-
-
-
-
-########################## Sequence conservation ####################################
-
-class CheckSequencesConservation(VariableWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
-  def getConservationValues(self, protocol):
-      protocol.calcConservation()
-      with open(protocol.getConservationFile()) as f:
-        consValues = f.readline().split()
-      return list(map(float, consValues))
-
-  def show(self, form, *params):
-    protocol = form.protocol
-    inputParams, outputParam = self.getInputOutput(form)
-    thres = getattr(protocol, inputParams[0]).get()
-
-    consValues = self.getConservationValues(protocol)
-    maxY = max(consValues)
-
-    xs = np.arange(len(consValues))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.bar(xs, consValues)
-    yloc = plt.MaxNLocator(10)
-    ax.yaxis.set_major_locator(yloc)
-    ax.set_ylim(0, maxY + 0.1)
-    ax.axhline(y=thres, color='r', linestyle='-', linewidth=1)
-
-    plt.xlabel("Sequence position")
-    plt.ylabel("Variability value")
-    plt.title('Variability values along sequence')
-
-    plt.show()
-
-CheckSequencesConservation().addTarget(protocol=ProtExtractSeqsROI,
-                                 targets=['thres'],
-                                 inputs=['thres'],
-                                 outputs=[])
-
-class CheckSequencesAccesibility(EmWizard):
-  _targets = [(ProtCalculateSASA, ['thres'])]
-
-  def show(self, form, *params):
-    protocol = form.protocol
-    consValues = protocol.getAccesibilityValues(inProt=False)
-
-    xs = np.arange(len(consValues))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.bar(xs, consValues)
-    yloc = plt.MaxNLocator(10)
-    ax.yaxis.set_major_locator(yloc)
-
-    plt.xlabel("Sequence position")
-    plt.ylabel("Accesibility value")
-    plt.title('Accesibility values along sequence')
-
-    plt.show()
-
-class GetSequencesWizard(EmWizard):
-    """Lists the sequences in a SetOfSequences and choose one"""
-    _targets = [(ProtExtractSeqsROI, ['outSeq'])]
-
-    def getListOfSequences(self, protocol):
-      seqList = []
-      if hasattr(protocol, 'inputSequences') and protocol.inputSequences.get() is not None:
-        for i, seq in enumerate(protocol.inputSequences.get()):
-          seqList.append('{}) {}'.format(i+1, seq.clone()))
-      return seqList
-
-    def show(self, form, *params):
-      protocol = form.protocol
-      try:
-        listOfSeqs = self.getListOfSequences(protocol)
-      except Exception as e:
-        print("ERROR: ", e)
-        return
-
-      finalSeqsList = []
-      for i in listOfSeqs:
-        finalSeqsList.append(String(i))
-      provider = ListTreeProviderString(finalSeqsList)
-      dlg = dialog.ListDialog(form.root, "Sequences", provider,
-                              "Select one sequence")
-      form.setVar('outSeq', dlg.values[0].get())
 

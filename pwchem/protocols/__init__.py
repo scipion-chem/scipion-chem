@@ -61,7 +61,8 @@ from pwchem.protocols.Sequences.protocol_generate_variants import ProtChemGenera
 
 from pwchem.protocols.Sequences.protocol_define_sequence_roi import ProtDefineSeqROI
 from pwchem.protocols.Sequences.protocol_import_sequence_roi import ProtImportSeqROI
-from pwchem.protocols.Sequences.protocol_extract_conserv_seq_rois import ProtExtractSeqsROI
+from pwchem.protocols.Sequences.protocol_calculate_conservation import ProtSeqCalculateConservation
+from pwchem.protocols.Sequences.protocol_extract_attribute_ROIs import ProtExtractSeqsROI
 from pwchem.protocols.Sequences.protocol_operate_sequence_rois import ProtOperateSeqROI
 from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
 

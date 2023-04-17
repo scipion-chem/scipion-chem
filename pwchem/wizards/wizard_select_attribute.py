@@ -38,6 +38,9 @@ from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 
 from pwem.wizards import SelectAttributeWizard
+from pwem.objects import String
+
+from pwchem.wizards import VariableWizard
 import pwchem.protocols as chemprot
 
 
@@ -113,3 +116,47 @@ SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtChemOperateSe
                                       inputs=['operation', 'inputSet', 'inputMultiSet'],
                                       outputs=['filterColumn'])
 
+
+########################## Sequence Attributes ####################################
+
+class SelectSequenceAttribute(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParams, outputParam = self.getInputOutput(form)
+    inSeq = getattr(protocol, inputParams[0]).get()
+
+    attrNames = list(map(String, inSeq.getAttributesDic()))
+
+    provider = ListTreeProviderString(attrNames)
+    dlg = dialog.ListDialog(form.root, "Sequence attributes", provider,
+                            "Select one attribute")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+
+SelectSequenceAttribute().addTarget(protocol=chemprot.ProtExtractSeqsROI,
+                                 targets=['inputAttribute'],
+                                 inputs=['inputSequence'],
+                                 outputs=['inputAttribute'])
+
+class CheckSequencesAttribute(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getProtAttributeValues(self, protocol):
+      return protocol.getAttributeValues()
+
+  def show(self, form, *params):
+    from pwchem.viewers.viewer_structure_attributes import plotSequenceAttribute
+    protocol = form.protocol
+    inputParams, outputParam = self.getInputOutput(form)
+    thres = getattr(protocol, inputParams[0]).get()
+    attrName = getattr(protocol, inputParams[1]).get()
+
+    attrValues = self.getProtAttributeValues(protocol)
+    plotSequenceAttribute(attrValues, attrName, thres)
+
+CheckSequencesAttribute().addTarget(protocol=chemprot.ProtExtractSeqsROI,
+                                    targets=['thres'],
+                                    inputs=['thres', 'inputAttribute'],
+                                    outputs=[])

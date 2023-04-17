@@ -64,6 +64,35 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
+class SequenceChem(data.Sequence):
+    def __init__(self, **kwargs):
+        data.Sequence.__init__(self, **kwargs)
+        self._attrFile = pwobj.String(kwargs.get('attributesFile', False))
+
+    def __str__(self):
+        return "SequenceChem (name = {})\n".format(self.getSeqName())
+
+    def getAttrFile(self):
+        return self._attrFile.get()
+
+    def setAttrFile(self, value):
+        self._attrFile.set(value)
+
+    def addAttributes(self, attrDic):
+        attrFile = self.getAttrFile()
+        with open(attrFile, 'a') as f:
+            for key, values in attrDic.items():
+                f.write('{}: {}\n'.format(key, values))
+
+    def getAttributesDic(self):
+        attrDic = {}
+        with open(self.getAttrFile()) as f:
+            for line in f:
+                key, values = line.split(':')
+                attrDic[key.strip()] = eval(values.strip())
+        return attrDic
+
+
 class SetOfSequencesChem(data.SetOfSequences):
     def __init__(self, **kwargs):
         data.SetOfSequences.__init__(self, **kwargs)
@@ -71,7 +100,7 @@ class SetOfSequencesChem(data.SetOfSequences):
         self._alignFile = pwobj.String(kwargs.get('alignFile', None))
 
     def getAligned(self):
-        self._aligned.get()
+        return self._aligned.get()
 
     def setAligned(self, value):
         self._aligned.set(value)
@@ -558,11 +587,12 @@ class SetOfSequenceROIs(data.EMSet):
     def exportToFile(self, outPath):
         if os.path.exists(outPath):
             os.remove(outPath)
-        wholeSeq = self.getFirstItem().getSequence()
-        self.getFirstItem()._sequence.exportToFile(outPath)
+        wholeSeqObj = self.getSequenceObj()
+        wholeSeq = wholeSeqObj.getSequence()
+        wholeSeqObj.exportToFile(outPath)
         for roi in self:
-            tmpSeq = ['-'] * len(wholeSeq)
             roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
+            tmpSeq = ['-'] * (len(wholeSeq) - len(roiSeq) + 1)
             tmpSeq[roiIdx-1] = roiSeq
 
             tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
