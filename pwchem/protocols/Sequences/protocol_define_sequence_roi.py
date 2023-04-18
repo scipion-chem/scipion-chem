@@ -36,6 +36,7 @@ from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 
+from pwchem.utils.utilsFasta import pairwiseAlign, parseFasta
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
 
@@ -48,7 +49,7 @@ class ProtDefineSeqROI(EMProtocol):
     """
     _label = 'Define sequence ROIs'
     _inputOptions = ['Sequence', 'SequenceVariants']
-    _originOptions = ['Residues', 'Variant', 'Mutations']
+    _originOptions = ['Residues', 'SubSequences', 'Variant', 'Mutations']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -68,7 +69,7 @@ class ProtDefineSeqROI(EMProtocol):
         group = form.addGroup('Add ROI')
         group.addParam('whichToAdd', params.EnumParam, choices=self._originOptions,
                        display=params.EnumParam.DISPLAY_HLIST,
-                       label='Add ROI from: ', condition='chooseInput==1', default=0,
+                       label='Add ROI from: ', default=0,
                        help='Add ROI from which definition (residues, variant or mutation)')
         #From residues
         group.addParam('resPosition', params.StringParam, label='Residues of interest: ',
@@ -77,19 +78,24 @@ class ProtDefineSeqROI(EMProtocol):
                             'You can either select a single residue or a range '
                             '(it will take into account the first and last residues selected)')
 
+        # From a set of sequences (that must constain subsequences)
+        group.addParam('inputSubsequences', params.PointerParam, label='SubSequences: ', condition='whichToAdd==1',
+                       pointerClass='SetOfSequences', allowsNull=True,
+                       help='Specify the set of sequences containing the subsequences that will be defined as ROIs')
+
         #From Variant
-        group.addParam('selectVariant', params.StringParam, condition='chooseInput==1 and whichToAdd==1',
+        group.addParam('selectVariant', params.StringParam, condition='chooseInput==1 and whichToAdd==2',
                        label='Select a predefined variant:',
                        help="Variant to use for defining the ROIs. Each mutation will be a different ROI")
         #From mutations
         group.addParam('selectMutation', params.StringParam,
-                       label='Select some mutations: ', condition='chooseInput==1 and whichToAdd==2',
+                       label='Select some mutations: ', condition='chooseInput==1 and whichToAdd==3',
                        help="Mutations to be defined as sequence ROIs.\n"
                             "You can do multiple selection. Each mutation will be a different ROI")
 
         # Common for ROIs independent of the origin
         group.addParam('descrip', params.StringParam,
-                       label='ROI description: ', condition='whichToAdd==0',
+                       label='ROI description: ', condition='whichToAdd in [0]',
                        help='Specify some description for this region of interest')
 
         group.addParam('addROI', params.LabelParam,
@@ -98,6 +104,20 @@ class ProtDefineSeqROI(EMProtocol):
         group.addParam('inROIs', params.TextParam, width=70, default='',
                       label='Input residues: ',
                       help='Input residues to define the ROI.')
+
+        form.addSection(label='Input Pointers')
+        form.addParam('inputPointerLabels', params.LabelParam, important=True,
+                      label='Records of inputs. Do not modificate manually',
+                      help='This is a list of the input pointer to keep track of the inputs received.\n'
+                           'It is automatically updated with the first section wizards.\n'
+                           'Manual modification (adding inputs from the lens) will have no actual impact on the '
+                           'protocol performance')
+        form.addParam('inputPointers', params.MultiPointerParam, pointerClass="Sequence, AtomStruct",
+                      label='Input Pointers: ', allowsNull=True,
+                      help='This is a list of the input pointer to keep track of the inputs received.\n'
+                           'It is automatically updated with the first section wizards.\n'
+                           'Manual modification (adding inputs from the lens) will have no actual impact on the '
+                           'protocol performance')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -120,14 +140,19 @@ class ProtDefineSeqROI(EMProtocol):
                 idxsList = [[int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]]
                 descList = [resDic['desc']]
 
+            elif '{}:'.format(self._originOptions[1]) in rStr:
+                setIdx = json.loads(':'.join(rStr.split(':')[1:]))['PointerIdx']
+                inSeqSet = self.inputPointers[int(setIdx)].get()
+                roiList, idxsList, descList = self.roisFromSequences(inSeqSet)
+
             elif not 'Original' == roiInfo:
                 # Variant origin
-                if '{}:'.format(self._originOptions[1]) in rStr:
+                if '{}:'.format(self._originOptions[2]) in rStr:
                     var2mutDic = self.inputSequenceVariants.get().getMutationsInLineage()
                     muts = var2mutDic[roiInfo]
 
                 # Mutants origin
-                elif '{}:'.format(self._originOptions[2]) in rStr:
+                elif '{}:'.format(self._originOptions[3]) in rStr:
                     muts = roiInfo.split(',')
 
                 roiList, idxsList, descList = [], [], []
@@ -172,5 +197,34 @@ class ProtDefineSeqROI(EMProtocol):
             return self.inputSequence.get()
         elif self.chooseInput.get() == 1:
             return self.inputSequenceVariants.get()._sequence
+
+    def parseROIFasta(self, fastaFile):
+        roiStrList, roiIdxList = [], []
+        fDic = parseFasta(fastaFile)
+        roiLine = fDic[list(fDic.keys())[1]]
+        for roiStr in roiLine.split('-'):
+            if roiStr.strip():
+                roiIdx = roiLine.index(roiStr)
+                roiIdxs = [roiIdx + 1, roiIdx + len(roiLine) + 1]
+                roiStrList.append(roiStr), roiIdxList.append(roiIdxs)
+
+        return roiStrList, roiIdxList
+
+    def roisFromSequences(self, seqs):
+        roiList, idxsList, descList = [], [], []
+        inputSeq = self.getInputSequence()
+        for i, subseq in enumerate(seqs):
+            subseqName = subseq.getSeqName()
+            if not subseqName:
+                subseqName = 'sequence_{}'.format(i)
+
+            out_file = os.path.abspath(self._getExtraPath("pairWise_{}.fasta".format(subseqName)))
+            pairwiseAlign(inputSeq, subseq, out_file, seqName1='Original', seqName2=subseqName)
+
+            roiStrList, roiIdxsList = self.parseROIFasta(out_file)
+            for i in range(len(roiStrList)):
+                roiList.append(roiStrList[i]), idxsList.append(roiIdxsList[i]), descList.append(subseqName)
+        return roiList, idxsList, descList
+
 
 
