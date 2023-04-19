@@ -137,17 +137,40 @@ class TestGenerateSequences(TestImportVariants):
         self._waitOutput(p, 'outputSequences', sleepTime=10)
         self.assertIsNotNone(getattr(p, 'outputSequences', None))
 
-
-class TestExtractSequenceROIs(TestGenerateSequences):
+class TestCalculateConservation(TestGenerateSequences):
     @classmethod
-    def _runExtractROIs(cls, inProt, fThres = 0.4, minSize=3):
+    def _runCalculateConservation(cls, inProt):
+
+        protCalcCons = cls.newProtocol(
+            ProtSeqCalculateConservation,
+        )
+        protCalcCons.inputSequences.set(inProt)
+        protCalcCons.inputSequences.setExtended('outputSequences')
+
+        cls.proj.launchProtocol(protCalcCons, wait=False)
+        return protCalcCons
+
+    def test(self):
+        pGen = self._runGenerateSequences(self.protImportVariants)
+        self._waitOutput(pGen, 'outputSequences', sleepTime=10)
+
+        p = self._runCalculateConservation(pGen)
+
+        self._waitOutput(p, 'outputSequence', sleepTime=10)
+        self.assertIsNotNone(getattr(p, 'outputSequence', None), 'Test failed, SequenceChem not generated')
+
+
+class TestExtractSequenceROIs(TestCalculateConservation):
+    @classmethod
+    def _runExtractROIs(cls, inProt, fThres=0.4, minSize=3, direc=0):
 
         protExtSeqROIs = cls.newProtocol(
             ProtExtractSeqsROI,
-            thres=0.2, flexThres=fThres, minSize=minSize, direction=1
+            inputAttribute='Maximum Proportion Conservation',
+            thres=fThres, minSize=minSize, direction=direc
         )
-        protExtSeqROIs.inputSequences.set(inProt)
-        protExtSeqROIs.inputSequences.setExtended('outputSequences')
+        protExtSeqROIs.inputSequence.set(inProt)
+        protExtSeqROIs.inputSequence.setExtended('outputSequence')
 
         cls.proj.launchProtocol(protExtSeqROIs, wait=False)
         return protExtSeqROIs
@@ -155,11 +178,12 @@ class TestExtractSequenceROIs(TestGenerateSequences):
     def test(self):
         pGen = self._runGenerateSequences(self.protImportVariants)
         self._waitOutput(pGen, 'outputSequences', sleepTime=10)
+        pCons = self._runCalculateConservation(pGen)
+        self._waitOutput(pCons, 'outputSequence', sleepTime=10)
 
-        p = self._runExtractROIs(pGen, minSize=1)
-
+        p = self._runExtractROIs(pCons, minSize=1, fThres=0.05, direc=1)
         self._waitOutput(p, 'outputROIs', sleepTime=10)
-        self.assertIsNotNone(getattr(p, 'outputROIs', None))
+        self.assertIsNotNone(getattr(p, 'outputROIs', None), 'Test failed, no output SequenceROIs generated')
 
 class TestOperateSeqROIs(TestExtractSequenceROIs, TestDefineSequenceROIs):
     @classmethod
@@ -185,9 +209,11 @@ class TestOperateSeqROIs(TestExtractSequenceROIs, TestDefineSequenceROIs):
     def test(self):
         pGen = self._runGenerateSequences(self.protImportVariants)
         pDef = self._runDefSeqROIs(inProt=self.protImportVariants, mode=1)
-
         self._waitOutput(pGen, 'outputSequences', sleepTime=10)
-        pExt = self._runExtractROIs(pGen, fThres=0.2, minSize=1)
+
+        pCons = self._runCalculateConservation(pGen)
+        self._waitOutput(pCons, 'outputSequence', sleepTime=10)
+        pExt = self._runExtractROIs(pCons, fThres=0.05, minSize=1, direc=1)
 
         self._waitOutput(pExt, 'outputROIs', sleepTime=10)
         self._waitOutput(pDef, 'outputROIs', sleepTime=10)

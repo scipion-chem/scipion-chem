@@ -89,8 +89,7 @@ class TestCalculateSASA(BaseTest):
   def _runCalculateSASA(cls, inputProt):
       protSASA = cls.newProtocol(
         ProtCalculateSASA,
-        extractRegions=True, chain_name='{"model": 0, "chain": "A", "residues": 98}',
-        direction=1, thres=80.0, minSize=2)
+        extractSequence=True, chain_name='{"model": 0, "chain": "A", "residues": 98}')
 
       protSASA.inputAtomStruct.set(inputProt)
       protSASA.inputAtomStruct.setExtended('outputPdb')
@@ -101,6 +100,6 @@ class TestCalculateSASA(BaseTest):
   def test(self):
     protSASA = self._runCalculateSASA(self.protImportPDB)
     self._waitOutput(protSASA, 'outputAtomStruct', sleepTime=5)
-    self.assertIsNotNone(protSASA.outputAtomStruct, "Test failed")
-    self.assertIsNotNone(protSASA.outputROIs, "Test failed")
+    self.assertIsNotNone(protSASA.outputAtomStruct, "Test failed, AtomStruct not generated")
+    self.assertIsNotNone(protSASA.outputSequence, "Test failed, SequenceChem not generated")
 
