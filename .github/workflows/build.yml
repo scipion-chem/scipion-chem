@@ -37,20 +37,20 @@ jobs:
     
     # Installing Miniconda
     - name: Install Miniconda
+      working-directory: $GITHUB_WORKSPACE/../
       run: |
-        ls && \
-        cd .. && ls && \
         wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-        bash Miniconda3-latest-Linux-x86_64.sh -b -p ${{ github.workspace }}/miniconda/ && \
-        source ${{ github.workspace }}/miniconda/etc/profile.d/conda.sh
+        bash Miniconda3-latest-Linux-x86_64.sh -b -p ${{ github.workspace }}/../miniconda/ && \
+        source ./miniconda/etc/profile.d/conda.sh
     
     # Installing Scipion
     - name: Install Scipion
+      working-directory: $GITHUB_WORKSPACE/../
       run: |
-        eval "$(${{ github.workspace }}/miniconda/bin/conda shell.bash hook)" && \
+        eval "$(${{ github.workspace }}/../miniconda/bin/conda shell.bash hook)" && \
         pip3 install --user scipion-installer && \
-        python3 -m scipioninstaller -conda -noXmipp -noAsk ${{ github.workspace }}/scipion && \
-        ${{ github.workspace }}/scipion/scipion3 config --overwrite
+        python3 -m scipioninstaller -conda -noXmipp -noAsk ${{ github.workspace }}..//scipion && \
+        ./scipion/scipion3 config --overwrite
     
     # Check out the repository in the pull request
     - name: Checkout repository
