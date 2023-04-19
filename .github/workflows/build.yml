@@ -44,9 +44,10 @@ jobs:
         source ./miniconda/etc/profile.d/conda.sh
     
     # Installing Scipion
-    - name: Install Scipion
+    - name: Install Scipion with dependencies
       working-directory: ${{ github.workspace }}/../
       run: |
+        sudo apt-get install gcc-10 g++-10 libopenmpi-dev make && \
         eval "$(${{ github.workspace }}/../miniconda/bin/conda shell.bash hook)" && \
         pip3 install --user scipion-installer && \
         python3 -m scipioninstaller -conda -noXmipp -noAsk ${{ github.workspace }}..//scipion && \
