@@ -107,16 +107,17 @@ class ProtCalculateSASA(EMProtocol):
 
         if self.extractSequence.get():
             inChain = self.getChain()
-            inFile = inpStruct.getFileName()
-            ASH.read(inFile)
-            outStr = str(ASH.getSequenceFromChain(modelID=0, chainID=inChain))
+            if inChain:
+                inFile = inpStruct.getFileName()
+                ASH.read(inFile)
+                outStr = str(ASH.getSequenceFromChain(modelID=0, chainID=inChain))
 
-            outSeq = SequenceChem(name='{}_{}'.format(getBaseName(inFile), inChain),
-                                  sequence=outStr, id='{}_{}'.format(getBaseName(inFile), inChain),
-                                  attributesFile=self._getExtraPath('sequenceAttributes.txt'))
-            outSeq.addAttributes({'SASA': self.getSASAChainValues(inChain)})
+                outSeq = SequenceChem(name='{}_{}'.format(getBaseName(inFile), inChain),
+                                      sequence=outStr, id='{}_{}'.format(getBaseName(inFile), inChain),
+                                      attributesFile=self._getExtraPath('sequenceAttributes.txt'))
+                outSeq.addAttributes({'SASA': self.getSASAChainValues(inChain)})
 
-            self._defineOutputs(outputSequence=outSeq)
+                self._defineOutputs(outputSequence=outSeq)
 
 
     # --------------------------- INFO functions -----------------------------------
