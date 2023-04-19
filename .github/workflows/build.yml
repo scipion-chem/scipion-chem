@@ -60,7 +60,7 @@ jobs:
 
     # Install plugin from the pull request using the Scipion3 installp command
     - name: Install plugin from pull request
-      working-directory: $GITHUB_WORKSPACE
+      working-directory: ${{ github.workspace }}
       run: |
         # Install the repository from the pull request
         pwd && \
