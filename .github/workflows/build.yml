@@ -1,5 +1,5 @@
 # Name of the GitHub Action
-name: Install and test Scipion framework on pull requests
+name: Build scipion-chem on Pull Request
 
 # Specify when the Action should be triggered: when a pull request is opened against the 'devel' or 'master' branch
 on:
@@ -39,18 +39,16 @@ jobs:
     - name: Install Miniconda
       run: |
         wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-        mkdir -p ${PWD}/miniconda && \
-        bash Miniconda3-latest-Linux-x86_64.sh -b -p ${PWD}/miniconda/ && \
-        source ${PWD}/miniconda/etc/profile.d/conda.sh
+        bash Miniconda3-latest-Linux-x86_64.sh -b -p ${{ github.workspace }}/miniconda/ && \
+        source ${{ github.workspace }}/miniconda/etc/profile.d/conda.sh
     
     # Installing Scipion
     - name: Install Scipion
       run: |
         conda activate && \
         pip3 install --user scipion-installer && \
-        mkdir -p ${PWD}/scipion && \
-        python3 -m scipioninstaller -conda -noXmipp -noAsk ${PWD}/scipion && \
-        ${PWD}/scipion/scipion3 config --overwrite
+        python3 -m scipioninstaller -conda -noXmipp -noAsk ${{ github.workspace }}/scipion && \
+        ${{ github.workspace }}/scipion/scipion3 config --overwrite
     
     # Check out the repository in the pull request
     - name: Checkout repository
