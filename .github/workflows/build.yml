@@ -45,7 +45,7 @@ jobs:
     # Installing Scipion
     - name: Install Scipion
       run: |
-        conda activate && \
+        eval "$(${{ github.workspace }}/miniconda/bin/conda shell.bash hook)" && \
         pip3 install --user scipion-installer && \
         python3 -m scipioninstaller -conda -noXmipp -noAsk ${{ github.workspace }}/scipion && \
         ${{ github.workspace }}/scipion/scipion3 config --overwrite
