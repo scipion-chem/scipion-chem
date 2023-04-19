@@ -63,4 +63,5 @@ jobs:
       working-directory: $GITHUB_WORKSPACE
       run: |
         # Install the repository from the pull request
+        pwd && \
         scipion3 installp -p . --devel
