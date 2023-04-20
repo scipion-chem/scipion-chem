@@ -1193,12 +1193,9 @@ class SetOfStructROIs(data.EMSet):
         rawStr = getRawPDBStr(pocketFile, ter=False).strip()
         if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
             for line in rawStr.split('\n'):
-                try:
-                    pdbLine = writePDBLine(replacements)
-                except:
-                    sline = splitPDBLine(line)
-                    replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:-1], 'Ve']
-                    pdbLine = writePDBLine(replacements)
+                sline = splitPDBLine(line)
+                replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
+                pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'P2Rank' or pocket.getPocketClass() == 'Standard':
