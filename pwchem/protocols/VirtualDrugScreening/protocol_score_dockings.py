@@ -313,8 +313,8 @@ class ProtocolScoreDocking(EMProtocol):
 
     def getPoseFilesStr(self):
         poseFilesFile = self._getTmpPath('poseFIles.txt')
-        allMols = self.getAllInputMols()
         if not os.path.exists(poseFilesFile):
+            allMols = self.getAllInputMols()
             poseFilesStr = ' '.join([os.path.abspath(mol.getPoseFile()) for mol in allMols])
             with open(poseFilesFile, 'w') as f:
                 f.write(poseFilesStr)
