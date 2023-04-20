@@ -31,6 +31,7 @@ from pwem.objects.data import Sequence
 
 from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
+from pwchem import Plugin
 
 EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
                   'SwisProt': 'sw', 'NCBI': 'ncbi',
@@ -44,7 +45,8 @@ EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x
 def convertEMBOSSformat(inputAlignmentFile, embossFormat, outputAligmentFile):
   '''Connvert alignment files. Options in EMBOSS_FORMATS dictionary
   Returns a command line which must be executed into the scipion environment'''
-  cl_run = 'seqret -sequence {} -osformat2 {} {}'. \
+  cl_run = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+  cl_run += 'seqret -sequence {} -osformat2 {} {}'. \
     format(inputAlignmentFile, embossFormat, outputAligmentFile)
   return cl_run
 
@@ -112,8 +114,8 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False
         fmt = 'clu'
 
     # Alignment
-    cline = str(alignClustalSequences(oriFasta, outPath))
-    cline += ' --outfmt={}'.format(fmt)
+    activateEnvLine = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+    cline = '{} {} --outfmt={}'.format(activateEnvLine, alignClustalSequences(oriFasta, outPath), fmt)
     if force:
         cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)

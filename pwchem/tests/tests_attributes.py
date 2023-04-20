@@ -81,7 +81,7 @@ class TestCalculateSASA(BaseTest):
   def _runImportPDB(cls):
     protImportPDB = cls.newProtocol(
       ProtImportPdb,
-      inputPdbData=0, pdbId='4erf')
+      inputPdbData=1, pdbFile=cls.ds.getFile('PDBx_mmCIF/1aoi.cif'))
     cls.launchProtocol(protImportPDB)
     cls.protImportPDB = protImportPDB
 
@@ -89,8 +89,8 @@ class TestCalculateSASA(BaseTest):
   def _runCalculateSASA(cls, inputProt):
       protSASA = cls.newProtocol(
         ProtCalculateSASA,
-        extractRegions=True, chain_name='{"model": 0, "chain": "A", "residues": 92}',
-        direction=1, thres=100.0, minSize=2)
+        extractRegions=True, chain_name='{"model": 0, "chain": "A", "residues": 98}',
+        direction=1, thres=80.0, minSize=2)
 
       protSASA.inputAtomStruct.set(inputProt)
       protSASA.inputAtomStruct.setExtended('outputPdb')

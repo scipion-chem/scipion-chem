@@ -31,6 +31,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat, parseFasta, parseAlnFile
 from pwchem.objects import SetOfSequencesChem, Sequence
+from pwchem import Plugin
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
@@ -85,16 +86,19 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         # Clustal Omega
         if programName == CLUSTALO:
             output_file = os.path.abspath(self._getPath('clustal_Omega.aln'))
-            cline = 'clustalo -i {} {} -o {} --outfmt=clu'.format(input_file, extraArgs, output_file)
+            cline = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+            cline += 'clustalo -i {} {} -o {} --outfmt=clu'.format(input_file, extraArgs, output_file)
 
         # Muscle
         elif programName == MUSCLE:
             output_file = os.path.abspath(self._getPath('muscle.aln'))
-            cline = 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
+            cline = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+            cline += 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
             output_file = os.path.abspath(self._getPath('mafft.aln'))
-            cline = 'mafft {} --clustalout {} > {}'.format(extraArgs, input_file, output_file)
+            cline = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+            cline += 'mafft {} --clustalout {} > {}'.format(extraArgs, input_file, output_file)
 
         self.runJob(cline, '')
 

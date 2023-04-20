@@ -62,6 +62,7 @@ class Plugin(pwem.Plugin):
         cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
         cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
         cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
+        cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
         cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
@@ -88,21 +89,15 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addPLIPPackage(cls, env, default=False):
       PLIP_INSTALLED = 'plip_installed'
-      plip_commands = 'conda create -y -n plip-env python=3.6 && '
-      plip_commands += '%s %s && ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation())
-      #Installing openbabel
-      plip_commands += 'conda install -y -c conda-forge openbabel && '
-      #Installing swig
-      plip_commands += 'conda install -y -c conda-forge swig && '
-      #Installing Pymol
-      plip_commands += 'conda install -y -c schrodinger -c conda-forge pymol && '
-      #Installing PLIP
-      plip_commands += 'conda install -y -c conda-forge plip && touch {}'.format(PLIP_INSTALLED)
 
-      plip_commands = [(plip_commands, PLIP_INSTALLED)]
+      installationCmd = cls.getCondaActivationCmd()
+      installationCmd += 'conda create --name plip-env --file {} && '.format(cls.getEnvSpecsPath('plip'))
+      installationCmd += 'touch {}'.format(PLIP_INSTALLED)
+
+      installationCmd = [(installationCmd, PLIP_INSTALLED)]
       env.addPackage(PLIP_DIC['name'], version=PLIP_DIC['version'],
                      tar='void.tgz',
-                     commands=plip_commands,
+                     commands=installationCmd,
                      default=True)
 
     @classmethod
@@ -156,8 +151,8 @@ class Plugin(pwem.Plugin):
         RDKIT_INSTALLED = 'rdkit_installed'
 
         installationCmd = cls.getCondaActivationCmd()
-        installationCmd += ' conda create -y -c conda-forge -n rdkit-env rdkit oddt &&'
-        installationCmd += ' mkdir oddtModels && touch %s' % RDKIT_INSTALLED
+        installationCmd += 'conda create --name rdkit-env --file {} && '.format(cls.getEnvSpecsPath('rdkit'))
+        installationCmd += 'mkdir oddtModels && touch %s' % RDKIT_INSTALLED
 
         rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
 
@@ -192,10 +187,7 @@ class Plugin(pwem.Plugin):
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
                       '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
       seqs_commands += 'tar -xf {} && rm {} &&'.format(*[cls.getDefTar(ALIVIEW_DIC)]*2)
-      seqs_commands += ' conda install -y -c bioconda clustalo &&'
-      seqs_commands += ' conda install -y -c bioconda muscle &&'
-      seqs_commands += ' conda install -y -c bioconda mafft &&'
-      seqs_commands += ' conda install -y -c bioconda emboss &&'
+      seqs_commands += ' conda create --name bioconda-env --file {} && '.format(cls.getEnvSpecsPath('bioconda'))
       seqs_commands += ' touch %s' % SEQS_INSTALLED
 
       seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
@@ -240,12 +232,6 @@ class Plugin(pwem.Plugin):
       outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
       protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
       os.rename(progFile, outFile)
-
-    @classmethod
-    def runRDKit(cls, protocol, program, args, cwd=None):
-      """ Run rdkit command from a given protocol. """
-      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getRDKitEnvActivation(), program)
-      protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 
     @classmethod
     def runJChemPaint(cls, protocol, cwd=None):
@@ -301,6 +287,11 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getScriptsDir(cls, scriptName):
       return cls.getPluginHome('scripts/%s' % scriptName)
+
+    @classmethod
+    def getEnvSpecsPath(cls, env=None):
+      envFile = '/{}_env_spec.txt'.format(env) if env else ''
+      return cls.getPluginHome('envs%s' % envFile)
 
     @classmethod
     def getMGLEnviron(cls):

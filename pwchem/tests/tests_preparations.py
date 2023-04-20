@@ -142,7 +142,7 @@ class TestPrepareReceptor(BaseTest):
     def _runImportPDB(cls):
       cls.protImportPDB = cls.newProtocol(
         ProtImportPdb,
-        inputPdbData=0, pdbId='4erf')
+        inputPdbData=1, pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
       cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
@@ -151,7 +151,7 @@ class TestPrepareReceptor(BaseTest):
         ProtChemPrepareReceptor,
         inputAtomStruct=cls.protImportPDB.outputPdb,
         HETATM=True, rchains=True,
-        chain_name='{"model": 0, "chain": "C", "residues": 93}')
+        chain_name='{"model": 0, "chain": "C", "residues": 141}')
 
       cls.launchProtocol(cls.protPrepareReceptor)
 
