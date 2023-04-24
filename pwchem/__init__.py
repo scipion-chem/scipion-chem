@@ -133,7 +133,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addJChemPaintPackage(cls, env, default=False):
         JCHEM_INSTALLED = 'jchem_installed'
-        jchem_commands = 'wget https://github.com/downloads/JChemPaint/jchempaint/jchempaint-3.3-1210.jar -O {} && '.\
+        jchem_commands = 'wget https://sourceforge.net/projects/cdk/files/JChemPaint/3.2.0/jchempaint-3.2.0.jar/download -O {} && '.\
           format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version'])))
         jchem_commands += 'chmod +x {} && '.format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.
                                                                   format(JCHEM_DIC['version'])))
