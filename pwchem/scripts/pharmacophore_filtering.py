@@ -159,6 +159,9 @@ if __name__ == "__main__":
             boundsMat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
             canMatch, allMatches = EmbedLib.MatchPharmacophoreToMol(mol, featFactory, pcophore)
             if canMatch:
+                # for (i, match) in enumerate(allMatches):
+                #     for f in match:
+                #         print("%d %s %s %s" % (i, f.GetFamily(), f.GetType(), f.GetAtomIds()))
                 failed, boundsMatMatched, matched, matchDetails = \
                     EmbedLib.MatchPharmacophore(allMatches, boundsMat, pcophore, useDownsampling=downSample)
                 if failed:
@@ -168,9 +171,13 @@ if __name__ == "__main__":
                 print("Couldn't match molecule {}".format(molFileDic[mol]))
                 continue
             atomMatch = [list(x.GetAtomIds()) for x in matched]
+            # for match in matched:
+            #     print("%s %d" % (match.GetFamily(), match.GetAtomIds()[0]))
+
             try:
                 molH = Chem.AddHs(mol, addCoords=True)
-                bm, embeddings, numFail = EmbedLib.EmbedPharmacophore(molH, atomMatch, pcophore, randomSeed=44,
+                Chem.AssignStereochemistry(molH, force=True, cleanIt=True)
+                bm, embeddings, numFail = EmbedLib.EmbedPharmacophore(molH, atomMatch, pcophore, randomSeed=44, silent=True,
                                                                       targetNumber=nAlignments, count=nAlignments*10)
                 # always yielding equal embeddings for all nAlignments
                 if optimize:
@@ -182,25 +189,26 @@ if __name__ == "__main__":
                 else:
                     optEmbeddings = embeddings
 
-            except ValueError:
+            except:
                 print("Bounds smoothing failed for molecule {}".format(molFileDic[mol]))
                 continue
 
 
             SSDs, confs = transformEmbeddings(pcophore, optEmbeddings, atomMatch)
-            bestFitIndex = min(enumerate(SSDs), key=itemgetter(1))[0]
+            if SSDs:
+                bestFitIndex = min(enumerate(SSDs), key=itemgetter(1))[0]
 
-            #print('Best: ', bestFitIndex)
-            #print('SSDs: ', SSDs)
-            prevSSDs = []
-            for i, conf in enumerate(confs):
-                if maxSSD >= SSDs[i] and not SSDs[i] in prevSSDs:
-                    optMol = optEmbeddings[i]
-                    outFile = os.path.join(outDir, getBaseFileName(molFileDic[mol]) + '_{}.sdf'.format(i))
-                    writeMol(optMol, outFile, cid=confs[i].GetId())
-                    prevSSDs.append(SSDs[i])
+                #print('Best: ', bestFitIndex)
+                #print('SSDs: ', SSDs)
+                prevSSDs = []
+                for i, conf in enumerate(confs):
+                    if maxSSD >= SSDs[i] and not SSDs[i] in prevSSDs:
+                        optMol = optEmbeddings[i]
+                        outFile = os.path.join(outDir, getBaseFileName(molFileDic[mol]) + '_{}.sdf'.format(i))
+                        writeMol(optMol, outFile, cid=confs[i].GetId())
+                        prevSSDs.append(SSDs[i])
 
-                    res[mol] = [outFile, SSDs[i]]
+                        res[mol] = [outFile, SSDs[i]]
 
         with open(os.path.join(outDir, 'deviations.tsv'), 'w') as f:
             f.write('OriginalMolecule\tOutputMolecule\tDeviation\n')

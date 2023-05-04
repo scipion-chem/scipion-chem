@@ -250,15 +250,15 @@ if __name__ == "__main__":
             clustDic[feat] = clusteringKMeans(features_coord[feat], kNumber).labels_
         elif method == DBSCAN:
             clustDic[feat] = clusteringDBScan(features_coord[feat], dbEps)
-   # print('clustDic: ', clustDic)
 
     ## Filters top clusters with minimum size
     cluster_indices = {feat: [] for feat in selFeatures}
     for feat in cluster_indices:
-        min_cluster_size = getMinClusterSize(paramsDic, len(molecules), len(clustDic[feat]))
-        selClusters = get_clusters(clustDic[feat], min_cluster_size, top_cluster_number)
-        if selClusters:
-            cluster_indices[feat] = selClusters
+        if clustDic[feat] is not None:
+            min_cluster_size = getMinClusterSize(paramsDic, len(molecules), len(clustDic[feat]))
+            selClusters = get_clusters(clustDic[feat], min_cluster_size, top_cluster_number)
+            if selClusters:
+                cluster_indices[feat] = selClusters
 
     # print('cluster_indices_sel: ', cluster_indices_sel)
 
