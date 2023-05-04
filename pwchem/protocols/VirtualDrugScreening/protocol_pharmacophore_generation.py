@@ -132,7 +132,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
             os.makedirs(outDir)
 
         for ligand in self.inputSmallMolecules.get():
-            inFile = ligand.getPoseFile()
+            inFile = ligand.getPoseFile() if ligand.getPoseFile() else ligand.getFileName()
             if not inFile.split('.')[-1] in ['pdb', 'mol2', 'sdf', 'mol']:
                 shutil.copy(inFile, os.path.join(tmpDir, os.path.basename(inFile)))
             else:
@@ -167,7 +167,8 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
           radii = pickle.load(clRadii)
 
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
-        outPharm.setProteinFile(abspath(self.inputSmallMolecules.get().getProteinFile()))
+        if self.inputSmallMolecules.get().getProteinFile():
+            outPharm.setProteinFile(abspath(self.inputSmallMolecules.get().getProteinFile()))
         for feat in radii:
             feat_radii = radii[feat]
             for i, loc in enumerate(centers[feat]):
