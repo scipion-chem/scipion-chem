@@ -77,12 +77,16 @@ class ProtMapSequenceROI(EMProtocol):
                        help='Preview the alignment of the specified Sequence and AtomStruct chain')
 
         group = form.addGroup('Distances')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                       label='Maximum atom depth (A): ',
-                       help='Maximum atom distance to the surface to be considered and mapped')
         group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
                        label='Maximum distance between pocket points (A): ',
                        help='Maximum distance between two pocket atoms to considered them same pocket')
+        group.addParam('surfaceCoords', params.BooleanParam, default=True,
+                       label='Map coordinates to surface? ',
+                       help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
+                            'closest surface coordinates or use them directly.')
+        group.addParam('maxDepth', params.FloatParam, default='3.0',
+                       label='Maximum atom depth (A): ',  condition='surfaceCoords',
+                       help='Maximum atom distance to the surface to be considered and mapped')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -108,10 +112,11 @@ class ProtMapSequenceROI(EMProtocol):
 
         mapDic = self.mapResidues(structModel)
 
-        originCoords = self.getROICoords(mapDic, structModel)
-        if originCoords:
-            surfaceCoords = self.mapSurfaceCoords(originCoords)
-            self.coordsClusters = self.clusterSurfaceCoords(surfaceCoords)
+        pocketCoords = self.getROICoords(mapDic, structModel)
+        if pocketCoords:
+            if self.surfaceCoords:
+                pocketCoords = self.mapSurfaceCoords(pocketCoords)
+            self.coordsClusters = self.clusterSurfaceCoords(pocketCoords)
         else:
             print('Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln"))
 
@@ -222,6 +227,7 @@ class ProtMapSequenceROI(EMProtocol):
                 if roiIdx in mapDic:
                     #Only added a residue if there was correspondance in the alignment
                     resIdxs.append(mapDic[roiIdx])
+        print(resIdxs)
 
         coords = []
         chainId = json.loads(self.chain_name.get())['chain']
