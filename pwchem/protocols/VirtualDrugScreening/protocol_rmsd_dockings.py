@@ -153,9 +153,9 @@ class ProtocolRMSDDocking(EMProtocol):
     def mapLabels(self, mol, posDic):
         '''Map the atom labels which were normally reorganized during the ligand preparation to those in the original
         molecule'''
-        mapDic, pDic = invertDic(mol.getMapDic()), {}
+        mapDic, pDic = mol.getMapDic(), {}
         for prevLabel in posDic:
-            pDic[mapDic[prevLabel]] = posDic[prevLabel]
+            pDic[mapDic[prevLabel.upper()]] = posDic[prevLabel.upper()]
         return pDic
 
     def is_het(self, residue):

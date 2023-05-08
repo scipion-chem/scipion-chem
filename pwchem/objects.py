@@ -422,11 +422,11 @@ class SmallMolecule(data.EMObject):
                 for probLabel in probCoords:
                     dist = calculateDistance(refCoords[refLabel], probCoords[probLabel])
                     if dist <= distThres:
-                        mapDic[refLabel] = probLabel
+                        mapDic[refLabel.upper()] = probLabel.upper()
 
         elif mapBy == 'order':
             for refLabel, probLabel in zip(refCoords, probCoords):
-                mapDic[refLabel] = probLabel
+                mapDic[refLabel.upper()] = probLabel.upper()
 
         if not len(mapDic) == len(refCoords):
             print('Atom label mapping could not be completed correctly')
