@@ -227,7 +227,6 @@ class ProtMapSequenceROI(EMProtocol):
                 if roiIdx in mapDic:
                     #Only added a residue if there was correspondance in the alignment
                     resIdxs.append(mapDic[roiIdx])
-        print(resIdxs)
 
         coords = []
         chainId = json.loads(self.chain_name.get())['chain']
