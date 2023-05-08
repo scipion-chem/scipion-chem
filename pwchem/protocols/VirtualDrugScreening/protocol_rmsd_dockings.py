@@ -153,11 +153,7 @@ class ProtocolRMSDDocking(EMProtocol):
     def mapLabels(self, mol, posDic):
         '''Map the atom labels which were normally reorganized during the ligand preparation to those in the original
         molecule'''
-        mapDic, pDic = {}, {}
-        with open(mol._mappingFile.get()) as fIn:
-            for line in fIn:
-                sline = line.split()
-                mapDic[sline[1]] = sline[0]
+        mapDic, pDic = invertDic(mol.getMapDic()), {}
         for prevLabel in posDic:
             pDic[mapDic[prevLabel]] = posDic[prevLabel]
         return pDic

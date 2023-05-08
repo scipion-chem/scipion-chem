@@ -214,9 +214,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             fnSmall = mol.getFileName()
             fnRoot = getBaseFileName(fnSmall)
             fnSmall = self._getExtraPath("{}_prep.mol2".format(fnRoot))
-            print('Look for ', fnSmall)
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:
-                mapFile = self.writeMapFile(mol, SmallMolecule(smallMolFilename=fnSmall))
+                mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=fnSmall), outDir=self._getExtraPath())
                 if self.doConformers:
                     fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                     outDir = self._getExtraPath(fnRoot)
@@ -268,16 +267,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
       with open(paramsFile) as f:
         code = f.readline().split()[1]
       return code
-
-    def writeMapFile(self, refMol, probMol, outFile=None):
-      if not outFile:
-          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getMolName()))
-
-      mapDic = refMol.mapLabels(probMol)
-      with open(outFile, 'w') as f:
-        for refLabel in mapDic:
-          f.write('{}\t{}\n'.format(refLabel, mapDic[refLabel]))
-      return outFile
 
     def reorderAtoms(self, inFile, outFile):
         '''Atom lines in the file are reordered so the atomNames numbers are in order (C2, C1, C3 -> C1, C2, C3)'''

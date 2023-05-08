@@ -379,7 +379,7 @@ class SmallMolecule(data.EMObject):
                 numType = {}
                 for i, line in enumerate(fIn):
                     if i >= 4:
-                        if len(line.split()) == 10:
+                        if len(line.split()) > 4:
                             elements = line.split()
                             atomType, coords = elements[3], elements[:3]
                             if atomType in numType:
@@ -395,21 +395,48 @@ class SmallMolecule(data.EMObject):
 
         return posDic
 
-    def mapLabels(self, probMol, distThres=0.1):
+    def getMapDic(self):
+        mapDic = {}
+        with open(self._mappingFile.get()) as fIn:
+            for line in fIn:
+                sline = line.split()
+                mapDic[sline[1]] = sline[0]
+        return mapDic
+
+    def mapLabels(self, probMol, mapBy='coords', distThres=0.1):
         '''Maps the labels of the reference molecule to other probe molecule, which must be the same and
         have the same positions. Returns a dic with the mapping'''
         mapDic = {}
         refCoords, probCoords = self.getAtomsPosDic(), probMol.getAtomsPosDic()
-        for refLabel in refCoords:
-            for probLabel in probCoords:
-                dist = calculateDistance(refCoords[refLabel], probCoords[probLabel])
-                if dist <= distThres:
-                    mapDic[refLabel] = probLabel
+        if mapBy == 'coords':
+            for refLabel in refCoords:
+                for probLabel in probCoords:
+                    dist = calculateDistance(refCoords[refLabel], probCoords[probLabel])
+                    if dist <= distThres:
+                        mapDic[refLabel] = probLabel
+
+        elif mapBy == 'order':
+            for refLabel, probLabel in zip(refCoords, probCoords):
+                mapDic[refLabel] = probLabel
+
         if not len(mapDic) == len(refCoords):
             print('Atom label mapping could not be completed correctly')
             return
         else:
             return mapDic
+
+    def writeMapFile(self, probMol, mapBy='coords', overWrite=False, outFile=None, outDir=None):
+        if not outFile:
+            if not outDir:
+                outDir = os.path.dirname(probMol.getFileName())
+            outFile = os.path.join(outDir, 'mapping_{}.tsv'.format(self.getMolName()))
+
+        if not os.path.exists(outFile) or overWrite:
+            mapDic = self.mapLabels(probMol, mapBy)
+            with open(outFile, 'w') as f:
+                for refLabel in mapDic:
+                    f.write('{}\t{}\n'.format(refLabel, mapDic[refLabel]))
+        return outFile
 
 
 class SetOfSmallMolecules(data.EMSet):
