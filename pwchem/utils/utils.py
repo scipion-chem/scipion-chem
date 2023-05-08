@@ -498,7 +498,7 @@ def invertDic(d):
         di[v] = k
     return di
 
-def relabelMapAtomsMol2(atomFile, mapDic, i=''):
+def relabelMapAtomsMol2(atomFile, i=''):
   '''Relabel the atom names according to a mapping dictionary.'''
   atomCount = {}
   auxFile = atomFile.replace(os.path.basename(atomFile), '{}_aux{}.mol2'.format(os.path.basename(atomFile), i))

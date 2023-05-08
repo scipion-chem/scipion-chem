@@ -225,6 +225,7 @@ class SmallMolecule(data.EMObject):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
+        self._mappingFile = pwobj.String(kwargs.get('mappingFile', None))
         self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
         self.molName = pwobj.String(kwargs.get('molName', None))
         if self.molName.get() and self.molName.get().lower() == 'guess':
@@ -271,6 +272,13 @@ class SmallMolecule(data.EMObject):
 
     def setPoseFile(self, value):
         return self.poseFile.set(value)
+
+    def getMappingFile(self):
+        '''Filename of the molecule after docking'''
+        return self._mappingFile.get()
+
+    def setMappingFile(self, value):
+        return self._mappingFile.set(value)
 
     def setPoseId(self, value):
         return self.poseId.set(value)
@@ -397,10 +405,11 @@ class SmallMolecule(data.EMObject):
 
     def getMapDic(self):
         mapDic = {}
-        with open(self._mappingFile.get()) as fIn:
-            for line in fIn:
-                sline = line.split()
-                mapDic[sline[1]] = sline[0]
+        if self.getMappingFile():
+            with open(self.getMappingFile()) as fIn:
+                for line in fIn:
+                    sline = line.split()
+                    mapDic[sline[1]] = sline[0]
         return mapDic
 
     def mapLabels(self, probMol, mapBy='coords', distThres=0.1):

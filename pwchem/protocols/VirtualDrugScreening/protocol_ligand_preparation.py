@@ -232,11 +232,11 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                         newSmallMol.setFileName(molFile)
                         newSmallMol.setConfId(confId)
                         newSmallMol._ConformersFile = pwobj.String(confFile)
-                        newSmallMol._mappingFile = pwobj.String(mapFile)
+                        newSmallMol.setMappingFile(pwobj.String(mapFile))
                         outputSmallMolecules.append(newSmallMol)
                 else:
                     newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
-                    newSmallMol._mappingFile = pwobj.String(mapFile)
+                    newSmallMol.setMappingFile(pwobj.String(mapFile))
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:

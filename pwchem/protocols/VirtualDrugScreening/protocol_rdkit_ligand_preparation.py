@@ -156,7 +156,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
                     newSmallMol.setFileName(molFile)
                     newSmallMol.setConfId(confId)
-                    newSmallMol._mappingFile = pwobj.String(mapFile)
+                    newSmallMol.setMappingFile(pwobj.String(mapFile))
                     outputSmallMolecules.append(newSmallMol)
 
         if len(outputSmallMolecules) > 0:
