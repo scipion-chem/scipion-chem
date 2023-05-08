@@ -464,6 +464,8 @@ def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None):
 
 
 def relabelAtomsMol2(atomFile, i=''):
+  '''Relabel the atom names so each atom type goes from 1 to x, so if there is only one oxygen named O7,
+  it will be renamed to O1'''
   atomCount = {}
   auxFile = atomFile.replace(os.path.basename(atomFile), 'aux{}.mol2'.format(i))
   atomLines = False
@@ -484,6 +486,41 @@ def relabelAtomsMol2(atomFile, i=''):
 
         if line.startswith('@<TRIPOS>ATOM'):
           atomLines = True
+
+        fOut.write(line)
+
+  shutil.move(auxFile, atomFile)
+  return atomFile
+
+def invertDic(d):
+    di = {}
+    for k, v in d.items():
+        di[v] = k
+    return di
+
+def relabelMapAtomsMol2(atomFile, i=''):
+  '''Relabel the atom names according to a mapping dictionary.'''
+  atomCount = {}
+  auxFile = atomFile.replace(os.path.basename(atomFile), '{}_aux{}.mol2'.format(os.path.basename(atomFile), i))
+  atomLines = False
+  with open(auxFile, 'w') as fOut:
+    with open(atomFile) as fIn:
+      for line in fIn:
+        if atomLines and line.startswith('@<TRIPOS>'):
+          atomLines = False
+
+        if atomLines:
+            atomName = line.split()[1]
+            atomType = removeNumberFromStr(atomName)
+
+            atomCount[atomType] = 1 if not atomType in atomCount else atomCount[atomType] + 1
+            atomName = atomName if atomType != atomName else atomName + str(atomCount[atomType])
+
+            numSize = len(str(atomCount[atomType]))
+            line = line[:8] + ' ' * (2 - len(atomType)) + atomName.ljust(8 + len(atomType)) + line[18:]
+
+        if line.startswith('@<TRIPOS>ATOM'):
+            atomLines = True
 
         fOut.write(line)
 
