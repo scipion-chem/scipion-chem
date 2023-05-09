@@ -51,7 +51,7 @@ class TestExtractLigand(BaseTest):
   def _runImportPDB(cls):
     protImportPDB = cls.newProtocol(
       ProtImportPdb,
-      inputPdbData=0, pdbId='4erf')
+      inputPdbData=1, pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
     cls.launchProtocol(protImportPDB)
     cls.protImportPDB = protImportPDB
 
@@ -59,7 +59,7 @@ class TestExtractLigand(BaseTest):
   def _runExtractLigand(cls, inputProt):
       protExtLig = cls.newProtocol(
         ProtExtractLigands,
-        cleanPDB=True, rchains=True, chain_name='{"model": 0, "chain": "C", "residues": 93}')
+        cleanPDB=True, rchains=True, chain_name='{"model": 0, "chain": "C", "residues": 141}')
 
       protExtLig.inputStructure.set(inputProt)
       protExtLig.inputStructure.setExtended('outputPdb')

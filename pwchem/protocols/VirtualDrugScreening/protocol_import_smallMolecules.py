@@ -273,7 +273,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
             zIdErrors += f.read().split('\n')[:-1]
           os.remove(errFile)
 
-        self.downloadSDFZINCThread(zIdErrors)
+        if len(zIdErrors) > 0:
+            self.downloadSDFZINCThread(zIdErrors)
 
     def downloadSDFZINCThread(self, zIDs):
         nt = self.numberOfThreads.get()

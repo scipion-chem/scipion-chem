@@ -34,10 +34,10 @@ from pwchem.protocols import *
 
 
 class TestImportBoth(BaseTest):
-
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
         cls.dsLig = DataSet.getDataSet("smallMolecules")
         cls.lig_data = cls.dsLig.getFile('mix')
 
@@ -46,8 +46,8 @@ class TestImportBoth(BaseTest):
     @classmethod
     def _importPDB(cls):
         inputPdbData = 1  # file
-        args = {'inputPdbData': 0,
-                'pdbId': '4erf'
+        args = {'inputPdbData': 1,
+                'pdbFile': cls.ds.getFile('PDBx_mmCIF/5ni1.pdb')
                 }
 
         protocol = cls.newProtocol(ProtImportPdb, **args)

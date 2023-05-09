@@ -351,7 +351,7 @@ SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               inputs=['inputAtomStruct2'],
                               outputs=['chain_name2'])
 
-SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
+SelectChainWizardQT().addTarget(protocol=ProtSeqCalculateConservation,
                               targets=['chain_name'],
                               inputs=['inputAS'],
                               outputs=['chain_name'])
@@ -359,6 +359,11 @@ SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
 SelectChainWizardQT().addTarget(protocol=ProtExtractLigands,
                               targets=['chain_name'],
                               inputs=['inputStructure'],
+                              outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
 
 SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
@@ -595,6 +600,11 @@ SelectElementWizard().addTarget(protocol=ProtocolRMSDDocking,
                                 targets=['refMolName'],
                                 inputs=['refSmallMolecules'],
                                 outputs=['refMolName'])
+
+SelectElementWizard().addTarget(protocol=ProtSeqCalculateConservation,
+                               targets=['outSeq'],
+                               inputs=['inputSequences'],
+                               outputs=['outSeq'])
 
 SelectElementMultiPointerWizard().addTarget(protocol=ProtocolPharmacophoreModification,
                                            targets=['currentFeatures'],

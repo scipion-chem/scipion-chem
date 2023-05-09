@@ -46,11 +46,11 @@ genSeqsStr = '''1) Variant: Original
 '''
 
 defSetASChain, defSetPDBChain = 'A', 'B'
-defSetSeqFile = 'Tmp/P0DTC2_FIRST-LAST.fa'
-defSetASFile = 'Tmp/4erf_{}_FIRST-LAST.fa'.format(defSetASChain)
+defSetSeqFile = 'Tmp/Seq_1aoi_A_mutated_FIRST-LAST.fa'
+defSetASFile = 'Tmp/1aoi_A_{}_FIRST-LAST.fa'.format(defSetASChain)
 defSetPDBFile = 'Tmp/5ni1_{}_FIRST-LAST.fa'.format(defSetPDBChain)
 
-names = ['P0DTC2', '4erf', '5ni1']
+names = ['Seq_1aoi_A_mutated', '1aoi', '5ni1']
 defSetChains = [None, defSetASChain, defSetPDBChain]
 defSetFiles = [defSetSeqFile, defSetASFile, defSetPDBFile]
 
@@ -137,17 +137,40 @@ class TestGenerateSequences(TestImportVariants):
         self._waitOutput(p, 'outputSequences', sleepTime=10)
         self.assertIsNotNone(getattr(p, 'outputSequences', None))
 
-
-class TestExtractSequenceROIs(TestGenerateSequences):
+class TestCalculateConservation(TestGenerateSequences):
     @classmethod
-    def _runExtractROIs(cls, inProt, fThres = 0.4, minSize=3):
+    def _runCalculateConservation(cls, inProt):
+
+        protCalcCons = cls.newProtocol(
+            ProtSeqCalculateConservation,
+        )
+        protCalcCons.inputSequences.set(inProt)
+        protCalcCons.inputSequences.setExtended('outputSequences')
+
+        cls.proj.launchProtocol(protCalcCons, wait=False)
+        return protCalcCons
+
+    def test(self):
+        pGen = self._runGenerateSequences(self.protImportVariants)
+        self._waitOutput(pGen, 'outputSequences', sleepTime=10)
+
+        p = self._runCalculateConservation(pGen)
+
+        self._waitOutput(p, 'outputSequence', sleepTime=10)
+        self.assertIsNotNone(getattr(p, 'outputSequence', None), 'Test failed, SequenceChem not generated')
+
+
+class TestExtractSequenceROIs(TestCalculateConservation):
+    @classmethod
+    def _runExtractROIs(cls, inProt, fThres=0.4, minSize=3, direc=0):
 
         protExtSeqROIs = cls.newProtocol(
             ProtExtractSeqsROI,
-            thres=0.2, flexThres=fThres, minSize=minSize, direction=1
+            inputAttribute='Maximum Proportion Conservation',
+            thres=fThres, minSize=minSize, direction=direc
         )
-        protExtSeqROIs.inputSequences.set(inProt)
-        protExtSeqROIs.inputSequences.setExtended('outputSequences')
+        protExtSeqROIs.inputSequence.set(inProt)
+        protExtSeqROIs.inputSequence.setExtended('outputSequence')
 
         cls.proj.launchProtocol(protExtSeqROIs, wait=False)
         return protExtSeqROIs
@@ -155,11 +178,12 @@ class TestExtractSequenceROIs(TestGenerateSequences):
     def test(self):
         pGen = self._runGenerateSequences(self.protImportVariants)
         self._waitOutput(pGen, 'outputSequences', sleepTime=10)
+        pCons = self._runCalculateConservation(pGen)
+        self._waitOutput(pCons, 'outputSequence', sleepTime=10)
 
-        p = self._runExtractROIs(pGen, minSize=1)
-
+        p = self._runExtractROIs(pCons, minSize=1, fThres=0.05, direc=1)
         self._waitOutput(p, 'outputROIs', sleepTime=10)
-        self.assertIsNotNone(getattr(p, 'outputROIs', None))
+        self.assertIsNotNone(getattr(p, 'outputROIs', None), 'Test failed, no output SequenceROIs generated')
 
 class TestOperateSeqROIs(TestExtractSequenceROIs, TestDefineSequenceROIs):
     @classmethod
@@ -185,9 +209,11 @@ class TestOperateSeqROIs(TestExtractSequenceROIs, TestDefineSequenceROIs):
     def test(self):
         pGen = self._runGenerateSequences(self.protImportVariants)
         pDef = self._runDefSeqROIs(inProt=self.protImportVariants, mode=1)
-
         self._waitOutput(pGen, 'outputSequences', sleepTime=10)
-        pExt = self._runExtractROIs(pGen, fThres=0.2, minSize=1)
+
+        pCons = self._runCalculateConservation(pGen)
+        self._waitOutput(pCons, 'outputSequence', sleepTime=10)
+        pExt = self._runExtractROIs(pCons, fThres=0.05, minSize=1, direc=1)
 
         self._waitOutput(pExt, 'outputROIs', sleepTime=10)
         self._waitOutput(pDef, 'outputROIs', sleepTime=10)
@@ -209,10 +235,19 @@ class TestDefineSetSequences(TestDefineSequenceROIs):
         cls._waitOutput(cls.protImportPDB, 'outputPdb', sleepTime=5)
 
     @classmethod
+    def _runImportSequence(cls):
+        args = {'inputSequenceName': 'User_seq',
+                'inputProteinSequence': ProtImportSequence.IMPORT_FROM_FILES,
+                'fileSequence': cls.dsModBuild.getFile('Sequences/1aoi_A_mutated.fasta')
+                }
+        cls.protImportSeq = cls.newProtocol(ProtImportSequence, **args)
+        cls.proj.launchProtocol(cls.protImportSeq, wait=False)
+
+    @classmethod
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=0, pdbId='4erf')
+            inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
         cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
@@ -243,7 +278,7 @@ class TestDefineSetSequences(TestDefineSequenceROIs):
             inputList=defSetSeqs
         )
 
-        inpObjs = [cls.protImportSeq.outputSequence, cls.protImportPDB.outputPdb, '5ni1']
+        inpObjs = [cls.protImportSeq.outputSequence, cls.protImportPDB.outputPdb, '1aoi']
         for i, inObj in enumerate(inpObjs):
             cls._writeSeqFiles(inObj, defSetFiles[i], defSetChains[i], names[i])
             if i < 2:
@@ -263,7 +298,7 @@ class TestMapSeqROIs(TestDefineSetSequences):
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=0, pdbId='6vsb')
+            inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
         cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
@@ -295,14 +330,14 @@ class TestPairwiseAlign(TestDefineSetSequences):
     def _runImportPDB(cls):
         cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
-            inputPdbData=0, pdbId='6vsb')
+            inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
         cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
     @classmethod
     def _runPairwiseAlign(cls, inProts):
         protAlign = cls.newProtocol(
             ProtChemPairWiseAlignment,
-            condAtomStruct1=False, chain_name2='{"model": 0, "chain": "A", "residues": 92}'
+            condAtomStruct1=False, chain_name2='{"model": 0, "chain": "A", "residues": 98}'
         )
         protAlign.inputSequence1.set(inProts[0])
         protAlign.inputSequence1.setExtended('outputSequence')
