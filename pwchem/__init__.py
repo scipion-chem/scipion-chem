@@ -205,7 +205,7 @@ class Plugin(pwem.Plugin):
       installationCmd = cls.getCondaActivationCmd()
       installationCmd += 'conda create -y -c conda-forge -n biosimspace-env mamba "python<3.10" && '
       installationCmd += '{} {} && '.format(cls.getCondaActivationCmd(), cls.getEnvActivation('BIOSIMSPACE'))
-      installationCmd += 'mamba install -c openbiosim biosimspace={} vmd ambertools=22 compilers && '.\
+      installationCmd += 'mamba install -c openbiosim -y biosimspace={} vmd nglview ambertools=22 compilers && '.\
         format(BIOSIMSPACE_DIC['version'])
 
       installationCmd += 'touch %s' % BIOSIM_INSTALLED

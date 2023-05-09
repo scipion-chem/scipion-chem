@@ -33,7 +33,7 @@ JCHEM_DIC = {'name': 'jchempaint',  'version': '3.2.0',   'home': 'JCHEM_HOME'}
 PLIP_DIC = {'name': 'plip',        'version': '2.2',   'home': 'PLIP_HOME'}
 ALIVIEW_DIC = {'name': 'aliview',    'version': '1.28',   'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC = {'name': 'shape-it',    'version': '2.0.0',   'home': 'SHAPEIT_HOME'}
-BIOSIMSPACE_DIC = {'name': 'biosimspace', 'version': '2023.1.2', 'home': 'BIOSIMSPACE_HOME'}
+BIOSIMSPACE_DIC = {'name': 'biosimspace', 'version': '2023.2.0', 'home': 'BIOSIMSPACE_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
