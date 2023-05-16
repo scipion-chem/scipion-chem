@@ -207,6 +207,7 @@ class Plugin(pwem.Plugin):
       installationCmd += '{} {} && '.format(cls.getCondaActivationCmd(), cls.getEnvActivation('BIOSIMSPACE'))
       installationCmd += 'mamba install -c openbiosim -y biosimspace={} vmd nglview ambertools=22 compilers && '.\
         format(BIOSIMSPACE_DIC['version'])
+      installationCmd += 'mamba install -c anaconda -y sqlite && '
 
       installationCmd += 'touch %s' % BIOSIM_INSTALLED
       biosim_commands = [(installationCmd, BIOSIM_INSTALLED)]
