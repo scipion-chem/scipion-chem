@@ -110,6 +110,29 @@ SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
                                inputs=['refAtomStruct'],
                                outputs=['refLigName'])
 
+class SelectMultiLigandWizard(SelectLigandWizard):
+  def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+
+      ASFile = getattr(protocol, inputParam[0]).get().getFileName()
+      molNames = self.extract_ligands(ASFile, protocol)
+
+      finalList = []
+      for i in molNames:
+        finalList.append(String(i))
+      provider = ListTreeProviderString(finalList)
+      dlg = dialog.ListDialog(form.root, "Ligand Names", provider,
+                              "Select one of the ligands")
+
+      vals = [v.get() for v in dlg.values]
+      form.setVar(outputParam[0], ', '.join(vals))
+
+SelectMultiLigandWizard().addTarget(protocol=ProtChemPrepareReceptor,
+                               targets=['het2keep'],
+                               inputs=['inputAtomStruct'],
+                               outputs=['het2keep'])
+
 
 class AddROIWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}

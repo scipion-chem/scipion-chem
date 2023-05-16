@@ -424,9 +424,9 @@ def sortSet(seti):
 
 
 class CleanStructureSelect(Select):
-  def __init__(self, chain_ids, rem_HETATM, rem_WATER):
+  def __init__(self, chain_ids, rem_HETATM, rem_WATER, het2keep=[]):
     self.chain_ids = chain_ids
-    self.HETATM = rem_HETATM
+    self.HETATM, self.het2keep= rem_HETATM, het2keep
     self.waters = rem_WATER
 
   def is_het(self, residue):
@@ -439,14 +439,14 @@ class CleanStructureSelect(Select):
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
     accept = True
-    if self.HETATM and self.is_het(residue):
+    if self.HETATM and self.is_het(residue) and not residue.resname in self.het2keep:
       accept = False
     elif self.waters and residue.id[0] == 'W':
       accept = False
     return accept
 
 
-def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None):
+def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None, het2keep=[]):
   """ Extraction of the heteroatoms of .pdb files """
   struct_name = getBaseFileName(struct_file)
   if struct_file.endswith('.pdb') or struct_file.endswith('.ent'):
@@ -459,7 +459,7 @@ def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None):
 
   io = PDBIO()
   io.set_structure(struct)
-  io.save(outFn, CleanStructureSelect(chain_ids, HETATM, waters))
+  io.save(outFn, CleanStructureSelect(chain_ids, HETATM, waters, het2keep))
   return outFn
 
 
