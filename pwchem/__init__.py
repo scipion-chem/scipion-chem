@@ -117,7 +117,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addMGLToolsPackage(cls, env, default=False):
         MGL_INSTALLED = "initMGLtools.sh"
-        mgl_commands = 'wget https://ccsb.scripps.edu/download/548/ -O {} --no-check-certificate && '. \
+        mgl_commands = 'wget https://ccsb.scripps.edu/download/532/ -O {} --no-check-certificate && '. \
             format(cls.getDefTar(MGL_DIC))
         mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)] * 2)
         mgl_commands += 'cp install.sh install.bash && sed -i "s/bin\/sh/bin\/bash/g" install.bash && '
@@ -289,9 +289,14 @@ class Plugin(pwem.Plugin):
       return cls.getPluginHome('scripts/%s' % scriptName)
 
     @classmethod
-    def getEnvSpecsPath(cls, env=None):
+    def getEnvSpecsPath(cls, env):
       envFile = '/{}_env_spec.txt'.format(env) if env else ''
       return cls.getPluginHome('envs%s' % envFile)
+
+    @classmethod
+    def getCondaEnvPath(cls, env, path=''):
+        condaPath = cls.getCondaActivationCmd().split('(')[1].split()[0].replace('/bin/conda', '')
+        return os.path.join(condaPath, 'envs', env+'-env', path)
 
     @classmethod
     def getMGLEnviron(cls):

@@ -25,8 +25,8 @@
 # *
 # **************************************************************************
 
+import os, shutil, json, requests, time
 import random as rd
-import os, shutil, json, requests
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
 from Bio.PDB.SASA import ShrakeRupley
@@ -50,13 +50,25 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
 
+def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
+  i, finished = 1, False
+  while not finished and i <= nMax:
+      try:
+          protocol.runJob(programPath, progArgs, **kwargs)
+          finished = True
+      except:
+          i += 1
+          time.sleep(1)
+  if i > 1 and i <= nMax:
+      print('Program {} run without error after {} trials'.format(programPath, i))
+  elif i > nMax:
+      print('Program {} could not be run without error after {} trials'.format(programPath, nMax))
+
 def getVarName(var):
   return [i for i, a in locals().items() if a == var][0]
 
-
 def getBaseName(file):
   return os.path.splitext(os.path.basename(file.strip()))[0]
-
 
 def getLigCoords(ASFile, ligName):
   '''Return the coordinates of the ligand specified in the atomic structure file'''
@@ -340,29 +352,32 @@ def getPDBCoords(pdbFile):
 ##################################################
 # ADT grids
 
-def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn_ffFile=None):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
-
   protName, protExt = os.path.splitext(os.path.basename(protFile))
   gpf_file = os.path.join(outDir, protName + '.gpf')
   npts = int(round(npts))
 
   protAtomTypes = parseAtomTypes(protFile)
-  protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
   if ligandFns == None:
-    ligAtomTypes = 'A C HD N NA OA SA'
+      ligAtomTypes = 'A C HD N NA OA SA'
   else:
-    ligAtomTypes = set([])
-    for ligFn in ligandFns:
-      ligAtomTypes = ligAtomTypes | parseAtomTypes(ligFn)
+      ligAtomTypes = set([])
+      for ligFn in ligandFns:
+          ligAtomTypes = ligAtomTypes | parseAtomTypes(ligFn)
 
-    ligAtomTypes = ' '.join(sortSet(ligAtomTypes))
+      ligAtomTypes = protAtomTypes.union(ligAtomTypes)
+      ligAtomTypes = ' '.join(sortSet(ligAtomTypes))
+
+  protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
   with open(os.path.abspath(gpf_file), "w") as file:
     file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
+    if zn_ffFile:
+        file.write("parameter_file %s                        # force field default parameter file\n" % (zn_ffFile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
     file.write("spacing %s                          # spacing(A)\n" % (spacing))
     file.write("receptor_types %s     # receptor atom types\n" % (protAtomTypes))
@@ -374,7 +389,9 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None):
       file.write("map %s.%s.map                       # atom-specific affinity map\n" % (protName, ligType))
     file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (protName))
     file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (protName))
-    file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant")
+    file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant\n")
+    if zn_ffFile:
+        file.write('''nbp_r_eps 0.25 23.2135 12 6 NA TZ\nnbp_r_eps 2.1   3.8453 12 6 OA Zn\nnbp_r_eps 2.25  7.5914 12 6 SA Zn\nnbp_r_eps 1.0   0.0    12 6 HD Zn\nnbp_r_eps 2.0   0.0060 12 6 NA Zn\nnbp_r_eps 2.0   0.2966 12 6  N Zn''')
 
   return os.path.abspath(gpf_file)
 
@@ -409,11 +426,11 @@ def parseAtomTypes(pdbqtFile, allowed=None):
           if allowed is None or at in allowed:
             atomTypes.add(at)
   else:
-    struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
+      struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
-    for atom in struct.get_atoms():
-      atomId = atom.get_id()
-      atomTypes.add(removeNumberFromStr(atomId))
+      for atom in struct.get_atoms():
+        atomId = atom.get_id()
+        atomTypes.add(removeNumberFromStr(atomId))
 
   return atomTypes
 

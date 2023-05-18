@@ -37,7 +37,7 @@ class ProtChemPrepareReceptor(EMProtocol):
     """Prepare receptor by removing HETATM atoms, waters, keeping only specific chains..."""
     _label = 'target preparation'
     _program = ""
-    def defineCleanParams(self, form, w=True, h=True, c=True):
+    def defineCleanParams(self, form, w=True, h=True, hk=True, c=True):
       clean = form.addGroup('Clean Structure File')
       if w:
           clean.addParam("waters", BooleanParam,
@@ -49,7 +49,8 @@ class ProtChemPrepareReceptor(EMProtocol):
                          label='Remove ligands HETATM',
                          default=True, important=True,
                          help='Remove all ligands and HETATM contained in the protein')
-          clean.addParam('het2keep', StringParam, condition='HETATM',
+      if hk:
+          clean.addParam('het2keep', StringParam, condition='HETATM', default='',
                          label='Heteroatom residues to keep', expertLevel=LEVEL_ADVANCED,
                          help='Specify specific heteroatom residues to keep')
       if c:
