@@ -82,7 +82,8 @@ def oddt_nnscore_score(paramsDic):
 
     if not 'model' in paramsDic:
         print('Training NNScore model: ', paramsDic['saveModel'])
-        nnScoreModel = nnscore().train(pdbbind_version=int(paramsDic['pdbbind']), sf_pickle=paramsDic['saveModel'])
+        nnscore().train(pdbbind_version=int(paramsDic['pdbbind']), sf_pickle=paramsDic['saveModel'])
+        nnScoreModel = nnscore().load(paramsDic['saveModel'])
     else:
         print('Loading NNScore model: ', paramsDic['model'])
         nnScoreModel = nnscore().load(paramsDic['model'])
