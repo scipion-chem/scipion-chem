@@ -25,7 +25,7 @@
 # **************************************************************************
 import os, json
 
-from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam
+from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, LEVEL_ADVANCED
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 
@@ -36,32 +36,40 @@ class ProtChemPrepareReceptor(EMProtocol):
     """Prepare receptor by removing HETATM atoms, waters, keeping only specific chains..."""
     _label = 'target preparation'
     _program = ""
+    def defineCleanParams(self, form, w=True, h=True, hk=True, c=True):
+      clean = form.addGroup('Clean Structure File')
+      if w:
+          clean.addParam("waters", BooleanParam,
+                         label='Remove waters',
+                         default=True, important=True,
+                         help='Remove all waters molecules from a pdb file')
+      if h:
+          clean.addParam("HETATM", BooleanParam,
+                         label='Remove ligands HETATM',
+                         default=True, important=True,
+                         help='Remove all ligands and HETATM contained in the protein')
+      if hk:
+          clean.addParam('het2keep', StringParam, condition='HETATM', default='',
+                         label='Heteroatom residues to keep', expertLevel=LEVEL_ADVANCED,
+                         help='Specify specific heteroatom residues to keep')
+      if c:
+          clean.addParam("rchains", BooleanParam,
+                         label='Select specific chains: ',
+                         default=False, important=True,
+                         help='Keep only the chains selected')
+
+          clean.addParam("chain_name", StringParam,
+                         label="Keep chains: ", important=True,
+                         condition="rchains==True",
+                         help="Select the chain(s) you want to keep in the structure")
+      return clean
 
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
                       label='Atomic Structure:', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-
-        clean = form.addGroup('Clean Structure File')
-        clean.addParam("waters", BooleanParam,
-                       label='Remove waters',
-                       default=True, important=True,
-                       help='Remove all waters molecules from a pdb file')
-        clean.addParam("HETATM", BooleanParam,
-                       label='Remove ligands HETATM',
-                       default=True, important=True,
-                       help='Remove all ligands and HETATM contained in the protein')
-
-        clean.addParam("rchains", BooleanParam,
-                       label='Select specific chains: ',
-                       default=False, important=True,
-                       help='Keep only the chains selected')
-
-        clean.addParam("chain_name", StringParam,
-                       label="Keep chains: ", important=True,
-                       condition="rchains==True",
-                       help="Select the chain(s) you want to keep in the structure")
+        clean = self.defineCleanParams(form)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
@@ -79,8 +87,9 @@ class ProtChemPrepareReceptor(EMProtocol):
                 modelChains = chainJson["model-chain"].upper().strip()
                 chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
 
+        het2keep = self.het2keep.get().split(', ')
         cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                               self.waters.get(), self.HETATM.get(), chain_ids)
+                               self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
 
     def createOutput(self):
         fnOut = self.getPreparedFile()

@@ -135,14 +135,14 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
 
     def createOutput(self):
-        """Create a set of Small Molecules as output with the path to:
-              - Path to small molecule with H (mol2 format)
-              - Path to conformers file (mol2 format)
+        """Create a set of Small Molecules as output
         """
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for mol in self.inputSmallMolecules.get():
             tempSmall = os.path.abspath(self._getExtraPath("{}*.sdf".format(mol.getMolName())))
             for molFile in sorted(list(glob.glob(tempSmall))):
+                mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=molFile), outDir=self._getExtraPath(),
+                                           mapBy='order')
                 if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
                     if self.doConformers:
                         confId = os.path.splitext(molFile)[0].split('-')[-1]
@@ -154,6 +154,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
                     newSmallMol.setFileName(molFile)
                     newSmallMol.setConfId(confId)
+                    newSmallMol.setMappingFile(pwobj.String(mapFile))
                     outputSmallMolecules.append(newSmallMol)
 
         if len(outputSmallMolecules) > 0:
@@ -205,15 +206,6 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         code = f.readline().split()[1]
       return code
 
-    def writeMapFile(self, refMol, probMol, outFile=None):
-      if not outFile:
-          outFile = self._getExtraPath('mapping_{}.tsv'.format(refMol.getUniqueName()))
-
-      mapDic = refMol.mapLabels(probMol)
-      with open(outFile, 'w') as f:
-        for refLabel in mapDic:
-          f.write('{}\t{}\n'.format(refLabel, mapDic[refLabel]))
-      return outFile
 
     def reorderAtoms(self, inFile, outFile):
         '''Atom lines in the file are reordered so the atomNames numbers are in order (C2, C1, C3 -> C1, C2, C3)'''

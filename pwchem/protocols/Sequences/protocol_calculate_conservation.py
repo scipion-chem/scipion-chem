@@ -27,7 +27,7 @@
 
 
 """
-This protocol is used define sequence ROIs based on the conservation in a multiple sequence alignment
+This protocol is used to calculate conservation over a set of sequences and store it on the object SequenceChem
 
 """
 import os, math, json
@@ -44,11 +44,11 @@ from pwem.objects import AtomStruct
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute
 
-from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
+from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence, SequenceChem
 from pwchem.utils import *
 
 SHANNON, SIMPSON, KABAT, PROP = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient', \
-                                'Maximum Proportion'
+                                'Maximum Proportion Conservation'
 
 def simpson(counts):
   sumi = 0
@@ -61,11 +61,11 @@ def simpson(counts):
 def kabat(counts):
   return (sum(counts) * len(counts)) / max(counts)
 
-class ProtExtractSeqsROI(EMProtocol):
+class ProtSeqCalculateConservation(EMProtocol):
     """
-    Extract a set of ROIs from a set of sequences based on the conservation in a alignment
+    Calculates conservation over a set of sequence and adds it into the object
     """
-    _label = 'Extract sequences ROIs'
+    _label = 'Calculate conservation'
     _ATTRNAME = 'Conservation'
     _OUTNAME = 'outputAtomStruct'
     _possibleOutputs = {_OUTNAME: AtomStruct}
@@ -85,12 +85,15 @@ class ProtExtractSeqsROI(EMProtocol):
                        label='Output sequence: ', expertLevel=params.LEVEL_ADVANCED,
                        help='Input sequence to use for the output sequence ROIs')
 
-        group.addParam('inputAS', params.PointerParam, pointerClass='AtomStruct',
+        group.addParam('mapCons', params.BooleanParam, default=True,
+                       label='Map sequence conservation to structure: ',
+                       help='Map the conservation from the sequence alignment into a structure whose sequence must'
+                            'align to the sequence alignment too')
+        group.addParam('inputAS', params.PointerParam, pointerClass='AtomStruct', condition='mapCons',
                        allowsNull=True, label="Input protein structure: ",
                        help='Input protein structure. If included, the conservation values will be drawed over'
                             'the surface of  the protein in the results analysis.')
-        group.addParam('chain_name', params.StringParam,
-                       allowsNull=True, label='Chain of interest:', condition='inputAS',
+        group.addParam('chain_name', params.StringParam, condition='mapCons', label='Chain of interest:',
                        help='Specify the chain of interest')
 
         group = form.addGroup('Variability measure')
@@ -100,43 +103,12 @@ class ProtExtractSeqsROI(EMProtocol):
                        help='Method to measure the conservation / variability in each position of the sequences.\n'
                             'http://imed.med.ucm.es/PVS/pvs-help.html#vmth')
 
-        group = form.addGroup('Cluster regions')
-        group.addParam('direction', params.EnumParam, default=0,
-                       choices=['Low variability', 'High variability'],
-                       label='Look for regions with: ', display=params.EnumParam.DISPLAY_HLIST,
-                       help='Whether to look for regions with high or low variability.'
-                            'high variability will look for high variability values of the metrics and viceversa')
-
-        group.addParam('highLabel', params.LabelParam, condition='direction==0',
-                       label='Keep below threshold',
-                       help='High variability will look for high conservation values of the metrics')
-        group.addParam('lowLabel', params.LabelParam, condition='direction==1',
-                       label='Keep over threshold',
-                       help='Low variability will look for low conservation values of the metrics')
-
-        group.addParam('thres', params.FloatParam,
-                       label='Main threshold for conserved region: ',
-                       help='Main threshold that checks the values of the conservation and defines that a position is '
-                            'or is not conserved depending on its conservation values.\n'
-                            'Conservation values are normalized from 0 (high conservation) to 1 (low conservation)')
-        group.addParam('performSoftening', params.BooleanParam, default=True, label='Perform softening: ',
-                       help='Use a Gaussian sliding window filter to soften the variability values')
-        line = group.addLine('Gaussian softening: ', condition='performSoftening',
-                             help='Perform Gaussian softening with this parameters')
-        line.addParam('wSize', params.FloatParam, label="Window size (odd number): ", default=3)
-        line.addParam('gStd', params.FloatParam, label="Gaussian deviation: ", default=1)
-
-        group.addParam('minSize', params.IntParam, default=1,
-                       label='Minimum region size: ',
-                       help='Minimum size for a region to be considered. Gaps do not count.')
-
-
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
         self._insertFunctionStep('calculateConservationStep')
-        if self.inputAS.get():
+        if self.mapCons.get() and self.inputAS.get():
             self._insertFunctionStep('mapConservationStep')
         self._insertFunctionStep('defineOutputStep')
 
@@ -162,31 +134,16 @@ class ProtExtractSeqsROI(EMProtocol):
             self.runJob(cline, '')
 
     def defineOutputStep(self):
-        if self.useCons:
-            outStr = str(self.calcConsensus())
-            outSeq = self.inputSequences.get().getFirstItem()
-            outSeq.setSequence(outStr)
-            outSeq.setSeqName('ConsensusSequence')
-        else:
-            chosenIdx = int(self.outSeq.get().split(')')[0]) - 1
-            for i, seq in enumerate(self.inputSequences.get()):
-              if i == chosenIdx:
-                  outSeq, outStr = seq, seq.getSequence()
-                  break
+        inSeq = self.getInputSequence()
 
-        roiIdxs = self.getROIs()
-        outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
-        for idxs in roiIdxs:
-            roi = outStr[idxs[0]-1:idxs[1]-1]
-            if len(roi.replace('-', '')) >= self.minSize.get():
-                roiSeq = Sequence(sequence=roi, name='ROI_{}-{}'.format(*idxs), id='ROI_{}-{}'.format(*idxs))
-                seqROI = SequenceROI(sequence=outSeq, seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1])
-                outROIs.append(seqROI)
+        consDic = self.getConsDic()
+        outSeq = SequenceChem(attributesFile=self._getExtraPath('sequenceAttributes.txt'))
+        outSeq.copy(inSeq)
+        outSeq.addAttributes({self.getEnumText('method'): list(consDic.values())})
 
-        if len(outROIs) > 0:
-            self._defineOutputs(outputROIs=outROIs)
+        self._defineOutputs(outputSequence=outSeq)
 
-        if self.inputAS.get():
+        if self.mapCons.get() and self.inputAS.get():
             outStructFileName = self._getPath('outputStructure.cif')
             # Write conservation in a section of the output cif file
             ASH = AtomicStructHandler()
@@ -213,9 +170,6 @@ class ProtExtractSeqsROI(EMProtocol):
         warns = []
         if not hasattr(self.inputSequences.get(), 'aligned') or not getattr(self.inputSequences.get(), 'aligned'):
             warns.append('Input sequences must be aligned to perform the conservation analysis.')
-        if self.performSoftening.get() and self.wSize.get() % 2 != 1:
-            warns.append('The size of the softenning window must be an odd number. Using {} instead of {}'.
-                          format(self.wSize.get() - 1, self.wSize.get()))
         return warns
 
     def _validate(self):
@@ -233,30 +187,6 @@ class ProtExtractSeqsROI(EMProtocol):
         summary_align = AlignInfo.SummaryInfo(alignment)
         return summary_align.gap_consensus(0.5)
 
-    def performSoft(self, values, wSize=3, gStd=1):
-        from scipy import signal
-        if wSize % 2 != 1:
-            wSize = wSize - 1
-        if wSize <= 0:
-            return values
-        window, values = signal.windows.gaussian(wSize, std=gStd), np.array(values)
-        nValues, size = [], len(window) // 2
-        for i in range(len(values)):
-            cValues = values[i - size: i + size + 1]
-            if i - size < 0:
-                # Left border
-                cValues = values[:i + size + 1]
-                cWindow = window[-len(cValues):]
-            elif len(cValues) < len(window):
-                #  Right border
-                cWindow = window[:len(cValues)]
-            else:
-                cWindow = window
-
-            cWindow = cWindow / sum(window)
-            nValues.append(np.dot(cValues, cWindow))
-        return nValues
-
     def calcConservation(self):
         seqsArr = self.getSequencesArray()
         if self.getEnumText('method') == SHANNON:
@@ -268,35 +198,11 @@ class ProtExtractSeqsROI(EMProtocol):
         elif self.getEnumText('method') == PROP:
             values = self.calcProp(seqsArr)
 
-        if self.performSoftening.get():
-            wSize, gStd = self.wSize.get(), self.gStd.get()
-            values = self.performSoft(values, wSize, gStd )
-
         outFile = self.getConservationFile()
         with open(outFile, 'w') as f:
             for value in values:
                 f.write('{}\t'.format(value))
         return outFile
-
-    def getROIs(self):
-        with open(self.getConservationFile()) as f:
-            consValues = f.readline().split()
-
-        rois = []
-        inRoi, fails = False, 0
-        for i, v in enumerate(consValues):
-            v = float(v)
-            if (v > self.thres.get() and self.direction.get() == 1) or \
-                    (v < self.thres.get() and self.direction.get() == 0):
-                fails = 0
-                if not inRoi:
-                    inRoi = True
-                    iniRoi = i + 1
-
-            elif inRoi:
-                rois.append([iniRoi, i + 1])
-                inRoi = False
-        return rois
 
     def mapConservation(self):
         '''Return a dictionary with {spec: value}
@@ -323,13 +229,7 @@ class ProtExtractSeqsROI(EMProtocol):
 
         # Map positions of the alignment with conservation values
         # {AlignPos: ConsValue}
-        consDic = {}
-        with open(self.getConservationFile()) as fcons:
-            line = fcons.readline()
-            for i, value in enumerate(line.split()):
-                consDic[i+1] = value
-
-        print(consDic)
+        consDic = self.getConsDic()
 
         #Final mapping: {"chain:Idx": ConsValue}
         mapDic = {}
@@ -344,13 +244,27 @@ class ProtExtractSeqsROI(EMProtocol):
 
     ##################
 
+    def getConsDic(self):
+        consDic = {}
+        with open(self.getConservationFile()) as fcons:
+            line = fcons.readline()
+            for i, value in enumerate(line.split()):
+                consDic[i + 1] = value
+
+        return consDic
+
     def getInputSequence(self):
-        inputObj = getattr(self, 'inputSequences')[0].get()
-        seq = inputObj.getSequence()
-        seq_name = inputObj.getSequenceObj().getId()
-        if not seq_name:
-          seq_name = inputObj.getSeqName()
-        return seq, seq_name
+        if self.useCons:
+            outStr = str(self.calcConsensus())
+            outSeq = self.inputSequences.get().getFirstItem()
+            outSeq.setSequence(outStr)
+            outSeq.setSeqName('ConsensusSequence')
+        else:
+            outSeqStr = self.outSeq.get()
+            for outSeq in self.inputSequences.get():
+                if outSeq.__str__() == outSeqStr:
+                    break
+        return outSeq
 
     def getInputASSequence(self):
         inputObj = getattr(self, 'inputAS').get()

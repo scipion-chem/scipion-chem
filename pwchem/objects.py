@@ -64,6 +64,35 @@ class SetOfDatabaseID(data.EMSet):
     def __init__(self, **kwargs):
         data.EMSet.__init__(self, **kwargs)
 
+class SequenceChem(data.Sequence):
+    def __init__(self, **kwargs):
+        data.Sequence.__init__(self, **kwargs)
+        self._attrFile = pwobj.String(kwargs.get('attributesFile', False))
+
+    def __str__(self):
+        return "SequenceChem (name = {})\n".format(self.getSeqName())
+
+    def getAttrFile(self):
+        return self._attrFile.get()
+
+    def setAttrFile(self, value):
+        self._attrFile.set(value)
+
+    def addAttributes(self, attrDic):
+        attrFile = self.getAttrFile()
+        with open(attrFile, 'a') as f:
+            for key, values in attrDic.items():
+                f.write('{}: {}\n'.format(key, values))
+
+    def getAttributesDic(self):
+        attrDic = {}
+        with open(self.getAttrFile()) as f:
+            for line in f:
+                key, values = line.split(':')
+                attrDic[key.strip()] = eval(values.strip())
+        return attrDic
+
+
 class SetOfSequencesChem(data.SetOfSequences):
     def __init__(self, **kwargs):
         data.SetOfSequences.__init__(self, **kwargs)
@@ -71,7 +100,7 @@ class SetOfSequencesChem(data.SetOfSequences):
         self._alignFile = pwobj.String(kwargs.get('alignFile', None))
 
     def getAligned(self):
-        self._aligned.get()
+        return self._aligned.get()
 
     def setAligned(self, value):
         self._aligned.set(value)
@@ -196,6 +225,7 @@ class SmallMolecule(data.EMObject):
         data.EMObject.__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
+        self._mappingFile = pwobj.String(kwargs.get('mappingFile', None))
         self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
         self.molName = pwobj.String(kwargs.get('molName', None))
         if self.molName.get() and self.molName.get().lower() == 'guess':
@@ -242,6 +272,13 @@ class SmallMolecule(data.EMObject):
 
     def setPoseFile(self, value):
         return self.poseFile.set(value)
+
+    def getMappingFile(self):
+        '''Filename of the molecule after docking'''
+        return self._mappingFile.get()
+
+    def setMappingFile(self, value):
+        return self._mappingFile.set(value)
 
     def setPoseId(self, value):
         return self.poseId.set(value)
@@ -350,7 +387,7 @@ class SmallMolecule(data.EMObject):
                 numType = {}
                 for i, line in enumerate(fIn):
                     if i >= 4:
-                        if len(line.split()) == 10:
+                        if len(line.split()) > 4:
                             elements = line.split()
                             atomType, coords = elements[3], elements[:3]
                             if atomType in numType:
@@ -366,21 +403,49 @@ class SmallMolecule(data.EMObject):
 
         return posDic
 
-    def mapLabels(self, probMol, distThres=0.1):
+    def getMapDic(self):
+        mapDic = {}
+        if self.getMappingFile():
+            with open(self.getMappingFile()) as fIn:
+                for line in fIn:
+                    sline = line.split()
+                    mapDic[sline[1]] = sline[0]
+        return mapDic
+
+    def mapLabels(self, probMol, mapBy='coords', distThres=0.1):
         '''Maps the labels of the reference molecule to other probe molecule, which must be the same and
         have the same positions. Returns a dic with the mapping'''
         mapDic = {}
         refCoords, probCoords = self.getAtomsPosDic(), probMol.getAtomsPosDic()
-        for refLabel in refCoords:
-            for probLabel in probCoords:
-                dist = calculateDistance(refCoords[refLabel], probCoords[probLabel])
-                if dist <= distThres:
-                    mapDic[refLabel] = probLabel
+        if mapBy == 'coords':
+            for refLabel in refCoords:
+                for probLabel in probCoords:
+                    dist = calculateDistance(refCoords[refLabel], probCoords[probLabel])
+                    if dist <= distThres:
+                        mapDic[refLabel.upper()] = probLabel.upper()
+
+        elif mapBy == 'order':
+            for refLabel, probLabel in zip(refCoords, probCoords):
+                mapDic[refLabel.upper()] = probLabel.upper()
+
         if not len(mapDic) == len(refCoords):
             print('Atom label mapping could not be completed correctly')
             return
         else:
             return mapDic
+
+    def writeMapFile(self, probMol, mapBy='coords', overWrite=False, outFile=None, outDir=None):
+        if not outFile:
+            if not outDir:
+                outDir = os.path.dirname(probMol.getFileName())
+            outFile = os.path.join(outDir, 'mapping_{}.tsv'.format(self.getMolName()))
+
+        if not os.path.exists(outFile) or overWrite:
+            mapDic = self.mapLabels(probMol, mapBy)
+            with open(outFile, 'w') as f:
+                for refLabel in mapDic:
+                    f.write('{}\t{}\n'.format(refLabel, mapDic[refLabel]))
+        return outFile
 
 
 class SetOfSmallMolecules(data.EMSet):
@@ -558,11 +623,12 @@ class SetOfSequenceROIs(data.EMSet):
     def exportToFile(self, outPath):
         if os.path.exists(outPath):
             os.remove(outPath)
-        wholeSeq = self.getFirstItem().getSequence()
-        self.getFirstItem()._sequence.exportToFile(outPath)
+        wholeSeqObj = self.getSequenceObj()
+        wholeSeq = wholeSeqObj.getSequence()
+        wholeSeqObj.exportToFile(outPath)
         for roi in self:
-            tmpSeq = ['-'] * len(wholeSeq)
             roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
+            tmpSeq = ['-'] * (len(wholeSeq) - len(roiSeq) + 1)
             tmpSeq[roiIdx-1] = roiSeq
 
             tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
@@ -1163,12 +1229,9 @@ class SetOfStructROIs(data.EMSet):
         rawStr = getRawPDBStr(pocketFile, ter=False).strip()
         if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
             for line in rawStr.split('\n'):
-                try:
-                    pdbLine = writePDBLine(replacements)
-                except:
-                    sline = splitPDBLine(line)
-                    replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:-1], 'Ve']
-                    pdbLine = writePDBLine(replacements)
+                sline = splitPDBLine(line)
+                replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
+                pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
         elif pocket.getPocketClass() == 'P2Rank' or pocket.getPocketClass() == 'Standard':

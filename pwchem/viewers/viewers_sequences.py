@@ -29,7 +29,7 @@ import pyworkflow.viewer as pwviewer
 from pwem.objects import SetOfSequences, Sequence
 
 from pwchem import Plugin as pwchem_plugin
-from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem
+from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem
 from pwchem.constants import *
 
 class SequenceAliView(pwviewer.CommandView):
@@ -48,7 +48,7 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [SetOfSequencesChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+    _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)

@@ -130,11 +130,10 @@ class ProtDefineSeqROI(EMProtocol):
 
         residuesStr = self.inROIs.get().strip().split('\n')
         for rStr in residuesStr:
-            roiInfo = rStr.split(':')[1].strip()
+            roiInfo = ':'.join(rStr.split(':')[1:]).strip()
 
             # Residues origin
             if '{}:'.format(self._originOptions[0]) in rStr:
-                roiInfo = ':'.join(rStr.split(':')[1:])
                 resDic = json.loads(roiInfo)
                 roiList, resIdxs = [resDic['residues']], resDic['index']
                 idxsList = [[int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]]

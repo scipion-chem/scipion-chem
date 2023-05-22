@@ -110,6 +110,29 @@ SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
                                inputs=['refAtomStruct'],
                                outputs=['refLigName'])
 
+class SelectMultiLigandWizard(SelectLigandWizard):
+  def show(self, form, *params):
+      protocol = form.protocol
+      inputParam, outputParam = self.getInputOutput(form)
+
+      ASFile = getattr(protocol, inputParam[0]).get().getFileName()
+      molNames = self.extract_ligands(ASFile, protocol)
+
+      finalList = []
+      for i in molNames:
+        finalList.append(String(i))
+      provider = ListTreeProviderString(finalList)
+      dlg = dialog.ListDialog(form.root, "Ligand Names", provider,
+                              "Select one of the ligands")
+
+      vals = [v.get() for v in dlg.values]
+      form.setVar(outputParam[0], ', '.join(vals))
+
+SelectMultiLigandWizard().addTarget(protocol=ProtChemPrepareReceptor,
+                               targets=['het2keep'],
+                               inputs=['inputAtomStruct'],
+                               outputs=['het2keep'])
+
 
 class AddROIWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
@@ -351,7 +374,7 @@ SelectChainWizardQT().addTarget(protocol=ProtChemPairWiseAlignment,
                               inputs=['inputAtomStruct2'],
                               outputs=['chain_name2'])
 
-SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
+SelectChainWizardQT().addTarget(protocol=ProtSeqCalculateConservation,
                               targets=['chain_name'],
                               inputs=['inputAS'],
                               outputs=['chain_name'])
@@ -359,6 +382,11 @@ SelectChainWizardQT().addTarget(protocol=ProtExtractSeqsROI,
 SelectChainWizardQT().addTarget(protocol=ProtExtractLigands,
                               targets=['chain_name'],
                               inputs=['inputStructure'],
+                              outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
 
 SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
@@ -595,6 +623,11 @@ SelectElementWizard().addTarget(protocol=ProtocolRMSDDocking,
                                 targets=['refMolName'],
                                 inputs=['refSmallMolecules'],
                                 outputs=['refMolName'])
+
+SelectElementWizard().addTarget(protocol=ProtSeqCalculateConservation,
+                               targets=['outSeq'],
+                               inputs=['inputSequences'],
+                               outputs=['outSeq'])
 
 SelectElementMultiPointerWizard().addTarget(protocol=ProtocolPharmacophoreModification,
                                            targets=['currentFeatures'],

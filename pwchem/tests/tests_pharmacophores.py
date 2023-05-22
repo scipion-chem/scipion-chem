@@ -32,6 +32,14 @@ MODIFY | Set 0 | PharmFeature 2 TO: {"Type": "Acceptor", "Coords": "(-37.79, 9.9
 
 class TestPharmGeneration(TestExtractLigand):
     @classmethod
+    def _runImportPDB(cls):
+        protImportPDB = cls.newProtocol(
+            ProtImportPdb,
+            inputPdbData=0, pdbId='4erf')
+        cls.launchProtocol(protImportPDB)
+        cls.protImportPDB = protImportPDB
+
+    @classmethod
     def _runGenPharm(cls, inProt):
         protGenPharm = cls.newProtocol(
             ProtocolPharmacophoreGeneration,

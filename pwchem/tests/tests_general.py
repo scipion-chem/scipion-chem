@@ -34,7 +34,6 @@ from pwchem.protocols import *
 
 
 class TestImportBoth(BaseTest):
-
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)

@@ -25,24 +25,51 @@
 # **************************************************************************
 
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+
 from pyworkflow.protocol import params
 from pwem.viewers import ChimeraAttributeViewer
-from pwchem.protocols import ProtExtractSeqsROI, ProtCalculateSASA
+from pwchem.protocols import ProtCalculateSASA, ProtSeqCalculateConservation
 from pwchem.viewers.viewers_sequences import SequenceAliView
+
+def plotSequenceAttribute(attrValues, attrName='Attribute', thres=None):
+    attrValues = list(map(float, attrValues))
+    maxY = max(attrValues)
+    xs = np.arange(len(attrValues))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.bar(xs, attrValues)
+    yloc = plt.MaxNLocator(10)
+    ax.yaxis.set_major_locator(yloc)
+    ax.set_ylim(0, maxY + maxY / 10)
+    if thres:
+        ax.axhline(y=thres, color='r', linestyle='-', linewidth=1)
+
+    plt.xlabel("Sequence position")
+    plt.ylabel("{} value".format(attrName))
+    plt.title('{} values along sequence'.format(attrName))
+
+    plt.show()
 
 class ConservationViewer(ChimeraAttributeViewer):
     """ Viewer for attribute conservation of an AtomStruct.
       Includes visualization in chimera and in histograms"""
-    _targets = [ProtExtractSeqsROI]
+    _targets = [ProtSeqCalculateConservation]
     _label = 'Sequence conservation analysis viewer'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def _defineParams(self, form):
-        form.addSection(label='Visualization of conservation regions')
-        form.addParam('viewROIs', params.LabelParam, label='View sequence conservation ROIs: ',
-                       help='View sequence conservation ROIs extracted in the protocol')
+        form.addSection(label='Visualization of sequence conservation')
+        form.addParam('viewSequence', params.LabelParam, label='View sequence: ',
+                       help='View output sequence')
+        form.addParam('viewConservation', params.LabelParam,
+                      label='Display conservation over sequence: ',
+                      help='Display a graph witht the values of the selected attribute over the sequence.')
+
         if hasattr(self.protocol, 'inputAS') and getattr(self.protocol, 'inputAS').get():
             super()._defineParams(form)
             # Overwrite defaults
@@ -52,17 +79,23 @@ class ConservationViewer(ChimeraAttributeViewer):
                                                         defaultColorMap='RdBu_r')
 
     def _getVisualizeDict(self):
-        visDic = {'viewROIs': self._showROIs}
+        visDic = {'viewSequence': self._showSequence, 'viewConservation': self._showConservation}
         if hasattr(self.protocol, 'inputAS') and getattr(self.protocol, 'inputAS').get():
             visDic.update(super()._getVisualizeDict())
         return visDic
 
-    def _showROIs(self, paramName=None):
-        obj = self.protocol.outputROIs
+    def _showSequence(self, paramName=None):
+        obj = self.protocol.outputSequence
         outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
-                                                              format(obj.getSequenceObj().getId())))
+                                                              format(obj.getId())))
         obj.exportToFile(outPath)
         return [SequenceAliView([outPath], cwd=self.protocol._getExtraPath())]
+
+    def _showConservation(self, paramName=None):
+        prot = self.protocol
+        attrValues = list(prot.getConsDic().values())
+        plotSequenceAttribute(attrValues, attrName=prot.getEnumText('method'))
+
 
 
 class SASAStructureViewer(ChimeraAttributeViewer):
@@ -72,34 +105,42 @@ class SASAStructureViewer(ChimeraAttributeViewer):
     _label = 'Accesibility viewer'
 
     def __init__(self, **kwargs):
-      super().__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def _defineParams(self, form):
-      if hasattr(self.protocol, 'outputROIs'):
-          form.addSection(label='Accesibility regions visualization')
-          form.addParam('viewROIs', params.LabelParam, label='View sequence accesibility ROIs: ',
-                        help='View sequence accesibility ROIs extracted in the protocol')
+        if hasattr(self.protocol, 'outputSequence'):
+            form.addSection(label='Visualization of sequence conservation')
+            form.addParam('viewSequence', params.LabelParam, label='View sequence: ',
+                        help='View output sequence')
+            form.addParam('viewConservation', params.LabelParam,
+                        label='Display conservation over sequence: ',
+                        help='Display a graph witht the values of the selected attribute over the sequence.')
 
-      if hasattr(self.protocol, 'outputAtomStruct'):
-          super()._defineParams(form)
-          # Overwrite defaults
-          from pwem.wizards.wizard import ColorScaleWizardBase
-          group = form.addGroup('Color settings')
-          ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
+        if hasattr(self.protocol, 'outputAtomStruct'):
+            super()._defineParams(form)
+            # Overwrite defaults
+            from pwem.wizards.wizard import ColorScaleWizardBase
+            group = form.addGroup('Color settings')
+            ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
                                                   defaultColorMap='RdBu')
 
     def _getVisualizeDict(self):
         visDic = {}
-        if hasattr(self.protocol, 'outputROIs'):
-            visDic.update({'viewROIs': self._showROIs})
+        if hasattr(self.protocol, 'outputSequence'):
+            visDic = {'viewSequence': self._showSequence, 'viewConservation': self._showSASA}
         if hasattr(self.protocol, 'outputAtomStruct'):
             visDic.update(super()._getVisualizeDict())
         return visDic
 
-    def _showROIs(self, paramName=None):
-        obj = self.protocol.outputROIs
+    def _showSequence(self, paramName=None):
+        obj = self.protocol.outputSequence
         outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
-                                                              format(obj.getSequenceObj().getId())))
+                                                              format(obj.getId())))
         obj.exportToFile(outPath)
         return [SequenceAliView([outPath], cwd=self.protocol._getExtraPath())]
+
+    def _showSASA(self, paramName=None):
+        prot = self.protocol
+        attrDic = prot.outputSequence.getAttributesDic()
+        plotSequenceAttribute(attrDic['SASA'], attrName='SASA')
 
