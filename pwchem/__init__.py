@@ -88,7 +88,7 @@ class Plugin(pwem.Plugin):
 
 ######################## PACKAGES #########################
     @classmethod
-    def addPLIPPackage(cls, env, default=False):
+    def addPLIPPackage(cls, env, default=True):
       PLIP_INSTALLED = 'plip_installed'
 
       installationCmd = cls.getCondaActivationCmd()
@@ -99,10 +99,10 @@ class Plugin(pwem.Plugin):
       env.addPackage(PLIP_DIC['name'], version=PLIP_DIC['version'],
                      tar='void.tgz',
                      commands=installationCmd,
-                     default=True)
+                     default=default)
 
     @classmethod
-    def addPyMolPackage(cls, env, default=False):
+    def addPyMolPackage(cls, env, default=True):
       PYMOL_INSTALLED = 'pymol_installed'
       pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
         format(cls.getDefTar(PYMOL_DIC, ext='tar.bz2'))
@@ -113,10 +113,10 @@ class Plugin(pwem.Plugin):
       env.addPackage(PYMOL_DIC['name'], version=PYMOL_DIC['version'],
                      tar='void.tgz',
                      commands=pymol_commands,
-                     default=True)
+                     default=default)
 
     @classmethod
-    def addMGLToolsPackage(cls, env, default=False):
+    def addMGLToolsPackage(cls, env, default=True):
         MGL_INSTALLED = "initMGLtools.sh"
         mgl_commands = 'wget https://ccsb.scripps.edu/download/532/ -O {} --no-check-certificate && '. \
             format(cls.getDefTar(MGL_DIC))
@@ -129,10 +129,10 @@ class Plugin(pwem.Plugin):
         env.addPackage(MGL_DIC['name'], version=MGL_DIC['version'],
                        tar='void.tgz',
                        commands=mgl_commands,
-                       default=True)
+                       default=default)
 
     @classmethod
-    def addJChemPaintPackage(cls, env, default=False):
+    def addJChemPaintPackage(cls, env, default=True):
         JCHEM_INSTALLED = 'jchem_installed'
         jchem_commands = 'wget https://sourceforge.net/projects/cdk/files/JChemPaint/3.2.0/jchempaint-3.2.0.jar/download -O {} && '.\
           format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version'])))
@@ -145,10 +145,10 @@ class Plugin(pwem.Plugin):
         env.addPackage(JCHEM_DIC['name'], version=JCHEM_DIC['version'],
                        tar='void.tgz',
                        commands=jchem_commands,
-                       default=True)
+                       default=default)
 
     @classmethod
-    def addRDKitPackage(cls, env, default=False):
+    def addRDKitPackage(cls, env, default=True):
         RDKIT_INSTALLED = 'rdkit_installed'
 
         installationCmd = cls.getCondaActivationCmd()
@@ -183,7 +183,7 @@ class Plugin(pwem.Plugin):
                      default=default)
 
     @classmethod
-    def addAliViewPackage(cls, env, default=False):
+    def addAliViewPackage(cls, env, default=True):
       SEQS_INSTALLED = 'aliview_installed'
       seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
                       '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
@@ -196,7 +196,7 @@ class Plugin(pwem.Plugin):
       env.addPackage(ALIVIEW_DIC['name'], version=ALIVIEW_DIC['version'],
                      tar='void.tgz',
                      commands=seqs_commands,
-                     default=True)
+                     default=default)
 
     @classmethod
     def addBioSimSpacePackage(cls, env, default=False):
@@ -228,6 +228,24 @@ class Plugin(pwem.Plugin):
           protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
       else:
           subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+
+    @classmethod
+    def runBioSimSpaceScript(cls, protocol, scriptPath, args, engine='gromacs', cwd=None, popen=False):
+      """ Run BioSimSpace script from a given protocol. """
+      # Check if BioSimSpace package is instaled (default False)
+      fullProgram = '{} {} && '.format(cls.getCondaActivationCmd(), cls.getEnvActivation('BIOSIMSPACE'))
+      if engine.lower() == 'gromacs':
+          try:
+              from gromacs import Plugin as gromacs_plugin
+              fullProgram += 'export PATH={}:$PATH && '.format(gromacs_plugin.getGromacsBin(''))
+          except:
+              print('WARNING: Gromacs plugin must be installed to run BioSimSpace with Gromacs engine')
+
+      fullProgram += 'python {} '.format(scriptPath)
+      if not popen:
+        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+      else:
+        subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
 
     @classmethod
     def runShapeIt(cls, protocol, program, args, cwd=None):
