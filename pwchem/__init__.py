@@ -39,9 +39,10 @@ from .bibtex import _bibtexStr
 from .constants import *
 from pwchem.install_helper import InstallHelper
 
-_logo = 'pwchem_logo.png'
-RDKIT = 'rdkit'
 DEFAULT_VERSION = '1.0'
+RDKIT = 'rdkit'
+_logo = 'pwchem_logo.png'
+__version__ = DEFAULT_VERSION
 
 class Plugin(pwem.Plugin):
     _rdkitHome = os.path.join(pwem.Config.EM_ROOT, RDKIT)
@@ -88,24 +89,26 @@ class Plugin(pwem.Plugin):
 
 ######################## PACKAGES #########################
     @classmethod
-    def addPLIPPackage(cls, env):
-      PLIP_VERSION = PLIP_DIC['version']
-      installer = InstallHelper()
+    def addPLIPPackage(cls, env, default=True):
+      # Instantiating install helper
+      installer = InstallHelper(PLIP_DIC['name'], packageHome=cls.getVar(PLIP_DIC['home']), packageVersion=PLIP_DIC['version'])
 
-        #.addCondaPackages('plip', ['clustalo'], channel='bioconda', binaryVersion=PLIP_VERSION, targetName='CLUSTALO_INSTALLED')\
-      installer.getCondaEnvCommand('plip', requirementsFile=False, binaryVersion=PLIP_VERSION)\
-        .addCondaPackages('plip', ['openbabel', 'swig', 'plip'], channel='conda-forge', binaryVersion=PLIP_VERSION)\
-        .addProtocolPackage(env, 'plip', protocolVersion=PLIP_VERSION, dependencies=['tar', 'wget'])
+        #.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
+      # Installing package
+      installer.getCondaEnvCommand(requirementsFile=False)\
+        .addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
+        .addPackage(env, dependencies=['tar', 'wget'], default=default)
 
     @classmethod
-    def addPyMolPackage(cls, env):
-      PYMOL_VERSION = PYMOL_DIC['version']
-      installer = InstallHelper()
+    def addPyMolPackage(cls, env, default=True):
+      # Instantiating install helper
+      installer = InstallHelper(PYMOL_DIC['name'], packageHome=PYMOL_DIC['home'], packageVersion=PYMOL_DIC['version'])
 
-      installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_VERSION + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
-        .addCommand('tar -jxf PyMOL-' + PYMOL_VERSION + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
+      # Installing package
+      installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
+        .addCommand('tar -jxf PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
         .addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
-        .addProtocolPackage(env, 'pymol', protocolVersion=PYMOL_VERSION, dependencies=['tar', 'wget'])
+        .addPackage(env, dependencies=['tar', 'wget'], default=default)
 
     @classmethod
     def addMGLToolsPackage(cls, env):
@@ -205,8 +208,7 @@ class Plugin(pwem.Plugin):
                      neededProgs=cls.getDependencies(),
                      default=True)
 
-
-    ##################### RUN CALLS #################33333
+    ##################### RUN CALLS ######################
     @classmethod
     def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
       """ Run rdkit command from a given protocol. """
