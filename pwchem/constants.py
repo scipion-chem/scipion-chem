@@ -27,7 +27,7 @@
 
 #Constant dictionaries
 MGL_DIC = {'name': 'mgltools',    'version': '1.5.7', 'home': 'MGL_HOME'}
-PYMOL_DIC = {'name': 'pymol',       'version': '2.5',   'home': 'PYMOL_HOME'}
+PYMOL_DIC = {'name': 'pymol',       'version': '2.5.5',   'home': 'PYMOL_HOME'}
 JCHEM_DIC = {'name': 'jchempaint',  'version': '3.2.0',   'home': 'JCHEM_HOME'}
 PLIP_DIC = {'name': 'plip',        'version': '2.2',   'home': 'PLIP_HOME'}
 ALIVIEW_DIC = {'name': 'aliview',    'version': '1.28',   'home': 'ALIVIEW_HOME'}

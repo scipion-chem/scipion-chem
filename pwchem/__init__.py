@@ -52,7 +52,7 @@ class Plugin(pwem.Plugin):
         #PLIP environment (with pymol bundle)
         cls.addPLIPPackage(env)
         cls.addRDKitPackage(env)
-        # cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
+        #cls.addShapeitPackage(env)
         cls.addMGLToolsPackage(env)
         cls.addJChemPaintPackage(env)
         cls.addPyMolPackage(env)
@@ -69,6 +69,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
         cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
         cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
+        cls._defineEmVar(VMD_DIC['home'], '{}-{}'.format(VMD_DIC['name'], VMD_DIC['version']))
         # cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
     @classmethod
@@ -86,7 +87,6 @@ class Plugin(pwem.Plugin):
       activation = cls.getVar("PLIP_ENV_ACTIVATION")
       return activation
 
-
 ######################## PACKAGES #########################
     @classmethod
     def addPLIPPackage(cls, env, default=True):
@@ -102,7 +102,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addPyMolPackage(cls, env, default=True):
       # Instantiating install helper
-      installer = InstallHelper(PYMOL_DIC['name'], packageHome=PYMOL_DIC['home'], packageVersion=PYMOL_DIC['version'])
+      installer = InstallHelper(PYMOL_DIC['name'], packageHome=cls.getVar(PYMOL_DIC['home']), packageVersion=PYMOL_DIC['version'])
 
       # Installing package
       installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
@@ -111,58 +111,46 @@ class Plugin(pwem.Plugin):
         .addPackage(env, dependencies=['tar', 'wget'], default=default)
 
     @classmethod
-    def addMGLToolsPackage(cls, env):
-        MGL_INSTALLED = "initMGLtools.sh"
-        mgl_commands = 'wget https://ccsb.scripps.edu/download/532/ -O {} --no-check-certificate && '. \
-            format(cls.getDefTar(MGL_DIC))
-        mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)] * 2)
-        mgl_commands += 'cp install.sh install.bash && sed -i "s/bin\/sh/bin\/bash/g" install.bash && '
-        mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.bash'))
-        mgl_commands += 'touch ' + MGL_INSTALLED
-        mgl_commands = [(mgl_commands, MGL_INSTALLED)]
+    def addMGLToolsPackage(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-        env.addPackage(MGL_DIC['name'], version=MGL_DIC['version'],
-                       tar='void.tgz',
-                       commands=mgl_commands,
-                       default=True)
+        # Defining file names
+        tarFile = cls.getDefTar(MGL_DIC)
+
+        # Installing package
+        installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tarFile)\
+          .addCommand(f'tar -xf {tarFile} --strip-components 1 && rm {tarFile}', 'MGLTOOLS_EXTRACTED')\
+          .addCommand(cls.getDefPath(MGL_DIC, 'install.sh'), 'MGLTOOLS_INSTALLED')\
+          .addPackage(env, dependencies=['wget', 'tar'], default=default)
 
     @classmethod
-    def addJChemPaintPackage(cls, env):
-        JCHEM_INSTALLED = 'jchem_installed'
-        jchem_commands = 'wget https://sourceforge.net/projects/cdk/files/JChemPaint/3.2.0/jchempaint-3.2.0.jar/download -O {} && '.\
-          format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version'])))
-        jchem_commands += 'chmod +x {} && '.format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.
-                                                                  format(JCHEM_DIC['version'])))
-        jchem_commands += ' touch %s' % JCHEM_INSTALLED
+    def addJChemPaintPackage(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(JCHEM_DIC['name'], packageHome=cls.getVar(JCHEM_DIC['home']), packageVersion=JCHEM_DIC['version'])
 
-        jchem_commands = [(jchem_commands, JCHEM_INSTALLED)]
+        # Defining filename to download
+        jchemFile = f"jchempaint-{JCHEM_DIC['version']}.jar"
 
-        env.addPackage(JCHEM_DIC['name'], version=JCHEM_DIC['version'],
-                       tar='void.tgz',
-                       commands=jchem_commands,
-                       default=True)
+        installer.getExtraFile(f"https://sourceforge.net/projects/cdk/files/JChemPaint/{JCHEM_DIC['version']}/{jchemFile}/download", 'JCHEM_DOWNLOADED', fileName=jchemFile)\
+          .addCommand(f'chmod +x {jchemFile}', 'JCHEM_INSTALLED')\
+          .addPackage(env, dependencies=['wget'], default=default)
 
     @classmethod
-    def addRDKitPackage(cls, env):
-        RDKIT_INSTALLED = 'rdkit_installed'
+    def addRDKitPackage(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper('rdkit', packageVersion=DEFAULT_VERSION)
 
-        installationCmd = cls.getCondaActivationCmd()
-        installationCmd += 'conda create --name rdkit-env --file {} && '.format(cls.getEnvSpecsPath('rdkit'))
-        installationCmd += 'mkdir oddtModels && touch %s' % RDKIT_INSTALLED
-
-        rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
-
+        # Defining env path
         envPath = os.environ.get('PATH', "")  # keep path since conda likely in there
-        installEnvVars = {'PATH': envPath} if envPath else None
-        env.addPackage(RDKIT,
-                       tar='void.tgz',
-                       commands=rdkit_commands,
-                       neededProgs=cls.getDependencies(),
-                       default=True,
-                       vars=installEnvVars)
+
+        # Installing package
+        installer.addCommand(f'conda create --name rdkit-{DEFAULT_VERSION} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
+          .addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
+          .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': envPath} if envPath else None)
 
     @classmethod
-    def addShapeitPackage(cls, env):
+    def addShapeitPackage(cls, env, default=True):
       SHAPEIT_INSTALLED = 'shapeit_installed'
 
       installationCmd = ' git clone https://github.com/rdkit/shape-it.git && cd shape-it && mkdir build && cd build &&'
@@ -175,38 +163,29 @@ class Plugin(pwem.Plugin):
                      tar='void.tgz',
                      commands=installationCmd,
                      neededProgs=cls.getDependencies(),
-                     default=True)
+                     default=default)
 
     @classmethod
-    def addAliViewPackage(cls, env):
-      SEQS_INSTALLED = 'aliview_installed'
-      seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
-                      '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
-      seqs_commands += 'tar -xf {} && rm {} &&'.format(*[cls.getDefTar(ALIVIEW_DIC)]*2)
-      seqs_commands += ' conda create --name bioconda-env --file {} && '.format(cls.getEnvSpecsPath('bioconda'))
-      seqs_commands += ' touch %s' % SEQS_INSTALLED
+    def addAliViewPackage(cls, env, default=True):
+      # Instantiating install helper
+      installer = InstallHelper(ALIVIEW_DIC['name'], packageHome=cls.getVar(ALIVIEW_DIC['home']), packageVersion=ALIVIEW_DIC['version'])
 
-      seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
+      # Defining filename
+      fileName = cls.getDefTar(ALIVIEW_DIC)
 
-      env.addPackage(ALIVIEW_DIC['name'], version=ALIVIEW_DIC['version'],
-                     tar='void.tgz',
-                     commands=seqs_commands,
-                     default=True)
+      # Installing package
+      installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=fileName)\
+        .addCommand(f'tar -xf {fileName} && rm {fileName}', 'ALIVIEW_EXTRACTED')\
+        .addCommand(f"conda create --name bioconda-{DEFAULT_VERSION} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
+        .addPackage(env, dependencies=['wget', 'conda'], default=default)
 
     @classmethod
-    def addVMDPackage(cls, env):
-      VMD_INSTALLED = 'vmd_installed'
+    def addVMDPackage(cls, env, default=True):
+      # Instantiating install helper
+      installer = InstallHelper(VMD_DIC['name'], packageHome=cls.getVar(VMD_DIC['home']), packageVersion=VMD_DIC['version'])
 
-      installationCmd = cls.getCondaActivationCmd()
-      installationCmd += ' conda create -y -c conda-forge -n vmd-env vmd &&'
-      installationCmd += ' touch %s' % VMD_INSTALLED
-      vmd_commands = [(installationCmd, VMD_INSTALLED)]
-
-      env.addPackage(VMD_DIC['name'], version=VMD_DIC['version'],
-                     tar='void.tgz',
-                     commands=vmd_commands,
-                     neededProgs=cls.getDependencies(),
-                     default=True)
+      installer.getCondaEnvCommand(requirementsFile=False).addCondaPackages(['vdm'], channel='conda-forge')\
+        .addPackage(env, dependencies=['conda'], default=default)
 
     ##################### RUN CALLS ######################
     @classmethod
@@ -250,9 +229,7 @@ class Plugin(pwem.Plugin):
         fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
-
   ##################### UTILS ###########################
-
     @classmethod
     def getDependencies(cls):
       # try to get CONDA activation command
