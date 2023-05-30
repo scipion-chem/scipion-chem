@@ -267,7 +267,7 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   if not os.path.exists(sdfFile) or overWrite:
     args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(molFile),
                                                                                   os.path.abspath(outDir), baseName)
-    pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env='plip', cwd=outDir, popen=True)
+    pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir, popen=True)
   return sdfFile
 
 

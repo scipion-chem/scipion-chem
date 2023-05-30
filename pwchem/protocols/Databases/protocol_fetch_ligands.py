@@ -547,11 +547,11 @@ class ProtocolLigandsFetching(EMProtocol):
 
         # Formatting with RDKit (neccessary if they are maestro)
         if self.useManager.get() == RDKIT or fnOut.endswith(".mae") or fnOut.endswith(".maegz"):
-            pwchemPlugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+            pwchemPlugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
         # Formatting with OpenBabel
         elif self.useManager.get() == OPENBABEL:
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
 
     def saveBDBLigands(self, ligIds):
         if self.structDatabase.get() == 0:

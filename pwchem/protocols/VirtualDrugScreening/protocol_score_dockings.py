@@ -247,7 +247,7 @@ class ProtocolScoreDocking(EMProtocol):
     def scoreDockings(self, receptorFile, msjDic, i):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
         self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def parseResults(self, resFile):
         resDic = {}

@@ -125,7 +125,7 @@ class ProtocolPainsRdkitFiltering(EMProtocol):
     def describeFilter(self, molsScipion):  # , receptorFile):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, molsScipion)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
         #if paramsPath:
             #os.remove(paramsPath)
 

@@ -113,7 +113,7 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     def convertEMBOSSformat(self, embossFormat, outputFile):
         from pwchem import Plugin
-        cl_run = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+        cl_run = '%s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivationCommand(BIOCONDA_DIC))
         cl_run += 'seqret -sequence {} -osformat2 {} {}'.\
             format(self.getAlignmentFileName(), embossFormat, outputFile)
 

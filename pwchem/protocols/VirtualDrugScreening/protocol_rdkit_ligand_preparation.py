@@ -33,17 +33,17 @@ Protocol Steps:
     2.1 Assign charges (Add gasteiger charges (ADT or computeGasteigerCharges de RDKit or babel --partialcharges mmff94 or gasteiger)
 3. Generate low energy conformers (openbabel with Confab or RDKIT AllChem.EmbedMolecule)
 """
+import os, glob
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pyworkflow.protocol.params import LEVEL_ADVANCED
 from pyworkflow.utils import Message
 
-import os, glob
-
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import natural_sort, makeSubsets
+from pwchem.constants import RDKIT_DIC
 
 scriptName = 'ligand_preparation_script.py'
 
@@ -131,7 +131,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(it)))
         self.writeParamsFile(paramsPath, molSet)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
 
     def createOutput(self):

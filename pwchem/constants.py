@@ -37,6 +37,7 @@ ALIVIEW_DIC = {'name': 'aliview',    'version': '1.28',   'home': 'ALIVIEW_HOME'
 SHAPEIT_DIC = {'name': 'shape-it',    'version': '2.0.0',   'home': 'SHAPEIT_HOME'}
 VMD_DIC = {'name': 'vmd', 'version': '1.9.3', 'home': 'VMD_HOME'}
 RDKIT_DIC = {'name': 'rdkit', 'version': DEFAULT_VERSION, 'home': 'RDKIT_HOME'}
+BIOCONDA_DIC = {'name': 'bioconda', 'version': DEFAULT_VERSION}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',

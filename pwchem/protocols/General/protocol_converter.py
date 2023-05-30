@@ -37,6 +37,7 @@ from pwem.convert.atom_struct import toCIF, toPdb
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
 from pwchem.utils import getBaseFileName
+from pwchem.constants import RDKIT_DIC, PLIP_DIC
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
 extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
@@ -121,9 +122,9 @@ class ConvertStructures(EMProtocol):
 
                 args = ' -i "{}" -of {} -o {} --outputDir {}'.format(fnSmall, outFormat, fnOut, outDir)
                 if self.getEnumText('useManager') == OBABEL:
-                    Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                    Plugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
                 else:
-                    Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+                    Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
                 if os.path.exists(fnOut):
                     smallMolecule = SmallMolecule(smallMolFilename=fnOut, molName='guess')

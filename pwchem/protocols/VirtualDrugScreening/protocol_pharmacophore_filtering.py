@@ -109,13 +109,13 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
             # we need the input files in a RDKit readable format (not pdbqt for example)
             args = ' --multiFiles -iD "{}" --pattern "{}" -of pdb --outputDir "{}"'. \
                 format(tmpDir, '*', outDir)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
 
     def filterStep(self):
         paramsPath = self.writeParamsFile()
 
         args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
-        pwchemPlugin.runScript(self, scriptName, args, env='rdkit', cwd=self._getPath())
+        pwchemPlugin.runScript(self, scriptName, args, env=RDKIT_DIC, cwd=self._getPath())
 
     def createOutputStep(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())

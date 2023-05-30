@@ -26,6 +26,7 @@
 
 import os
 
+from pwchem.constants import BIOCONDA_DIC
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwem.protocols import EMProtocol
 
@@ -86,18 +87,18 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         # Clustal Omega
         if programName == CLUSTALO:
             output_file = os.path.abspath(self._getPath('clustal_Omega.aln'))
-            cline = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+            cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
             cline += 'clustalo -i {} {} -o {} --outfmt=clu'.format(input_file, extraArgs, output_file)
 
         # Muscle
         elif programName == MUSCLE:
             output_file = os.path.abspath(self._getPath('muscle.aln'))
-            cline = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+            cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
             cline += 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
             output_file = os.path.abspath(self._getPath('mafft.aln'))
-            cline = '%s %s && ' % (Plugin.getCondaActivationCmd(), Plugin.getEnvActivation('bioconda'))
+            cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
             cline += 'mafft {} --clustalout {} > {}'.format(extraArgs, input_file, output_file)
 
         self.runJob(cline, '')

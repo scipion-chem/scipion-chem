@@ -55,10 +55,6 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def _defineVariables(cls):
-		cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-' + DEFAULT_VERSION)
-		cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-' + PLIP_DIC['version'])
-		cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
-		cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
 		cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
 		cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
 		cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
@@ -67,19 +63,9 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
 	@classmethod
-	def getEnvActivation(cls, env):
-		activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
-		return activation
-
-	@classmethod
-	def getRDKitEnvActivation(cls):
-		activation = cls.getVar("RDKIT_ENV_ACTIVATION")
-		return activation
-
-	@classmethod
-	def getPLIPEnvActivation(cls):
-		activation = cls.getVar("PLIP_ENV_ACTIVATION")
-		return activation
+	def getEnvActivationCommand(cls, packageDictionary, condaHook=True):
+		""" This function returns the conda enviroment activation command for a given package. """
+		return '{}conda activate {}-{}'.format(cls.getCondaActivationCmd() if condaHook else '', packageDictionary['name'], packageDictionary['version'])
 
 ######################## PACKAGES #########################
 	@classmethod
@@ -184,7 +170,7 @@ class Plugin(pwem.Plugin):
 	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
 		""" Run rdkit command from a given protocol. """
 		scriptName = cls.getScriptsDir(scriptName)
-		fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
+		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
@@ -207,7 +193,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
 		""" Run openbabel command from a given protocol. """
-		fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), program)
+		fullProgram = '%s && %s' % (cls.getEnvActivationCommand(PLIP_DIC, condaHook=True), program)
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 		else:
@@ -216,15 +202,10 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), 'plip')
+		fullProgram = '%s && %s ' % (cls.getCondaActivationCmd(), cls.getEnvActivationCommand(PLIP_DIC, condaHook=True), 'plip')
 		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################
-	@classmethod
-	def getEnvActivationCommand(cls, packageDictionary, condaHook=False):
-		""" This function returns the conda enviroment activation command for a given package. """
-		return '{}conda activate {}-{}'.format(cls.getCondaActivationCmd() if condaHook else '', packageDictionary['name'], packageDictionary['version'])
-  
 	@classmethod
 	def getPluginHome(cls, path=""):
 		import pwchem

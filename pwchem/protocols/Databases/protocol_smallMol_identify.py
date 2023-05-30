@@ -33,6 +33,7 @@ from pyworkflow.protocol import params
 
 from pwchem import Plugin
 from pwchem.utils import performBatchThreading
+from pwchem.constants import RDKIT_DIC, PLIP_DIC
 
 RDKIT, OPENBABEL = 0, 1
 PUBCHEMID, PUBCHEMNAME, ZINC, CHEMBL = 1, 2, 3, 4
@@ -154,11 +155,11 @@ class ProtChemSmallMolIdentify(EMProtocol):
             args = ' -i "{}" -of smi -o {} --outputDir {} -nt {}'.format(fnSmall, fnOut, outDir, nt)
 
             if self.useManager.get() == RDKIT or fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
-                Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
             # Formatting with OpenBabel
             elif self.useManager.get() == OPENBABEL:
-                Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                Plugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
 
         return self.parseSMI(fnOut)
 

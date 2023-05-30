@@ -92,7 +92,7 @@ class ProtocolFingerprintFiltering(EMProtocol):
         mols = self.inputSmallMolecules.get()
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def createOutputStep(self):
         filtered_molecules_dict = self.parseResults(self._getPath("results.tsv"))

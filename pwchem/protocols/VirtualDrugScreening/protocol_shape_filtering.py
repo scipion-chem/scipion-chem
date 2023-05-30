@@ -136,7 +136,7 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)  # , receptorFile)
 
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def shapeitFilter(self):
         mols = self.inputSmallMolecules.get()
