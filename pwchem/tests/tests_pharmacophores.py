@@ -24,6 +24,8 @@
 from pyworkflow.tests import DataSet
 import pyworkflow.tests as tests
 
+from pwem.protocols import ProtImportPdb
+
 from ..protocols import *
 from ..tests import TestExtractLigand, TestRDKitLigandPreparation
 
