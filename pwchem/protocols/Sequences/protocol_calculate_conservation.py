@@ -182,7 +182,7 @@ class ProtSeqCalculateConservation(EMProtocol):
         inFasta = self._getPath('alignedSequences.fasta')
         inSeqs = self.fillInputSequences()
         for seq in inSeqs:
-            seq.appendToFile(inFasta, doClean=False)
+            seq.appendToFile(inFasta) # TODO: add doClean=False in next scipion-em release
         alignment = AlignIO.read(inFasta, 'fasta')
         summary_align = AlignInfo.SummaryInfo(alignment)
         return summary_align.gap_consensus(0.5)
