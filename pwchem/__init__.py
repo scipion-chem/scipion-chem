@@ -154,7 +154,7 @@ class Plugin(pwem.Plugin):
 		# Installing package
 		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=fileName)\
 			.addCommand(f'tar -xf {fileName} && rm {fileName}', 'ALIVIEW_EXTRACTED')\
-			.addCommand(f"conda create --name bioconda-{DEFAULT_VERSION} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
+			.addCommand(f"conda create --name {BIOCONDA_DIC['name']}-{BIOCONDA_DIC['version']} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
 			.addPackage(env, dependencies=['wget', 'conda'], default=default)
 
 	@classmethod
