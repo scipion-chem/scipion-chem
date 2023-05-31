@@ -64,6 +64,10 @@ jobs:
       run: |
         # Install the repository from the pull request
         ${{ github.workspace }}/../scipion/scipion3 installp -p . --devel
+        
+    - name: Get installed envs
+      run: |
+        conda info --envs
     
     - name: Run test
       run : |
