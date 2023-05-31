@@ -64,3 +64,7 @@ jobs:
       run: |
         # Install the repository from the pull request
         ${{ github.workspace }}/../scipion/scipion3 installp -p . --devel
+    
+    - name: Run test
+      run : |
+        ${{ github.workspace }}/../scipion/scipion3 tests pwchem.tests.tests_databases.TestIdentifyLigands
