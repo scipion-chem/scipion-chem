@@ -287,7 +287,7 @@ class ProtocolLigandsFetching(EMProtocol):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(),
                                                             suffix='outputSmallMolecules')
         for fnSmall in glob.glob(self._getExtraPath('*')):
-            if os.path.isfile(fnSmall) and not fnSmall.endswith('.txt'):
+            if os.path.isfile(fnSmall) and not fnSmall.endswith('.txt') and 'wget-log' not in fnSmall:
                 smallMolecule = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
                 outputSmallMolecules.append(smallMolecule)
 
