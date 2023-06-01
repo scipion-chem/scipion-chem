@@ -64,9 +64,9 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
 		# Common enviroments
-		cls._defineEmVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
-		cls._defineEmVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
-		cls._defineEmVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
+		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC, conda_hook=False))
+		cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC, conda_hook=False))
+		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC, conda_hook=False))
 
 	@classmethod
 	def getEnvActivationCommand(cls, package_dictionary, conda_hook=True):
