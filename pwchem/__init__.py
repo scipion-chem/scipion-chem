@@ -103,7 +103,7 @@ class Plugin(pwem.Plugin):
 		# Installing package
 		installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tarFile)\
 			.addCommand(f'tar -xf {tarFile} --strip-components 1 && rm {tarFile}', 'MGLTOOLS_EXTRACTED')\
-			.addCommand(cls.getDefPath(MGL_DIC, 'install.sh'), 'MGLTOOLS_INSTALLED')\
+			.addCommand('export DISPLAY= && {}'.format(cls.getDefPath(MGL_DIC, 'install.sh')), 'MGLTOOLS_INSTALLED')\
 			.addPackage(env, dependencies=['wget', 'tar'], default=default)
 
 	@classmethod
