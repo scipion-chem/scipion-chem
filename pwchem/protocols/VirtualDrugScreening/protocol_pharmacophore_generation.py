@@ -142,14 +142,14 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
             # we need the input files in a RDKit readable format (not pdbqt for example)
             args = ' --multiFiles -iD "{}" --pattern "{}" -of pdb --outputDir "{}"'. \
                 format(tmpDir, '*', outDir)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
         smiDir = self.getInputSMIDir()
         if not os.path.exists(smiDir):
             os.makedirs(smiDir)
         args = ' --multiFiles -iD "{}" --pattern "{}" -of smi --outputDir "{}"'. \
             format(outDir, '*', smiDir)
-        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
+        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
     def generationStep(self):
         paramsPath = self.writeParamsFile()

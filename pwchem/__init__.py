@@ -98,11 +98,11 @@ class Plugin(pwem.Plugin):
 		installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
 		# Defining file names
-		tarFile = cls.getDefTar(MGL_DIC)
+		tar_file = cls.getDefTar(MGL_DIC)
 
 		# Installing package
-		installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tarFile)\
-			.addCommand(f'tar -xf {tarFile} --strip-components 1 && rm {tarFile}', 'MGLTOOLS_EXTRACTED')\
+		installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tar_file)\
+			.addCommand(f'tar -xf {tar_file} --strip-components 1 && rm {tar_file}', 'MGLTOOLS_EXTRACTED')\
 			.addCommand('export DISPLAY= && {}'.format(cls.getDefPath(MGL_DIC, 'install.sh')), 'MGLTOOLS_INSTALLED')\
 			.addPackage(env, dependencies=['wget', 'tar'], default=default)
 
@@ -112,27 +112,27 @@ class Plugin(pwem.Plugin):
 		installer = InstallHelper(JCHEM_DIC['name'], packageHome=cls.getVar(JCHEM_DIC['home']), packageVersion=JCHEM_DIC['version'])
 
 		# Defining filename to download
-		jchemFile = f"jchempaint-{JCHEM_DIC['version']}.jar"
+		jchem_file = f"jchempaint-{JCHEM_DIC['version']}.jar"
 
-		installer.getExtraFile(f"https://sourceforge.net/projects/cdk/files/JChemPaint/{JCHEM_DIC['version']}/{jchemFile}/download", 'JCHEM_DOWNLOADED', fileName=jchemFile)\
-			.addCommand(f'chmod +x {jchemFile}', 'JCHEM_INSTALLED')\
+		installer.getExtraFile(f"https://sourceforge.net/projects/cdk/files/JChemPaint/{JCHEM_DIC['version']}/{jchem_file}/download", 'JCHEM_DOWNLOADED', fileName=jchem_file)\
+			.addCommand(f'chmod +x {jchem_file}', 'JCHEM_INSTALLED')\
 			.addPackage(env, dependencies=['wget'], default=default)
 
 	@classmethod
 	def addShapeitPackage(cls, env, default=True):
-		# Instantiating plip install helper
-		plipInstaller = InstallHelper(PLIP_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=PLIP_DIC['version'])
+		# Instantiating openbabel install helper
+		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		plipInstaller.getCondaEnvCommand(requirementsFile=False)\
+		openbabel_installer.getCondaEnvCommand(requirementsFile=False)\
 			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
 		
 		# Instantiating shape it install helper
 		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
 
-		# Importing commands from plip and rdkit installers
-		shapeItInstaller.importCommandList(plipInstaller.getCommandList())
+		# Importing commands from openbabel and rdkit installers
+		shapeItInstaller.importCommandList(openbabel_installer.getCommandList())
 
 		# Defining binaries folder name
 		binariesDirectory = SHAPEIT_DIC['name']
@@ -193,7 +193,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
 		""" Run openbabel command from a given protocol. """
-		fullProgram = '%s && %s' % (cls.getEnvActivationCommand(PLIP_DIC), program)
+		fullProgram = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 		else:
@@ -202,7 +202,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(PLIP_DIC), 'plip')
+		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'openbabel')
 		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################

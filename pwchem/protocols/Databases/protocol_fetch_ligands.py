@@ -551,7 +551,7 @@ class ProtocolLigandsFetching(EMProtocol):
 
         # Formatting with OpenBabel
         elif self.useManager.get() == OPENBABEL:
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
     def saveBDBLigands(self, ligIds):
         if self.structDatabase.get() == 0:
