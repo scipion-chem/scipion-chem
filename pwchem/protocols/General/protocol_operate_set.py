@@ -24,11 +24,7 @@
 # *
 # **************************************************************************
 
-from math import ceil
-import numpy as np
-
 from pwem.protocols import EMProtocol
-from pyworkflow.object import Float, Integer
 from pyworkflow.protocol import params
 
 from pwchem.utils import fillEmptyAttributes

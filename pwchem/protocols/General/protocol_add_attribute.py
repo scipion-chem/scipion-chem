@@ -29,10 +29,7 @@
 This module will extract the ligand from a complex pdb.
 """
 
-import os, sys, json
-
 from pyworkflow.protocol import params
-from pyworkflow.object import String, Float, Integer
 from pwem.protocols import EMProtocol
 
 from pwchem.utils import *

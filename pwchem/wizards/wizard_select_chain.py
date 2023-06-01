@@ -38,13 +38,13 @@ from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
-from pwem.wizards import EmWizard, SelectChainWizard, SelectResidueWizard, VariableWizard
+from pwem.wizards import SelectChainWizard, SelectResidueWizard, VariableWizard
 from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
-from pwchem.objects import SequenceVariants, SetOfStructROIs
-from pwchem.viewers.viewers_sequences import SequenceAliViewer, SequenceAliView
+from pwchem.objects import SetOfStructROIs
+from pwchem.viewers.viewers_sequences import SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 

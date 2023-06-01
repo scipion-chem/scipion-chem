@@ -28,13 +28,10 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params
 from pwem.viewers import ChimeraAttributeViewer
-from pwem.objects import Sequence
 from pwchem.protocols import ProtCalculateSASA, ProtSeqCalculateConservation
 from pwchem.viewers.viewers_sequences import SequenceAliView
-
 
 def plotSequenceAttribute(attrValues, attrName='Attribute', thres=None):
     attrValues = list(map(float, attrValues))

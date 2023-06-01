@@ -103,7 +103,7 @@ class ProtocolADMEFiltering(EMProtocol):
     def describeFilter(self, molsScipion):  # , receptorFile):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, molsScipion)  # , receptorFile)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []

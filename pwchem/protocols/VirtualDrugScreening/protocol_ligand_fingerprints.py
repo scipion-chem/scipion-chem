@@ -29,17 +29,11 @@
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
+import os
 from pwchem import Plugin
-from pyworkflow.utils.path import copyFile
-from pwchem.utils import fillEmptyAttributes
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
-import csv
-import glob
+from pwchem.objects import SetOfSmallMolecules
 
 scriptName = 'fingerprint_filtering.py'
 
@@ -98,7 +92,7 @@ class ProtocolFingerprintFiltering(EMProtocol):
         mols = self.inputSmallMolecules.get()
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def createOutputStep(self):
         filtered_molecules_dict = self.parseResults(self._getPath("results.tsv"))
