@@ -36,7 +36,7 @@ from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEV
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
 from pwchem.utils import performBatchThreading
-from pwchem.constants import RDKIT_DIC, PLIP_DIC
+from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
 DEFAULT_FORMAT = 'sdf'
@@ -203,7 +203,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
                   # Formatting with OpenBabel
                   elif self.useManager.get() == OPENBABEL:
-                      Plugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
+                      Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
                   if make3d:
                       self.downloadErrors(outDir)
@@ -233,7 +233,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
             elif self.useManager.get() == OPENBABEL:
             # Formatting with OpenBabel
-                Plugin.runScript(self, 'obabel_IO.py', args, env=PLIP_DIC, cwd=outDir)
+                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
             if make3d:
               self.downloadErrors(outDir)
