@@ -68,6 +68,7 @@ jobs:
     - name: Get installed envs
       run: |
         conda info --envs && \
+        ${{ github.workspace }}/../scipion/scipion3 run "python -c \"import pwem; print(pwem.Plugin.getCondaActivationCmd())\"" | grep eval && \
         conda activate plip-env && \
         echo $CONDA_PREFIX
     
