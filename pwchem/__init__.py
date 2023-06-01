@@ -149,11 +149,11 @@ class Plugin(pwem.Plugin):
 		installer = InstallHelper(ALIVIEW_DIC['name'], packageHome=cls.getVar(ALIVIEW_DIC['home']), packageVersion=ALIVIEW_DIC['version'])
 
 		# Defining filename
-		fileName = cls.getDefTar(ALIVIEW_DIC)
+		file_name = cls.getDefTar(ALIVIEW_DIC)
 
 		# Installing package
-		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=fileName)\
-			.addCommand(f'tar -xf {fileName} && rm {fileName}', 'ALIVIEW_EXTRACTED')\
+		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=file_name)\
+			.addCommand(f'tar -xf {file_name} && rm {file_name}', 'ALIVIEW_EXTRACTED')\
 			.addCommand(f"conda create --name {BIOCONDA_DIC['name']}-{BIOCONDA_DIC['version']} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
 			.addPackage(env, dependencies=['wget', 'conda'], default=default)
 
@@ -167,14 +167,14 @@ class Plugin(pwem.Plugin):
 
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
+	def runScript(cls, protocol, script_name, args, env, cwd=None, popen=False):
 		""" Run rdkit command from a given protocol. """
-		scriptName = cls.getScriptsDir(scriptName)
-		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
+		script_name = cls.getScriptsDir(script_name)
+		full_program = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', script_name)
 		if not popen:
-			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
+			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+			subprocess.check_call(full_program + args, cwd=cwd, shell=True)
 
 	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):
@@ -193,17 +193,17 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
 		""" Run openbabel command from a given protocol. """
-		fullProgram = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
+		full_program = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
 		if not popen:
-			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 		else:
-			run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
+			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'openbabel')
-		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
+		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'openbabel')
+		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################
 	@classmethod
