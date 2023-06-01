@@ -129,18 +129,18 @@ class Plugin(pwem.Plugin):
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
 		
 		# Instantiating shape it install helper
-		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
+		shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
 
 		# Importing commands from openbabel and rdkit installers
-		shapeItInstaller.importCommandList(openbabel_installer.getCommandList())
+		shape_it_installer.importCommandList(openbabel_installer.getCommandList())
 
 		# Defining binaries folder name
-		binariesDirectory = SHAPEIT_DIC['name']
+		binaries_directory = SHAPEIT_DIC['name']
 
 		# Installing package
-		shapeItInstaller.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binariesDirectory)\
-			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binariesDirectory)\
-			.addCommand(f'cd {binariesDirectory}/build && make', 'SHAPEIT_COMPILED')\
+		shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
+			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
+			.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
