@@ -202,7 +202,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		fullProgram = '%s && %s ' % (cls.getCondaActivationCmd(), cls.getEnvActivationCommand(PLIP_DIC, condaHook=True), 'plip')
+		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(PLIP_DIC, condaHook=True), 'plip')
 		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################
