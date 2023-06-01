@@ -115,8 +115,8 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False
         fmt = 'clu'
 
     # Alignment
-    activateEnvLine = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
-    cline = '{} {} --outfmt={}'.format(activateEnvLine, alignClustalSequences(oriFasta, outPath), fmt)
+    activate_env_line = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+    cline = '{} {} --outfmt={}'.format(activate_env_line, alignClustalSequences(oriFasta, outPath), fmt)
     if force:
         cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)
