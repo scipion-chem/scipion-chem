@@ -84,22 +84,22 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         setForAlignment.exportToFile(input_file)
         extraArgs = self.getExtraArgs()
 
+        cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
         # Clustal Omega
         if programName == CLUSTALO:
             output_file = os.path.abspath(self._getPath('clustal_Omega.aln'))
-            cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
             cline += 'clustalo -i {} {} -o {} --outfmt=clu'.format(input_file, extraArgs, output_file)
 
         # Muscle
         elif programName == MUSCLE:
             output_file = os.path.abspath(self._getPath('muscle.aln'))
-            cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
             cline += 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
 
         elif programName == MAFFT:
             output_file = os.path.abspath(self._getPath('mafft.aln'))
-            cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
             cline += 'mafft {} --clustalout {} > {}'.format(extraArgs, input_file, output_file)
+        else:
+            cline += 'exit'
 
         self.runJob(cline, '')
 
