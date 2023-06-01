@@ -63,9 +63,9 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
 	@classmethod
-	def getEnvActivationCommand(cls, packageDictionary, condaHook=True):
+	def getEnvActivationCommand(cls, package_dictionary, conda_hook=True):
 		""" This function returns the conda enviroment activation command for a given package. """
-		return '{}conda activate {}-{}'.format(cls.getCondaActivationCmd() if condaHook else '', packageDictionary['name'], packageDictionary['version'])
+		return '{}conda activate {}-{}'.format(cls.getCondaActivationCmd() if conda_hook else '', package_dictionary['name'], package_dictionary['version'])
 
 ######################## PACKAGES #########################
 	@classmethod
@@ -74,12 +74,12 @@ class Plugin(pwem.Plugin):
 		installer = InstallHelper(RDKIT_DIC['name'], packageHome=cls.getVar(RDKIT_DIC['home']), packageVersion=RDKIT_DIC['version'])
 
 		# Defining env path
-		envPath = os.environ.get('PATH', "")  # keep path since conda likely in there
+		env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
 		# Installing package
 		installer.addCommand(f'conda create --name {RDKIT_DIC["name"]}-{RDKIT_DIC["version"]} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
-			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': envPath} if envPath else None)
+			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
 	@classmethod
 	def addPyMolPackage(cls, env, default=True):
@@ -139,7 +139,7 @@ class Plugin(pwem.Plugin):
 
 		# Installing package
 		shapeItInstaller.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binariesDirectory)\
-			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC, condaHook=True)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binariesDirectory)\
+			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binariesDirectory)\
 			.addCommand(f'cd {binariesDirectory}/build && make', 'SHAPEIT_COMPILED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
@@ -193,7 +193,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
 		""" Run openbabel command from a given protocol. """
-		fullProgram = '%s && %s' % (cls.getEnvActivationCommand(PLIP_DIC, condaHook=True), program)
+		fullProgram = '%s && %s' % (cls.getEnvActivationCommand(PLIP_DIC), program)
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 		else:
@@ -202,7 +202,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(PLIP_DIC, condaHook=True), 'plip')
+		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(PLIP_DIC), 'plip')
 		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################
