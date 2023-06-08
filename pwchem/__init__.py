@@ -178,7 +178,7 @@ class Plugin(pwem.Plugin):
 
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, scriptDir=None, cwd=None, popen=False):
+	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, scriptDir=None):
 		""" Run a script from a given protocol using a specific environment """
 		scriptName = cls.getScriptsDir(scriptName) if not scriptDir else os.path.join(scriptDir, scriptName)
 		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
