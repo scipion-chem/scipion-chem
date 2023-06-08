@@ -33,8 +33,7 @@ same or different software
 """
 
 import os, re
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from scipy.spatial import distance
+from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.metrics.pairwise import pairwise_distances
 
 from pyworkflow.protocol import params

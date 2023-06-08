@@ -25,15 +25,19 @@
 # *
 # **************************************************************************
 
-PYMOL_HOME = 'PYMOL_HOME'
+# Versions
+DEFAULT_VERSION = '1.0'
+
 #Constant dictionaries
-MGL_DIC = {'name': 'mgltools',    'version': '1.5.7', 'home': 'MGL_HOME'}
-PYMOL_DIC = {'name': 'pymol',       'version': '2.5',   'home': PYMOL_HOME}
-JCHEM_DIC = {'name': 'jchempaint',  'version': '3.2.0',   'home': 'JCHEM_HOME'}
-PLIP_DIC = {'name': 'plip',        'version': '2.2',   'home': 'PLIP_HOME'}
-ALIVIEW_DIC = {'name': 'aliview',    'version': '1.28',   'home': 'ALIVIEW_HOME'}
-SHAPEIT_DIC = {'name': 'shape-it',    'version': '2.0.0',   'home': 'SHAPEIT_HOME'}
-VMD_DIC = {'name': 'vmd', 'version': '1.9.3', 'home': 'VMD_HOME'}
+MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
+PYMOL_DIC =     {'name': 'pymol',       'version': '2.5.5',         'home': 'PYMOL_HOME'}
+JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}
+OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPENBABEL_HOME'}
+ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
+SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
+VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_HOME'}
+RDKIT_DIC =     {'name': 'rdkit',       'version': DEFAULT_VERSION, 'home': 'RDKIT_HOME'}
+BIOCONDA_DIC =  {'name': 'bioconda',    'version': DEFAULT_VERSION}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',

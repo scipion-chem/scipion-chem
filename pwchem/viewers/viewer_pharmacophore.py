@@ -24,12 +24,12 @@
 # *
 # **************************************************************************
 
-import os, pickle
+import os
 
 from pyworkflow.protocol.params import *
 import pyworkflow.viewer as pwviewer
 
-from pwchem.viewers import PyMolViewer, PyMolView
+from pwchem.viewers import PyMolView
 from pwchem.objects import PharmacophoreChem
 from pwchem.protocols import ProtocolPharmacophoreGeneration, ProtocolPharmacophoreFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import *

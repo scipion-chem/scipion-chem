@@ -34,12 +34,11 @@ import os, json
 
 from pyworkflow.utils import Message
 from pyworkflow.protocol import params
-from pwem.convert.atom_struct import toPdb, toCIF, AtomicStructHandler, addScipionAttribute
+from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute
 from pwem.protocols import EMProtocol
 from pwem.objects import AtomStruct
 
-from pwchem import Plugin as pwchemPlugin
-from pwchem.objects import SetOfStructROIs, StructROI, SetOfSequenceROIs, SequenceChem, SequenceROI
+from pwchem.objects import SequenceChem
 from pwchem.utils import *
 from pwchem.constants import MGL_DIC
 

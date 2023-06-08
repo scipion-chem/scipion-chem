@@ -27,7 +27,7 @@
 import os
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
+from pyworkflow.protocol.params import PathParam, StringParam
 from pwchem.objects import DatabaseID, SetOfDatabaseID
 
 class ProtChemImportSetOfDatabaseIDs(EMProtocol):

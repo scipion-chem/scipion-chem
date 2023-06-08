@@ -21,12 +21,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
-import time
-
-from pyworkflow.tests import BaseTest, DataSet, setupTestProject
+from pyworkflow.tests import DataSet
 import pyworkflow.tests as tests
+
 from pwem.protocols import ProtImportPdb
-from pyworkflow.object import Pointer
 
 from ..protocols import *
 from ..tests import TestExtractLigand, TestRDKitLigandPreparation

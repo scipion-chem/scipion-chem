@@ -36,293 +36,234 @@ import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 import pwem
 from .bibtex import _bibtexStr
-
 from .constants import *
+from pwchem.install_helper import InstallHelper
 
 _logo = 'pwchem_logo.png'
-RDKIT = 'rdkit'
+__version__ = DEFAULT_VERSION
 
 class Plugin(pwem.Plugin):
-    _rdkitHome = os.path.join(pwem.Config.EM_ROOT, RDKIT)
+	@classmethod
+	def defineBinaries(cls, env):
+		cls.addRDKitPackage(env)
+		cls.addShapeitPackage(env)
+		cls.addMGLToolsPackage(env)
+		cls.addJChemPaintPackage(env)
+		cls.addPyMolPackage(env)
+		cls.addAliViewPackage(env)
+		cls.addVMDPackage(env)
 
-    @classmethod
-    def defineBinaries(cls, env):
-        #PLIP environment (with pymol bundle)
-        cls.addPLIPPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addRDKitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        # cls.addShapeitPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addMGLToolsPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addJChemPaintPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addPyMolPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addAliViewPackage(env, default=bool(cls.getCondaActivationCmd()))
-        cls.addVMDPackage(env, default=bool(cls.getCondaActivationCmd()))
+	@classmethod
+	def _defineVariables(cls):
+		# Package home directories 
+		cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
+		cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
+		cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
+		cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
+		cls._defineEmVar(VMD_DIC['home'], '{}-{}'.format(VMD_DIC['name'], VMD_DIC['version']))
+		cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
 
-    @classmethod
-    def _defineVariables(cls):
-        cls._defineVar("RDKIT_ENV_ACTIVATION", 'conda activate rdkit-env')
-        cls._defineVar("PLIP_ENV_ACTIVATION", 'conda activate plip-env')
-        cls._defineVar("VMD_ENV_ACTIVATION", 'conda activate vmd-env')
-        cls._defineVar("BIOCONDA_ENV_ACTIVATION", 'conda activate bioconda-env')
-        cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
-        cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
-        cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
-        cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
-        # cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
+		# Common enviroments
+		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
+		cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
+		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
 
-    @classmethod
-    def getEnvActivation(cls, env):
-      activation = cls.getVar("{}_ENV_ACTIVATION".format(env.upper()))
-      return activation
+	@classmethod
+	def getEnvName(cls, packageDictionary):
+		""" This function returns the name of the conda enviroment for a given package. """
+		return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
 
-    @classmethod
-    def getRDKitEnvActivation(cls):
-      activation = cls.getVar("RDKIT_ENV_ACTIVATION")
-      return activation
-
-    @classmethod
-    def getPLIPEnvActivation(cls):
-      activation = cls.getVar("PLIP_ENV_ACTIVATION")
-      return activation
-
+	@classmethod
+	def getEnvActivationCommand(cls, packageDictionary, condaHook=True):
+		""" This function returns the conda enviroment activation command for a given package. """
+		return '{}conda activate {}'.format(cls.getCondaActivationCmd() if condaHook else '', cls.getEnvName(packageDictionary))
 
 ######################## PACKAGES #########################
-    @classmethod
-    def addPLIPPackage(cls, env, default=False):
-      PLIP_INSTALLED = 'plip_installed'
+	@classmethod
+	def addRDKitPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(RDKIT_DIC['name'], packageHome=cls.getVar(RDKIT_DIC['home']), packageVersion=RDKIT_DIC['version'])
 
-      installationCmd = cls.getCondaActivationCmd()
-      installationCmd += 'conda create --name plip-env --file {} && '.format(cls.getEnvSpecsPath('plip'))
-      installationCmd += 'touch {}'.format(PLIP_INSTALLED)
+		# Defining env path
+		env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
-      installationCmd = [(installationCmd, PLIP_INSTALLED)]
-      env.addPackage(PLIP_DIC['name'], version=PLIP_DIC['version'],
-                     tar='void.tgz',
-                     commands=installationCmd,
-                     default=True)
+		# Installing package
+		installer.addCommand(f'conda create --name {RDKIT_DIC["name"]}-{RDKIT_DIC["version"]} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
+			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
+			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
+			
+	@classmethod
+	def addPyMolPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(PYMOL_DIC['name'], packageHome=cls.getVar(PYMOL_DIC['home']), packageVersion=PYMOL_DIC['version'])
 
-    @classmethod
-    def addPyMolPackage(cls, env, default=False):
-      PYMOL_INSTALLED = 'pymol_installed'
-      pymol_commands = 'wget https://pymol.org/installers/PyMOL-2.5.2_293-Linux-x86_64-py37.tar.bz2 -O {} && '.\
-        format(cls.getDefTar(PYMOL_DIC, ext='tar.bz2'))
-      pymol_commands += 'tar -jxf {} --strip-components 1 && rm {} &&'.\
-        format(*[cls.getDefTar(PYMOL_DIC, ext='tar.bz2')]*2)
-      pymol_commands += 'touch ' + PYMOL_INSTALLED
-      pymol_commands = [(pymol_commands, PYMOL_INSTALLED)]
-      env.addPackage(PYMOL_DIC['name'], version=PYMOL_DIC['version'],
-                     tar='void.tgz',
-                     commands=pymol_commands,
-                     default=True)
+		# Installing package
+		installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
+			.addCommand('tar -jxf PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
+			.addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
+			.addPackage(env, dependencies=['tar', 'wget'], default=default)
 
-    @classmethod
-    def addMGLToolsPackage(cls, env, default=False):
-      MGL_INSTALLED = "initMGLtools.sh"
-      mgl_commands = 'wget {} -O {} --no-check-certificate && '. \
-        format(cls.getMGLToolsURL(), cls.getDefTar(MGL_DIC))
-      mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)] * 2)
-      mgl_commands += 'cp install.sh install.bash && sed -i "s/bin\/sh/bin\/bash/g" install.bash && '
-      mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.bash'))
-      mgl_commands += 'touch ' + MGL_INSTALLED
-      mgl_commands = [(mgl_commands, MGL_INSTALLED)]
+	@classmethod
+	def addMGLToolsPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-      env.addPackage(MGL_DIC['name'], version=MGL_DIC['version'],
-                     commands=mgl_commands, tar='void.tgz', default=default)
+		# Defining file names
+		tar_file = cls.getDefTar(MGL_DIC)
 
-    @classmethod
-    def addJChemPaintPackage(cls, env, default=False):
-        JCHEM_INSTALLED = 'jchem_installed'
-        jchem_commands = 'wget https://sourceforge.net/projects/cdk/files/JChemPaint/3.2.0/jchempaint-3.2.0.jar/download -O {} && '.\
-          format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version'])))
-        jchem_commands += 'chmod +x {} && '.format(cls.getDefPath(JCHEM_DIC, 'jchempaint-{}.jar'.
-                                                                  format(JCHEM_DIC['version'])))
-        jchem_commands += ' touch %s' % JCHEM_INSTALLED
+		# Installing package
+		installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tar_file)\
+			.addCommand(f'tar -xf {tar_file} --strip-components 1 && rm {tar_file}', 'MGLTOOLS_EXTRACTED')\
+			.addCommand('export DISPLAY= && {}'.format(cls.getDefPath(MGL_DIC, 'install.sh')), 'MGLTOOLS_INSTALLED')\
+			.addPackage(env, dependencies=['wget', 'tar'], default=default)
 
-        jchem_commands = [(jchem_commands, JCHEM_INSTALLED)]
+	@classmethod
+	def addJChemPaintPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(JCHEM_DIC['name'], packageHome=cls.getVar(JCHEM_DIC['home']), packageVersion=JCHEM_DIC['version'])
 
-        env.addPackage(JCHEM_DIC['name'], version=JCHEM_DIC['version'],
-                       tar='void.tgz',
-                       commands=jchem_commands,
-                       default=True)
+		# Defining filename to download
+		jchem_file = f"jchempaint-{JCHEM_DIC['version']}.jar"
 
-    @classmethod
-    def addRDKitPackage(cls, env, default=False):
-        RDKIT_INSTALLED = 'rdkit_installed'
+		installer.getExtraFile(f"https://sourceforge.net/projects/cdk/files/JChemPaint/{JCHEM_DIC['version']}/{jchem_file}/download", 'JCHEM_DOWNLOADED', fileName=jchem_file)\
+			.addCommand(f'chmod +x {jchem_file}', 'JCHEM_INSTALLED')\
+			.addPackage(env, dependencies=['wget'], default=default)
 
-        installationCmd = cls.getCondaActivationCmd()
-        installationCmd += 'conda create --name rdkit-env --file {} && '.format(cls.getEnvSpecsPath('rdkit'))
-        installationCmd += 'mkdir oddtModels && touch %s' % RDKIT_INSTALLED
+	@classmethod
+	def addShapeitPackage(cls, env, default=True):
+		# Instantiating openbabel install helper
+		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
-        rdkit_commands = [(installationCmd, RDKIT_INSTALLED)]
+		# Generating installation commands
+		openbabel_installer.getCondaEnvCommand(requirementsFile=False)\
+			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
+			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
+		
+		# Instantiating shape it install helper
+		shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
 
-        envPath = os.environ.get('PATH', "")  # keep path since conda likely in there
-        installEnvVars = {'PATH': envPath} if envPath else None
-        env.addPackage(RDKIT,
-                       tar='void.tgz',
-                       commands=rdkit_commands,
-                       neededProgs=cls.getDependencies(),
-                       default=default,
-                       vars=installEnvVars)
+		# Importing commands from openbabel and rdkit installers
+		shape_it_installer.importCommandList(openbabel_installer.getCommandList())
 
-    @classmethod
-    def addShapeitPackage(cls, env, default=False):
-      SHAPEIT_INSTALLED = 'shapeit_installed'
+		# Defining binaries folder name
+		binaries_directory = SHAPEIT_DIC['name']
 
-      installationCmd = ' git clone https://github.com/rdkit/shape-it.git && cd shape-it && mkdir build && cd build &&'
-      installationCmd += ' cmake -DCMAKE_INSTALL_PREFIX=. .. && make && make install && cd ../.. &&'
-      installationCmd += ' mv shape-it/* . && rm -rf shape-it && mv build/shape-it . && mv build/libshapeit_lib.so . &&'
-      installationCmd += ' touch %s' % SHAPEIT_INSTALLED
-      installationCmd = [(installationCmd, SHAPEIT_INSTALLED)]
+		# Installing package
+		shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
+			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
+			.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
-      env.addPackage(SHAPEIT_DIC['name'], version=SHAPEIT_DIC['version'],
-                     tar='void.tgz',
-                     commands=installationCmd,
-                     neededProgs=cls.getDependencies(),
-                     default=default)
+	@classmethod
+	def addAliViewPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(ALIVIEW_DIC['name'], packageHome=cls.getVar(ALIVIEW_DIC['home']), packageVersion=ALIVIEW_DIC['version'])
 
-    @classmethod
-    def addAliViewPackage(cls, env, default=False):
-      SEQS_INSTALLED = 'aliview_installed'
-      seqs_commands = 'wget https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz -O {} ' \
-                      '--no-check-certificate && '.format(cls.getDefTar(ALIVIEW_DIC))
-      seqs_commands += 'tar -xf {} && rm {} &&'.format(*[cls.getDefTar(ALIVIEW_DIC)]*2)
-      seqs_commands += ' conda create --name bioconda-env --file {} && '.format(cls.getEnvSpecsPath('bioconda'))
-      seqs_commands += ' touch %s' % SEQS_INSTALLED
+		# Defining filename
+		file_name = cls.getDefTar(ALIVIEW_DIC)
 
-      seqs_commands = [(seqs_commands, SEQS_INSTALLED)]
+		# Installing package
+		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=file_name)\
+			.addCommand(f'tar -xf {file_name} && rm {file_name}', 'ALIVIEW_EXTRACTED')\
+			.addCommand(f"conda create --name {BIOCONDA_DIC['name']}-{BIOCONDA_DIC['version']} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
+			.addPackage(env, dependencies=['wget', 'conda'], default=default)
 
-      env.addPackage(ALIVIEW_DIC['name'], version=ALIVIEW_DIC['version'],
-                     tar='void.tgz',
-                     commands=seqs_commands,
-                     default=True)
+	@classmethod
+	def addVMDPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(VMD_DIC['name'], packageHome=cls.getVar(VMD_DIC['home']), packageVersion=VMD_DIC['version'])
 
-    @classmethod
-    def addVMDPackage(cls, env, default=False):
-      VMD_INSTALLED = 'vmd_installed'
+		installer.getCondaEnvCommand(requirementsFile=False).addCondaPackages(['vdm'], channel='conda-forge')\
+			.addPackage(env, dependencies=['conda'], default=default)
 
-      installationCmd = cls.getCondaActivationCmd()
-      installationCmd += ' conda create -y -c conda-forge -n vmd-env vmd &&'
-      installationCmd += ' touch %s' % VMD_INSTALLED
-      vmd_commands = [(installationCmd, VMD_INSTALLED)]
+	##################### RUN CALLS ######################
+	@classmethod
+	def runScript(cls, protocol, script_name, args, env, cwd=None, popen=False):
+		""" Run rdkit command from a given protocol. """
+		script_name = cls.getScriptsDir(script_name)
+		full_program = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', script_name)
+		if not popen:
+			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd)
+		else:
+			subprocess.check_call(full_program + args, cwd=cwd, shell=True)
 
-      env.addPackage(VMD_DIC['name'], version=VMD_DIC['version'],
-                     tar='void.tgz',
-                     commands=vmd_commands,
-                     neededProgs=cls.getDependencies(),
-                     default=default)
+	@classmethod
+	def runShapeIt(cls, protocol, program, args, cwd=None):
+		""" Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
+		progDir = cls.getProgramHome(SHAPEIT_DIC)
+		progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
+		outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
+		protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
+		os.rename(progFile, outFile)
 
+	@classmethod
+	def runJChemPaint(cls, protocol, cwd=None):
+		""" Run jchempaint command from a given protocol. """
+		protocol.runJob('java -jar {}'.format(cls.getProgramHome(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version']))), arguments='', env=cls.getEnviron(), cwd=cwd)
 
-    ##################### RUN CALLS #################33333
-    @classmethod
-    def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False):
-      """ Run rdkit command from a given protocol. """
-      scriptName = cls.getScriptsDir(scriptName)
-      fullProgram = '%s %s && %s %s' % (cls.getCondaActivationCmd(), cls.getEnvActivation(env), 'python', scriptName)
-      if not popen:
-          protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
-      else:
-          subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+	@classmethod
+	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
+		""" Run openbabel command from a given protocol. """
+		full_program = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
+		if not popen:
+			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+		else:
+			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
-    @classmethod
-    def runShapeIt(cls, protocol, program, args, cwd=None):
-      """ Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
-      progDir = cls.getProgramHome(SHAPEIT_DIC)
-      progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
-      outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
-      protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
-      os.rename(progFile, outFile)
-
-    @classmethod
-    def runJChemPaint(cls, protocol, cwd=None):
-      """ Run jchempaint command from a given protocol. """
-      protocol.runJob('java -jar {}'.format(cls.getProgramHome(JCHEM_DIC, 'jchempaint-{}.jar'.
-                                                               format(JCHEM_DIC['version']))),
-                      arguments='', env=cls.getEnviron(), cwd=cwd)
-
-    @classmethod
-    def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
-      """ Run openbabel command from a given protocol. """
-      fullProgram = '%s %s && %s' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), program)
-      if not popen:
-        protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
-      else:
-        run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
-
-    @classmethod
-    def runPLIP(cls, args, cwd=None):
-        """ Run PLIP command from a given protocol. """
-        fullProgram = '%s %s && %s ' % (cls.getCondaActivationCmd(), cls.getPLIPEnvActivation(), 'plip')
-        run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
-
+	@classmethod
+	def runPLIP(cls, args, cwd=None):
+		""" Run PLIP command from a given protocol. """
+		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'openbabel')
+		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################
+	@classmethod
+	def getPluginHome(cls, path=""):
+		import pwchem
+		fnDir = os.path.split(pwchem.__file__)[0]
+		return os.path.join(fnDir, path)
 
-    @classmethod
-    def getDependencies(cls):
-      # try to get CONDA activation command
-      condaActivationCmd = cls.getCondaActivationCmd()
-      neededProgs = []
-      if not condaActivationCmd:
-        neededProgs.append('conda')
+	# Default version paths
+	@classmethod
+	def getDefPath(cls, programDic, path=''):
+		return os.path.join(pwem.Config.EM_ROOT, '{}-{}'.format(programDic['name'], programDic['version']), path)
 
-      return neededProgs
+	# In use paths
+	@classmethod
+	def getProgramHome(cls, programDic, path=''):
+		return os.path.join(cls.getVar(programDic['home']), path)
 
-    @classmethod
-    def getPluginHome(cls, path=""):
-      import pwchem
-      fnDir = os.path.split(pwchem.__file__)[0]
-      return os.path.join(fnDir, path)
+	@classmethod
+	def getScriptsDir(cls, scriptName):
+		return cls.getPluginHome('scripts/%s' % scriptName)
 
-    # Default version paths
-    @classmethod
-    def getDefPath(cls, programDic, path=''):
-        return os.path.join(pwem.Config.EM_ROOT, '{}-{}'.format(programDic['name'], programDic['version']), path)
+	@classmethod
+	def getEnvSpecsPath(cls, env):
+		envFile = '/{}_env_spec.txt'.format(env) if env else ''
+		return cls.getPluginHome('envs%s' % envFile)
 
-    # In use paths
-    @classmethod
-    def getProgramHome(cls, programDic, path=''):
-        return os.path.join(cls.getVar(programDic['home']), path)
+	@classmethod
+	def getMGLEnviron(cls):
+		""" Create the needed environment for MGL Tools programs. """
+		environ = pwutils.Environ(os.environ)
+		pos = pwutils.Environ.BEGIN
+		environ.update({
+			'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
+		}, position=pos)
+		return environ
 
-    @classmethod
-    def getScriptsDir(cls, scriptName):
-      return cls.getPluginHome('scripts/%s' % scriptName)
+	@classmethod
+	def getODDTModelsPath(cls, path=''):
+		return os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels', path))
 
-    @classmethod
-    def getEnvSpecsPath(cls, env):
-      envFile = '/{}_env_spec.txt'.format(env) if env else ''
-      return cls.getPluginHome('envs%s' % envFile)
-
-    @classmethod
-    def getCondaEnvPath(cls, env, path=''):
-        condaPath = cls.getCondaActivationCmd().split('(')[1].split()[0].replace('/bin/conda', '')
-        return os.path.join(condaPath, 'envs', env, path)
-
-    @classmethod
-    def getMGLEnviron(cls):
-      """ Create the needed environment for MGL Tools programs. """
-      environ = pwutils.Environ(os.environ)
-      pos = pwutils.Environ.BEGIN
-      environ.update({
-        'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
-      }, position=pos)
-      return environ
-
-    @classmethod
-    def getODDTModelsPath(cls, path=''):
-      return os.path.abspath(os.path.join(cls._rdkitHome, 'oddtModels', path))
-
-    @classmethod
-    def getDefTar(cls, programDic, ext='tgz'):
-      return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
-
-    @classmethod
-    def getMGLToolsURL(cls):
-      return 'https://ccsb.scripps.edu/download/532/'
-
+	@classmethod
+	def getDefTar(cls, programDic, ext='tgz'):
+		return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
 
 DataSet(name='smallMolecules', folder='smallMolecules',
-            files={
-              'mix': 'mix/',
-              'mol2': 'mol2/',
-              'pdb': 'pdb/',
-              'sdf': 'sdf/',
-              'smi': 'smi/'})
+					files={
+						'mix': 'mix/',
+						'mol2': 'mol2/',
+						'pdb': 'pdb/',
+						'sdf': 'sdf/',
+						'smi': 'smi/'})

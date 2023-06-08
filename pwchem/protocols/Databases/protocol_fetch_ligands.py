@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-import os, re, csv, glob, json
+import os, re, glob, json
 import numpy as np
 from urllib.request import urlopen
 from Bio.PDB import PDBIO, Select
@@ -33,7 +33,6 @@ from sklearn.cluster import DBSCAN
 
 import pwem.convert as emconv
 
-from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
@@ -42,8 +41,6 @@ from pwchem.utils import *
 from pwchem.constants import elements_mass
 
 from pwchem import Plugin as pwchemPlugin
-from pwchem.utils import fillEmptyAttributes
-import pyworkflow.object as pwobj
 from pwchem.utils import clean_PDB
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
@@ -550,11 +547,11 @@ class ProtocolLigandsFetching(EMProtocol):
 
         # Formatting with RDKit (neccessary if they are maestro)
         if self.useManager.get() == RDKIT or fnOut.endswith(".mae") or fnOut.endswith(".maegz"):
-            pwchemPlugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+            pwchemPlugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
         # Formatting with OpenBabel
         elif self.useManager.get() == OPENBABEL:
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
     def saveBDBLigands(self, ligIds):
         if self.structDatabase.get() == 0:
