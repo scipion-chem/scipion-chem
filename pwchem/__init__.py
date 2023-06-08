@@ -74,9 +74,9 @@ class Plugin(pwem.Plugin):
 		return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
 
 	@classmethod
-	def getEnvActivationCommand(cls, packageDictionary, conda_hook=True):
+	def getEnvActivationCommand(cls, packageDictionary, condaHook=True):
 		""" This function returns the conda enviroment activation command for a given package. """
-		return '{}conda activate {}'.format(cls.getCondaActivationCmd() if conda_hook else '', cls.getEnvName(packageDictionary))
+		return '{}conda activate {}'.format(cls.getCondaActivationCmd() if condaHook else '', cls.getEnvName(packageDictionary))
 
 ######################## PACKAGES #########################
 	@classmethod
