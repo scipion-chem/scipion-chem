@@ -178,14 +178,15 @@ class Plugin(pwem.Plugin):
 
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, script_name, args, env, cwd=None, popen=False):
-		""" Run rdkit command from a given protocol. """
-		script_name = cls.getScriptsDir(script_name)
-		full_program = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', script_name)
+	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, scriptDir=None):
+		""" Run a script from a given protocol using a specific environment """
+		scriptName = cls.getScriptsDir(scriptName) if not scriptDir else os.path.join(scriptDir, scriptName)
+		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
+
 		if not popen:
-			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd)
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(full_program + args, cwd=cwd, shell=True)
+			subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
 
 	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):

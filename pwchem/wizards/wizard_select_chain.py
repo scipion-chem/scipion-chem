@@ -43,11 +43,68 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
-from pwchem.objects import SetOfStructROIs
+
+from pwchem.objects import SequenceVariants, SetOfStructROIs
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel
+from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
+
+class SelectLigandAtom(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+  def is_het(self, residue):
+    res = residue.id[0]
+    return res != " " and res != "W"
+
+  def extract_atoms(self, molFile, protocol):
+    """ Extraction of the atoms in a ligand file """
+    if not molFile.endswith('.pdb'):
+        proj = protocol.getProject()
+
+        inName, inExt = os.path.splitext(os.path.basename(molFile))
+        oFile = os.path.abspath(proj.getTmpPath(inName + '.pdb'))
+
+        args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(molFile), oFile)
+        runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
+        molFile = oFile
+
+    parser = PDBParser().get_structure(molFile, molFile)
+
+    atomNames = []
+    for model in parser:
+      for atom in model.get_atoms():
+        atomNames.append(atom.get_name())
+    atomNames = natural_sort(atomNames)
+    return atomNames
+
+  def getMol(self, inSet, molName):
+    myMol = None
+    for mol in inSet:
+      if mol.__str__() == molName:
+        myMol = mol.clone()
+        break
+    if myMol == None:
+      print('The input ligand is not found')
+      return None
+    else:
+      return myMol
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+
+    inSet, molName = getattr(protocol, inputParam[0]).get(), getattr(protocol, inputParam[1]).get()
+    mol = self.getMol(inSet, molName)
+    molFile = mol.getPoseFile() if mol.getPoseFile() else mol.getFileName()
+    atomNames = self.extract_atoms(molFile, protocol)
+
+    finalList = []
+    for i in atomNames:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Ligand atom names", provider,
+                            "Select one of the ligand atoms")
+    form.setVar(outputParam[0], dlg.values[0].get())
 
 class SelectLigandWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
