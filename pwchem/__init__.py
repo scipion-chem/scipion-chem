@@ -69,9 +69,14 @@ class Plugin(pwem.Plugin):
 		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
 
 	@classmethod
-	def getEnvActivationCommand(cls, package_dictionary, conda_hook=True):
+	def getEnvName(cls, packageDictionary):
+		""" This function returns the name of the conda enviroment for a given package. """
+		return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
+
+	@classmethod
+	def getEnvActivationCommand(cls, packageDictionary, conda_hook=True):
 		""" This function returns the conda enviroment activation command for a given package. """
-		return '{}conda activate {}-{}'.format(cls.getCondaActivationCmd() if conda_hook else '', package_dictionary['name'], package_dictionary['version'])
+		return '{}conda activate {}'.format(cls.getCondaActivationCmd() if conda_hook else '', cls.getEnvName(packageDictionary))
 
 ######################## PACKAGES #########################
 	@classmethod
