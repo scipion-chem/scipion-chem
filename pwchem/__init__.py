@@ -116,19 +116,17 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=False):
-        MGL_INSTALLED = "initMGLtools.sh"
-        mgl_commands = 'wget https://ccsb.scripps.edu/download/532/ -O {} --no-check-certificate && '. \
-            format(cls.getDefTar(MGL_DIC))
-        mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)] * 2)
-        mgl_commands += 'cp install.sh install.bash && sed -i "s/bin\/sh/bin\/bash/g" install.bash && '
-        mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.bash'))
-        mgl_commands += 'touch ' + MGL_INSTALLED
-        mgl_commands = [(mgl_commands, MGL_INSTALLED)]
+      MGL_INSTALLED = "initMGLtools.sh"
+      mgl_commands = 'wget {} -O {} --no-check-certificate && '. \
+        format(cls.getMGLToolsURL(), cls.getDefTar(MGL_DIC))
+      mgl_commands += 'tar -xf {} --strip-components 1 && rm {} &&'.format(*[cls.getDefTar(MGL_DIC)] * 2)
+      mgl_commands += 'cp install.sh install.bash && sed -i "s/bin\/sh/bin\/bash/g" install.bash && '
+      mgl_commands += '{} && '.format(cls.getDefPath(MGL_DIC, 'install.bash'))
+      mgl_commands += 'touch ' + MGL_INSTALLED
+      mgl_commands = [(mgl_commands, MGL_INSTALLED)]
 
-        env.addPackage(MGL_DIC['name'], version=MGL_DIC['version'],
-                       tar='void.tgz',
-                       commands=mgl_commands,
-                       default=True)
+      env.addPackage(MGL_DIC['name'], version=MGL_DIC['version'],
+                     commands=mgl_commands, tar='void.tgz', default=default)
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=False):
@@ -296,7 +294,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def getCondaEnvPath(cls, env, path=''):
         condaPath = cls.getCondaActivationCmd().split('(')[1].split()[0].replace('/bin/conda', '')
-        return os.path.join(condaPath, 'envs', env+'-env', path)
+        return os.path.join(condaPath, 'envs', env, path)
 
     @classmethod
     def getMGLEnviron(cls):
@@ -316,6 +314,9 @@ class Plugin(pwem.Plugin):
     def getDefTar(cls, programDic, ext='tgz'):
       return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
 
+    @classmethod
+    def getMGLToolsURL(cls):
+      return 'https://ccsb.scripps.edu/download/532/'
 
 
 DataSet(name='smallMolecules', folder='smallMolecules',
