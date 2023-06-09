@@ -35,10 +35,12 @@ Protocol Steps:
 """
 import os, glob
 
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pyworkflow.protocol.params import LEVEL_ADVANCED
 from pyworkflow.utils import Message
+import pyworkflow.object as pwobj
+
+from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
