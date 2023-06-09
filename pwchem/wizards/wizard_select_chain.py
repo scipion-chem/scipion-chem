@@ -52,9 +52,6 @@ from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 class SelectLigandAtom(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
-  def is_het(self, residue):
-    res = residue.id[0]
-    return res != " " and res != "W"
 
   def extract_atoms(self, molFile, protocol):
     """ Extraction of the atoms in a ligand file """
@@ -69,7 +66,6 @@ class SelectLigandAtom(VariableWizard):
         molFile = oFile
 
     parser = PDBParser().get_structure(molFile, molFile)
-
     atomNames = []
     for model in parser:
       for atom in model.get_atoms():
