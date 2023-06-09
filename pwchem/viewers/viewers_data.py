@@ -54,7 +54,7 @@ class PyMolView(pwviewer.CommandView):
 
   def __init__(self, pymolArgs, cwd, **kwargs):
     print('command: ', [pwchem_plugin.getProgramHome(PYMOL_DIC), *pymolArgs.split()])
-    pwviewer.CommandView.__init__(self, [pwchem_plugin.getProgramHome(PYMOL_DIC, 'bin/pymol'), *pymolArgs.split()],
+    pwviewer.CommandView.__init__(self, [pwchem_plugin.getProgramHome(PYMOL_DIC, 'pymol/bin/pymol'), *pymolArgs.split()],
                                   cwd=cwd,
                                   env=PyMol.getEnviron(), **kwargs)
 
