@@ -68,6 +68,7 @@ class Plugin(pwem.Plugin):
 		cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
 		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
 
+########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
 	@classmethod
 	def getEnvName(cls, packageDictionary):
 		""" This function returns the name of the conda enviroment for a given package. """
@@ -77,6 +78,21 @@ class Plugin(pwem.Plugin):
 	def getEnvActivationCommand(cls, packageDictionary, condaHook=True):
 		""" This function returns the conda enviroment activation command for a given package. """
 		return '{}conda activate {}'.format(cls.getCondaActivationCmd() if condaHook else '', cls.getEnvName(packageDictionary))
+	
+	@classmethod
+	def getEnvPath(cls, packageDictionary=None, innerPath=None):
+		""" This function returns the root path for the env given it's dictionary. """
+		# Command to extract the base path
+		condaCmd = f'{cls.getCondaActivationCmd()} conda activate && echo $CONDA_PREFIX'
+
+		# Getting the base path
+		basePath = subprocess.run(condaCmd, shell=True, stdout=subprocess.PIPE).stdout.strip().decode('utf-8')
+
+		# Getting env base path
+		envBasePath = os.path.join(basePath, 'envs', cls.getEnvName(packageDictionary)) if packageDictionary else basePath
+
+		# Returning env path
+		return os.path.join(envBasePath, innerPath) if innerPath else envBasePath
 
 ######################## PACKAGES #########################
 	@classmethod
