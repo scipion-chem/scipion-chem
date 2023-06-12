@@ -80,7 +80,7 @@ class Plugin(pwem.Plugin):
 		return '{}conda activate {}'.format(cls.getCondaActivationCmd() if condaHook else '', cls.getEnvName(packageDictionary))
 	
 	@classmethod
-	def getEnvPath(cls, packageDictionary, innerPath=None):
+	def getEnvPath(cls, packageDictionary=None, innerPath=None):
 		""" This function returns the root path for the env given it's dictionary. """
 		# Command to extract the base path
 		condaCmd = f'{cls.getCondaActivationCmd()} conda activate && echo $CONDA_PREFIX'
@@ -89,7 +89,7 @@ class Plugin(pwem.Plugin):
 		basePath = subprocess.run(condaCmd, shell=True, stdout=subprocess.PIPE).stdout.strip().decode('utf-8')
 
 		# Getting env base path
-		envBasePath = os.path.join(basePath, 'envs', cls.getEnvName(packageDictionary))
+		envBasePath = os.path.join(basePath, 'envs', cls.getEnvName(packageDictionary)) if packageDictionary else basePath
 
 		# Returning env path
 		return os.path.join(envBasePath, innerPath) if innerPath else envBasePath
