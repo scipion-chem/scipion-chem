@@ -140,6 +140,11 @@ class ChemicalReaction(data.EMObject):
 		#### Parameters:
 		inputMolecule (SmallMolecule): Molecule to be added to the input set.
 		"""
+		# If input set has not been yet initialized, raise exception
+		if not self.__inputMolecules:
+			raise AttributeError("Set of input molecules has not been initialized yet. You need to call setInputMolecules first.")
+		
+		# Adding molecule to set
 		self.__inputMolecules.append(inputMolecule)
 	
 	def getInputMolecule(self, name: pwobj.String = '', fileName: pwobj.String = ''):
@@ -181,6 +186,11 @@ class ChemicalReaction(data.EMObject):
 		#### Parameters:
 		outputMolecule (SmallMolecule): Molecule to be added to the output set.
 		"""
+		# If output set has not been yet initialized, raise exception
+		if not self.__outputMolecules:
+			raise AttributeError("Set of output molecules has not been initialized yet. You need to call setOutputMolecules first.")
+		
+		# Adding molecule to set
 		self.__outputMolecules.append(outputMolecule)
 	
 	def getOutputMolecule(self, name: pwobj.String = '', fileName: pwobj.String = ''):
