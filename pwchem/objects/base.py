@@ -28,13 +28,13 @@ import enum, io, subprocess
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
-from .utils import *
-from .constants import *
+from pwchem.utils import *
+from pwchem.constants import *
 
 class DatabaseID(data.EMObject):
     """ Database identifier """
     def __init__(self, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self.database = pwobj.String(kwargs.get('database', None))
         self.dbId = pwobj.String(kwargs.get('dbId', None))
 
@@ -62,11 +62,11 @@ class SetOfDatabaseID(data.EMSet):
     FILE_TEMPLATE_NAME = 'setOfDatabaseIds%s.sqlite'
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
 
 class SequenceChem(data.Sequence):
     def __init__(self, **kwargs):
-        data.Sequence.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self._attrFile = pwobj.String(kwargs.get('attributesFile', False))
 
     def __str__(self):
@@ -95,7 +95,7 @@ class SequenceChem(data.Sequence):
 
 class SetOfSequencesChem(data.SetOfSequences):
     def __init__(self, **kwargs):
-        data.SetOfSequences.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
         self._alignFile = pwobj.String(kwargs.get('alignFile', None))
 
@@ -130,7 +130,7 @@ class SequenceVariants(data.EMFile):
     """A fasta file for a Protein ID"""
 
     def __init__(self, filename=None, **kwargs):
-        data.EMFile.__init__(self, filename, **kwargs)
+        super().__init__(self, filename, **kwargs)
         self._sequence = None
 
     def __str__(self):
@@ -222,7 +222,7 @@ class SmallMolecule(data.EMObject):
     """ Small molecule """
 
     def __init__(self, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self.smallMoleculeFile = pwobj.String(kwargs.get('smallMolFilename', None))
         self.poseFile = pwobj.String(kwargs.get('poseFile', None))  # File of position
         self._mappingFile = pwobj.String(kwargs.get('mappingFile', None))
@@ -454,7 +454,7 @@ class SetOfSmallMolecules(data.EMSet):
     FILE_TEMPLATE_NAME = 'setOfSmallMolecules%s.sqlite'
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self._molClass = pwobj.String('Standard')
         self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
         self._docked = pwobj.Boolean(False)
@@ -524,7 +524,7 @@ class BindingSite(data.EMObject):
     """ Binding site """
 
     def __init__(self, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self.bindingSiteFile = pwobj.String(kwargs.get('bindingSiteFilename', None))
         self.structurePtr = None
 
@@ -539,7 +539,7 @@ class SetOfBindingSites(data.EMSet):
     EXPOSE_ITEMS = True
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
 
 
 class SequenceROI(data.EMObject):
@@ -601,7 +601,7 @@ class SetOfSequenceROIs(data.EMSet):
     ITEM_TYPE = SequenceROI
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
 
     def __str__(self):
         s = '{} ({} items, sequence={})'.format(self.getClassName(), self.getSize(),
@@ -644,7 +644,7 @@ class StructROI(data.EMFile):
             self.properties, self.pocketId = self.parseFile(extraFile, filename)
             kwargs.update(self.getKwargs(self.properties, POCKET_ATTRIBUTES_MAPPING))
 
-        data.EMFile.__init__(self, filename, **kwargs)
+        super().__init__(self, filename, **kwargs)
         if hasattr(self, 'pocketId') and self.pocketId:
             self.setObjId(self.pocketId)
         self._proteinFile = String(proteinFile)
@@ -1080,7 +1080,7 @@ class SetOfStructROIs(data.EMSet):
     ITEM_TYPE = StructROI
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self._pocketsClass = String(kwargs.get('pocketsClass', None))
         self._hetatmFile = String(kwargs.get('hetatmFile', None))
 
@@ -1265,7 +1265,7 @@ class SetOfStructROIs(data.EMSet):
 
 class ProteinAtom(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self.parseLine(pdbLine)
 
     def __str__(self):
@@ -1294,7 +1294,7 @@ class ProteinAtom(data.EMObject):
 
 class ProteinResidue(data.EMObject):
     def __init__(self, pdbLine, **kwargs):
-        data.EMObject.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self.parseLine(pdbLine)
 
     def __str__(self):
@@ -1428,7 +1428,7 @@ class PharmacophoreChem(data.EMSet):
     ITEM_TYPE = PharmFeature
 
     def __init__(self, **kwargs):
-        data.EMSet.__init__(self, **kwargs)
+        super().__init__(self, **kwargs)
         self._proteinFile = pwobj.String(kwargs.get('proteinFile', None))
 
     def __str__(self):
