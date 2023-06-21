@@ -113,11 +113,11 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     def convertEMBOSSformat(self, embossFormat, outputFile):
         from pwchem import Plugin
-        cl_run = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
-        cl_run += 'seqret -sequence {} -osformat2 {} {}'.\
+        clRun = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+        clRun += 'seqret -sequence {} -osformat2 {} {}'.\
             format(self.getAlignmentFileName(), embossFormat, outputFile)
 
-        subprocess.check_call(cl_run, shell=True)
+        subprocess.check_call(clRun, shell=True)
         return outputFile
 
     def __str__(self):
@@ -192,11 +192,11 @@ class SequenceVariants(data.EMFile):
             mutIdx = getNumberFromStr(mutation)
             subsDic[int(mutIdx)] = mutation.split(mutIdx)[1]
 
-        letters_sequence = list(sequence)
+        lettersSequence = list(sequence)
         for mutPos in subsDic:
-            letters_sequence[mutPos - 1] = subsDic[mutPos]
+            lettersSequence[mutPos - 1] = subsDic[mutPos]
 
-        mutatedSequence = ''.join(letters_sequence)
+        mutatedSequence = ''.join(lettersSequence)
         return mutatedSequence
 
     def exportToFile(self, outPath):
@@ -317,17 +317,14 @@ class SmallMolecule(data.EMObject):
     def getConformersFileName(self):
         if hasattr(self, '_ConformersFile'):
             return self._ConformersFile.get()
-        return
 
     def getParamsFileName(self):
         if hasattr(self, '_ParamsFile'):
             return self._ParamsFile.get()
-        return
 
     def getPDBFileName(self):
         if hasattr(self, '_PDBFile'):
             return self._PDBFile.get()
-        return
 
     def getMolClass(self):
         return self._type
@@ -428,11 +425,9 @@ class SmallMolecule(data.EMObject):
             for refLabel, probLabel in zip(refCoords, probCoords):
                 mapDic[refLabel.upper()] = probLabel.upper()
 
-        if not len(mapDic) == len(refCoords):
-            print('Atom label mapping could not be completed correctly')
-            return
-        else:
+        if len(mapDic) == len(refCoords):
             return mapDic
+        print('Atom label mapping could not be completed correctly')
 
     def writeMapFile(self, probMol, mapBy='coords', overWrite=False, outFile=None, outDir=None):
         if not outFile:
@@ -480,7 +475,7 @@ class SetOfSmallMolecules(data.EMSet):
     def updateMolClass(self):
         mClass = self.getMolClass()
         for mol in self:
-            if not mol.getMolClass() == mClass:
+            if mol.getMolClass() != mClass:
                 if mClass == 'Standard':
                     mClass = mol.getMolClass()
                 else:
@@ -721,11 +716,11 @@ class StructROI(data.EMFile):
     def getProteinFile(self):
         return str(self._proteinFile)
 
-    def getKwargs(self, props, AM):
+    def getKwargs(self, props, am):
         nkwargs = {}
         for k in props:
-            if k in AM:
-                nkwargs[AM[k]] = props[k]
+            if k in am:
+                nkwargs[am[k]] = props[k]
         return nkwargs
 
     def calculateContacts(self):
@@ -781,12 +776,12 @@ class StructROI(data.EMFile):
         else:
             cHullIndex = np.array(list(range(len(coords))))
         candidates = coords[cHullIndex]
-        dist_mat = spatial.distance_matrix(candidates, candidates)
+        distMat = spatial.distance_matrix(candidates, candidates)
         if radius != []:
-            dist_mat = self.addRadius(dist_mat, np.array(radius)[cHullIndex])
-        i, j = np.unravel_index(dist_mat.argmax(), dist_mat.shape)
+            distMat = self.addRadius(distMat, np.array(radius)[cHullIndex])
+        i, j = np.unravel_index(distMat.argmax(), distMat.shape)
 
-        return dist_mat[i, j]
+        return distMat[i, j]
 
     def addRadius(self, dMat, radius):
         '''Add the radius of each alpha sphere to their corresponding row and column in the distances
@@ -926,8 +921,8 @@ class StructROI(data.EMFile):
         for at in atoms:
             dists += [calculateDistance(refCoord, at.getCoords())]
 
-        zipped_lists = sorted(zip(dists, atoms))
-        dists, atoms = zip(*zipped_lists)
+        zippedLists = sorted(zip(dists, atoms))
+        dists, atoms = zip(*zippedLists)
         residues = self.getAtomResidues(atoms)
 
         closestResidues = []
@@ -963,7 +958,7 @@ class StructROI(data.EMFile):
                         atoms.append(ProteinAtom(line))
                         atomsIds.append(atoms[-1].atomId)
                         newResidue = ProteinResidue(line)
-                        if not newResidue.residueId in residuesIds:
+                        if newResidue.residueId not in residuesIds:
                             residues.append(newResidue)
                             residuesIds.append(newResidue.residueId)
             props['contactAtoms'] = self.encodeIds(atomsIds)
@@ -1116,7 +1111,7 @@ class SetOfStructROIs(data.EMSet):
     def updatePocketsClass(self):
         pClass = self.getPocketsClass()
         for pocket in self:
-            if not pocket.getPocketClass() == pClass:
+            if pocket.getPocketClass() != pClass:
                 if pClass == None:
                     pClass = pocket.getPocketClass()
                 else:
@@ -1475,6 +1470,3 @@ class PharmacophoreChem(data.EMSet):
 
 class PredictStructROIsOutput(enum.Enum):
     outputStructROIs = SetOfStructROIs
-
-# class ImportMicsOutput(enum.Enum):
-#   outputMicrographs = SetOfMicrographs
