@@ -1458,7 +1458,6 @@ class PharmacophoreChem(data.EMSet):
         return pDic
 
     def setPharmFromDic(self, pDic):
-        pDic = {}
         for featId in pDic:
             feat = PharmFeature().setFeatFromDic(pDic[featId])
             feat.setObjId(featId)
