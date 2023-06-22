@@ -799,7 +799,7 @@ class StructROI(data.EMFile):
         '''
         if mode == 2:
             return self.getConvexVolume()
-        elif mode == 1 and float(self.getVolume()) != None:
+        elif mode == 1 and self.getVolume() != None:
             return self.getVolume()
         else:
             vol = self.getSurfaceConvexVolume()
@@ -1458,7 +1458,6 @@ class PharmacophoreChem(data.EMSet):
         return pDic
 
     def setPharmFromDic(self, pDic):
-        pDic = {}
         for featId in pDic:
             feat = PharmFeature().setFeatFromDic(pDic[featId])
             feat.setObjId(featId)
