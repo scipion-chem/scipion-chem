@@ -27,8 +27,9 @@ from pwem.convert.atom_struct import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
 from ..tests import TestImportVariants, TestImportSequences
-from ..protocols import *
-
+from ..protocols import ProtDefineSeqROI, ProtChemGenerateVariants, ProtSeqCalculateConservation
+from ..protocols import ProtExtractSeqsROI, ProtOperateSeqROI, ProtDefineSetOfSequences
+from ..protocols import ProtMapSequenceROI, ProtChemMultipleSequenceAlignment, ProtChemPairWiseAlignment
 
 CLUSTALO, MUSCLE, MAFFT = 0, 1, 2
 
