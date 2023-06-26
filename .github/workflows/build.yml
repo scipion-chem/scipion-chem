@@ -68,4 +68,4 @@ jobs:
     # Run test
     - name: Run test
       working-directory: ${{ github.workspace }}/../
-      run: scipion/scipion3 tests pwchem.tests.tests_imports.TestImportSmallMolecules
+      run: scipion/scipion3 tests pwchem.tests.tests_imports.TestImportSequences
