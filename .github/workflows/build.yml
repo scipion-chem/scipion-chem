@@ -64,3 +64,8 @@ jobs:
       run: |
         # Install the repository from the pull request
         ${{ github.workspace }}/../scipion/scipion3 installp -p . --devel
+    
+    # Run test
+    - name: Run test
+      working-directory: ${{ github.workspace }}/../
+      run: scipion/scipion3 tests pwchem.tests.tests_imports.TestImportSmallMolecules
