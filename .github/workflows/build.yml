@@ -1,5 +1,5 @@
 # Name of the GitHub Action
-name: Build scipion-chem on Pull Request
+name: Build plugin on Pull Request
 
 # Specify when the Action should be triggered: when a pull request is opened against the 'devel' or 'master' branch
 on:
