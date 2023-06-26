@@ -2,3 +2,4 @@ lxml
 scipy
 mdtraj
 parmed
+sklearn
