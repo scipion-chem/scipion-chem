@@ -55,7 +55,8 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def _defineVariables(cls):
-		# Package home directories 
+		# Package home directories
+		cls._defineEmVar(RDKIT_DIC['home'], '{}-{}'.format(RDKIT_DIC['name'], RDKIT_DIC['version']))
 		cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
 		cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
 		cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
@@ -271,7 +272,10 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def getODDTModelsPath(cls, path=''):
-		return os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels', path))
+		oddtModelsDir = os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels'))
+		if not os.path.exists(oddtModelsDir):
+			os.mkdir(oddtModelsDir)
+		return os.path.join(oddtModelsDir, path)
 
 	@classmethod
 	def getDefTar(cls, programDic, ext='tgz'):
