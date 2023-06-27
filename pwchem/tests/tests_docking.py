@@ -33,7 +33,7 @@ defRoiStr = '''1) Coordinate: {"X": 51, "Y": 76, "Z": 61}'''
 defRoiStrLig = '''1) Ext-Ligand: {"pointerIdx": "0", "ligName": "SmallMolecule (g1_4erf_0R3-1_1 molecule)"}'''
 
 wSteps = "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'Vina', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}\n" \
-         "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'RFScore', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}"
+         "{'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False, 'scoreChoice': 'RFScore', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016'}\n"
 
 prepRec = '{"model": 0, "chain": "C", "residues": 93}'
 
