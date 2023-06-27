@@ -61,13 +61,13 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def _defineVariables(cls):
 		# Package home directories
-		cls._defineEmVar(RDKIT_DIC['home'], '{}-{}'.format(RDKIT_DIC['name'], RDKIT_DIC['version']))
-		cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
-		cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
-		cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
-		cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
-		cls._defineEmVar(VMD_DIC['home'], '{}-{}'.format(VMD_DIC['name'], VMD_DIC['version']))
-		cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
+		cls._defineEmVar(RDKIT_DIC['home'], cls.getEnvName(RDKIT_DIC))
+		cls._defineEmVar(MGL_DIC['home'], cls.getEnvName(MGL_DIC))
+		cls._defineEmVar(PYMOL_DIC['home'], cls.getEnvName(PYMOL_DIC))
+		cls._defineEmVar(JCHEM_DIC['home'], cls.getEnvName(JCHEM_DIC))
+		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
+		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
+		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
