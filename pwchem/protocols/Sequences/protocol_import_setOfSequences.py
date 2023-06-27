@@ -26,15 +26,11 @@
 
 import glob, os, urllib
 
-import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol import params
 
 from pwem.protocols import EMProtocol
 from pwem.objects import Sequence, SetOfSequences
-
-from pwchem import Plugin
-
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory

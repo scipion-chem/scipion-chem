@@ -39,16 +39,13 @@ from Bio.Align import AlignInfo
 from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
-from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.objects import AtomStruct
 from pwem.protocols import EMProtocol
-from pwem.convert.atom_struct import toPdb, toCIF, AtomicStructHandler, addScipionAttribute
+from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute
 
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence, SequenceChem
 from pwchem.utils import *
-from pwchem.utils.utilsFasta import pairwiseAlign
-from pwchem import Plugin
 
 SHANNON, SIMPSON, KABAT, PROP = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient', \
                                 'Maximum Proportion Conservation'

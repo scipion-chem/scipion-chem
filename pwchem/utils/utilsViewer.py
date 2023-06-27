@@ -25,7 +25,6 @@
 # **************************************************************************
 
 import os
-from ..viewers import PyMolViewer
 
 def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=True):
     pmlStr = ''

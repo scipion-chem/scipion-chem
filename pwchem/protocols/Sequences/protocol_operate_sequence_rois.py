@@ -31,22 +31,15 @@ This protocol is used to operate sequence ROIs (union, intrsection, difference a
 The operations is applied on the sets iteratively, in the order they are inputted (1 op 2, 12 op 3, 123 op 4, ...)
 
 """
-import os, json
 from itertools import groupby
 from operator import itemgetter
-from scipy.spatial import distance
-from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
-from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
-from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
-from pwem.convert import cifToPdb
 
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
-from pwchem import Plugin
 
 UNION, INTERSECTION, DIFF, SYM_DIFF = 0, 1, 2, 3
 

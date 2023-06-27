@@ -30,20 +30,15 @@
 This protocol is used to import a set of sequence ROIs (regions of interest) from some files
 
 """
-import os, csv
-from scipy.spatial import distance
-from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
-from Bio.PDB.PDBParser import PDBParser
+import csv
 
 from pyworkflow.protocol import params
-from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
-from pwem.convert import cifToPdb, SequenceHandler
+from pwem.convert import SequenceHandler
 
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
-from pwchem import Plugin
 
 class ProtImportSeqROI(EMProtocol):
     """

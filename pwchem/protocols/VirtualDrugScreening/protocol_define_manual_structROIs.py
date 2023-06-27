@@ -31,10 +31,9 @@ This protocol is used to manually define structural regions from coordinates, re
 
 """
 import os, json, math, sys
-from sklearn.metrics.pairwise import pairwise_distances
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
-from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
+from Bio.PDB.ResidueDepth import get_surface
 from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params

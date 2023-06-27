@@ -36,7 +36,6 @@ import os
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
-from pwem.objects.data import AtomStruct
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput
 from pwchem.utils import *

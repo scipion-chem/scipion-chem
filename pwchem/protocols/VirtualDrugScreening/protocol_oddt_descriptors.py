@@ -36,7 +36,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
+import os
 
 from pwchem import Plugin
 from pwchem.utils import fillEmptyAttributes
@@ -147,7 +147,7 @@ class ProtocolODDTDescriptors(EMProtocol):
     def describeDockings(self, molsScipion, receptorFile):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, molsScipion, receptorFile)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def writeParamsFile(self, paramsFile, molsScipion, recFile):
         molFiles = []

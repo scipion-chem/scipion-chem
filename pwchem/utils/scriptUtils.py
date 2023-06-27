@@ -27,7 +27,7 @@
 '''Utils used in scripts. Imports containing Bio (and other modules) cannot be performed, so these functions
 must be placed separatedly. These are also available in scipion-chem.'''
 
-import os, threading
+import threading
 
 def divideMultiPDB(file):
   '''Divides a PDB into the different models (start with MODEL finish with ENDMDL) and return the string

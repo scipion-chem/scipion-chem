@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, csv, glob
+import os, glob
 from pyworkflow.tests import *
 
 from pwem.protocols import ProtImportPdb

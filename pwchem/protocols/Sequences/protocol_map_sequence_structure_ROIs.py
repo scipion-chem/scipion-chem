@@ -32,14 +32,14 @@ This protocol maps a set of sequence ROIs to structure ROIs for an AtomStruct
 """
 import os, json
 from scipy.spatial import distance
-from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
+from Bio.PDB.ResidueDepth import get_surface
 from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
 from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
-from pwem.convert import cifToPdb, alignClustalSequences
+from pwem.convert import cifToPdb
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *

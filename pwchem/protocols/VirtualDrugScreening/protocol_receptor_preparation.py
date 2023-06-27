@@ -25,11 +25,10 @@
 # **************************************************************************
 import os, json
 
-from pyworkflow.protocol.params import PointerParam, EnumParam, StringParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, LEVEL_ADVANCED
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 
-from pwchem import Plugin as pwchem_plugin
 from pwchem.utils import clean_PDB
 from pwchem.constants import MGL_DIC
 

@@ -26,7 +26,7 @@
 # *
 # **************************************************************************
 
-import os, csv
+import os
 from pyworkflow.tests import *
 
 from pwchem.protocols import *

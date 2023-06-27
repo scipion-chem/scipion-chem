@@ -40,11 +40,11 @@ from pyworkflow.protocol.params import LEVEL_ADVANCED
 from pyworkflow.utils import Message
 import pyworkflow.object as pwobj
 
-import os, re, glob, shutil
+import os, glob
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, splitConformerFile, appendToConformersFile, relabelAtomsMol2, \
-  splitPDBLine, natural_sort, makeSubsets, getBaseFileName
+from pwchem.utils import runOpenBabel, splitConformerFile, relabelAtomsMol2, \
+  natural_sort, makeSubsets, getBaseFileName
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):

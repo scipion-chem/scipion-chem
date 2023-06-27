@@ -24,17 +24,15 @@
 # *
 # **************************************************************************
 
-import os, re, glob
+import os
 
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
-from pyworkflow.utils import Message
-from pyworkflow.utils.path import copyFile
 from pwem.protocols import EMProtocol
 
 from pwchem.utils import *
 from pwchem import Plugin
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules
 
 scriptName = 'shape_distances_script.py'
 
@@ -138,7 +136,7 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)  # , receptorFile)
 
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def shapeitFilter(self):
         mols = self.inputSmallMolecules.get()

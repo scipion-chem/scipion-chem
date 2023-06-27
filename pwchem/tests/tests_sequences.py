@@ -21,12 +21,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
-from pyworkflow.tests import BaseTest, DataSet, setupTestProject
+from pyworkflow.tests import DataSet, setupTestProject
 from pwem.protocols import ProtImportPdb, ProtImportSequence
 from pwem.convert.atom_struct import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
-from ..utils import getBaseFileName
 from ..tests import TestImportVariants, TestImportSequences
 from ..protocols import *
 

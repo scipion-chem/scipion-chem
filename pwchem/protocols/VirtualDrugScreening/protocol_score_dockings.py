@@ -36,11 +36,9 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
-from scipy.stats import pearsonr, zscore
+import os
 
 from pwchem import Plugin
-from pwchem.utils import fillEmptyAttributes
 
 scriptName = 'scores_docking_oddt.py'
 VINA, RFSCORE, NNSCORE, PLECSCORE = 0, 1, 2, 3
@@ -249,7 +247,7 @@ class ProtocolScoreDocking(EMProtocol):
     def scoreDockings(self, receptorFile, msjDic, i):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
         self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def parseResults(self, resFile):
         resDic = {}

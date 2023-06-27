@@ -1,5 +1,5 @@
 # Name of the GitHub Action
-name: Build scipion-chem on Pull Request
+name: Build plugin on Pull Request
 
 # Specify when the Action should be triggered: when a pull request is opened against the 'devel' or 'master' branch
 on:
@@ -14,53 +14,36 @@ jobs:
 
     # Define the steps to be taken in the job
     steps:
-    # Getting current test time
-    - name: Get current time
-      uses: josStorer/get-current-time@v2
-      id: current-time
-      with:
-        format: YYYYMMDD-HH
-        utcOffset: "+02:00"
-    
-    # Using current time to view test time (for debugging purposes)
-    - name: Use current time
-      env:
-        R_TIME: "${{ steps.current-time.outputs.readableTime }}"
-      run: echo $R_TIME
-    
-    # Installing wget, needed for downloading some dependencies
-    - name: Install wget
+    # Installing scipion and miniconda dependencies
+    - name: Install dependencies
       run: |
-        # Update package lists and install wget
-        sudo apt-get update && \
-        sudo apt-get install -y wget
+        sudo apt-get update
+        sudo apt-get install -y wget gcc-10 g++-10 libopenmpi-dev make
     
     # Installing Miniconda
     - name: Install Miniconda
       working-directory: ${{ github.workspace }}/../
       run: |
-        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-        bash Miniconda3-latest-Linux-x86_64.sh -b -p ${{ github.workspace }}/../miniconda/ && \
-        source ./miniconda/etc/profile.d/conda.sh
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        bash Miniconda3-latest-Linux-x86_64.sh -b -p miniconda/
+        source miniconda/etc/profile.d/conda.sh
+        conda update -n base -c defaults conda -y
     
     # Installing Scipion
     - name: Install Scipion with dependencies
       working-directory: ${{ github.workspace }}/../
       run: |
-        sudo apt-get install -y gcc-10 g++-10 libopenmpi-dev make && \
-        eval "$(${{ github.workspace }}/../miniconda/bin/conda shell.bash hook)" && \
-        pip3 install --user scipion-installer && \
-        python3 -m scipioninstaller -conda -noXmipp -noAsk ${{ github.workspace }}/../scipion
+        eval "$(miniconda/bin/conda shell.bash hook)"
+        pip3 install --user scipion-installer
+        python3 -m scipioninstaller -conda -noXmipp -noAsk scipion
     
     # Check out the repository in the pull request
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         ref: ${{ github.head_ref }}
 
     # Install plugin from the pull request using the Scipion3 installp command
     - name: Install plugin from pull request
       working-directory: ${{ github.workspace }}
-      run: |
-        # Install the repository from the pull request
-        ${{ github.workspace }}/../scipion/scipion3 installp -p . --devel
+      run: ../scipion/scipion3 installp -p . --devel

@@ -30,13 +30,13 @@ import os, requests, glob, sys, json
 
 
 from pwem.protocols import EMProtocol
-import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam, STEPS_PARALLEL
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
-from pwchem.utils import runOpenBabel, performBatchThreading
+from pwchem.utils import performBatchThreading
+from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
 DEFAULT_FORMAT = 'sdf'
@@ -199,11 +199,11 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
                   # Formatting with RDKit (neccessary if they are maestro)
                   if self.useManager.get() == RDKIT or fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
-                      Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+                      Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
                   # Formatting with OpenBabel
                   elif self.useManager.get() == OPENBABEL:
-                      Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                      Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
                   if make3d:
                       self.downloadErrors(outDir)
@@ -229,11 +229,11 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
             if self.useManager.get() == RDKIT:
             # Formatting with RDKit
-                Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
             elif self.useManager.get() == OPENBABEL:
             # Formatting with OpenBabel
-                Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
             if make3d:
               self.downloadErrors(outDir)

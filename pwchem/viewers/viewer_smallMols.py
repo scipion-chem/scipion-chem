@@ -24,12 +24,12 @@
 # *
 # **************************************************************************
 
-import os, re
+import os
 
-from pyworkflow.protocol.params import EnumParam, LabelParam
+from pyworkflow.protocol.params import EnumParam
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import showError
-from pwem.viewers.viewer_chimera import mapVolsWithColorkey, Chimera, ChimeraView, generateColorLegend
+from pwem.viewers.viewer_chimera import Chimera, ChimeraView
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
