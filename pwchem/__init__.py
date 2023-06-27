@@ -222,14 +222,18 @@ class Plugin(pwem.Plugin):
 
 
   @classmethod
-  def addBioSimSpacePackage(cls, env, default=False):
+  def addBioSimSpacePackage(cls, env, default=True):
     installer = InstallHelper(BIOSIMSPACE_DIC['name'], packageHome=cls.getVar(BIOSIMSPACE_DIC['home']),
                               packageVersion=BIOSIMSPACE_DIC['version'])
 
-    installer.getCondaEnvCommand(requirementsFile=False, pythonVersion='3.10').\
-      addCondaPackages(['biosimspace=={}'.format(BIOSIMSPACE_DIC['version']), 'nglview', 'ambertools==22', 'compilers'],
-                      channel='openbiosim').\
-      addCondaPackages(['sqlite'], channel='anaconda').\
+    condaPackages = ['biosimspace=={}'.format(BIOSIMSPACE_DIC['version']), 'nglview', 'ambertools==22', 'compilers']
+    condaActivation = '{} conda activate {}-{}'.format(pwem.Plugin.getCondaActivationCmd(),
+                                                       BIOSIMSPACE_DIC['name'], BIOSIMSPACE_DIC['version'])
+
+    installer.getCondaEnvCommand(requirementsFile=False, pythonVersion='3.10'). \
+      addCondaPackages(['mamba', 'sqlite'], channel='anaconda', targetName='MAMBA_CONDA_PACKAGE_INSTALLED'). \
+      addCommand('{} && mamba install -y -c openbiosim {}'.
+                 format(condaActivation, ' '.join(condaPackages)), targetName='BIOSIMSPACE_INSTALLED').\
       addPackage(env, dependencies=['conda'], default=default)
 
 
