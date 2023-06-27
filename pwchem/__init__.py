@@ -58,6 +58,7 @@ class Plugin(pwem.Plugin):
     cls.addPyMolPackage(env)
     cls.addAliViewPackage(env)
     cls.addVMDPackage(env)
+    cls.addBioSimSpacePackage(env)
 
   @classmethod
   def _defineVariables(cls):
@@ -68,11 +69,13 @@ class Plugin(pwem.Plugin):
     cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
     cls._defineEmVar(VMD_DIC['home'], '{}-{}'.format(VMD_DIC['name'], VMD_DIC['version']))
     cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
+    cls._defineEmVar(BIOSIMSPACE_DIC['home'], '{}-{}'.format(BIOSIMSPACE_DIC['name'], BIOSIMSPACE_DIC['version']))
 
     # Common enviroments
     cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
     cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
     cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
+    cls._defineVar('BIOSIMSPACE_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOSIMSPACE_DIC))
 
   ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
   @classmethod
@@ -223,26 +226,12 @@ class Plugin(pwem.Plugin):
     installer = InstallHelper(BIOSIMSPACE_DIC['name'], packageHome=cls.getVar(BIOSIMSPACE_DIC['home']),
                               packageVersion=BIOSIMSPACE_DIC['version'])
 
-    installer.getCondaEnvCommand(requirementsFile=False).addCondaPackages(['vdm'], channel='conda-forge'). \
+    installer.getCondaEnvCommand(requirementsFile=False, pythonVersion='3.10').\
+      addCondaPackages(['biosimspace=={}'.format(BIOSIMSPACE_DIC['version']), 'nglview', 'ambertools==22', 'compilers'],
+                      channel='openbiosim').\
+      addCondaPackages(['sqlite'], channel='anaconda').\
       addPackage(env, dependencies=['conda'], default=default)
 
-    BIOSIM_INSTALLED = 'biosimspace_installed'
-
-    installationCmd = cls.getCondaActivationCmd()
-    installationCmd += 'conda create -y -c conda-forge -n biosimspace-env mamba "python<3.10" && '
-    installationCmd += '{} {} && '.format(cls.getCondaActivationCmd(), cls.getEnvActivation('BIOSIMSPACE'))
-    installationCmd += 'mamba install -c openbiosim -y biosimspace={} vmd nglview ambertools=22 compilers && '. \
-      format(BIOSIMSPACE_DIC['version'])
-    installationCmd += 'mamba install -c anaconda -y sqlite && '
-
-    installationCmd += 'touch %s' % BIOSIM_INSTALLED
-    biosim_commands = [(installationCmd, BIOSIM_INSTALLED)]
-
-    env.addPackage(BIOSIMSPACE_DIC['name'], version=BIOSIMSPACE_DIC['version'],
-                   tar='void.tgz',
-                   commands=biosim_commands,
-                   neededProgs=cls.getDependencies(),
-                   default=default)
 
   ##################### RUN CALLS ######################
   @classmethod
@@ -307,48 +296,48 @@ class Plugin(pwem.Plugin):
       subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
 
     ##################### UTILS ###########################
-    @classmethod
-    def getPluginHome(cls, path=""):
-      import pwchem
-      fnDir = os.path.split(pwchem.__file__)[0]
-      return os.path.join(fnDir, path)
+  @classmethod
+  def getPluginHome(cls, path=""):
+    import pwchem
+    fnDir = os.path.split(pwchem.__file__)[0]
+    return os.path.join(fnDir, path)
 
-    # Default version paths
-    @classmethod
-    def getDefPath(cls, programDic, path=''):
-      return os.path.join(pwem.Config.EM_ROOT, '{}-{}'.format(programDic['name'], programDic['version']), path)
+  # Default version paths
+  @classmethod
+  def getDefPath(cls, programDic, path=''):
+    return os.path.join(pwem.Config.EM_ROOT, '{}-{}'.format(programDic['name'], programDic['version']), path)
 
-    # In use paths
-    @classmethod
-    def getProgramHome(cls, programDic, path=''):
-      return os.path.join(cls.getVar(programDic['home']), path)
+  # In use paths
+  @classmethod
+  def getProgramHome(cls, programDic, path=''):
+    return os.path.join(cls.getVar(programDic['home']), path)
 
-    @classmethod
-    def getScriptsDir(cls, scriptName):
-      return cls.getPluginHome('scripts/%s' % scriptName)
+  @classmethod
+  def getScriptsDir(cls, scriptName):
+    return cls.getPluginHome('scripts/%s' % scriptName)
 
-    @classmethod
-    def getEnvSpecsPath(cls, env):
-      envFile = '/{}_env_spec.txt'.format(env) if env else ''
-      return cls.getPluginHome('envs%s' % envFile)
+  @classmethod
+  def getEnvSpecsPath(cls, env):
+    envFile = '/{}_env_spec.txt'.format(env) if env else ''
+    return cls.getPluginHome('envs%s' % envFile)
 
-    @classmethod
-    def getMGLEnviron(cls):
-      """ Create the needed environment for MGL Tools programs. """
-      environ = pwutils.Environ(os.environ)
-      pos = pwutils.Environ.BEGIN
-      environ.update({
-        'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
-      }, position=pos)
-      return environ
+  @classmethod
+  def getMGLEnviron(cls):
+    """ Create the needed environment for MGL Tools programs. """
+    environ = pwutils.Environ(os.environ)
+    pos = pwutils.Environ.BEGIN
+    environ.update({
+      'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
+    }, position=pos)
+    return environ
 
-    @classmethod
-    def getODDTModelsPath(cls, path=''):
-      return os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels', path))
+  @classmethod
+  def getODDTModelsPath(cls, path=''):
+    return os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels', path))
 
-    @classmethod
-    def getDefTar(cls, programDic, ext='tgz'):
-      return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
+  @classmethod
+  def getDefTar(cls, programDic, ext='tgz'):
+    return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
 
 
 DataSet(name='smallMolecules', folder='smallMolecules',
