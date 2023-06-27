@@ -285,7 +285,7 @@ class Plugin(pwem.Plugin):
   def runBioSimSpaceScript(cls, protocol, scriptPath, args, engine='gromacs', cwd=None, popen=False):
     """ Run BioSimSpace script from a given protocol. """
     # Check if BioSimSpace package is instaled (default False)
-    full_program = '%s && ' % (cls.getEnvActivationCommand(BIOSIMSPACE_DIC))
+    fullProgram = '%s && ' % (cls.getEnvActivationCommand(BIOSIMSPACE_DIC))
     if engine.lower() == 'gromacs':
       try:
         from gromacs import Plugin as gromacs_plugin
