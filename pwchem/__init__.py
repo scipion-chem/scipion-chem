@@ -30,14 +30,19 @@ This package contains the protocols for
 manipulation of atomic struct objects
 """
 
+# General imports
 import os, subprocess
 from subprocess import run
+
+# Scipion em imports
+import pwem
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
-import pwem
+from scipion.install.funcs import InstallHelper
+
+# Plugin imports
 from .bibtex import _bibtexStr
 from .constants import *
-from pwchem.install_helper import InstallHelper
 
 _logo = 'pwchem_logo.png'
 __version__ = DEFAULT_VERSION
