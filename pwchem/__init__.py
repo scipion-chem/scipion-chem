@@ -157,7 +157,7 @@ class Plugin(pwem.Plugin):
 		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabel_installer.getCondaEnvCommand(requirementsFile=False)\
+		openbabel_installer.getCondaEnvCommand()\
 			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
 		
@@ -195,7 +195,7 @@ class Plugin(pwem.Plugin):
 		# Instantiating install helper
 		installer = InstallHelper(VMD_DIC['name'], packageHome=cls.getVar(VMD_DIC['home']), packageVersion=VMD_DIC['version'])
 
-		installer.getCondaEnvCommand(requirementsFile=False).addCondaPackages(['vdm'], channel='conda-forge')\
+		installer.getCondaEnvCommand().addCondaPackages(['vmd'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################
