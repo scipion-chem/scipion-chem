@@ -344,23 +344,24 @@ class ProtDefineStructROIs(EMProtocol):
                 if res.get_resname() in residueTypes:
                     cMassResidues[res] = res.center_of_mass()
 
-            linked = linkage(list(cMassResidues.values()), resLink.lower())
-            clusterIdxs = fcluster(linked, resDist, 'distance')
+            if len(cMassResidues) > 0:
+                linked = linkage(list(cMassResidues.values()), resLink.lower())
+                clusterIdxs = fcluster(linked, resDist, 'distance')
 
-            clusters = {}
-            for i, res in enumerate(cMassResidues):
-                resIdx = clusterIdxs[i]
-                if resIdx in clusters:
-                    clusters[resIdx] += [res]
-                else:
-                    clusters[resIdx] = [res]
+                clusters = {}
+                for i, res in enumerate(cMassResidues):
+                    resIdx = clusterIdxs[i]
+                    if resIdx in clusters:
+                        clusters[resIdx] += [res]
+                    else:
+                        clusters[resIdx] = [res]
 
-            for _, clust in clusters.items():
-                resNameList = [res.get_resname() for res in clust]
-                if self.isSublist(residueTypes, resNameList):
-                    oCoords += list(a.get_coord() for res in clust for a in res.get_atoms())
-                    for res in clust:
-                        print(res, cMassResidues[res])
+                for _, clust in clusters.items():
+                    resNameList = [res.get_resname() for res in clust]
+                    if self.isSublist(residueTypes, resNameList):
+                        oCoords += list(a.get_coord() for res in clust for a in res.get_atoms())
+                        for res in clust:
+                            print(res, cMassResidues[res])
 
         return oCoords
 
