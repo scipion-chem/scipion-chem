@@ -460,8 +460,7 @@ class SetOfSmallMolecules(data.EMSet):
 
     def clone(self):
         clone = self.getClass()()
-        clone.copy(self)
-        clone.copyInfo(self)
+        clone.copy(self, ignoreAttrs=[])
         return clone
 
     def copyInfo(self, other):
