@@ -88,7 +88,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
           self._defineSimParams(form)
 
     def getMDSystem(self, objType=MDSystem):
-        if type(self.protocol) == objType:
+        if isinstance(self.protocol, objType):
             return self.protocol
         else:
             return self.protocol.outputSystem
