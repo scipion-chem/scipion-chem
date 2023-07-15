@@ -45,10 +45,12 @@ jobs:
 
     # Install plugin from the pull request using the Scipion3 installp command
     - name: Install plugin from pull request
-      working-directory: ${{ github.workspace }}/../
-      run: scipion/scipion3 installp -p . --devel
+      working-directory: ${{ github.workspace }}
+      run: ../scipion/scipion3 installp -p . --devel
     
     # Run test
     - name: Run test
       working-directory: ${{ github.workspace }}/../
-      run: scipion/scipion3 tests pwchem.tests.tests_sequences.TestGenerateSequences
+      run: |
+        eval "$(miniconda/bin/conda shell.bash hook)"
+        scipion/scipion3 tests pwchem.tests.tests_sequences.TestGenerateSequences

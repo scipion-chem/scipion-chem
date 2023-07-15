@@ -2,4 +2,4 @@ lxml
 scipy
 mdtraj
 parmed
-sklearn
+scikit-learn
