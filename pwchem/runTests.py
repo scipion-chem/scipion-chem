@@ -1,7 +1,6 @@
 # General imports
 import subprocess, argparse, multiprocessing, sys
 
-# Function to colorize a string
 def colorStr(string, color):
     """ This function returns the input string wrapped in the specified color. """
     if color == 'green':
@@ -13,20 +12,24 @@ def colorStr(string, color):
     else:
         return string
 
-# Function to run a test
 def runTest(test):
     """ This function receives a test and runs it. """
-    print(f"Running test {test}...")
+    printAndFlush(f"Running test {test}...")
     try:
         # Running test
         result = subprocess.run([args.scipion, testPrefix + test], check=True, capture_output=True, text=True)
         if result.returncode == 0:
-            print(colorStr(f"Test {test} OK", color='green'))
+            printAndFlush(colorStr(f"Test {test} OK", color='green'))
     except subprocess.CalledProcessError as e:
         # Detect failed test
-        print(e.stderr)
-        print(colorStr(f"Test {test} failed with above message.", color='red'))
+        printAndFlush(e.stderr)
+        printAndFlush(colorStr(f"Test {test} failed with above message.", color='red'))
         return test
+
+def printAndFlush(message):
+    """ This function prints a specific message and inmediately flushes stdout. """
+    print(message)
+    sys.stdout.flush()
 
 # Parse the command-line arguments
 parser = argparse.ArgumentParser(
@@ -48,7 +51,7 @@ command = f"{args.scipion} test --grep {args.plugin}"
 try:
     output = subprocess.check_output(command, shell=True, text=True)
 except subprocess.CalledProcessError:
-    print(colorStr("ERROR: Test search command failed. Check line above for more detailed info.", color='red'))
+    printAndFlush(colorStr("ERROR: Test search command failed. Check line above for more detailed info.", color='red'))
     sys.exit(1)
 
 # Define test command string variables
@@ -64,16 +67,13 @@ for line in lines:
     if line.startswith(scipionTestsStartingSpaces):
         filteredLines.append(line.replace(f'{scipionTestsStartingSpaces}scipion3 {testPrefix}', ''))
 
-# TEST:
-#filteredLines = ['tests_databases.TestIdentifyLigands']
-
 # If no tests were found, module was not found
 if len(filteredLines) == 0:
-    print(colorStr(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?", color='red'))
+    printAndFlush(colorStr(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?", color='red'))
     sys.exit(1)
 
 # Showing initial message with number of tests
-print(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {args.jobs} processes...", color='yellow'))
+printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {args.jobs} processes...", color='yellow'))
 
 # Create a shared flag to indicate error occurrence
 manager = multiprocessing.Manager()
@@ -99,8 +99,8 @@ pool.join()
 
 # Check if an error occurred
 if errorFlag:
-    print(colorStr("Some tests ended with errors. Exiting.", color='red'))
+    printAndFlush(colorStr("Some tests ended with errors. Exiting.", color='red'))
     sys.exit(1)
 
 # Message if all tests succeeded
-print(colorStr("\nAll test passed!", color='green'))
+printAndFlush(colorStr("\nAll test passed!", color='green'))
