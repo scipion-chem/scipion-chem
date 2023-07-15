@@ -50,7 +50,7 @@ jobs:
     
     # Run test
     - name: Run test
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
         eval "$(miniconda/bin/conda shell.bash hook)"
-        python runTests.py ${{ github.workspace }}/../scipion/scipion3
+        python runTests.py ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }}
