@@ -360,7 +360,7 @@ class ProtocolScoreDocking(EMProtocol):
         sumStr = ''
         for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
             if dicLine.strip():
-                msjDic = eval(dicLine)
+                msjDic = eval(dicLine.strip())
                 msjDic = self.addDefaultForMissing(msjDic)
                 scoreChoice = msjDic['scoreChoice']
                 sumStr += '{}) Score: {}'.format(i+1, scoreChoice)

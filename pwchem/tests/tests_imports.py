@@ -4,7 +4,7 @@
 # *
 # * Authors:    Alberto M. Parra Pérez (amparraperez@gmail.com)
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * Unidad de Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -13,24 +13,29 @@
 # *
 # * This program is distributed in the hope that it will be useful,
 # * but WITHOUT ANY WARRANTY; without even the implied warranty of
-# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # * GNU General Public License for more details.
 # *
 # * You should have received a copy of the GNU General Public License
 # * along with this program; if not, write to the Free Software
 # * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-# * 02111-1307  USA
+# * 02111-1307 USA
 # *
-# *  All comments concerning this program package may be sent to the
-# *  e-mail address 'scipion@cnb.csic.es'
+# * All comments concerning this program package may be sent to the
+# * e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
 
+# General imports
 import os
+
+# Scipion em imports
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
+# Scipion chem imports
 from pwchem.protocols import *
 from pwchem.constants import *
+from pwchem.utils import assertHandle
 
 iedb_csv_str = '''Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object
 Epitope ID,Object Type,Description,Epitope Modified Residue(s),Epitope Modification(s),Starting Position,Ending Position,Non-peptidic epitope Accession,Epitope Synonyms,Antigen Name,Antigen Accession,Parent Protein,Parent Protein Accession,Organism Name,Parent Organism,Parent Organism ID,Epitope Comments,Epitope Relationship,Object Type,Description,Starting Position,Ending Position,Non-peptidic object Accession,Synonyms,Antigen Name,Parent Protein,Organism Name,Parent Organism
@@ -39,188 +44,181 @@ Epitope ID,Object Type,Description,Epitope Modified Residue(s),Epitope Modificat
 "1220","Linear peptide","AEVQIDRLI","","","989","997","","","surface glycoprotein [Severe acute respiratory syndrome coronavirus 2]","YP_009724390.1","Spike glycoprotein","P0DTC2","Severe acute respiratory syndrome coronavirus 2","Severe acute respiratory syndrome coronavirus 2","2697049","","","","","","","","","","","",""'''
 
 class TestImportBase(BaseTest):
-  @classmethod
-  def setUpClass(cls):
-    cls.dsLig = DataSet.getDataSet("smallMolecules")
-    setupTestProject(cls)
+	@classmethod
+	def setUpClass(cls):
+		cls.dsLig = DataSet.getDataSet("smallMolecules")
+		setupTestProject(cls)
 
-    cls._runImportSmallMols()
-    cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules', sleepTime=5)
+		cls._runImportSmallMols()
+		cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules', sleepTime=5)
 
-  @classmethod
-  def _runImportSmallMols(cls):
-    cls.protImportSmallMols = cls.newProtocol(
-      ProtChemImportSmallMolecules,
-      filesPath=cls.dsLig.getFile('mol2'))
-    cls.proj.launchProtocol(cls.protImportSmallMols, wait=False)
+	@classmethod
+	def _runImportSmallMols(cls):
+		cls.protImportSmallMols = cls.newProtocol(
+			ProtChemImportSmallMolecules,
+			filesPath=cls.dsLig.getFile('mol2'))
+		cls.proj.launchProtocol(cls.protImportSmallMols, wait=False)
 
 class TestImportSmallMolecules(TestImportBase):
-    MULTIPLE_T = True
-    MULTIPLE_F = False
-    filesPattern = '*'
+	MULTIPLE_T = True
+	MULTIPLE_F = False
+	filesPattern = '*'
 
-    def testImport_one_mol_smi(self):
-        """ Import a single file of a small molecule provided by the user in smi format
-        """
-        print("\nImport Experiment:  1 molecule smi format")
+	def testImport_one_mol_smi(self):
+		""" Import a single file of a small molecule provided by the user in smi format. """
+		print("\nImport Experiment: 1 molecule smi format")
 
-        kwargs = {'multipleFiles': self.MULTIPLE_F,
-                'filePath': self.dsLig.getFile(os.path.join("mix", "2000_smi.smi"))
-                }
+		kwargs = {
+			'multipleFiles': self.MULTIPLE_F,
+			'filePath': self.dsLig.getFile(os.path.join("mix", "2000_smi.smi"))
+		}
 
-        prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
-        self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMolecules
-        self.assertIsNotNone(small_1,
-                             "There was a problem with the import")
-        self.assertTrue(small_1.getSize()==1,
-                        "There was a problem with the import and the SetOfSmallMolecules is empty")
+		prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+		self.launchProtocol(prot1)
+		small_1 = getattr(prot1, 'outputSmallMolecules', None)
+		assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+		assertHandle(self.assertTrue, small_1.getSize()==1,
+								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
-    def testImport_one_mol_pdb(self):
-        """ Import a single file of a small molecule provided by the user in pdb format
-        """
-        print("\nImport Experiment:  1 molecule pdb format")
+	def testImport_one_mol_pdb(self):
+			""" Import a single file of a small molecule provided by the user in pdb format
+			"""
+			print("\nImport Experiment: 1 molecule pdb format")
 
-        kwargs = {'multipleFiles': self.MULTIPLE_F,
-                'filePath': self.dsLig.getFile(os.path.join("mix", "2000_pdb.pdb"))
-                }
+			kwargs = {
+				'multipleFiles': self.MULTIPLE_F,
+				'filePath': self.dsLig.getFile(os.path.join("mix", "2000_pdb.pdb"))
+			}
 
-        prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
-        self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMolecules
-        self.assertIsNotNone(small_1,
-                             "There was a problem with the import")
-        self.assertTrue(small_1.getSize()==1,
-                        "There was a problem with the import and the SetOfSmallMolecules is empty")
+			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			self.launchProtocol(prot1)
+			small_1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small_1.getSize()==1,
+								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
-    def testImport_one_mol_sdf(self):
-        """ Import a single file of a small molecule provided by the user in sdf format
-        """
-        print("\nImport Experiment:  1 molecule sdf format")
+	def testImport_one_mol_sdf(self):
+			""" Import a single file of a small molecule provided by the user in sdf format
+			"""
+			print("\nImport Experiment: 1 molecule sdf format")
 
-        kwargs = {'multipleFiles': self.MULTIPLE_F,
-                'filePath': self.dsLig.getFile(os.path.join("mix", "2000_sdf.sdf"))
-                }
+			kwargs = {
+				'multipleFiles': self.MULTIPLE_F,
+				'filePath': self.dsLig.getFile(os.path.join("mix", "2000_sdf.sdf"))
+			}
 
-        prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
-        self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMolecules
-        self.assertIsNotNone(small_1,
-                             "There was a problem with the import")
-        self.assertTrue(small_1.getSize()==1,
-                        "There was a problem with the import and the SetOfSmallMolecules is empty")
+			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			self.launchProtocol(prot1)
+			small_1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small_1.getSize()==1,
+								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
+	def testImport_mols_mix(self):
+			""" Import several files of a small molecule provided by the user in different formats. """
+			print("\nImport Experiment: 4 molecules in several formats")
 
-    def testImport_mols_mix(self):
-        """Import several files of a small molecule provided by the user in different formats
-        """
-        print("\nImport Experiment:  4 molecules in several formats")
+			kwargs = {
+				'multipleFiles': self.MULTIPLE_T,
+				'filesPath': self.dsLig.getFile(os.path.join("mix")),
+				'filesPattern': self.filesPattern
+			}
 
-        kwargs = {'multipleFiles': self.MULTIPLE_T,
-                'filesPath': self.dsLig.getFile(os.path.join("mix")),
-                'filesPattern': self.filesPattern
-                }
-
-        prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
-        self.launchProtocol(prot1)
-        small_1 = prot1.outputSmallMolecules
-        self.assertIsNotNone(small_1,
-                             "There was a problem with the import")
-        self.assertTrue(small_1.getSize()==4,
-                        "There was a problem with the import and the SetOfSmallMolecules is empty")
-
+			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			self.launchProtocol(prot1)
+			small_1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small_1.getSize()==4,
+								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
 class TestImportSequences(BaseTest):
-    @classmethod
-    def setUpClass(cls):
-      setupTestProject(cls)
-      cls.ds = DataSet.getDataSet('model_building_tutorial')
+	@classmethod
+	def setUpClass(cls):
+		setupTestProject(cls)
+		cls.ds = DataSet.getDataSet('model_building_tutorial')
+		cls.pImpDBs = cls._runImportDBIds()
+		cls._waitOutput(cls.pImpDBs, 'outputDatabaseIDs', sleepTime=5)
 
-      cls.pImpDBs = cls._runImportDBIds()
-      cls._waitOutput(cls.pImpDBs, 'outputDatabaseIDs', sleepTime=5)
+	@classmethod
+	def getIdsFilePath(cls, inType=0, dbName='UniProt'):
+		return os.path.abspath(cls.proj.getPath('inputIDs_{}_{}.txt'.format(inType, dbName)))
 
-    @classmethod
-    def getIdsFilePath(cls, inType=0, dbName='UniProt'):
-      return os.path.abspath(cls.proj.getPath('inputIDs_{}_{}.txt'.format(inType, dbName)))
+	@classmethod
+	def _runImportDBIds(cls, inType=0, dbName='UniProt'):
+		idsFile = cls.getIdsFilePath(inType, dbName)
+		with open(idsFile, 'w') as f:
+			f.write('\n'.join(DB_IDS[inType][dbName]))
 
-    @classmethod
-    def _runImportDBIds(cls, inType=0, dbName='UniProt'):
-      idsFile = cls.getIdsFilePath(inType, dbName)
-      with open(idsFile, 'w') as f:
-        f.write('\n'.join(DB_IDS[inType][dbName]))
+		protImport = cls.newProtocol(
+			ProtChemImportSetOfDatabaseIDs,
+			filePath=idsFile, databaseName=dbName
+		)
+		cls.proj.launchProtocol(protImport, wait=False)
+		return protImport
 
-      protImport = cls.newProtocol(
-        ProtChemImportSetOfDatabaseIDs,
-        filePath=idsFile, databaseName=dbName
-      )
-      cls.proj.launchProtocol(protImport, wait=False)
-      return protImport
+	@classmethod
+	def _runImportSeqs(cls):
+		protImportSeqs = cls.newProtocol(
+			ProtChemImportSetOfSequences,
+			multiple=False,
+			filePath=cls.ds.getFile('Sequences/Several_sequences.fasta'))
+		cls.launchProtocol(protImportSeqs)
+		cls.protImportSeqs = protImportSeqs
 
-    @classmethod
-    def _runImportSeqs(cls):
-      protImportSeqs = cls.newProtocol(
-        ProtChemImportSetOfSequences,
-        multiple=False,
-        filePath=cls.ds.getFile('Sequences/Several_sequences.fasta'))
-      cls.launchProtocol(protImportSeqs)
-      cls.protImportSeqs = protImportSeqs
+	@classmethod
+	def _runImportSeqsFromDB(cls, inProt):
+		protImportSeqs = cls.newProtocol(
+			ProtChemImportSetOfSequences,
+			fromFile=False, database=0)
 
-    @classmethod
-    def _runImportSeqsFromDB(cls, inProt):
-      protImportSeqs = cls.newProtocol(
-        ProtChemImportSetOfSequences,
-        fromFile=False, database=0)
+		protImportSeqs.inputListID.set(inProt)
+		protImportSeqs.inputListID.setExtended('outputDatabaseIDs')
 
-      protImportSeqs.inputListID.set(inProt)
-      protImportSeqs.inputListID.setExtended('outputDatabaseIDs')
+		cls.launchProtocol(protImportSeqs)
+		cls.protImportSeqsDB = protImportSeqs
 
-      cls.launchProtocol(protImportSeqs)
-      cls.protImportSeqsDB = protImportSeqs
+	def test(self):
+		self._runImportSeqs()
+		self._runImportSeqsFromDB(inProt=self.pImpDBs)
 
-    def test(self):
-      self._runImportSeqs()
-      self._runImportSeqsFromDB(inProt=self.pImpDBs)
-
-      self.assertIsNotNone(getattr(self.protImportSeqs, 'outputSequences', None))
-      self.assertIsNotNone(getattr(self.protImportSeqsDB, 'outputSequences', None))
+		assertHandle(self.assertIsNotNone, getattr(self.protImportSeqs, 'outputSequences', None), cwd=self.protImportSeqs.getWorkingDir())
+		assertHandle(self.assertIsNotNone, getattr(self.protImportSeqsDB, 'outputSequences', None), cwd=self.protImportSeqsDB.getWorkingDir())
 
 class TestImportVariants(BaseTest):
-    @classmethod
-    def setUpClass(cls):
-      setupTestProject(cls)
+	@classmethod
+	def setUpClass(cls):
+		setupTestProject(cls)
 
-    @classmethod
-    def _runImportVariants(cls):
-      protImportVariants = cls.newProtocol(
-        ProtChemImportVariants,
-        fromID=True,
-        inputUniProtKB='P0DTC2')
-      cls.proj.launchProtocol(protImportVariants, wait=False)
-      cls.protImportVariants = protImportVariants
+	@classmethod
+	def _runImportVariants(cls):
+		protImportVariants = cls.newProtocol(
+			ProtChemImportVariants,
+			fromID=True,
+			inputUniProtKB='P0DTC2')
+		cls.proj.launchProtocol(protImportVariants, wait=False)
+		cls.protImportVariants = protImportVariants
 
-    def test(self):
-      self._runImportVariants()
-      self._waitOutput(self.protImportVariants, 'outputVariants', sleepTime=5)
-      self.assertIsNotNone(self.protImportVariants.outputVariants)
-
+	def test(self):
+		self._runImportVariants()
+		self._waitOutput(self.protImportVariants, 'outputVariants')
+		assertHandle(self.assertIsNotNone, getattr(self.protImportVariants, 'outputVariants', None), cwd=self.protImportVariants.getWorkingDir())
 
 class TestImportSeqROIs(BaseTest):
-  @classmethod
-  def setUpClass(cls):
-    setupTestProject(cls)
-    inFile = cls.proj.getTmpPath('epitopes.csv')
-    with open(inFile, 'w') as f:
-        f.write(iedb_csv_str)
+	@classmethod
+	def setUpClass(cls):
+		setupTestProject(cls)
+		inFile = cls.proj.getTmpPath('epitopes.csv')
+		with open(inFile, 'w') as f:
+				f.write(iedb_csv_str)
 
-  @classmethod
-  def _runImportSeqROIs(cls):
-    protImportSeqROIs = cls.newProtocol(
-      ProtImportSeqROI,
-      inputFile=cls.proj.getTmpPath('epitopes.csv'))
-    cls.launchProtocol(protImportSeqROIs)
-    return protImportSeqROIs
+	@classmethod
+	def _runImportSeqROIs(cls):
+		protImportSeqROIs = cls.newProtocol(
+			ProtImportSeqROI,
+			inputFile=cls.proj.getTmpPath('epitopes.csv'))
+		cls.launchProtocol(protImportSeqROIs)
+		return protImportSeqROIs
 
-  def testImportSeqROIs(self):
-    protImportSeqROIs = self._runImportSeqROIs()
-    self.assertIsNotNone(protImportSeqROIs.outputROIs_P0DTC2)
-
+	def testImportSeqROIs(self):
+		protImportSeqROIs = self._runImportSeqROIs()
+		assertHandle(self.assertIsNotNone, getattr(protImportSeqROIs, 'outputROIs_P0DTC2', None), cwd=protImportSeqROIs.getWorkingDir())

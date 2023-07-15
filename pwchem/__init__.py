@@ -60,13 +60,14 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def _defineVariables(cls):
-		# Package home directories 
-		cls._defineEmVar(MGL_DIC['home'], '{}-{}'.format(MGL_DIC['name'], MGL_DIC['version']))
-		cls._defineEmVar(PYMOL_DIC['home'], '{}-{}'.format(PYMOL_DIC['name'], PYMOL_DIC['version']))
-		cls._defineEmVar(JCHEM_DIC['home'], '{}-{}'.format(JCHEM_DIC['name'], JCHEM_DIC['version']))
-		cls._defineEmVar(ALIVIEW_DIC['home'], '{}-{}'.format(ALIVIEW_DIC['name'], ALIVIEW_DIC['version']))
-		cls._defineEmVar(VMD_DIC['home'], '{}-{}'.format(VMD_DIC['name'], VMD_DIC['version']))
-		cls._defineEmVar(SHAPEIT_DIC['home'], '{}-{}'.format(SHAPEIT_DIC['name'], SHAPEIT_DIC['version']))
+		# Package home directories
+		cls._defineEmVar(RDKIT_DIC['home'], cls.getEnvName(RDKIT_DIC))
+		cls._defineEmVar(MGL_DIC['home'], cls.getEnvName(MGL_DIC))
+		cls._defineEmVar(PYMOL_DIC['home'], cls.getEnvName(PYMOL_DIC))
+		cls._defineEmVar(JCHEM_DIC['home'], cls.getEnvName(JCHEM_DIC))
+		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
+		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
+		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -156,7 +157,7 @@ class Plugin(pwem.Plugin):
 		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabel_installer.getCondaEnvCommand(requirementsFile=False)\
+		openbabel_installer.getCondaEnvCommand()\
 			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
 		
@@ -194,7 +195,7 @@ class Plugin(pwem.Plugin):
 		# Instantiating install helper
 		installer = InstallHelper(VMD_DIC['name'], packageHome=cls.getVar(VMD_DIC['home']), packageVersion=VMD_DIC['version'])
 
-		installer.getCondaEnvCommand(requirementsFile=False).addCondaPackages(['vdm'], channel='conda-forge')\
+		installer.getCondaEnvCommand().addCondaPackages(['vmd'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################
@@ -276,7 +277,10 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def getODDTModelsPath(cls, path=''):
-		return os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels', path))
+		oddtModelsDir = os.path.abspath(os.path.join(cls.getVar(RDKIT_DIC['home']), 'oddtModels'))
+		if not os.path.exists(oddtModelsDir):
+			os.mkdir(oddtModelsDir)
+		return os.path.join(oddtModelsDir, path)
 
 	@classmethod
 	def getDefTar(cls, programDic, ext='tgz'):
