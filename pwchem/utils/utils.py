@@ -729,5 +729,8 @@ def assertHandle(func, *args, **kwargs):
       resultStdout = subprocess.run(['cat', stdout], check=True, capture_output=True)
       errorMessage = resultStdout.stdout.decode()
     else:
+      message = kwargs.get('message', '')
       errorMessage = "Something went wrong with the protocol, but there are no stderr/stdout files right now, try manually opening the project to check it."
+      if message:
+        errorMessage += f"\n{message}"
     raise AssertionError(f"Assertion {func.__name__} failed for the following reasons:\n\n{errorMessage}")
