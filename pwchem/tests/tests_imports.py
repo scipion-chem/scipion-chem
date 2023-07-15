@@ -37,11 +37,15 @@ from pwchem.protocols import *
 from pwchem.constants import *
 from pwchem.utils import assertHandle
 
+# Global variables
 iedb_csv_str = '''Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Epitope,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object,Related Object
 Epitope ID,Object Type,Description,Epitope Modified Residue(s),Epitope Modification(s),Starting Position,Ending Position,Non-peptidic epitope Accession,Epitope Synonyms,Antigen Name,Antigen Accession,Parent Protein,Parent Protein Accession,Organism Name,Parent Organism,Parent Organism ID,Epitope Comments,Epitope Relationship,Object Type,Description,Starting Position,Ending Position,Non-peptidic object Accession,Synonyms,Antigen Name,Parent Protein,Organism Name,Parent Organism
 "234","Linear peptide","AAISDYDYY","","","4840","4848","","","orf1ab polyprotein [Severe acute respiratory syndrome coronavirus 2]","YP_009724389.1","Replicase polyprotein 1ab","P0DTD1","Severe acute respiratory syndrome coronavirus 2","Severe acute respiratory syndrome coronavirus 2","2697049","","","","","","","","","","","",""
 "956","Linear peptide","AEGSRGGSQA","","","173","182","","","nucleocapsid phosphoprotein [Severe acute respiratory syndrome coronavirus 2]","YP_009724397.2","Nucleoprotein","P0DTC9","Severe acute respiratory syndrome coronavirus 2","Severe acute respiratory syndrome coronavirus 2","2697049","","","","","","","","","","","",""
 "1220","Linear peptide","AEVQIDRLI","","","989","997","","","surface glycoprotein [Severe acute respiratory syndrome coronavirus 2]","YP_009724390.1","Spike glycoprotein","P0DTC2","Severe acute respiratory syndrome coronavirus 2","Severe acute respiratory syndrome coronavirus 2","2697049","","","","","","","","","","","",""'''
+
+importErrorMessage = "There was a problem with the import"
+emptySetOfMoleculesErrorMessage = "There was a problem with the import and the SetOfSmallMolecules is empty"
 
 class TestImportBase(BaseTest):
 	@classmethod
@@ -76,9 +80,9 @@ class TestImportSmallMolecules(TestImportBase):
 		prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 		self.launchProtocol(prot1)
 		small1 = getattr(prot1, 'outputSmallMolecules', None)
-		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+		assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
 		assertHandle(self.assertTrue, small1.getSize()==1,
-								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
+								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
 
 	def testImport_one_mol_pdb(self):
 			""" Import a single file of a small molecule provided by the user in pdb format
@@ -93,9 +97,9 @@ class TestImportSmallMolecules(TestImportBase):
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 			self.launchProtocol(prot1)
 			small1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
 			assertHandle(self.assertTrue, small1.getSize()==1,
-								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
+								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
 
 	def testImport_one_mol_sdf(self):
 			""" Import a single file of a small molecule provided by the user in sdf format
@@ -110,9 +114,9 @@ class TestImportSmallMolecules(TestImportBase):
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 			self.launchProtocol(prot1)
 			small1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
 			assertHandle(self.assertTrue, small1.getSize()==1,
-								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
+								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
 
 	def testImport_mols_mix(self):
 			""" Import several files of a small molecule provided by the user in different formats. """
@@ -127,9 +131,9 @@ class TestImportSmallMolecules(TestImportBase):
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 			self.launchProtocol(prot1)
 			small1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
 			assertHandle(self.assertTrue, small1.getSize()==4,
-								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
+								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
 
 class TestImportSequences(BaseTest):
 	@classmethod
