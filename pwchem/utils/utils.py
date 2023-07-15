@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-import os, shutil, json, requests, time
+import os, shutil, json, requests, time, subprocess
 import random as rd
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
@@ -699,5 +699,35 @@ def calculate_SASA(structFile, outFile):
           resId = residue.get_id()[1]
           f.write('{}:{}\t{}\n'.format(chainID, resId, residue.sasa))
 
+################# Test utils #####################
+def assertHandle(func, *args, **kwargs):
+  """ This function runs the given assertion and handles the potential error. """
+  # Initialize assertion result
+  assertionFailed = False
 
+  # Defining full path to error log
+  cwd = kwargs.get('cwd', '')
+  stderrSubpath = os.path.join('logs', 'run.stderr')
+  stdoutSubpath = os.path.join('logs', 'run.stdout')
+  stderr = os.path.abspath(os.path.join(cwd, stderrSubpath) if cwd else stderrSubpath)
+  stdout = os.path.abspath(os.path.join(cwd, stdoutSubpath) if cwd else stdoutSubpath)
 
+  # Attempt to run assertion
+  try:
+    func(*args)
+  except AssertionError:
+    assertionFailed = True
+
+  # If assertion fails, show error log
+  if assertionFailed:
+    # Getting error logs (stderr has priority over stdout)
+    # Most errors are dumped on stderr, while some others on stdout
+    if os.path.exists(stderr):
+      resultStderr = subprocess.run(['cat', stderr], check=True, capture_output=True)
+      errorMessage = resultStderr.stdout.decode()
+    elif os.path.exists(stdout):
+      resultStdout = subprocess.run(['cat', stdout], check=True, capture_output=True)
+      errorMessage = resultStdout.stdout.decode()
+    else:
+      errorMessage = "Something went wrong with the protocol, but there are no stderr/stdout files right now, try manually opening the project to check it."
+    raise AssertionError(f"Assertion {func.__name__} failed for the following reasons:\n\n{errorMessage}")
