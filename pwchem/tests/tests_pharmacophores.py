@@ -27,7 +27,7 @@ import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
-from pwchem.protocols import *
+from pwchem.protocols import ProtocolPharmacophoreGeneration, ProtocolPharmacophoreModification, ProtocolPharmacophoreFiltering
 from pwchem.tests import TestExtractLigand, TestRDKitLigandPreparation
 from pwchem.utils import assertHandle
 

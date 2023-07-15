@@ -52,11 +52,11 @@ class TestOBLigandPreparation(TestImportBase):
 
 		protocol = self.newProtocol(ProtChemOBabelPrepareLigands, **args)
 		self.launchProtocol(protocol)
-		small_1 = getattr(protocol, 'outputSmallMolecules', None)
+		small1 = getattr(protocol, 'outputSmallMolecules', None)
 
-		assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
+		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
 
-		for mol in small_1:
+		for mol in small1:
 			assertHandle(self.assertTrue, (mol.getFileName()).endswith(".mol2"),
 										message="The format of first molecule is wrong. It must be in mol2 format", cwd=protocol.getWorkingDir())
 			try:
@@ -83,11 +83,11 @@ class TestOBLigandPreparation(TestImportBase):
 
 		protocol = self.newProtocol(ProtChemOBabelPrepareLigands, **args)
 		self.launchProtocol(protocol)
-		small_1 = getattr(protocol, 'outputSmallMolecules', None)
+		small1 = getattr(protocol, 'outputSmallMolecules', None)
 
-		assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
+		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
 
-		for mol in small_1:
+		for mol in small1:
 			assertHandle(self.assertTrue, (mol.getFileName()).endswith(".mol2"),
 										message="The format of first molecule is wrong. It must be in mol2 format", cwd=protocol.getWorkingDir())
 			try:

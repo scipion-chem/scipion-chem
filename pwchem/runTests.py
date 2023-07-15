@@ -48,7 +48,7 @@ command = f"{args.scipion} test --grep {args.plugin}"
 try:
     output = subprocess.check_output(command, shell=True, text=True)
 except subprocess.CalledProcessError:
-    print(colorStr(f"ERROR: Test search command failed. Check line above for more detailed info.", color='red'))
+    print(colorStr("ERROR: Test search command failed. Check line above for more detailed info.", color='red'))
     sys.exit(1)
 
 # Define test command string variables

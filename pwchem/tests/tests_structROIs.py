@@ -26,7 +26,7 @@ from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
-from pwchem.protocols import *
+from pwchem.protocols import ProtDefineStructROIs, ProtocolConsensusStructROIs
 from pwchem.utils import assertHandle
 
 defROIsStr = '''1) Coordinate: {"X": 45, "Y": 65, "Z": 60}

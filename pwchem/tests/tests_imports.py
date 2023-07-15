@@ -75,9 +75,9 @@ class TestImportSmallMolecules(TestImportBase):
 
 		prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 		self.launchProtocol(prot1)
-		small_1 = getattr(prot1, 'outputSmallMolecules', None)
-		assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
-		assertHandle(self.assertTrue, small_1.getSize()==1,
+		small1 = getattr(prot1, 'outputSmallMolecules', None)
+		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+		assertHandle(self.assertTrue, small1.getSize()==1,
 								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
 	def testImport_one_mol_pdb(self):
@@ -92,9 +92,9 @@ class TestImportSmallMolecules(TestImportBase):
 
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 			self.launchProtocol(prot1)
-			small_1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
-			assertHandle(self.assertTrue, small_1.getSize()==1,
+			small1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small1.getSize()==1,
 								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
 	def testImport_one_mol_sdf(self):
@@ -109,9 +109,9 @@ class TestImportSmallMolecules(TestImportBase):
 
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 			self.launchProtocol(prot1)
-			small_1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
-			assertHandle(self.assertTrue, small_1.getSize()==1,
+			small1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small1.getSize()==1,
 								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
 	def testImport_mols_mix(self):
@@ -126,9 +126,9 @@ class TestImportSmallMolecules(TestImportBase):
 
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
 			self.launchProtocol(prot1)
-			small_1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
-			assertHandle(self.assertTrue, small_1.getSize()==4,
+			small1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small1.getSize()==4,
 								 message="There was a problem with the import and the SetOfSmallMolecules is empty", cwd=prot1.getWorkingDir())
 
 class TestImportSequences(BaseTest):

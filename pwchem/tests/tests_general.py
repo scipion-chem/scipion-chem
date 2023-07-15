@@ -49,7 +49,7 @@ class TestImportBoth(BaseTest):
 	def _importPDB(cls):
 		inputPdbData = 1 # file
 		args = {
-			 'inputPdbData': 1,
+			 'inputPdbData': inputPdbData,
 				'pdbFile': cls.ds.getFile('PDBx_mmCIF/5ni1.pdb')
 			}
 
@@ -85,11 +85,11 @@ class TestConverter(TestImportBoth):
 		protocol = self.newProtocol(ConvertStructures, **args)
 		self.launchProtocol(protocol)
 
-		small_1 = getattr(protocol, 'outputSmallMolecules', None)
+		small1 = getattr(protocol, 'outputSmallMolecules', None)
 		convert_file = glob.glob(protocol._getExtraPath("*"))
 
-		assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-		assertHandle(self.assertTrue, small_1.getSize()==4,
+		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
+		assertHandle(self.assertTrue, small1.getSize()==4,
 								 message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
 		files = ""
@@ -115,11 +115,11 @@ class TestConverter(TestImportBoth):
 
 		protocol = self.newProtocol(ConvertStructures, **args)
 		self.launchProtocol(protocol)
-		small_1 = getattr(protocol, 'outputSmallMolecules', None)
+		small1 = getattr(protocol, 'outputSmallMolecules', None)
 		convert_file = glob.glob(protocol._getExtraPath("*"))
 
-		assertHandle(self.assertIsNotNone, small_1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-		assertHandle(self.assertTrue, small_1.getSize()==4,
+		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
+		assertHandle(self.assertTrue, small1.getSize()==4,
 								 message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
 		files = ""

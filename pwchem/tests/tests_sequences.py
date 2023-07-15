@@ -36,6 +36,7 @@ from pwchem.utils import assertHandle
 
 CLUSTALO, MUSCLE, MAFFT = 0, 1, 2
 
+# Global variables
 defSeqROIsVar = '''1) Residues: {"index": "1-3", "residues": "MFV", "desc": "Residues"}
 2) Variant: Alpha
 3) Mutations: L18F'''
@@ -62,6 +63,7 @@ defSetSeqs = '''1) {"name": "%s", "index": "FIRST-LAST", "seqFile": "%s"}
 3) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile": "%s"}''' % \
 						 (names[0], defSetSeqFile, names[1], defSetASChain, defSetASFile, names[2], defSetPDBChain, defSetPDBFile)
 
+testFile = 'PDBx_mmCIF/1aoi.cif'
 class TestDefineSequenceROIs(TestImportVariants):
 	@classmethod
 	def setUpClass(cls):
@@ -247,7 +249,7 @@ class TestDefineSetSequences(TestDefineSequenceROIs):
 	def _runImportPDB(cls):
 		cls.protImportPDB = cls.newProtocol(
 			ProtImportPdb,
-			inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif')
+			inputPdbData=1, pdbFile=cls.dsModBuild.getFile(testFile)
 		)
 		cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
@@ -297,7 +299,7 @@ class TestMapSeqROIs(TestDefineSetSequences):
 	def _runImportPDB(cls):
 			cls.protImportPDB = cls.newProtocol(
 					ProtImportPdb,
-					inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
+					inputPdbData=1, pdbFile=cls.dsModBuild.getFile(testFile))
 			cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
 	@classmethod
@@ -328,7 +330,7 @@ class TestPairwiseAlign(TestDefineSetSequences):
 	def _runImportPDB(cls):
 			cls.protImportPDB = cls.newProtocol(
 					ProtImportPdb,
-					inputPdbData=1, pdbFile=cls.dsModBuild.getFile('PDBx_mmCIF/1aoi.cif'))
+					inputPdbData=1, pdbFile=cls.dsModBuild.getFile(testFile))
 			cls.proj.launchProtocol(cls.protImportPDB, wait=False)
 
 	@classmethod

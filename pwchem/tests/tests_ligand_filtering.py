@@ -22,7 +22,8 @@
 # ***************************************************************************
 
 # Scipion chem imports
-from pwchem.protocols import *
+from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering
+from pwchem.protocols import ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
 
