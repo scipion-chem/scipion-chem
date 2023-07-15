@@ -66,7 +66,7 @@ class TestImportDBIDs(BaseTest):
   def test(self):
     pImp = self._runImportDBIds()
 
-    self._waitOutput(pImp, 'outputDatabaseIDs', timeOut=10)
+    self._waitOutput(pImp, 'outputDatabaseIDs')
     assertHandle(self.assertIsNotNone, getattr(pImp, 'outputDatabaseIDs', None), cwd=pImp.getWorkingDir())
 
 class TestIdentifyLigands(TestImportBase):
@@ -84,7 +84,7 @@ class TestIdentifyLigands(TestImportBase):
 
   def test(self):
     pIdent = self._runIdentify(self.protImportSmallMols)
-    self._waitOutput(pIdent, 'outputSmallMolecules', timeOut=10)
+    self._waitOutput(pIdent, 'outputSmallMolecules')
     assertHandle(self.assertIsNotNone, getattr(pIdent, 'outputSmallMolecules', None), cwd=pIdent.getWorkingDir())
 
 class TestZINCFilter(TestIdentifyLigands):
@@ -103,7 +103,7 @@ class TestZINCFilter(TestIdentifyLigands):
   def test(self):
     pIdent = self._runIdentify(self.protImportSmallMols)
     pFilt = self._runZINCFilter(pIdent)
-    self._waitOutput(pFilt, 'outputSmallMolecules', timeOut=10)
+    self._waitOutput(pFilt, 'outputSmallMolecules')
     assertHandle(self.assertIsNotNone, getattr(pFilt, 'outputSmallMolecules', None), cwd=pFilt.getWorkingDir())
 
 class TestUniProtCrossRef(TestImportDBIDs):
@@ -121,9 +121,9 @@ class TestUniProtCrossRef(TestImportDBIDs):
 
   def test(self):
     pImp = self._runImportDBIds()
-    self._waitOutput(pImp, 'outputDatabaseIDs', timeOut=10)
+    self._waitOutput(pImp, 'outputDatabaseIDs')
     pCrossRef = self._runCrossRef(pImp)
-    self._waitOutput(pCrossRef, 'outputDatabaseIDs', timeOut=10)
+    self._waitOutput(pCrossRef, 'outputDatabaseIDs')
     assertHandle(self.assertIsNotNone, getattr(pCrossRef, 'outputDatabaseIDs', None), cwd=pCrossRef.getWorkingDir())
 
 class TestFetchLigands(TestImportDBIDs):
@@ -156,7 +156,7 @@ class TestFetchLigands(TestImportDBIDs):
         impProts[(inType, iBase)] = self._runImportDBIds(inType=inType, dbName=dbName)
 
     for p in impProts.values():
-      self._waitOutput(p, 'outputDatabaseIDs', timeOut=10)
+      self._waitOutput(p, 'outputDatabaseIDs')
       assertHandle(self.assertIsNotNone, getattr(p, 'outputDatabaseIDs', None), cwd=p.getWorkingDir())
 
     for inType, inDic in enumerate(DB_IDS):
@@ -165,5 +165,5 @@ class TestFetchLigands(TestImportDBIDs):
         fetchProts.append(self._runFetchLigands(pImp, inType=inType, inDataBase=iBase))
 
     for p in fetchProts:
-      self._waitOutput(p, 'outputSmallMolecules', timeOut=10)
+      self._waitOutput(p, 'outputSmallMolecules')
       assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
