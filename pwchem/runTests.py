@@ -1,5 +1,8 @@
 # General imports
-import subprocess, argparse, multiprocessing, sys
+import subprocess, argparse, multiprocessing, sys, json, os, importlib
+
+# Global variables
+skippableTestFileName = 'skippableTests.json'
 
 def colorStr(string, color):
 	""" This function returns the input string wrapped in the specified color. """
@@ -27,9 +30,31 @@ def runTest(test):
 		return test
 
 def printAndFlush(message):
-	""" This function prints a specific message and inmediately flushes stdout. """
+	""" This function prints a given message and inmediately flushes stdout. """
 	print(message)
 	sys.stdout.flush()
+
+def readSkippableTestsFile():
+	""" This function returns an object with the different tests and the situations where to skip them. """
+	# Get file's location
+	currentLocation = os.path.dirname(os.path.abspath(__file__))
+	skippableTestFile = os.path.join(currentLocation, skippableTestFileName)
+
+	# Read the JSON data from the file
+	try:
+		with open(skippableTestFile, 'r') as file:
+			return json.load(file)
+	except FileNotFoundError:
+		printAndFlush(colorStr("No skippable tests file found, running all.", color='yellow'))
+	except PermissionError:
+		printAndFlush(colorStr(f"Error: Permission denied to open file '{skippableTestFile}'.", color='red'))
+		sys.exit(1)
+	except json.JSONDecodeError as e:
+		printAndFlush(colorStr(f"Error: Invalid JSON format in file '{skippableTestFile}':\n{e}", color='red'))
+		sys.exit(1)
+	except Exception as e:
+		printAndFlush(colorStr(f"An unexpected error occurred:\n{e}", color='red'))
+		sys.exit(1)
 
 # Parse the command-line arguments
 parser = argparse.ArgumentParser(
@@ -39,6 +64,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument("scipion", help="Path to Scipion executable, relative or absolute")
 parser.add_argument("plugin", help="Name of the plugin's Python module")
 parser.add_argument("-j", "--jobs", type=int, help="Number of jobs. Defaults to max available")
+parser.add_argument("-noGPU", action='store_true', help="If set, no tests that need a GPU will run. Use it in enviroments where a GPU cannot be accessed.")
 args = parser.parse_args()
 
 # Set the number of jobs
@@ -71,6 +97,52 @@ for line in lines:
 if len(filteredLines) == 0:
 	printAndFlush(colorStr(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?", color='red'))
 	sys.exit(1)
+
+# Obtaining skippable tests according to situation
+allSkippableTests = readSkippableTestsFile()
+gpuSkippableTests = allSkippableTests.get('gpu', [])
+dependenciesSkippableTests = allSkippableTests.get('dependencies', [])
+otherSkippableTests = allSkippableTests.get('others', [])
+#print(filteredLines)
+
+# Removing GPU skippable tests if no GPU flag provided by args
+if args.noGPU:
+	for gpuTest in gpuSkippableTests:
+		if gpuTest in filteredLines:
+			printAndFlush(colorStr(f"Skipping test {gpuTest}. Reason: GPU.", color='yellow'))
+			filteredLines.remove(gpuTest)
+
+# Removing dependency tests if dependencies are not present
+for dependency in dependenciesSkippableTests:
+	# Getting plugin and module name
+	dependencyTestKey = dependency.get("name", None)
+	dependencyTestModule = dependency.get("module", None)
+
+	# Try to import module if provided
+	try:
+		if dependencyTestModule:
+			importlib.import_module(dependencyTestModule)
+			continue
+	except ModuleNotFoundError:
+		pass
+
+	# If no module was provided or import raised a ModuleNotFoundError exception, skip tests
+	for dependencyTest in dependency.get("tests", []):
+		if dependencyTest in filteredLines:
+			printAndFlush(colorStr(f"Skipping test {dependencyTest}. Reason: Unmet dependency with plugin {dependencyTestKey}.", color='yellow'))
+			filteredLines.remove(dependencyTest)
+
+# Removing other tests for reasons stated
+for otherTest in otherSkippableTests:
+	# Getting test name and reason
+	testName = otherTest.get("test", None)
+	testReason = otherTest.get("reason", None)
+
+	# If test exists, skip
+	if testName and testName in filteredLines:
+		reason = f"Reason: {testReason}" if testReason else "No reason provided"
+		printAndFlush(colorStr(f"Skipping test {testName}. {reason}.", color='yellow'))
+		filteredLines.remove(testName)
 
 # Showing initial message with number of tests
 printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {args.jobs} processes...", color='yellow'))
