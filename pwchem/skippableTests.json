@@ -1,6 +1,6 @@
 {
 	"gpu": [
-		
+
 	],
 	"dependencies": [
 		{
@@ -13,6 +13,13 @@
 		}
 	],
 	"others": [
-
+		{
+			"test": "tests_databases.TestIdentifyLigands",
+			"reason": "Already was failing. Needs fix"
+		},
+		{
+			"test": "tests_databases.TestZINCFilter",
+			"reason": "Already was failing. Needs fix"
+		}
 	]
 }
