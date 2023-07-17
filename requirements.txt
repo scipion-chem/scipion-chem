@@ -1,4 +1,4 @@
 lxml
 scipy
-mdtraj
+mdtraj==1.9.7
 parmed
