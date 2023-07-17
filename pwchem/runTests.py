@@ -2,7 +2,7 @@
 import subprocess, argparse, multiprocessing, sys, json, os, importlib
 
 # Global variables
-skippableTestFileName = 'skippableTests.json'
+testData = 'testData.json'
 
 def colorStr(string, color):
 	""" This function returns the input string wrapped in the specified color. """
@@ -14,6 +14,32 @@ def colorStr(string, color):
 		return f"\033[91m{string}\033[0m"
 	else:
 		return string
+
+def runInParallel(func, paramList):
+	"""
+	This function creates a pool of workers to run the given function in parallel.
+	Returns True if all executed correctly, False otherwise. 
+	"""
+	# Create a pool of worker processes
+	pool = multiprocessing.Pool(processes=args.jobs)
+
+	# Apply the given function to the given param list using the pool
+	results = [pool.apply_async(func, args=(param,)) for param in paramList]
+
+	# Check if any process encountered an error
+	correct = True
+	for result in results:
+		if result.get():
+			correct = False
+	
+	# Close the pool to release resources
+	pool.close()
+
+	# Join the pool, waiting for all processes to complete
+	pool.join()
+
+	# Return the result state
+	return correct
 
 def runTest(test):
 	""" This function receives a test and runs it. """
@@ -34,16 +60,20 @@ def printAndFlush(message):
 	print(message)
 	sys.stdout.flush()
 
-def readSkippableTestsFile():
-	""" This function returns an object with the different tests and the situations where to skip them. """
+def readTestDataFile():
+	"""
+	This function returns a list with the necessary datasets for the tests, as well as
+	an object with the different tests and the situations where to skip them.
+	"""
 	# Get file's location
 	currentLocation = os.path.dirname(os.path.abspath(__file__))
-	skippableTestFile = os.path.join(currentLocation, skippableTestFileName)
+	skippableTestFile = os.path.join(currentLocation, testData)
 
 	# Read the JSON data from the file
 	try:
 		with open(skippableTestFile, 'r') as file:
-			return json.load(file)
+			dataFile = json.load(file)
+			return dataFile.get("datasets", []), dataFile.get("skippable", {})
 	except FileNotFoundError:
 		printAndFlush(colorStr("No skippable tests file found, running all.", color='yellow'))
 	except PermissionError:
@@ -56,9 +86,24 @@ def readSkippableTestsFile():
 		printAndFlush(colorStr(f"An unexpected error occurred:\n{e}", color='red'))
 		sys.exit(1)
 
+def downloadDatset(dataset):
+	""" This function downloads a given dataset for scipion tests. """
+	printAndFlush(colorStr(f"Downloading dataset {dataset}...", color='yellow'))
+	try:
+		result = subprocess.run([args.scipion, f" testdata --download {dataset}"], check=True, capture_output=True, text=True)
+		if result.returncode == 0:
+				printAndFlush(colorStr(f"Dataset {dataset} download OK", color='green'))
+	except subprocess.CalledProcessError as e:
+		# Detect failed test
+		printAndFlush(e.stderr)
+		printAndFlush(colorStr(f"Dataset {dataset} download failed with the above message.", color='red'))
+		return dataset
+
 # Parse the command-line arguments
+epilog = "Example 1: python script.py /path/to/scipion pwchem -j 2"
+epilog += "\nExample 2: python script.py /path/to/scipion pwchem -noGPU"
 parser = argparse.ArgumentParser(
-	epilog="Example: python script.py /path/to/scipion pwchem -j 2",
+	epilog=epilog,
 	formatter_class=argparse.RawDescriptionHelpFormatter
 )
 parser.add_argument("scipion", help="Path to Scipion executable, relative or absolute")
@@ -94,22 +139,21 @@ for line in lines:
 		filteredLines.append(line.replace(f'{scipionTestsStartingSpaces}scipion3 {testPrefix}', ''))
 
 # If no tests were found, module was not found
-if len(filteredLines) == 0:
+if not filteredLines:
 	printAndFlush(colorStr(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?", color='red'))
 	sys.exit(1)
 
-# Obtaining skippable tests according to situation
-allSkippableTests = readSkippableTestsFile()
+# Obtaining datasets and skippable tests according to situation
+datasets, allSkippableTests = readTestDataFile()
 gpuSkippableTests = allSkippableTests.get('gpu', [])
 dependenciesSkippableTests = allSkippableTests.get('dependencies', [])
 otherSkippableTests = allSkippableTests.get('others', [])
-#print(filteredLines)
 
 # Removing GPU skippable tests if no GPU flag provided by args
 if args.noGPU:
 	for gpuTest in gpuSkippableTests:
 		if gpuTest in filteredLines:
-			printAndFlush(colorStr(f"Skipping test {gpuTest}. Reason: GPU.", color='yellow'))
+			printAndFlush(colorStr(f"Skipping test {gpuTest}. Reason: Needs GPU.", color='yellow'))
 			filteredLines.remove(gpuTest)
 
 # Removing dependency tests if dependencies are not present
@@ -144,33 +188,23 @@ for otherTest in otherSkippableTests:
 		printAndFlush(colorStr(f"Skipping test {testName}. {reason}.", color='yellow'))
 		filteredLines.remove(testName)
 
+# Downloading in parallel required datasets if there are any
+if datasets:
+	result = runInParallel(downloadDatset, datasets)
+
+	# Check if there were any errors
+	if not result:
+		printAndFlush(colorStr("The download of at least one dataset ended with errors. Exiting.", color='red'))
+		sys.exit(1)
+
 # Showing initial message with number of tests
 printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {args.jobs} processes...", color='yellow'))
 
-# Create a shared flag to indicate error occurrence
-manager = multiprocessing.Manager()
-errorFlag = manager.Value('i', 0)
-
-# Create a pool of worker processes
-pool = multiprocessing.Pool(processes=args.jobs)
-
-# Apply the runTest function to the filtered lines using the pool
-results = [pool.apply_async(runTest, args=(test,)) for test in filteredLines]
-
-# Check if any process encountered an error
-errorFlag = False
-for result in results:
-	if result.get():
-		errorFlag = True
-
-# Close the pool to release resources
-pool.close()
-
-# Join the pool, waiting for all processes to complete
-pool.join()
+# Run all the tests in parallel
+result = runInParallel(runTest, filteredLines)
 
 # Check if an error occurred
-if errorFlag:
+if not result:
 	printAndFlush(colorStr("Some tests ended with errors. Exiting.", color='red'))
 	sys.exit(1)
 
