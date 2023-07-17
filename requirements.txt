@@ -1,5 +1,5 @@
 lxml
 scipy
+distlib==0.3.6
 mdtraj
 parmed
-distlib==0.3.6
