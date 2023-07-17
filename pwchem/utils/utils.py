@@ -722,12 +722,14 @@ def assertHandle(func, *args, **kwargs):
   if assertionFailed:
     # Getting error logs (stderr has priority over stdout)
     # Most errors are dumped on stderr, while some others on stdout
-    if os.path.exists(stderr):
-      resultStderr = subprocess.run(['cat', stderr], check=True, capture_output=True)
-      errorMessage = resultStderr.stdout.decode()
-    elif os.path.exists(stdout):
-      resultStdout = subprocess.run(['cat', stdout], check=True, capture_output=True)
-      errorMessage = resultStdout.stdout.decode()
+    if os.path.exists(stderr) or os.path.exists(stdout):
+      for stdFile in [stderr, stdout]:
+        if os.path.exists(stdFile):
+          stdMessage = subprocess.run(['cat', stdFile], check=True, capture_output=True).stdout.decode()
+          # Sometimes stderr file exists but it is empty, in those cases, fall back to stdout
+          if stdMessage:
+            break
+      errorMessage = stdMessage
     else:
       message = kwargs.get('message', '')
       errorMessage = "Something went wrong with the protocol, but there are no stderr/stdout files right now, try manually opening the project to check it."
