@@ -18,7 +18,7 @@ def colorStr(string, color):
 def runInParallel(func, paramList):
 	"""
 	This function creates a pool of workers to run the given function in parallel.
-	Returns True if all executed correctly, False otherwise. 
+	Also returns a list with the failed commands.
 	"""
 	# Create a pool of worker processes
 	pool = multiprocessing.Pool(processes=args.jobs)
@@ -26,11 +26,13 @@ def runInParallel(func, paramList):
 	# Apply the given function to the given param list using the pool
 	results = [pool.apply_async(func, args=(param,)) for param in paramList]
 
+	# Initializing list of failed commands
+	failedCommands = []
+
 	# Check if any process encountered an error
-	correct = True
 	for result in results:
 		if result.get():
-			correct = False
+			failedCommands.append(result.get())
 	
 	# Close the pool to release resources
 	pool.close()
@@ -38,8 +40,8 @@ def runInParallel(func, paramList):
 	# Join the pool, waiting for all processes to complete
 	pool.join()
 
-	# Return the result state
-	return correct
+	# Return list of failed commands
+	return failedCommands
 
 def runTest(test):
 	""" This function receives a test and runs it. """
@@ -188,12 +190,20 @@ for otherTest in otherSkippableTests:
 		printAndFlush(colorStr(f"Skipping test {testName}. {reason}.", color='yellow'))
 		filteredLines.remove(testName)
 
+# Initialize an empty dictionary to store the grouped strings
+groupedTests = {}
+
+# Group the tests based on the file they are declared on
+for test in filteredLines:
+	key, value = test.split('.', 1)
+	groupedTests.setdefault(key, []).append(value)
+
 # Downloading in parallel required datasets if there are any
 if datasets:
-	result = runInParallel(downloadDatset, datasets)
+	failedDownloads = runInParallel(downloadDatset, datasets)
 
 	# Check if there were any errors
-	if not result:
+	if failedDownloads:
 		printAndFlush(colorStr("The download of at least one dataset ended with errors. Exiting.", color='red'))
 		sys.exit(1)
 
@@ -201,10 +211,38 @@ if datasets:
 printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {args.jobs} processes...", color='yellow'))
 
 # Run all the tests in parallel
-result = runInParallel(runTest, filteredLines)
+failedTests = runInParallel(runTest, filteredLines)
+
+# Initialize an empty dictionary to store the grouped tests
+groupedTests = {}
+
+# Group the tests based on the file they are declared on
+for test in filteredLines:
+	key, value = test.split('.', 1)
+	groupedTests.setdefault(key, []).append(value)
+
+# Create a new dictionary to separate from the grouped tests,
+# the ones failing from the ones passing
+results = {}
+for key, valueList in groupedTests.items():
+	# Initialize the 'failed' and 'passed' lists for each key
+	results[key] = {'failed': [], 'passed': []}
+	
+	# Check if each test is in the failed tests list
+	for test in valueList:
+		resultListKey = 'failed' if f"{key}.{test}" in failedTests else 'passed'
+		results[key][resultListKey].append(test)
+
+# Print summary of passed/failed tests
+printAndFlush("SUMMARY:")
+for testGroup in results:
+	passed = results.get(testGroup, {}).get("passed", [])
+	failed = results.get(testGroup, {}).get("failed", [])
+	total = len(passed) + len(failed)
+	printAndFlush(colorStr(f"{testGroup}: [{len(passed)} / {total}]\n\tFailed tests: {failed.join(' ')}", color='red'))
 
 # Check if an error occurred
-if not result:
+if failedTests:
 	printAndFlush(colorStr("Some tests ended with errors. Exiting.", color='red'))
 	sys.exit(1)
 
