@@ -702,9 +702,6 @@ def calculate_SASA(structFile, outFile):
 ################# Test utils #####################
 def assertHandle(func, *args, **kwargs):
   """ This function runs the given assertion and handles the potential error. """
-  # Initialize assertion result
-  assertionFailed = False
-
   # Defining full path to error log
   cwd = kwargs.get('cwd', '')
   stderrSubpath = os.path.join('logs', 'run.stderr')
@@ -716,21 +713,17 @@ def assertHandle(func, *args, **kwargs):
   try:
     func(*args)
   except AssertionError:
-    assertionFailed = True
-
-  # If assertion fails, show error log
-  if assertionFailed:
+    # If assertion fails, show error log
     # Getting error logs (stderr has priority over stdout)
     # Most errors are dumped on stderr, while some others on stdout
-    if os.path.exists(stderr) or os.path.exists(stdout):
-      for stdFile in [stderr, stdout]:
-        if os.path.exists(stdFile):
-          stdMessage = subprocess.run(['cat', stdFile], check=True, capture_output=True).stdout.decode()
-          # Sometimes stderr file exists but it is empty, in those cases, fall back to stdout
-          if stdMessage:
-            break
-      errorMessage = stdMessage
-    else:
+    errorMessage = ''
+    for stdFile in [stderr, stdout]:
+      if os.path.exists(stdFile):
+        errorMessage = subprocess.run(['cat', stdFile], check=True, capture_output=True).stdout.decode()
+        # Sometimes stderr file exists but it is empty, in those cases, fall back to stdout
+        if errorMessage:
+          break
+    if not errorMessage:
       message = kwargs.get('message', '')
       errorMessage = "Something went wrong with the protocol, but there are no stderr/stdout files right now, try manually opening the project to check it."
       if message:
