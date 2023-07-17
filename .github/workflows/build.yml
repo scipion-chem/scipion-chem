@@ -37,6 +37,7 @@ jobs:
         pip3 install distlib==0.3.6
         pip3 install --user scipion-installer
         python3 -m scipioninstaller -conda -noXmipp -noAsk scipion
+        pip3 show distlib
     
     # Check out the repository in the pull request
     - name: Checkout repository
