@@ -239,7 +239,7 @@ for testGroup in results:
 	passed = results.get(testGroup, {}).get("passed", [])
 	failed = results.get(testGroup, {}).get("failed", [])
 	total = len(passed) + len(failed)
-	printAndFlush(colorStr(f"{testGroup}: [{len(passed)} / {total}]\n\tFailed tests: {failed.join(' ')}", color='red'))
+	printAndFlush(colorStr(f"{testGroup}: [{len(passed)} / {total}]\n\tFailed tests: {' '.join(failed)}", color='red'))
 
 # Check if an error occurred
 if failedTests:
