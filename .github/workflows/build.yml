@@ -46,4 +46,10 @@ jobs:
     # Install plugin from the pull request using the Scipion3 installp command
     - name: Install plugin from pull request
       working-directory: ${{ github.workspace }}
-      run: ../scipion/scipion3 installp -p . --devel
+      run: |
+        eval "$(../miniconda/bin/conda shell.bash hook)"
+        conda activate scipion3
+        pip uninstall distlib
+        pip install distlib==0.3.6
+        conda deactivate
+        ../scipion/scipion3 installp -p . --devel
