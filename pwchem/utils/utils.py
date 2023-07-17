@@ -704,10 +704,8 @@ def assertHandle(func, *args, **kwargs):
   """ This function runs the given assertion and handles the potential error. """
   # Defining full path to error log
   cwd = kwargs.get('cwd', '')
-  stderrSubpath = os.path.join('logs', 'run.stderr')
-  stdoutSubpath = os.path.join('logs', 'run.stdout')
-  stderr = os.path.abspath(os.path.join(cwd, stderrSubpath) if cwd else stderrSubpath)
-  stdout = os.path.abspath(os.path.join(cwd, stdoutSubpath) if cwd else stdoutSubpath)
+  stderr = os.path.abspath(os.path.join(cwd, 'logs', 'run.stderr'))
+  stdout = os.path.abspath(os.path.join(cwd, 'logs', 'run.stdout'))
 
   # Attempt to run assertion
   try:
