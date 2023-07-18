@@ -25,19 +25,22 @@
 # *
 # **************************************************************************
 
-import os, shutil, json, requests, time, subprocess
+# General imports
+import os, shutil, json, requests, time, subprocess, glob
 import random as rd
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
 from Bio.PDB.SASA import ShrakeRupley
+#from sklearn.cluster import DBSCAN
 
-from pwem.convert import AtomicStructHandler, SequenceHandler
-from pwem.convert.atom_struct import cifToPdb
-from pwem.objects.data import Sequence, Object, String, Integer, Float
+# Scipion em imports
+from pwem.convert import AtomicStructHandler
+from pwem.objects.data import Object, String, Integer, Float
 
+# Plugin imports
 from pwchem.constants import *
 from pwchem import Plugin as pwchemPlugin
-from .scriptUtils import *
+from pwchem.utils.scriptUtils import *
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt': 'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -91,7 +94,6 @@ def getLigCoords(ASFile, ligName):
             coords.append(list(atom.get_coord()))
   return coords
 
-
 def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   if not structureHandler:
     structureHandler = AtomicStructHandler()
@@ -99,31 +101,26 @@ def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   url = "https://www.rcsb.org/structure/" + str(pdbID)
   try:
     response = requests.get(url)
-  except:
-    raise Exception("Cannot connect to PDB server")
+  except requests.exceptions.ConnectionError as e:
+    raise requests.exceptions.ConnectionError("Cannot connect to PDB server.\n", e)
   if (response.status_code >= 400) and (response.status_code < 500):
-    raise Exception("%s is a wrong PDB ID" % pdbID)
+    raise NameError("%s is a wrong PDB ID" % pdbID)
   fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir=outDir)
   return fileName
-
 
 def getRawPDBStr(pdbFile, ter=True):
   outStr = ''
   with open(pdbFile) as fIn:
     for line in fIn:
-      if line.startswith('ATOM') or line.startswith('HETATM'):
-        outStr += line
-      elif ter and line.startswith('TER'):
+      if line.startswith('ATOM') or line.startswith('HETATM') or (ter and line.startswith('TER')):
         outStr += line
   return outStr
-
 
 def writeRawPDB(pdbFile, outFile, ter=True):
   '''Creates a new pdb with only the ATOM and HETATM lines'''
   with open(outFile, 'w') as f:
     f.write(getRawPDBStr(pdbFile, ter))
   return outFile
-
 
 def writePDBLine(j):
   '''j: elements to write in the pdb'''
@@ -152,7 +149,6 @@ def writePDBLine(j):
   return "%s%s %s %s %s%s    %s%s%s%s%s%s%s\n" % \
          (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
 
-
 def splitPDBLine(line, rosetta=False):
   if line.startswith(("ATOM", "HETATM")):
     atomType = line[0:6].strip()
@@ -177,7 +173,6 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-
 def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
@@ -191,7 +186,6 @@ def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
           line = writePDBLine(sLine)
         f.write(line)
 
-
 def getScipionObj(value):
   if isinstance(value, Object):
     return value
@@ -204,16 +198,13 @@ def getScipionObj(value):
   else:
     return None
 
-
 def setAttribute(obj, label, value):
   if value is None:
     return
   setattr(obj, label, getScipionObj(value))
 
-
 def copyAttribute(src, dst, label, default=None):
   setAttribute(dst, label, getattr(src, label, default))
-
 
 def createColorVectors(nColors):
   sampling = [a / 10 for a in range(1, 10)]
@@ -223,7 +214,6 @@ def createColorVectors(nColors):
     if not newColor in colors:
       colors += [newColor]
   return colors
-
 
 def createSurfacePml(pockets):
   pdbFile = pockets.getProteinFile()
@@ -236,22 +226,19 @@ def createSurfacePml(pockets):
 
   return PML_SURF_STR.format(pdbFile, surfaceStr)
 
-
 def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
-
 def pdbqt2other(protocol, pdbqtFile, otherFile):
   '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
-  inName, inExt = os.path.splitext(os.path.basename(otherFile))
-  if not inExt in ['.pdb', '.mol2', '.sdf', '.mol']:
+  inExt = os.path.splitext(os.path.basename(otherFile))[1]
+  if inExt not in ['.pdb', '.mol2', '.sdf', '.mol']:
     inExt, otherFile = 'pdb', otherFile.replace(inExt, '.pdb')
 
   args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
   runOpenBabel(protocol=protocol, args=args, popen=True)
   return os.path.abspath(otherFile)
-
 
 def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   '''Convert molecule files to sdf using openbabel'''
@@ -270,10 +257,8 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
     pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
   return sdfFile
 
-
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
   pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
-
 
 def splitConformerFile(confFile, outDir):
   fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
@@ -299,12 +284,12 @@ def splitConformerFile(confFile, outDir):
   writeFile(towrite, newFile)
   return outDir
 
-
 def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
   '''Appends a molecule to a conformers file.
     If outConfFile == None, the output conformers file path is the same as as the start'''
+  rename = False
   if outConfFile == None:
-    iName, iExt = os.path.splitext(confFile)
+    iExt = os.path.splitext(confFile)[1]
     outConfFile = confFile.replace(iExt, '_aux' + iExt)
     rename = True
 
@@ -327,17 +312,14 @@ def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
 
   return outConfFile
 
-
 def writeFile(towrite, file):
   with open(file, 'w') as f:
     f.write(towrite)
-
 
 def getProteinMaxDiameter(protFile):
   protCoords = np.array(getPDBCoords(protFile))
   minCoords, maxCoords = protCoords.min(axis=0), protCoords.max(axis=0)
   return max(maxCoords - minCoords)
-
 
 def getPDBCoords(pdbFile):
   coords = []
@@ -348,7 +330,6 @@ def getPDBCoords(pdbFile):
         coords.append((float(line[6]), float(line[7]), float(line[8])))
   return coords
 
-
 ##################################################
 # ADT grids
 
@@ -356,7 +337,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
-  protName, protExt = os.path.splitext(os.path.basename(protFile))
+  protName = os.path.splitext(os.path.basename(protFile))[0]
   gpf_file = os.path.join(outDir, protName + '.gpf')
   npts = int(round(npts))
 
@@ -398,10 +379,9 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
 def calculate_centerMass(atomStructFile):
   """
-    Returns the geometric center of mass of an Entity (anything with a get_atoms function in biopython).
-    Geometric assumes all masses are equal
-    """
-
+  Returns the geometric center of mass of an Entity (anything with a get_atoms function in biopython).
+  Geometric assumes all masses are equal
+  """
   try:
     structureHandler = AtomicStructHandler()
     structureHandler.read(atomStructFile)
@@ -412,8 +392,6 @@ def calculate_centerMass(atomStructFile):
 
   except Exception as e:
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
-    return
-
 
 def parseAtomTypes(pdbqtFile, allowed=None):
   atomTypes = set([])
@@ -439,7 +417,6 @@ def sortSet(seti):
   seti.sort()
   return seti
 
-
 class CleanStructureSelect(Select):
   def __init__(self, chain_ids, rem_HETATM, rem_WATER, het2keep=[]):
     self.chain_ids = chain_ids
@@ -456,12 +433,10 @@ class CleanStructureSelect(Select):
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
     accept = True
-    if self.HETATM and self.is_het(residue) and not residue.resname in self.het2keep:
-      accept = False
-    elif self.waters and residue.id[0] == 'W':
+    if ((self.HETATM and self.is_het(residue) and residue.resname not in self.het2keep) or
+        (self.waters and residue.id[0] == 'W')):
       accept = False
     return accept
-
 
 def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None, het2keep=[]):
   """ Extraction of the heteroatoms of .pdb files """
@@ -498,7 +473,6 @@ def relabelAtomsMol2(atomFile, i=''):
             atomCount[atom] += 1
           else:
             atomCount[atom] = 1
-          numSize = len(str(atomCount[atom]))
           line = line[:8] + ' ' * (2 - len(atom)) + atom + str(atomCount[atom]).ljust(8) + line[18:]
 
         if line.startswith('@<TRIPOS>ATOM'):
@@ -530,10 +504,9 @@ def relabelMapAtomsMol2(atomFile, i=''):
             atomName = line.split()[1]
             atomType = removeNumberFromStr(atomName)
 
-            atomCount[atomType] = 1 if not atomType in atomCount else atomCount[atomType] + 1
+            atomCount[atomType] = 1 if atomType not in atomCount else atomCount[atomType] + 1
             atomName = atomName if atomType != atomName else atomName + str(atomCount[atomType])
 
-            numSize = len(str(atomCount[atomType]))
             line = line[:8] + ' ' * (2 - len(atomType)) + atomName.ljust(8 + len(atomType)) + line[18:]
 
         if line.startswith('@<TRIPOS>ATOM'):
@@ -550,20 +523,14 @@ def removeNumberFromStr(s):
   for i in s:
     if not i.isdigit():
       newS += i
-    else:
-      pass
   return newS
-
 
 def getNumberFromStr(s):
   num = ''
   for i in s:
-    if not i.isdigit():
-      pass
-    else:
+    if i.isdigit():
       num += i
   return num
-
 
 def calculateDistance(coord1, coord2):
   dist = 0
@@ -573,7 +540,6 @@ def calculateDistance(coord1, coord2):
   for c1, c2 in zip(coord1, coord2):
     dist += (c1 - c2) ** 2
   return dist ** (1 / 2)
-
 
 def calculateRMSD(coords1, coords2):
   rmsd = 0
@@ -585,11 +551,10 @@ def calculateRMSD(coords1, coords2):
       rmsd += (x1 - x2) ** 2
   return (rmsd / len(coords2)) ** (1 / 2)
 
-
 def calculateRMSDKeys(coordDic1, coordDic2):
-  '''Calculate the RMSD from two dic containing coordinates, using the keys of the
-    first one
-    '''
+  '''
+  Calculate the RMSD from two dic containing coordinates, using the keys of the first one.
+  '''
   rmsd, count = 0, 0
   for k in coordDic1:
     if k in coordDic2:
@@ -602,17 +567,15 @@ def calculateRMSDKeys(coordDic1, coordDic2):
       count += 1
   return (rmsd / count) ** (1 / 2)
 
-
-################3 UTILS Sequence Object ################
+################# UTILS Sequence Object ################
 
 def getSequenceFastaName(sequence):
   '''Return a fasta name for the sequence.
     Priorizes the Id; if None, just "sequence"'''
   return cleanPipeIds(sequence.getId()) if sequence.getId() is not None else 'sequence'
 
-
 def cleanPipeIds(idStr):
-  '''Return a guessed ID when they contain "|"'''
+  ''' Return a guessed ID when they contain "|". '''
   seqId = idStr.strip()
   if '|' in seqId:
     seqId = seqId.split('|')[1]
@@ -637,9 +600,8 @@ def natural_sort(listi, rev=False):
   alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
   return sorted(listi, key=alphanum_key, reverse=rev)
 
-
 def fillEmptyAttributes(inputSets):
-  '''Fill all items with empty attributes'''
+  ''' Fill all items with empty attributes. '''
   attributes = getAllAttributes(inputSets)
   for inSet in inputSets:
     for item in inSet.get():
@@ -648,7 +610,6 @@ def fillEmptyAttributes(inputSets):
           item.__setattr__(attr, attributes[attr])
   return inputSets
 
-
 def getAllAttributes(inputSets):
   '''Return a dic with {attrName: ScipionObj=None}'''
   attributes = {}
@@ -656,19 +617,42 @@ def getAllAttributes(inputSets):
     item = inpSet.get().getFirstItem()
     attrKeys = item.getObjDict().keys()
     for attrK in attrKeys:
-      if not attrK in attributes:
+      if attrK not in attributes:
         value = item.__getattribute__(attrK)
         attributes[attrK] = value.clone()
         attributes[attrK].set(None)
   return attributes
 
-
 def getBaseFileName(filename):
   return os.path.splitext(os.path.basename(filename))[0]
 
+#def clusterPDBLigands(ligandFiles):
+#  """
+#  Performs clustering for a set of ligands using DBSCAN using their center of mass.
+#  Returns a list of lists of files with the clustering.
+#  """
+#  cmass = []
+#  for ligFile in ligandFiles:
+#    ligId = os.path.basename(ligFile).split('.')[0]
+#    s = PDBParser().get_structure(ligId, ligFile)
+#    coords, ws = [], []
+#    for i, residue in enumerate(s.get_residues()):
+#      for atom in residue:
+#        coords.append(atom.get_coord())
+#        ws.append(elements_mass[atom.element])
+#    cmass.append(np.average(coords, axis=0, weights=ws))
+#
+#  if len(cmass) > 0:
+#    model = DBSCAN(min_samples=1, eps=5)
+#    pred = model.fit_predict(np.array(cmass))
+#
+#    clusters = [[] for i in range(max(pred) + 1)]
+#    for i, ligFile in enumerate(ligandFiles):
+#      clusters[pred[i]] += [ligFile]
+#
+#  return clusters
 
 ################# Wizard utils #####################
-
 def getChainIds(chainStr):
   '''Parses a line of json with the description of a chain or chains and returns the ids'''
   chainJson = json.loads(chainStr)
@@ -678,7 +662,6 @@ def getChainIds(chainStr):
     modelChains = chainJson["model-chain"].upper().strip()
     chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
   return chain_ids
-
 
 def calculate_SASA(structFile, outFile):
   if structFile.endswith('.pdb') or structFile.endswith('.ent'):
@@ -692,7 +675,6 @@ def calculate_SASA(structFile, outFile):
 
   with open(outFile, 'w') as f:
     for model in struct:
-      modelID = model.get_id()
       for chain in model:
         chainID = chain.get_id()
         for residue in chain:
@@ -722,6 +704,8 @@ def assertHandle(func, *args, **kwargs):
         if errorMessage:
           break
     if not errorMessage:
+      # If no error message was found in any of the stdout/stderr files, return generic message,
+      # optionally with custom info provided as argument
       message = kwargs.get('message', '')
       errorMessage = "Something went wrong with the protocol, but there are no stderr/stdout files right now, try manually opening the project to check it."
       if message:

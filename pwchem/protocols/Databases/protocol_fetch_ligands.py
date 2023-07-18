@@ -26,10 +26,8 @@
 
 # General imports
 import os, re, glob, json
-import numpy as np
 from urllib.request import urlopen
 from Bio.PDB import PDBIO, Select
-from sklearn.cluster import DBSCAN
 
 # Scipion em imports
 import pwem.convert as emconv
