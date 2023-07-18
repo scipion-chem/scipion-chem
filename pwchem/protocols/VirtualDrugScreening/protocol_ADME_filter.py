@@ -36,6 +36,7 @@ from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.constants import RDKIT_DIC
+from pwchem.utils import getBaseName
 
 scriptName = 'ADME_script.py'
 
