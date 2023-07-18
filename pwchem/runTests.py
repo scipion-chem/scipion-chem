@@ -209,7 +209,8 @@ if datasets:
 		sys.exit(1)
 
 # Showing initial message with number of tests
-printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {args.jobs} processes...", color='yellow'))
+nJobs = len(filteredLines) if len(filteredLines) < args.jobs else args.jobs
+printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {nJobs} processes...", color='yellow'))
 
 # Run all the tests in parallel
 failedTests = runInParallel(runTest, filteredLines)
