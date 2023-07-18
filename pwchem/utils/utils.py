@@ -26,7 +26,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, json, requests, time, subprocess, glob
+import os, shutil, json, requests, time, subprocess#, glob
 import random as rd
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
