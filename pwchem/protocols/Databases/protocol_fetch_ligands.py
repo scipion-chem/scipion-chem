@@ -452,7 +452,7 @@ class ProtocolLigandsFetching(EMProtocol):
 			model = DBSCAN(min_samples=1, eps=5)
 			pred = model.fit_predict(np.array(cmass))
 
-			clusters = [[] for i in range(max(pred) + 1)]
+			clusters = [[] for _ in range(max(pred) + 1)]
 			for i, ligFile in enumerate(ligandFiles):
 				clusters[pred[i]] += [ligFile]
 
