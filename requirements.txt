@@ -1,5 +1,3 @@
 lxml
 scipy
-mdtraj
 parmed
-scikit-learn
