@@ -35,21 +35,8 @@ from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
 
 class TestOBLigandPreparation(TestImportBase):
-	def test_1(self):
-		""" Prepare a set of 4 ligands with conformer generation (genetic algotithm). """
-		print("\n Prepare a set of 4 ligands with conformer generation (genetic algotithm) \n")
-
-		inputMols = self.protImportSmallMols.outputSmallMolecules
-		args = {
-			'inputType': 0, # SmallMolecules
-			'inputSmallMolecules': inputMols,
-			'method_charges': 0, # gasteiger
-			'doConformers': True,
-			"method_conf": 0,
-			"number_conf": 10,
-			"rmsd_cutoff": 0.375,
-		}
-
+	def OBLigandPreparationGenericTest(self, args):
+		""" This function provides the common code for similar tests. """
 		protocol = self.newProtocol(ProtChemOBabelPrepareLigands, **args)
 		self.launchProtocol(protocol)
 		small1 = getattr(protocol, 'outputSmallMolecules', None)
@@ -65,6 +52,23 @@ class TestOBLigandPreparation(TestImportBase):
 			except:
 				assertHandle(self.assertTrue, (mol.getConformersFileName()).endswith("Not available"),
 										message="Something was wrong in column of _ConformessFile", cwd=protocol.getWorkingDir())
+				
+	def test_1(self):
+		""" Prepare a set of 4 ligands with conformer generation (genetic algotithm). """
+		print("\n Prepare a set of 4 ligands with conformer generation (genetic algotithm) \n")
+
+		inputMols = self.protImportSmallMols.outputSmallMolecules
+		args = {
+			'inputType': 0, # SmallMolecules
+			'inputSmallMolecules': inputMols,
+			'method_charges': 0, # gasteiger
+			'doConformers': True,
+			"method_conf": 0,
+			"number_conf": 10,
+			"rmsd_cutoff": 0.375,
+		}
+
+		self.OBLigandPreparationGenericTest(args)
 
 	def test_2(self):
 		""" Prepare a set of 4 ligands with conformer generation (confab algotithm). """
@@ -81,21 +85,7 @@ class TestOBLigandPreparation(TestImportBase):
 			"rmsd_cutoff": 0.5,
 		}
 
-		protocol = self.newProtocol(ProtChemOBabelPrepareLigands, **args)
-		self.launchProtocol(protocol)
-		small1 = getattr(protocol, 'outputSmallMolecules', None)
-
-		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-
-		for mol in small1:
-			assertHandle(self.assertTrue, (mol.getFileName()).endswith(".mol2"),
-										message="The format of first molecule is wrong. It must be in mol2 format", cwd=protocol.getWorkingDir())
-			try:
-				assertHandle(self.assertTrue, (mol.getConformersFileName()).endswith("_conformers.mol2"),
-										message="The format of conformers molecules is wrong. It must be in mol2 format", cwd=protocol.getWorkingDir())
-			except:
-				assertHandle(self.assertTrue, (mol.getConformersFileName()).endswith("Not available"),
-										message="Something was wrong in column of _ConformessFile", cwd=protocol.getWorkingDir())
+		self.OBLigandPreparationGenericTest(args)
 
 class TestRDKitLigandPreparation(TestImportBase):
 	@classmethod
