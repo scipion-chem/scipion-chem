@@ -27,7 +27,9 @@ import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
-from pwchem.protocols import *
+from pwchem.protocols import ProtExtractLigands, ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands
+from pwchem.protocols import ProtDefineStructROIs, ProtocolScoreDocking, ProtocolConsensusDocking
+from pwchem.protocols import ProtChemPrepareReceptor, ProtocolRMSDDocking
 from pwchem.tests import TestDefineStructROIs
 from pwchem.utils import assertHandle
 

@@ -26,11 +26,11 @@
 # **************************************************************************
 
 # Scipion em imports
-from pyworkflow.tests import *
+from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
-from pwchem.protocols import *
+from pwchem.protocols import ProtChemOBabelPrepareLigands, ProtChemRDKitPrepareLigands, ProtChemPrepareReceptor
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
 
