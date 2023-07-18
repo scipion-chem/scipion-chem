@@ -58,16 +58,16 @@ RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
-      try:
-          protocol.runJob(programPath, progArgs, **kwargs)
-          finished = True
-      except:
-          i += 1
-          time.sleep(1)
+    try:
+      protocol.runJob(programPath, progArgs, **kwargs)
+      finished = True
+    except:
+      i += 1
+      time.sleep(1)
   if i > 1 and i <= nMax:
-      print('Program {} run without error after {} trials'.format(programPath, i))
+    print('Program {} run without error after {} trials'.format(programPath, i))
   elif i > nMax:
-      print('Program {} could not be run without error after {} trials'.format(programPath, nMax))
+    print('Program {} could not be run without error after {} trials'.format(programPath, nMax))
 
 def getVarName(var):
   return [i for i, a in locals().items() if a == var][0]
