@@ -38,6 +38,7 @@ SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHA
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_HOME'}
 RDKIT_DIC =     {'name': 'rdkit',       'version': DEFAULT_VERSION, 'home': 'RDKIT_HOME'}
 BIOCONDA_DIC =  {'name': 'bioconda',    'version': DEFAULT_VERSION}
+MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',

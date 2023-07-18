@@ -27,7 +27,7 @@
 # **************************************************************************
 
 
-import os, shutil, parmed, mdtraj
+import os, shutil, parmed
 
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam
 from pwem.objects.data import AtomStruct
@@ -37,7 +37,7 @@ from pwem.convert.atom_struct import toCIF, toPdb
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
 from pwchem.utils import getBaseFileName
-from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
+from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC, MDTRAJ_DIC
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
 extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
@@ -166,10 +166,15 @@ class ConvertStructures(EMProtocol):
             sysFile = inSystem.getSystemFile()
 
             if self.convSysFile.get():
-                system = mdtraj.load(sysFile, top=sysFile)
-                sysFile = self._getPath('{}.{}'.format(getBaseFileName(sysFile),
-                                                        self.getEnumText('outputSysFormat').lower()))
-                system.save(sysFile)
+                outDir = os.path.abspath(self._getExtraPath())
+                fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
+                outFormat = self.getEnumText('outputSysFormat').lower()
+                fnOut = os.path.join(outDir, fnRoot + outFormat)
+
+                args = ' -s {} -o {}'.format(sysFile, fnOut) # no traj so convert system
+                Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                sysFile = fnOut
+
             outSystem = MDSystem(filename=sysFile)
             outSystem.setSystemFile(sysFile)
             
@@ -187,10 +192,15 @@ class ConvertStructures(EMProtocol):
                 trjFile = inSystem.getTrajectoryFile()
 
                 if self.convTrjFile.get():
-                    traj = mdtraj.load(trjFile, top=sysFile)
-                    trjFile = self._getPath('{}.{}'.format(getBaseFileName(trjFile),
-                                                            self.getEnumText('outputTrjFormat').lower()))
-                    traj.save(trjFile)
+                    outDir = os.path.abspath(self._getExtraPath())
+                    fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
+                    outFormat = self.getEnumText('outputTrjFormat').lower()
+                    fnOut = os.path.join(outDir, fnRoot + outFormat)
+
+                    args = ' -s {} -o {} -t'.format(sysFile, fnOut, trjFile)
+                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                    trjFile = fnOut
+
                 outSystem.setTrajectoryFile(trjFile)
 
             self._defineOutputs(outputSystem=outSystem)

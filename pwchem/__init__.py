@@ -198,6 +198,14 @@ class Plugin(pwem.Plugin):
 		installer.getCondaEnvCommand().addCondaPackages(['vmd'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
+	@classmethod
+	def addMDTrajPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
+
+		installer.getCondaEnvCommand().addCondaPackages(['mdtraj'], channel='conda-forge')\
+			.addPackage(env, dependencies=['conda'], default=default)
+
 	##################### RUN CALLS ######################
 	@classmethod
 	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, scriptDir=None):
