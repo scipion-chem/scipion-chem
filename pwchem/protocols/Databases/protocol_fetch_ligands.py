@@ -435,30 +435,6 @@ class ProtocolLigandsFetching(EMProtocol):
 
 		return ligNames
 
-	def clusterPDBLigands(self):
-		cmass = []
-		ligandFiles = glob.glob(self._getExtraPath('*.pdb'))
-		for ligFile in ligandFiles:
-			ligId = os.path.basename(ligFile).split('.')[0]
-			s = PDBParser().get_structure(ligId, ligFile)
-			coords, ws = [], []
-			for i, residue in enumerate(s.get_residues()):
-				for atom in residue:
-					coords.append(atom.get_coord())
-					ws.append(elements_mass[atom.element])
-			cmass.append(np.average(coords, axis=0, weights=ws))
-
-		if len(cmass) > 0:
-			model = DBSCAN(min_samples=1, eps=5)
-			pred = model.fit_predict(np.array(cmass))
-
-			clusters = [[] for _ in range(max(pred) + 1)]
-			for i, ligFile in enumerate(ligandFiles):
-				clusters[pred[i]] += [ligFile]
-
-			clean_PDB(self.getRefProteinFile(), outFn=self.getOriginalReceptorFile(), waters=True, HETATM=True)
-		return clusters
-
 	def saveStructures(self, pdbIds, align=False):
 		# Align structures
 		alignedFns = {}
@@ -615,9 +591,6 @@ class ProtocolLigandsFetching(EMProtocol):
 			return cifFiles[0]
 		else:
 			return glob.glob(self._getPath('*.pdb'))[0]
-
-	def getOriginalReceptorFile(self, targetID):
-		return self._getPath(targetID + '.pdb')
 
 	def checkStructureFilters(self, jDic, iBase):
 		checks = []
