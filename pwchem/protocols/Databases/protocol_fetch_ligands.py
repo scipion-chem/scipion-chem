@@ -36,8 +36,8 @@ from pyworkflow.protocol import params
 
 # Plugin imports
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import clean_PDB, PDBParser, MMCIFParser
-from pwchem.constants import elements_mass, RDKIT_DIC, OPENBABEL_DIC
+from pwchem.utils import MMCIFParser
+from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
