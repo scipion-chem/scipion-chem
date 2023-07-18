@@ -33,7 +33,7 @@ import pyworkflow.object as pwobj
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
-# Scipion chem imports
+# Plugin imports
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
