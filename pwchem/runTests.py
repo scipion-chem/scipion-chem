@@ -21,7 +21,8 @@ def runInParallel(func, paramList):
 	Also returns a list with the failed commands.
 	"""
 	# Create a pool of worker processes
-	pool = multiprocessing.Pool(processes=args.jobs)
+	nJobs = len(paramList) if len(paramList) < args.jobs else args.jobs
+	pool = multiprocessing.Pool(processes=nJobs)
 
 	# Apply the given function to the given param list using the pool
 	results = [pool.apply_async(func, args=(param,)) for param in paramList]
