@@ -1,10 +1,9 @@
-# # -*- coding: utf-8 -*-
-# # # **************************************************************************
-# # # *
-# # # * Authors: Alba Lomas Redondo (albalomasredon@gmail.com)
-# # # *          Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
-# # # *
-# # # *
+# **************************************************************************
+# *
+# * Authors: Alba Lomas Redondo (albalomasredon@gmail.com)
+# *          Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# *
+# *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
 # * the Free Software Foundation; either version 2 of the License, or
@@ -25,23 +24,23 @@
 # *
 # **************************************************************************
 
+# General imports
 import os, re, glob, json
 import numpy as np
 from urllib.request import urlopen
 from Bio.PDB import PDBIO, Select
 from sklearn.cluster import DBSCAN
 
+# Scipion em imports
 import pwem.convert as emconv
-
-from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
+from pyworkflow.protocol import params
 
+# Plugin imports
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import *
-from pwchem.constants import elements_mass
-
+from pwchem.utils import clean_PDB, PDBParser, MMCIFParser
+from pwchem.constants import elements_mass, RDKIT_DIC, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
-from pwchem.utils import clean_PDB
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
 RDKIT, OPENBABEL = 0, 1
@@ -481,7 +480,7 @@ class ProtocolLigandsFetching(EMProtocol):
                     matrix, rms = oriASH.getTransformMatrix(pdbFile, outFn=outFn)
                     alignedFns[pdbId2] = outFn
                 except:
-                    self.addToSummary('{} could not be aligned to {}'.format(pdbId2m, dbIds[0]))
+                    self.addToSummary('{} could not be aligned to {}'.format(pdbId2, pdbIds[0]))
                     alignedFns[pdbId2] = pdbFile
             else:
                 alignedFns[pdbId2] = pdbFile
@@ -652,9 +651,8 @@ class ProtocolLigandsFetching(EMProtocol):
                 checks.append(False)
                 date = jDic['rcsb_accession_info']['deposit_date']
                 year = int(date.split('-')[0])
-                if year <= self.date.get() and self.dateBefore.get() == 1:
-                    checks[-1] = True
-                elif year >= self.date.get() and self.dateBefore.get() == 2:
+                if ((year <= self.date.get() and self.dateBefore.get() == 1) or
+                    (year >= self.date.get() and self.dateBefore.get() == 2)):
                     checks[-1] = True
             else:
                 checks.append(True)
