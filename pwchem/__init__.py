@@ -57,6 +57,7 @@ class Plugin(pwem.Plugin):
 		cls.addPyMolPackage(env)
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
+		cls.addMDTrajPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
