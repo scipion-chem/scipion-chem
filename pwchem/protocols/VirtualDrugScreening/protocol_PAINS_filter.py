@@ -25,21 +25,21 @@
 # *
 # **************************************************************************
 
+# General imports
 import os
 
+# Scipion em imports
 import pyworkflow.object as pwobj
 from pyworkflow.protocol import params
-from pyworkflow.utils.path import copyFile
-
 from pwem.protocols import EMProtocol
 
+# Scipion chem imports
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-
+from pwchem.constants import RDKIT_DIC
 
 scriptName = 'RDKit_PAINS_script.py'
-
 
 class ProtocolPainsRdkitFiltering(EMProtocol):
     """
