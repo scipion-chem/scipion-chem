@@ -57,6 +57,7 @@ class Plugin(pwem.Plugin):
 		cls.addPyMolPackage(env)
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
+		cls.addMDTrajPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
@@ -196,6 +197,14 @@ class Plugin(pwem.Plugin):
 		installer = InstallHelper(VMD_DIC['name'], packageHome=cls.getVar(VMD_DIC['home']), packageVersion=VMD_DIC['version'])
 
 		installer.getCondaEnvCommand().addCondaPackages(['vmd'], channel='conda-forge')\
+			.addPackage(env, dependencies=['conda'], default=default)
+
+	@classmethod
+	def addMDTrajPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
+
+		installer.getCondaEnvCommand().addCondaPackages(['mdtraj'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################

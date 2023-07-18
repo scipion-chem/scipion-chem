@@ -21,12 +21,15 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
+# Scipion em imports
 from pyworkflow.tests import BaseTest, DataSet
 import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 
+# Scipion chem imports
 from pwchem.protocols import *
 from pwchem.tests import TestImportBase
+from pwchem.utils import assertHandle
 
 solStr = '''1, 0.05
 2, 0.24
@@ -41,16 +44,16 @@ class TestAddAttribute(TestImportBase):
       fromInput=mode, atKey='Solubility')
 
     if mode == 0:
-        protAdd.atValue.set("0.5")
-        protAdd.inputObject.set(inputProt)
-        protAdd.inputObject.setExtended('outputSmallMolecules')
+      protAdd.atValue.set("0.5")
+      protAdd.inputObject.set(inputProt)
+      protAdd.inputObject.setExtended('outputSmallMolecules')
     else:
-        protAdd.mapKey.set('_objId')
-        protAdd.inputFile.set(inputFile)
-        protAdd.inputSet.set(inputProt)
-        protAdd.inputSet.setExtended('outputSmallMolecules')
+      protAdd.mapKey.set('_objId')
+      protAdd.inputFile.set(inputFile)
+      protAdd.inputSet.set(inputProt)
+      protAdd.inputSet.setExtended('outputSmallMolecules')
 
-    cls.proj.launchProtocol(protAdd, wait=False)
+    cls.proj.launchProtocol(protAdd)
     return protAdd
 
   def test(self):
@@ -58,13 +61,13 @@ class TestAddAttribute(TestImportBase):
 
     inFile = self.proj.getTmpPath('attributeMapping.csv')
     with open(inFile, 'w') as f:
-        f.write(solStr)
+      f.write(solStr)
     protAdd2 = self._runAddAttribute(self.protImportSmallMols, mode=1, inputFile=inFile)
 
-    self._waitOutput(protAdd1, 'outputObject', sleepTime=5)
-    self._waitOutput(protAdd2, 'outputSet', sleepTime=5)
-    self.assertIsNotNone(getattr(protAdd1, 'outputObject', None))
-    self.assertIsNotNone(getattr(protAdd2, 'outputSet', None))
+    self._waitOutput(protAdd1, 'outputObject', timeOut=10)
+    self._waitOutput(protAdd2, 'outputSet', timeOut=10)
+    assertHandle(self.assertIsNotNone, getattr(protAdd1, 'outputObject', None), cwd=protAdd1.getWorkingDir())
+    assertHandle(self.assertIsNotNone, getattr(protAdd2, 'outputSet', None), cwd=protAdd2.getWorkingDir())
 
 
 class TestCalculateSASA(BaseTest):
@@ -96,7 +99,6 @@ class TestCalculateSASA(BaseTest):
 
   def test(self):
     protSASA = self._runCalculateSASA(self.protImportPDB)
-    self._waitOutput(protSASA, 'outputAtomStruct', sleepTime=5)
-    self.assertIsNotNone(protSASA.outputAtomStruct, "Test failed, AtomStruct not generated")
-    self.assertIsNotNone(protSASA.outputSequence, "Test failed, SequenceChem not generated")
-
+    self._waitOutput(protSASA, 'outputAtomStruct', timeOut=10)
+    assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputAtomStruct', None), cwd=protSASA.getWorkingDir())
+    assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputSequence', None), cwd=protSASA.getWorkingDir())
