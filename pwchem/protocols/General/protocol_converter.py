@@ -197,7 +197,7 @@ class ConvertStructures(EMProtocol):
                     outFormat = self.getEnumText('outputTrjFormat').lower()
                     fnOut = os.path.join(outDir, fnRoot + outFormat)
 
-                    args = ' -s {} -o {} -t'.format(sysFile, fnOut, trjFile)
+                    args = ' -s {} -o {} -t {}'.format(sysFile, fnOut, trjFile)
                     Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
                     trjFile = fnOut
 
