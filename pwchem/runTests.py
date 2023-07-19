@@ -1,9 +1,6 @@
 # General imports
 import subprocess, argparse, multiprocessing, sys, json, os
 
-# Global variables
-testData = 'testData.json'
-
 ################################## UTILS FUNCTIONS ##################################
 def colorStr(string, color):
 	""" This function returns the input string wrapped in the specified color. """
