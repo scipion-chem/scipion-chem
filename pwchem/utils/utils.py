@@ -26,7 +26,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, json, requests, time, subprocess
+import os, shutil, json, requests, time, subprocess, sys
 # import glob
 import random as rd
 import numpy as np
@@ -55,7 +55,7 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
 ################# Generic function utils #####################
-def insistentExecution(func, *args, maxTimes=5, sleepTime=0):
+def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
   """
   ### This function will try to run the given function, and if it fails,
   ### it will retry it the set number of times until it works or has done it the set number of times.
@@ -67,11 +67,14 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0):
   - sleepTime (int): Optional. Number of seconds to wait between each attempt.
 
   #### Example:
-  insistentExecution(, maxTimes=10)
+  getUrlContent = lambda url: urlopen(url).read().decode('utf-8')
+  content = insistentExecution(getUrlContent, url, maxTimes=10)
   """
-  import sys
-  print("------------------------- ATTEMPTS LEFT: -------------------------", maxTimes-1)
-  sys.stdout.flush()
+  # Printing message if verbose mode is active
+  if verbose:
+    print("Attempting to run function. Retries left: ", maxTimes-1)
+    sys.stdout.flush()
+    
   # Attept to run the function
   try:
     return func(*args)
@@ -79,22 +82,25 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0):
     # Saving exception message
     exception = e
   
-  print("------------------------- ATTEMPT FAILED -------------------------")
-  print("MESSAGE: ", exception)
-  sys.stdout.flush()
   # If function gets to this point, execution failed
+  # Show message if verbose is set
+  if verbose:
+    print("Execution failed with message:\n", exception)
   # Check current number of retries
   if maxTimes > 1:
-    print("------------------------- Retry -------------------------")
-    sys.stdout.flush()
+    if verbose:
+      print("Retrying...")
+      sys.stdout.flush()
     # If there is at least one retry left, call function again with one less retry
     if sleepTime > 0:
       # Sleep sleepTime seconds if it is greater than 0 seconds
       time.sleep(sleepTime)
-    return insistentExecution(func, *args, maxTimes=maxTimes-1, sleepTime=sleepTime)
+    return insistentExecution(func, *args, maxTimes=maxTimes-1, sleepTime=sleepTime, verbose=verbose)
   else:
     print("------------------------- RAISE ERROR -------------------------")
-    sys.stdout.flush()
+    if verbose:
+      print("All executions failed. Re-raising exception.")
+      sys.stdout.flush()
     # If max number of retries was fulfilled, raise exception
     raise exception
 

@@ -545,7 +545,7 @@ class ProtocolLigandsFetching(EMProtocol):
 			getUrlContent = lambda url: urlopen(url).read().decode('utf-8')
 
 			# Trying to access url
-			sdfStr = insistentExecution(getUrlContent, url, maxTimes=3)
+			sdfStr = insistentExecution(getUrlContent, url, maxTimes=3, verbose=True)
 
 			with open(os.path.join(outDir, zid) + '.sdf', 'w') as f:
 				f.write(sdfStr)
