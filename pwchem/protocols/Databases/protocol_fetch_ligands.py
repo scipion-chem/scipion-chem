@@ -539,7 +539,6 @@ class ProtocolLigandsFetching(EMProtocol):
 
 			zid = 'ZINC' + ligand_id.zfill(12)
 			url = 'https://zinc.docking.org/substances/{}.sdf'.format(zid)
-			print(url)
 
 			# Defining function to retry n times
 			getUrlContent = lambda url: urlopen(url).read().decode('utf-8')

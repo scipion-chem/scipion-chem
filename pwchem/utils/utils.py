@@ -97,7 +97,6 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
       time.sleep(sleepTime)
     return insistentExecution(func, *args, maxTimes=maxTimes-1, sleepTime=sleepTime, verbose=verbose)
   else:
-    print("------------------------- RAISE ERROR -------------------------")
     if verbose:
       print("All executions failed. Re-raising exception.")
       sys.stdout.flush()
