@@ -72,7 +72,7 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
   """
   # Printing message if verbose mode is active
   if verbose:
-    print("Attempting to run function. Retries left: ", maxTimes-1)
+    print("Attempting to run function. Retries left: ", maxTimes)
     sys.stdout.flush()
     
   # Attept to run the function
