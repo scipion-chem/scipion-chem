@@ -36,7 +36,7 @@ from pyworkflow.protocol import params
 
 # Plugin imports
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import MMCIFParser
+from pwchem.utils import MMCIFParser, insistentExecution
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
 
@@ -539,8 +539,13 @@ class ProtocolLigandsFetching(EMProtocol):
 
 			zid = 'ZINC' + ligand_id.zfill(12)
 			url = 'https://zinc.docking.org/substances/{}.sdf'.format(zid)
-			with urlopen(url) as response:
-				sdfStr = response.read().decode('utf-8')
+			print(url)
+
+			# Defining function to retry n times
+			getUrlContent = lambda url: urlopen(url).read().decode('utf-8')
+
+			# Trying to access url
+			sdfStr = insistentExecution(getUrlContent, url, maxTimes=3)
 
 			with open(os.path.join(outDir, zid) + '.sdf', 'w') as f:
 				f.write(sdfStr)
@@ -555,11 +560,11 @@ class ProtocolLigandsFetching(EMProtocol):
 			try:
 				self.runJob('wget', '"{}" -O {}'.format(self.getPubChemURL(ligand_id), outFile),
 										cwd=self._getExtraPath())
-			except:
+			except Exception:
 				try:
 					self.runJob('wget', '"{}" -O {}'.format(self.getPubChemURL(ligand_id, dim=2), outFile),
 											cwd=self._getExtraPath())
-				except:
+				except Exception:
 					self.addToSummary('Pubchem Compound with ID: {} could not be downloaded'.format(ligand_id))
 
 	def saveDrugBankLigands(self, ligand_ids, outDir=None):
