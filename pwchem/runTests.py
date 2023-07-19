@@ -136,29 +136,26 @@ def getAllTests(scipion, pluginModule, testPrefix):
 	# Return full list of tests
 	return filteredLines
 
-def readTestDataFile():
+def readTestDataFile(testDataFilePath):
 	"""
 	This function returns a list with the necessary datasets for the tests, as well as
 	an object with the different tests and the situations where to skip them.
 	"""
-	# Get file's location
-	currentLocation = os.path.dirname(os.path.abspath(__file__))
-	skippableTestFile = os.path.join(currentLocation, testData)
-
 	# Read the JSON data from the file
 	try:
-		with open(skippableTestFile, 'r') as file:
+		with open(testDataFilePath, 'r') as file:
 			dataFile = json.load(file)
 			return dataFile.get("datasets", []), dataFile.get("skippable", {})
 	except FileNotFoundError:
 		printAndFlush(colorStr("No skippable tests file found, running all.", color='yellow'))
+		return None, None
 	except PermissionError:
-		printFatalError(f"ERROR: Permission denied to open file '{skippableTestFile}'.")
+		printFatalError(f"ERROR: Permission denied to open file '{testDataFilePath}'.")
 	except json.JSONDecodeError as e:
-		printFatalError(f"ERROR: Invalid JSON format in file '{skippableTestFile}':\n{e}")
+		printFatalError(f"ERROR: Invalid JSON format in file '{testDataFilePath}':\n{e}")
 	except Exception as e:
 		printFatalError(f"An unexpected error occurred:\n{e}")
-
+	
 def downloadDatset(dataset, scipionExecutable):
 	""" This function downloads a given dataset for scipion tests. """
 	printAndFlush(colorStr(f"Downloading dataset {dataset}...", color='yellow'))
@@ -287,13 +284,15 @@ def main(args):
 	filteredLines = getAllTests(args.scipion, args.plugin, testPrefix)
 
 	# Obtaining datasets and skippable tests according to situation
-	datasets, allSkippableTests = readTestDataFile()
-	gpuSkippableTests = allSkippableTests.get('gpu', [])
-	dependenciesSkippableTests = allSkippableTests.get('dependencies', [])
-	otherSkippableTests = allSkippableTests.get('others', [])
+	datasets, allSkippableTests = readTestDataFile(args.testData)
 
-	# Removing skippable tests
-	filteredLines = removeSkippableTests(filteredLines, args.noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests)
+	if allSkippableTests:
+		gpuSkippableTests = allSkippableTests.get('gpu', [])
+		dependenciesSkippableTests = allSkippableTests.get('dependencies', [])
+		otherSkippableTests = allSkippableTests.get('others', [])
+
+		# Removing skippable tests
+		filteredLines = removeSkippableTests(filteredLines, args.noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests)
 
 	# Downloading in parallel required datasets if there are any
 	if datasets:
@@ -336,10 +335,14 @@ if __name__ == "__main__":
 	parser.add_argument("plugin", help="Name of the plugin's Python module")
 	parser.add_argument("-j", "--jobs", type=int, help="Number of jobs. Defaults to max available")
 	parser.add_argument("-noGPU", action='store_true', help="If set, no tests that need a GPU will run. Use it in enviroments where a GPU cannot be accessed.")
+	parser.add_argument("-testData", help="Location of the test data JSON file.")
 	args = parser.parse_args()
 
 	# Set the number of jobs
 	args.jobs = args.jobs if args.jobs else multiprocessing.cpu_count()
+
+	# Set the test data file path
+	args.testData = os.path.expanduser(args.testData) if args.testData else ''
 
 	# Call main function
 	main(args)
