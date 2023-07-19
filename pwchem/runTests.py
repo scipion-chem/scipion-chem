@@ -1,5 +1,5 @@
 # General imports
-import subprocess, argparse, multiprocessing, sys, json, os, importlib
+import subprocess, argparse, multiprocessing, sys, json, os
 
 # Global variables
 testData = 'testData.json'
@@ -102,6 +102,17 @@ def downloadDatset(dataset):
 		printAndFlush(colorStr(f"Dataset {dataset} download failed with the above message.", color='red'))
 		return dataset
 
+def getCondaActivationCmd():
+	""" This function reads the scipion config file and returns the conda activation command. """
+	# Path to scipion config file
+	configFile = os.path.join(os.path.dirname(args.scipion), 'config', 'scipion.conf')
+
+	# Read file and return conda activation command
+	with open(configFile, 'r') as f:
+		for line in f:
+			if line.startswith('CONDA_ACTIVATION_CMD'):
+				return line.split('=')[1].strip()
+
 # Parse the command-line arguments
 epilog = "Example 1: python script.py /path/to/scipion pwchem -j 2"
 epilog += "\nExample 2: python script.py /path/to/scipion pwchem -noGPU"
@@ -166,12 +177,12 @@ for dependency in dependenciesSkippableTests:
 	dependencyTestModule = dependency.get("module", None)
 
 	# Try to import module if provided
-	try:
-		if dependencyTestModule:
-			importlib.import_module(dependencyTestModule)
+	if dependencyTestModule:
+		# Creating import command to run within scipion3 conda env
+		command = f"{getCondaActivationCmd()} && conda activate scipion3 && python -c 'import {dependencyTestModule}' 2>/dev/null && echo 1 || echo 0"
+		sucess = int(subprocess.check_output(command, shell=True).decode().replace('\n', ''))
+		if sucess:
 			continue
-	except ModuleNotFoundError:
-		pass
 
 	# If no module was provided or import raised a ModuleNotFoundError exception, skip tests
 	for dependencyTest in dependency.get("tests", []):
