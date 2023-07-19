@@ -54,7 +54,6 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
-
 def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
@@ -76,7 +75,7 @@ def getBaseName(file):
   return os.path.splitext(os.path.basename(file.strip()))[0]
 
 def getLigCoords(ASFile, ligName):
-  '''Return the coordinates of the ligand specified in the atomic structure file'''
+  """ Return the coordinates of the ligand specified in the atomic structure file. """
   if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
     pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
     parser = PDBParser().get_structure(pdb_code, ASFile)
