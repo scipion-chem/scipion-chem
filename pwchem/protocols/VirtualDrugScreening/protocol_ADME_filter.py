@@ -25,15 +25,18 @@
 # *
 # **************************************************************************
 
+# General imports
 import os
 
+# Scipion em imports
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
+# Plugin imports
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules
-from pwchem.utils import *
-
+from pwchem.constants import RDKIT_DIC
+from pwchem.utils import getBaseName
 
 scriptName = 'ADME_script.py'
 
@@ -50,7 +53,6 @@ class ProtocolADMEFiltering(EMProtocol):
     It is possible to analyze molecules in  mol, mol2, pdb, sdf and smi format.
     """
     _label = 'ADME ligand filtering'
-
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -73,7 +75,6 @@ class ProtocolADMEFiltering(EMProtocol):
         self._insertFunctionStep('filterStep')
         self._insertFunctionStep('createOutputStep')
 
-
     def filterStep(self):
         mols = self.inputSmallMolecules.get()
         self.describeFilter(mols)
@@ -85,8 +86,8 @@ class ProtocolADMEFiltering(EMProtocol):
 
         mols = self.inputSmallMolecules.get()
         for mol in mols:
-            file = os.path.abspath(mol.getFileName())
-            molName = getBaseName(file)
+            molFile = os.path.abspath(mol.getFileName())
+            molName = getBaseName(molFile)
             if molName in filtered_molecules_names:
                 newMols.append(mol)
 
@@ -94,12 +95,10 @@ class ProtocolADMEFiltering(EMProtocol):
         self._defineOutputs(outputSmallMolecules=newMols)
 
     # --------------- INFO functions -------------------------
-
     def _citations(self):
         return ['Wójcikowski2015']
 
     # --------------------------- UTILS functions -----------------------------------
-
     def describeFilter(self, molsScipion):  # , receptorFile):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, molsScipion)  # , receptorFile)
@@ -125,14 +124,13 @@ class ProtocolADMEFiltering(EMProtocol):
         return paramsFile
 
     def getRule(self):
-        function = RDIC[self.getEnumText('ruleChoice')]
-        return function
+        return RDIC[self.getEnumText('ruleChoice')]
 
     def parseResults(self, outputFile):
         molecules = []
         with open(outputFile) as tsv_file:
             for line in tsv_file:
-                if not line[0] == "#":
+                if line[0] != "#":
                     molName = getBaseName(line)
                     molecules.append(molName)
 

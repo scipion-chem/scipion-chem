@@ -27,6 +27,11 @@
 				"test": "tests_databases.TestFetchLigands",
 				"reason": "Broken link. Waiting for remote fix"
 			}
+			,
+			{
+				"test": "tests_databases.TestFetchLigands",
+				"reason": "Broken link. Waiting for remote fix"
+			}
 		]
 	}
 }
