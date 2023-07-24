@@ -183,7 +183,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         if len(failedMols) > 0:
           with open(os.path.abspath(self._getExtraPath('failedCharges.txt')), 'w') as f:
             for molFn in failedMols:
-              f.write(molFn)
+              f.write(molFn + '\n')
 
     def conformersStep(self, molSet, it):
         """ Generate a number of conformers of the same small molecule in mol2 format with
@@ -191,7 +191,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """
         failedMols = []
         for molFn in glob.glob(self._getExtraPath("*_prep.mol2")):
-          print('MolfN:', molFn)
           fnSmall = os.path.abspath(molFn)
           fnRoot = getBaseFileName(fnSmall)
 
@@ -209,7 +208,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         if len(failedMols) > 0:
           with open(os.path.abspath(self._getExtraPath('failedConfomerGeneration.txt')), 'w') as f:
             for molFn in failedMols:
-              f.write(molFn)
+              f.write(molFn + '\n')
 
 
     def createOutput(self):

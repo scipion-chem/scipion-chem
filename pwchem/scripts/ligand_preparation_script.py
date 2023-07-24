@@ -84,6 +84,7 @@ if __name__ == "__main__":
     outDir = paramsDic['outputDir']
     ffMethod = paramsDic['ffMethod']
 
+    failedMols = []
     mols_dict, _ = getMolFilesDic(molFiles)
     for inmol in mols_dict:
         molBase = os.path.splitext(os.path.basename(mols_dict[inmol]))[0]
@@ -101,21 +102,28 @@ if __name__ == "__main__":
             else:
                 outBasef = outBase
 
-            if paramsDic['doHydrogens']:
-                mol = Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
+            try:
+                if paramsDic['doHydrogens']:
+                    mol = Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
 
-            if paramsDic['doGasteiger']:
-                AllChem.ComputeGasteigerCharges(mol)
+                if paramsDic['doGasteiger']:
+                    AllChem.ComputeGasteigerCharges(mol)
 
-            AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
+                AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
 
-            if 'numConf' in paramsDic:
-                mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
-                                                 paramsDic['numConf'], paramsDic['rmsThres'])
-                for cid, cMol in enumerate(mol.GetConformers()):
-                    outFile = outBasef + '-{}.sdf'.format(cid+1)
-                    writeMol(mol, outFile, cid=cid)
-            else:
-                outFile = outBasef + '.sdf'
-                writeMol(mol, outFile)
+                if 'numConf' in paramsDic:
+                    mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
+                                                     paramsDic['numConf'], paramsDic['rmsThres'])
+                    for cid, cMol in enumerate(mol.GetConformers()):
+                        outFile = outBasef + '-{}.sdf'.format(cid+1)
+                        writeMol(mol, outFile, cid=cid)
+                else:
+                    outFile = outBasef + '.sdf'
+                    writeMol(mol, outFile)
+            except:
+                failedMols.append(outBase)
+
+    with open(os.path.join(outDir, 'failedPreparations.txt'), 'w') as f:
+        for oBase in failedMols:
+            f.write(oBase + '\n')
 
