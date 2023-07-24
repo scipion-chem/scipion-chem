@@ -191,19 +191,20 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """
         failedMols = []
         for molFn in glob.glob(self._getExtraPath("*_prep.mol2")):
-            fnSmall = self._getExtraPath(molFn)
-            fnRoot = getBaseFileName(fnSmall)
+          print('MolfN:', molFn)
+          fnSmall = os.path.abspath(molFn)
+          fnRoot = getBaseFileName(fnSmall)
 
-            if self.method_conf.get() == 0:  # Genetic algorithm
-                args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
-                       (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
-            else:  # confab
-                args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
-                       (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
-            try:
-                runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-            except:
-                failedMols.append(fnRoot)
+          if self.method_conf.get() == 0:  # Genetic algorithm
+              args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
+                     (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
+          else:  # confab
+              args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
+                     (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
+          try:
+              runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+          except:
+              failedMols.append(fnRoot)
 
         if len(failedMols) > 0:
           with open(os.path.abspath(self._getExtraPath('failedConfomerGeneration.txt')), 'w') as f:
@@ -229,7 +230,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                     fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                     outDir = self._getExtraPath(fnRoot)
                     os.mkdir(outDir)
-                    confFile = self._getExtraPath("{}_conformers.mol2".format(mol.getMolName()))
+                    confFile = self._getExtraPath("{}_prep_conformers.mol2".format(mol.getMolName()))
                     confDir = splitConformerFile(confFile, outDir=outDir)
                     for molFile in os.listdir(confDir):
                         molFile = os.path.abspath(os.path.join(confDir, molFile))
