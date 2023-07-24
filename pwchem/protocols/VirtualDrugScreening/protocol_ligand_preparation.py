@@ -147,6 +147,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """ Assign the charges using a method available
             in the open-access and free program openbabel
         """
+        failedMols = []
         for mol in molSet:
             fnSmall = mol.getFileName()
             fnRoot = getBaseFileName(fnSmall)
@@ -172,34 +173,43 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             else:
                 args = " -i%s '%s' -h --partialcharge %s -O '%s'" % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
 
-            runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()), popen=True)
+            try:
+              runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()), popen=True)
+            except:
+              failedMols.append(fnRoot)
+
             oFile = relabelAtomsMol2(os.path.abspath(self._getExtraPath(oFile)), it)
+
+        if len(failedMols) > 0:
+          with open(os.path.abspath(self._getExtraPath('failedCharges.txt')), 'w') as f:
+            for molFn in failedMols:
+              f.write(molFn)
 
     def conformersStep(self, molSet, it):
         """ Generate a number of conformers of the same small molecule in mol2 format with
             openbabel using two different algorithm
         """
-        # 3. Generate mol2 conformers file for each molecule with OpenBabel
-        with open(self._getExtraPath('failed_{}.txt'.format(it)), 'w') as fEr:
-            for mol in molSet:
-                fnSmall = mol.getFileName()
-                fnRoot = getBaseFileName(fnSmall)
-                file = os.path.abspath(self._getExtraPath("{}_prep.mol2".format(fnRoot)))
+        failedMols = []
+        for mol in glob.glob(self._getExtraPath("*_prep.mol2")):
+            fnSmall = mol.getFileName()
+            fnRoot = getBaseFileName(fnSmall)
+            file = os.path.abspath(fnSmall)
 
-                if not os.path.exists(file) or os.path.getsize(file) == 0:
-                    fEr.write('Failed to add charges to: {}\n'.format(fnRoot))
-                    continue
+            if self.method_conf.get() == 0:  # Genetic algorithm
+                args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
+                       (os.path.abspath(file), self.number_conf.get(), fnRoot)
+            else:  # confab
+                args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
+                       (os.path.abspath(file), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
+            try:
+                runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
+            except:
+                failedMols.append(fnRoot)
 
-                if self.method_conf.get() == 0:  # Genetic algorithm
-                    args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
-                           (os.path.abspath(file), self.number_conf.get(), fnRoot)
-                else:  # confab
-                    args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
-                           (os.path.abspath(file), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
-                try:
-                    runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
-                except:
-                    fEr.write('Failed to generate conformers to: {}\n'.format(fnRoot))
+        if len(failedMols) > 0:
+          with open(os.path.abspath(self._getExtraPath('failedConfomerGeneration.txt')), 'w') as f:
+            for molFn in failedMols:
+              f.write(molFn)
 
 
     def createOutput(self):
