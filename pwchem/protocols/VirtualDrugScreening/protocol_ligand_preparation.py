@@ -190,17 +190,16 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             openbabel using two different algorithm
         """
         failedMols = []
-        for mol in glob.glob(self._getExtraPath("*_prep.mol2")):
-            fnSmall = mol.getFileName()
+        for molFn in glob.glob(self._getExtraPath("*_prep.mol2")):
+            fnSmall = self._getExtraPath(molFn)
             fnRoot = getBaseFileName(fnSmall)
-            file = os.path.abspath(fnSmall)
 
             if self.method_conf.get() == 0:  # Genetic algorithm
                 args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
-                       (os.path.abspath(file), self.number_conf.get(), fnRoot)
+                       (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
             else:  # confab
                 args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
-                       (os.path.abspath(file), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
+                       (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
             try:
                 runOpenBabel(protocol=self, args=args, cwd=os.path.abspath(self._getExtraPath()))
             except:
