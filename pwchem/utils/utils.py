@@ -406,7 +406,7 @@ def getPDBCoords(pdbFile):
 ##################################################
 # ADT grids
 
-def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn_ffFile=None, addLigTypes=True):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
@@ -430,8 +430,8 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   with open(os.path.abspath(gpf_file), "w") as file:
     file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
-    if zn_ffFile:
-        file.write("parameter_file %s                        # force field default parameter file\n" % (zn_ffFile))
+    if znFFfile:
+        file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
     file.write("spacing %s                          # spacing(A)\n" % (spacing))
     file.write("receptor_types %s     # receptor atom types\n" % (protAtomTypes))
@@ -444,7 +444,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (protName))
     file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (protName))
     file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant\n")
-    if zn_ffFile:
+    if znFFfile:
         file.write('''nbp_r_eps 0.25 23.2135 12 6 NA TZ\nnbp_r_eps 2.1   3.8453 12 6 OA Zn\nnbp_r_eps 2.25  7.5914 12 6 SA Zn\nnbp_r_eps 1.0   0.0    12 6 HD Zn\nnbp_r_eps 2.0   0.0060 12 6 NA Zn\nnbp_r_eps 2.0   0.2966 12 6  N Zn''')
 
   return os.path.abspath(gpf_file)
