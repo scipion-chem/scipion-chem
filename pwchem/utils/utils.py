@@ -468,7 +468,7 @@ def calculate_centerMass(atomStructFile):
     return
 
 
-def parseAtomTypes(pdbqtFile, allowed=None):
+def parseAtomTypes(pdbqtFile, allowed=None, ignore=['G0', 'CG0']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
     with open(pdbqtFile) as f:
@@ -476,14 +476,15 @@ def parseAtomTypes(pdbqtFile, allowed=None):
         if line.startswith('ATOM') or line.startswith('HETATM'):
           pLine = line.split()
           at = pLine[-1]
-          if allowed is None or at in allowed:
-            atomTypes.add(at)
+          if (allowed is None or at in allowed) and not at in ignore:
+              atomTypes.add(at)
   else:
       struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
       for atom in struct.get_atoms():
         atomId = atom.get_id()
-        atomTypes.add(removeNumberFromStr(atomId))
+        if not removeNumberFromStr(atomId) in ignore:
+          atomTypes.add(removeNumberFromStr(atomId))
 
   return atomTypes
 
