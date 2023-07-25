@@ -103,7 +103,7 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
-def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
+def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
     try:
@@ -111,7 +111,8 @@ def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
       finished = True
     except Exception:
       i += 1
-      time.sleep(1)
+      time.sleep(sleepTime)
+
   if i > 1 and i <= nMax:
     print('Program {} run without error after {} trials'.format(programPath, i))
   elif i > nMax:
