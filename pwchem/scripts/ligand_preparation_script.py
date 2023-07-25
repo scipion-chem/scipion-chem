@@ -48,19 +48,12 @@ def conformer_generation(mol, outBase, ffMethod, restrainMethod, numConf, rmsThr
     param = getattr(rdDistGeom, restrainMethod)()
     param.pruneRmsThresh = float(rmsThres)
     cids = rdDistGeom.EmbedMultipleConfs(mol, int(numConf), param)
-
-    mp = AllChem.MMFFGetMoleculeProperties(mol, mmffVariant=ffMethod)
-    AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
-
-    for cid in cids:
-        ff = AllChem.MMFFGetMoleculeForceField(mol, mp, confId=cid)
-        e = ff.CalcEnergy()
+    if len(cids) > 0:
+        AllChem.MMFFOptimizeMoleculeConfs(mol, numThreads=0, mmffVariant=ffMethod)
         rdMolAlign.AlignMolConformers(mol)
-
-        mol.SetProp('CID', str(cid))
-        mol.SetProp('Energy', str(e))
-
-    return mol
+        return mol
+    else:
+        return False
 
 def filterMolsSize(mols, size):
     nMols = []
@@ -68,6 +61,18 @@ def filterMolsSize(mols, size):
         if mol.GetNumAtoms() > int(size):
             nMols.append(mol)
     return nMols
+
+def embedAndOptimize(mol):
+    embedMess = AllChem.EmbedMolecule(mol, randomSeed=44)
+    if embedMess == 0:
+        AllChem.MMFFOptimizeMolecule(mol)
+    else:
+        embedMess = AllChem.EmbedMolecule(mol, randomSeed=44, useRandomCoords=True)
+        if embedMess == 0:
+            AllChem.MMFFOptimizeMolecule(mol)
+        else:
+            return False
+    return mol
 
 def writeMol(mol, outFile, cid=-1):
     w = Chem.SDWriter(outFile)
@@ -111,23 +116,19 @@ if __name__ == "__main__":
             if 'numConf' in paramsDic:
                 mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
                                                  paramsDic['numConf'], paramsDic['rmsThres'])
-                for cid, cMol in enumerate(mol.GetConformers()):
-                    outFile = outBasef + '-{}.sdf'.format(cid+1)
-                    writeMol(mol, outFile, cid=cid)
+                if mol:
+                    for cid, cMol in enumerate(mol.GetConformers()):
+                        outFile = outBasef + '-{}.sdf'.format(cid+1)
+                        writeMol(mol, outFile, cid=cid)
+                else:
+                    failedMols.append(outBase)
             else:
-                embedMess = AllChem.EmbedMolecule(mol, randomSeed=44)
-                if embedMess == 0:
-                    AllChem.MMFFOptimizeMolecule(mol)
+                mol = embedAndOptimize(mol)
+                if mol:
                     outFile = outBasef + '.sdf'
                     writeMol(mol, outFile)
                 else:
-                    embedMess = AllChem.EmbedMolecule(mol, randomSeed=44, useRandomCoords=True)
-                    if embedMess == 0:
-                        AllChem.MMFFOptimizeMolecule(mol)
-                        outFile = outBasef + '.sdf'
-                        writeMol(mol, outFile)
-                    else:
-                        failedMols.append(outBase)
+                    failedMols.append(outBase)
 
 
     paramsIdx = sys.argv[1].split('_')[-1].split('.')[0]
@@ -135,4 +136,3 @@ if __name__ == "__main__":
         with open(os.path.join(outDir, f'failedPreparations_{paramsIdx}.txt'), 'w') as f:
             for oBase in failedMols:
                 f.write(oBase.split('/')[-1] + '\n')
-
