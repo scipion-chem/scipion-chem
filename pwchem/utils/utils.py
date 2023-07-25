@@ -405,7 +405,7 @@ def getPDBCoords(pdbFile):
 ##################################################
 # ADT grids
 
-def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn_ffFile=None):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn_ffFile=None, addLigTypes=True):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
@@ -415,7 +415,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   protAtomTypes = parseAtomTypes(protFile)
 
-  if ligandFns == None:
+  if ligandFns == None or not addLigTypes:
       ligAtomTypes = 'A C HD N NA OA SA'
   else:
       ligAtomTypes = set([])
