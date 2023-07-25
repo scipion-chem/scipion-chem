@@ -468,7 +468,7 @@ def calculate_centerMass(atomStructFile):
     return
 
 
-def parseAtomTypes(pdbqtFile, allowed=None, ignore=['G0', 'CG0']):
+def parseAtomTypes(pdbqtFile, allowed=None, ignore=['G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
     with open(pdbqtFile) as f:
