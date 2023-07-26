@@ -109,11 +109,11 @@ class SASAStructureViewer(ChimeraAttributeViewer):
 
     def _defineParams(self, form):
         if hasattr(self.protocol, 'outputSequence'):
-            form.addSection(label='Visualization of sequence conservation')
+            form.addSection(label='Visualization of sequence SASA')
             form.addParam('viewSequence', params.LabelParam, label='View sequence: ',
                         help='View output sequence')
-            form.addParam('viewConservation', params.LabelParam,
-                        label='Display conservation over sequence: ',
+            form.addParam('viewSASA', params.LabelParam,
+                        label='Display SASA over sequence: ',
                         help='Display a graph witht the values of the selected attribute over the sequence.')
 
         if hasattr(self.protocol, 'outputAtomStruct'):
@@ -127,12 +127,12 @@ class SASAStructureViewer(ChimeraAttributeViewer):
     def _getVisualizeDict(self):
         visDic = {}
         if hasattr(self.protocol, 'outputSequence'):
-            visDic = {'viewSequence': self._showSequence, 'viewConservation': self._showSASA}
+            visDic = {'viewSequence': self._showSequenceAttrs, 'viewSASA': self._showSASA}
         if hasattr(self.protocol, 'outputAtomStruct'):
             visDic.update(super()._getVisualizeDict())
         return visDic
 
-    def _showSequence(self, paramName=None):
+    def _showSequenceAttrs(self, paramName=None):
         obj = self.protocol.outputSequence
         outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
                                                               format(obj.getId())))
