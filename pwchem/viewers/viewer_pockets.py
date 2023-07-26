@@ -42,9 +42,7 @@ class StructROIPointsViewer(pwviewer.Viewer):
   # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
-    hetatmFile = obj.getProteinHetatmFile()
-    if not hetatmFile or not os.path.exists(hetatmFile):
-        hetatmFile = obj.buildPDBhetatmFile()
+    hetatmFile = obj.buildPDBhetatmFile()
     pmlFile = obj.createPML(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
