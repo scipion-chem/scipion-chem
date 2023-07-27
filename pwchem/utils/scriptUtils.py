@@ -79,6 +79,8 @@ def performBatchThreading(task, inSet, nt, cloneItem=True, copySet=False, *args,
       -task: function. Task to perform
       -inSet: iterable. Will be divided and inputed for the task
       -nt: int. Number of threads to use
+
+      -cloneItem: whether to perform "clone" function over the objects in inSet (necessary for Scipion objects)
   '''
   threads, outLists = [], [[] for i in range(nt)]
   subsets = makeSubsets(inSet, nt, cloneItem=cloneItem, copySet=copySet)
