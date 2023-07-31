@@ -37,12 +37,12 @@ from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 
-from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput
+from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
 from pwchem.utils import *
 
 from pwchem.constants import *
 
-MAXVOL, MAXSURF = 0, 1
+MAXVOL, MAXSURF, INTERSEC = 0, 1, 2
 
 class ProtocolConsensusStructROIs(EMProtocol):
     """
@@ -50,7 +50,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
     """
     _label = 'Consensus structural ROIs'
     _possibleOutputs = PredictStructROIsOutput
-    actionChoices = ['MaxVolume', 'MaxSurface']
+    repChoices = ['MaxVolume', 'MaxSurface', 'Intersection']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -58,23 +58,25 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputStructROIsSets', params.MultiPointerParam,
                        pointerClass='SetOfStructROIs', allowsNull=False,
-                       label="Input Sets of Structural ROIs",
+                       label="Input Sets of Structural ROIs: ",
                        help='Select the structural ROIs sets to make the consensus')
         form.addParam('outIndv', params.BooleanParam, default=False,
                       label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Creates an output set related to each input set, with the elements from each input'
                            'present in the consensus clusters')
 
-        form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping',
+        form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping: ',
                       help="Min proportion of residues (from the smaller) of two structural regions to be considered "
                            "overlapping")
-        form.addParam('action', params.EnumParam, default=MAXSURF,
-                      label='Action on overlapping', choices=self.actionChoices,
+        form.addParam('repChoice', params.EnumParam, default=MAXSURF,
+                      label='Representant choice: ', choices=self.repChoices,
                       expertLevel=params.LEVEL_ADVANCED,
-                      help='Action to take on overlapping structural regions, whether to merge them or keep just one '
-                           'with some condition')
+                      help='How to choose the representative ROI from a cluster of overlapping ROIs. MaxSurface and '
+                           'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
+                           '\nIntersection creates a new standard pocket with the interecting residues from the '
+                           'ROIs in the cluster (if any)')
         form.addParam('numOfOverlap', params.IntParam, default=2,
-                      label='Minimun number of overlapping structural regions',
+                      label='Minimun number of overlapping structural regions: ',
                       help="Min number of structural regions to be considered consensus StructROIs")
         form.addParam('sameClust', params.BooleanParam, default=True,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
@@ -239,12 +241,15 @@ class ProtocolConsensusStructROIs(EMProtocol):
             minSize = self.numOfOverlap.get()
 
         representatives = []
-        for clust in clusters:
+        for i, clust in enumerate(clusters):
             if self.countPocketsInCluster(clust, pocketDic) >= minSize:
-                if self.action.get() == MAXVOL:
+                if self.repChoice.get() == MAXVOL:
                     outPocket = self.getMaxVolumePocket(clust)
-                elif self.action.get() == MAXSURF:
+                elif self.repChoice.get() == MAXSURF:
                     outPocket = self.getMaxSurfacePocket(clust)
+                elif self.repChoice.get() == INTERSEC:
+                    outPocket = self.getIntersectionPocket(clust, i)
+
                 representatives.append(outPocket)
         return representatives
 
@@ -270,9 +275,62 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 outPocket = pocket.clone()
         return outPocket
 
+    def createPocketFile(self, coords, i):
+        outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))
+        with open(outFile, 'w') as f:
+            for j, coord in enumerate(coords):
+                f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
+        return outFile
+
+    def parsePDBResidueCoords(self, pdbFile):
+        resCoordsDic = {}
+        with open(pdbFile) as f:
+            for line in f:
+                if line.startswith('ATOM'):
+                    line = splitPDBLine(line)
+                    proteinChain, residueNumber = line[4:6]
+                    residueId = '{}_{}'.format(proteinChain, residueNumber)
+                    coord = list(map(float, line[6:9]))
+                    if residueId in resCoordsDic:
+                        resCoordsDic[residueId].append(coord)
+                    else:
+                        resCoordsDic[residueId] = [coord]
+        return resCoordsDic
+
+
+    def getIntersectionPocket(self, cluster, i):
+        '''Return the pocket as set of intersection residues in a cluster.'''
+        inters = cluster[0].getDecodedCResidues()
+        pdbFile = cluster[0].getProteinFile()
+        atomsDic = {}
+        for pocket in cluster:
+            # todo: align protein sequence to have correspondant residues for calculating intersection
+            pRes = pocket.getDecodedCResidues()
+            inters = set(inters).intersection(set(pRes))
+
+        if len(inters) > 0:
+            coords = []
+            resCoordDic = self.parsePDBResidueCoords(pdbFile)
+            for res in inters:
+                coords += resCoordDic[res]
+
+            pocketFile = self.createPocketFile(coords, i)
+            outPocket = StructROI(pocketFile, pdbFile)
+            outPocket.calculateContacts()
+        else:
+            outPocket = self.getMaxSurfacePocket(cluster)
+
+        return outPocket
+
+    def getPocketsIntersection(self, pock1, pock2):
+        res1, res2 = pock1.getDecodedCResidues(), pock2.getDecodedCResidues()
+        # todo: align protein sequence to have correspondant residues for calculating intersection
+        overlap = set(res1).intersection(set(res2))
+        return overlap
+
     def calculateResiduesOverlap(self, pock1, pock2):
         res1, res2 = pock1.getDecodedCResidues(), pock2.getDecodedCResidues()
-        overlap = set(res1).intersection(set(res2))
+        overlap = self.getPocketsIntersection(pock1, pock2)
         return len(overlap) / min(len(res1), len(res2))
 
     def getAllPocketAttributes(self, pocketSets):
