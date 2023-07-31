@@ -216,7 +216,7 @@ class ProtDefineStructROIs(EMProtocol):
             pocketFile = self.createPocketFile(clust, i)
             pocket = StructROI(pocketFile, pdbFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
+                pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
             pocket.calculateContacts()
             outPockets.append(pocket)
 

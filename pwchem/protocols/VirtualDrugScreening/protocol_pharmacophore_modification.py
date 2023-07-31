@@ -114,7 +114,7 @@ class ProtocolPharmacophoreModification(EMProtocol):
             outPharm = PharmacophoreChem().create(outputPath=self._getPath())
 
         if self.inputAtomStruct.get():
-            outPharm.setProteinFile(abspath(self.inputAtomStruct.get().getFileName()))
+            outPharm.setProteinFile(self.inputAtomStruct.get().getFileName())
 
         operDic, addList = self.getOperationDic()
         featsDic = self.getCurrentFeaturesDic()

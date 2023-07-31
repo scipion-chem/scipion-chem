@@ -137,7 +137,7 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
             newSmallMol = SmallMolecule()
             newSmallMol.copy(mol, copyId=False)
             newSmallMol.setGridId(1)
-            newSmallMol.setPoseFile(resDic[molBase][0])
+            newSmallMol.setPoseFile(os.path.relpath(resDic[molBase][0]))
             newSmallMol.setEnergy(resDic[molBase][1])
 
             poseId = resDic[molBase][0].split('.')[0].split('_')[-1]
