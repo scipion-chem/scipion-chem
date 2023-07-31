@@ -85,7 +85,7 @@ class ProtChemPairWiseAlignment(EMProtocol):
         for seqId in outSeqDic:
             outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
 
-        outSeqs.setAlignmentFileName(out_file)
+        outSeqs.setAlignmentFileName(os.path.relpath(out_file))
         outSeqs.setAligned(True)
         self._defineOutputs(outputSequences=outSeqs)
 

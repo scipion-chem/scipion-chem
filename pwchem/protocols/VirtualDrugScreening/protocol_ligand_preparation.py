@@ -232,7 +232,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                     confFile = self._getExtraPath("{}_prep_conformers.mol2".format(mol.getMolName()))
                     confDir = splitConformerFile(confFile, outDir=outDir)
                     for molFile in os.listdir(confDir):
-                        molFile = os.path.abspath(os.path.join(confDir, molFile))
+                        molFile = os.path.join(confDir, molFile)
                         confId = os.path.splitext(molFile)[0].split('-')[-1]
 
                         newSmallMol = SmallMolecule()

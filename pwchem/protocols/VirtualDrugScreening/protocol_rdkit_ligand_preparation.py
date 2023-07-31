@@ -141,7 +141,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for mol in self.inputSmallMolecules.get():
-            tempSmall = os.path.abspath(self._getExtraPath("{}*.sdf".format(mol.getMolName())))
+            tempSmall = self._getExtraPath("{}*.sdf".format(mol.getMolName()))
             for molFile in sorted(list(glob.glob(tempSmall))):
                 mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=molFile), outDir=self._getExtraPath(),
                                            mapBy='order')
