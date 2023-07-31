@@ -301,20 +301,23 @@ class ProtocolConsensusDocking(EMProtocol):
 
         finalClusters = []
         for keys in posArrays:
-            # Matrix distance and clustering perform over different molecules separatedly
-            rmsds = pairwise_distances(posArrays[keys], metric=self.calculateFlattenRMSD,
-                                       n_jobs=self.numberOfThreads.get())   # Parallel distance matrix calculation
+            if len(posArrays[keys]) > 1: #Needed more than 1 mol to cluster
+                # Matrix distance and clustering perform over different molecules separatedly
+                rmsds = pairwise_distances(posArrays[keys], metric=self.calculateFlattenRMSD,
+                                           n_jobs=self.numberOfThreads.get())   # Parallel distance matrix calculation
 
-            linked = linkage(rmsds, self.getEnumText('linkage').lower())
-            clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
+                linked = linkage(rmsds, self.getEnumText('linkage').lower())
+                clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
 
-            clusterMol = {}
-            for i, cl in enumerate(clusters):
-                if cl in clusterMol:
-                    clusterMol[cl] += [molsDic[keys][i]]
-                else:
-                    clusterMol[cl] = [molsDic[keys][i]]
-            finalClusters += list(clusterMol.values())
+                clusterMol = {}
+                for i, cl in enumerate(clusters):
+                    if cl in clusterMol:
+                        clusterMol[cl] += [molsDic[keys][i]]
+                    else:
+                        clusterMol[cl] = [molsDic[keys][i]]
+                finalClusters += list(clusterMol.values())
+            else:
+                finalClusters += [molsDic[keys]]
 
         return finalClusters
 
