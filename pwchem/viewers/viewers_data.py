@@ -26,14 +26,18 @@ import os
 from subprocess import Popen
 
 import pyworkflow.viewer as pwviewer
-import pwem.viewers.views as pwemViews
-import pwem.viewers.showj as showj
-from pwem.objects import SetOfSequences, AtomStruct
+from pyworkflow.protocol.params import EnumParam
 import pyworkflow.utils as pwutils
+
+import pwem.viewers.views as pwemViews
+from pwem.viewers import Chimera, ChimeraView
+import pwem.viewers.showj as showj
+from pwem.protocols import EMProtocol
+from pwem.objects import SetOfSequences, AtomStruct, SetOfAtomStructs
 
 import pwchem.objects
 from pwchem import Plugin as pwchem_plugin
-from ..constants import *
+from pwchem.constants import *
 
 class PyMol:
   """ Help class to run PyMol and manage its environment. """
@@ -81,11 +85,74 @@ class VmdViewPopen(pwviewer.CommandView):
       fullProgram = '%s && %s' % (pwchem_plugin.getEnvActivationCommand(VMD_DIC), self._cmd)
       Popen(fullProgram, cwd=self._cwd, shell=True)
 
+class AtomStructViewer(pwviewer.ProtocolViewer):
+    _label = 'Viewer AtomStruct'
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [AtomStruct]
+    _viewerOptions = ['PyMol', 'ChimeraX']
+
+    def _defineParams(self, form):
+      form.addSection(label='Visualization of consensus Structural ROIs')
+      group = form.addGroup('AtomStruct General Viewer')
+      group.addParam('displaySoftware', EnumParam,
+                     choices=self._viewerOptions, default=0,
+                     label='Display AtomStruct with: ',
+                     help='Display the AtomStruct object with which software.\nAvailable: PyMol, ChimeraX')
+
+    def _getVisualizeDict(self):
+      return {
+        'displaySoftware': self._viewAtomStruct,
+      }
+
+    def _viewAtomStruct(self, e=None):
+      if self.displaySoftware.get() == 0:
+        pymolViewer = AtomStructPymolViewer(project=self.getProject())
+        return pymolViewer._visualize(self.getAtomStruct())
+      elif self.displaySoftware.get() == 1:
+        return self._viewChimera(self.getAtomStruct())
+
+    def getAtomStruct(self):
+      obj = self.protocol
+      # If the input is a protocol (Analyze results was used), extract the AtomStruct obj
+      if issubclass(type(obj), EMProtocol):
+        for output in self.protocol.iterOutputAttributes(outputClass=AtomStruct):
+          obj = output[1]
+      return obj
+
+    def _viewChimera(self, obj):
+      fnCmd = os.path.abspath(self._getPath("chimera_output.cxc"))
+      with open(fnCmd, 'w') as f:
+        f.write('cd %s\n' % os.getcwd())
+        f.write("cofr 0,0,0\n")  # set center of coordinates
+        f.write("style stick\n")
+
+        _inputVol = obj.getVolume()
+        if _inputVol is not None:
+          volID = 1
+          dim, sampling = _inputVol.getDim()[0], _inputVol.getSamplingRate()
+
+          f.write("open %s\n" % _inputVol.getFileName())
+          x, y, z = _inputVol.getOrigin(force=True).getShifts()
+          f.write("volume #%d style surface voxelSize %f\nvolume #%d origin "
+                  "%0.2f,%0.2f,%0.2f\n"
+                  % (volID, sampling, volID, x, y, z))
+        else:
+          dim, sampling = 150., 1.
+
+        bildFileName = self._getPath("axis_output.bild")
+        Chimera.createCoordinateAxisFile(dim, bildFileName=bildFileName, sampling=sampling)
+        f.write("open %s\n" % bildFileName)
+
+        f.write("open %s\n" % obj.getFileName())
+
+        view = ChimeraView(fnCmd)
+        return [view]
+
 
 class AtomStructPymolViewer(PyMolViewer):
     _label = 'Viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [AtomStruct]
+    _targets = []
 
     def _visualize(self, obj, **args):
       pymolV = PyMolViewer(project=self.getProject())

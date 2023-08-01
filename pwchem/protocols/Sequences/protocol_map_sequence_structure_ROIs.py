@@ -129,7 +129,7 @@ class ProtMapSequenceROI(EMProtocol):
                 pocket = StructROI(pocketFile, self.getASFileName())
                 pocket.setNumberOfPoints(len(clust))
                 if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                    pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
+                    pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
                 pocket.calculateContacts()
                 outPockets.append(pocket)
 

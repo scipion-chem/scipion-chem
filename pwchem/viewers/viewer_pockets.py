@@ -42,9 +42,7 @@ class StructROIPointsViewer(pwviewer.Viewer):
   # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
-    hetatmFile = obj.getProteinHetatmFile()
-    if not hetatmFile or not os.path.exists(hetatmFile):
-        hetatmFile = obj.buildPDBhetatmFile()
+    hetatmFile = obj.buildPDBhetatmFile()
     pmlFile = obj.createPML(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
@@ -169,21 +167,17 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
 
     def _defineParams(self, form):
       form.addSection(label='Visualization of consensus Structural ROIs')
-      form.addParam('outputSet', params.EnumParam,
+      pGroup = form.addGroup('Pymol General Viewer')
+      pGroup.addParam('outputSet', params.EnumParam,
                     choices=self.getChoices(), default=0,
                     label='Set of pockets output: ',
                     help='Set of pockets output to visualize'
                     )
-      form.addParam('displayTable', params.LabelParam,
-                    label='Display table view of set of Pockets: ',
-                    help='Table view'
-                    )
-
-      form.addParam('setClass', params.StringParam,
+      pGroup.addParam('setClass', params.StringParam,
                     label='Set of Pockets Class: ', default='-',
                     help='Pocket class in chosen set')
 
-      form.addParam('displayFPocket', params.EnumParam,
+      pGroup.addParam('displayFPocket', params.EnumParam,
                     choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)', 'VMD'],
                     default=0, condition='setClass=="{}"'.format(FPOCKET),
                     display=params.EnumParam.DISPLAY_HLIST,
@@ -192,20 +186,25 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
                          '*VMD*: display Set of Pockets with VMD.'
                     )
 
-      form.addParam('displayPyMol', params.EnumParam,
+      pGroup.addParam('displayPyMol', params.EnumParam,
                     choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)'],
                     default=0, condition='setClass!="{}"'.format(FPOCKET),
                     display=params.EnumParam.DISPLAY_HLIST,
                     label='Display output Set of Pockets with: ',
                     help='*PyMol*: display Set of Pockets and pockets as points / surface'
                     )
-      form.addParam('displayBBoxes', params.BooleanParam,
+      pGroup.addParam('displayBBoxes', params.BooleanParam,
                     default=False, label='Display pocket bounding boxes',
                     condition='not (setClass=="{}" and displayFPocket==0)'.format(FPOCKET),
                     help='Display the bounding boxes in pymol to check the size for the localized docking')
-      form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
+      pGroup.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
                     default=1.1, condition='displayBBoxes and not (setClass=="{}" and displayFPocket==0)'.format(FPOCKET),
                     help='The radius * n of each pocket will be used as grid radius')
+      
+      tGroup = form.addGroup('Table view')
+      tGroup.addParam('displayTable', params.LabelParam,
+                      label='Display table view of set of Pockets: ',
+                      help='Table view')
 
     def getChoices(self):
         outputLabels = []

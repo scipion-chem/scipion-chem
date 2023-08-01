@@ -24,15 +24,18 @@
 # *
 # **************************************************************************
 
+# General imports
 import os
 
+# Scipion em imports
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import *
+# Plugin imports
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules
+from pwchem.constants import RDKIT_DIC
 
 scriptName = 'shape_distances_script.py'
 
@@ -120,9 +123,9 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
         mols = self.inputSmallMolecules.get()
         for mol in mols:
-            file = os.path.abspath(mol.getFileName())
-            if file in filtered_molecules:
-                mol._shapeDistance = pwobj.String(filtered_molecules_dict[file])
+            molFile = os.path.abspath(mol.getFileName())
+            if molFile in filtered_molecules:
+                mol._shapeDistance = pwobj.String(filtered_molecules_dict[molFile])
                 newMols.append(mol)
 
         newMols.updateMolClass()
@@ -158,7 +161,6 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []
-        file_mol_dict = {}
         f = open(paramsFile, 'w')
         f.write('outputPath: results.tsv\n')
         for mol in molsScipion:
@@ -195,16 +197,13 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
         return self.refFile
 
     def getDistance(self):
-        function = self.getEnumText('distanceType')
-        return function
+        return self.getEnumText('distanceType')
 
     def parseResults(self, outputFile):
         molecules = {}
         with open(outputFile) as read_tsv:
             for row in read_tsv:
-                if row[0] == "#":
-                    pass
-                else:
+                if row[0] != "#":
                     row1 = row.split("\t")
                     molecules[row1[0]] = row1[1]
 
@@ -219,6 +218,3 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
                 if float(score) > self.cut.get():
                     molecules_dic[mol.getFileName()] = score
         return molecules_dic
-
-
-

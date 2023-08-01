@@ -25,19 +25,24 @@
 # *
 # **************************************************************************
 
-import os, shutil, json, requests, time
+# General imports
+import os, shutil, json, requests, time, subprocess, sys
+# import glob
 import random as rd
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
 from Bio.PDB.SASA import ShrakeRupley
+#from sklearn.cluster import DBSCAN
 
-from pwem.convert import AtomicStructHandler, SequenceHandler
+# Scipion em imports
+from pwem.convert import AtomicStructHandler
 from pwem.convert.atom_struct import cifToPdb
 from pwem.objects.data import Sequence, Object, String, Integer, Float
 
-from pwchem.constants import *
+# Plugin imports
+from pwchem.constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
-from .scriptUtils import *
+from pwchem.utils.scriptUtils import makeSubsets, performBatchThreading
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt': 'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -49,20 +54,69 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
+################# Generic function utils #####################
+def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
+  """
+  ### This function will try to run the given function, and if it fails,
+  ### it will retry it the set number of times until it works or has done it the set number of times.
 
-def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
+  #### Params:
+  - func (function): Function to execute.
+  - *args: Optional. Arguments passed to the given function.
+  - maxTime (int): Optional. Max number or retries. Default: 5.
+  - sleepTime (int): Optional. Number of seconds to wait between each attempt.
+
+  #### Example:
+  getUrlContent = lambda url: urlopen(url).read().decode('utf-8')
+  content = insistentExecution(getUrlContent, url, maxTimes=10)
+  """
+  # Printing message if verbose mode is active
+  if verbose:
+    print("Attempting to run function. Retries left: ", maxTimes)
+    sys.stdout.flush()
+    
+  # Attept to run the function
+  try:
+    return func(*args)
+  except Exception as e:
+    # Saving exception message
+    exception = e
+  
+  # If function gets to this point, execution failed
+  # Show message if verbose is set
+  if verbose:
+    print("Execution failed with message:\n", exception)
+  # Check current number of retries
+  if maxTimes > 1:
+    if verbose:
+      print("Retrying...")
+      sys.stdout.flush()
+    # If there is at least one retry left, call function again with one less retry
+    if sleepTime > 0:
+      # Sleep sleepTime seconds if it is greater than 0 seconds
+      time.sleep(sleepTime)
+    return insistentExecution(func, *args, maxTimes=maxTimes-1, sleepTime=sleepTime, verbose=verbose)
+  else:
+    if verbose:
+      print("All executions failed. Re-raising exception.")
+      sys.stdout.flush()
+    # If max number of retries was fulfilled, raise exception
+    raise exception
+
+def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
-      try:
-          protocol.runJob(programPath, progArgs, **kwargs)
-          finished = True
-      except:
-          i += 1
-          time.sleep(1)
+    try:
+      protocol.runJob(programPath, progArgs, **kwargs)
+      finished = True
+    except Exception:
+      i += 1
+      time.sleep(sleepTime)
+
   if i > 1 and i <= nMax:
-      print('Program {} run without error after {} trials'.format(programPath, i))
+    print('Program {} run without error after {} trials'.format(programPath, i))
   elif i > nMax:
-      print('Program {} could not be run without error after {} trials'.format(programPath, nMax))
+    print('Program {} could not be run without error after {} trials'.format(programPath, nMax))
 
 def getVarName(var):
   return [i for i, a in locals().items() if a == var][0]
@@ -71,7 +125,7 @@ def getBaseName(file):
   return os.path.splitext(os.path.basename(file.strip()))[0]
 
 def getLigCoords(ASFile, ligName):
-  '''Return the coordinates of the ligand specified in the atomic structure file'''
+  """ Return the coordinates of the ligand specified in the atomic structure file. """
   if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
     pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
     parser = PDBParser().get_structure(pdb_code, ASFile)
@@ -99,7 +153,7 @@ def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   url = "https://www.rcsb.org/structure/" + str(pdbID)
   try:
     response = requests.get(url)
-  except:
+  except Exception:
     raise Exception("Cannot connect to PDB server")
   if (response.status_code >= 400) and (response.status_code < 500):
     raise Exception("%s is a wrong PDB ID" % pdbID)
@@ -352,7 +406,7 @@ def getPDBCoords(pdbFile):
 ##################################################
 # ADT grids
 
-def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn_ffFile=None):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
@@ -362,7 +416,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   protAtomTypes = parseAtomTypes(protFile)
 
-  if ligandFns == None:
+  if ligandFns == None or not addLigTypes:
       ligAtomTypes = 'A C HD N NA OA SA'
   else:
       ligAtomTypes = set([])
@@ -376,8 +430,8 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   with open(os.path.abspath(gpf_file), "w") as file:
     file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
-    if zn_ffFile:
-        file.write("parameter_file %s                        # force field default parameter file\n" % (zn_ffFile))
+    if znFFfile:
+        file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
     file.write("spacing %s                          # spacing(A)\n" % (spacing))
     file.write("receptor_types %s     # receptor atom types\n" % (protAtomTypes))
@@ -390,7 +444,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (protName))
     file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (protName))
     file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant\n")
-    if zn_ffFile:
+    if znFFfile:
         file.write('''nbp_r_eps 0.25 23.2135 12 6 NA TZ\nnbp_r_eps 2.1   3.8453 12 6 OA Zn\nnbp_r_eps 2.25  7.5914 12 6 SA Zn\nnbp_r_eps 1.0   0.0    12 6 HD Zn\nnbp_r_eps 2.0   0.0060 12 6 NA Zn\nnbp_r_eps 2.0   0.2966 12 6  N Zn''')
 
   return os.path.abspath(gpf_file)
@@ -415,7 +469,7 @@ def calculate_centerMass(atomStructFile):
     return
 
 
-def parseAtomTypes(pdbqtFile, allowed=None):
+def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
     with open(pdbqtFile) as f:
@@ -423,14 +477,15 @@ def parseAtomTypes(pdbqtFile, allowed=None):
         if line.startswith('ATOM') or line.startswith('HETATM'):
           pLine = line.split()
           at = pLine[-1]
-          if allowed is None or at in allowed:
-            atomTypes.add(at)
+          if (allowed is None or at in allowed) and not at in ignore:
+              atomTypes.add(at)
   else:
       struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
       for atom in struct.get_atoms():
         atomId = atom.get_id()
-        atomTypes.add(removeNumberFromStr(atomId))
+        if not removeNumberFromStr(atomId) in ignore:
+          atomTypes.add(removeNumberFromStr(atomId))
 
   return atomTypes
 
@@ -603,7 +658,7 @@ def calculateRMSDKeys(coordDic1, coordDic2):
   return (rmsd / count) ** (1 / 2)
 
 
-################3 UTILS Sequence Object ################
+################# UTILS Sequence Object ################
 
 def getSequenceFastaName(sequence):
   '''Return a fasta name for the sequence.
@@ -692,12 +747,47 @@ def calculate_SASA(structFile, outFile):
 
   with open(outFile, 'w') as f:
     for model in struct:
-      modelID = model.get_id()
       for chain in model:
         chainID = chain.get_id()
         for residue in chain:
           resId = residue.get_id()[1]
           f.write('{}:{}\t{}\n'.format(chainID, resId, residue.sasa))
 
+################# Test utils #####################
+def assertHandle(func, *args, cwd='', message=''):
+  """
+  ### This function runs the given assertion and handles the potential error, showing the protocol's error trace instead of a generic assertion.
+  ### Note: Only designed to handle the assertions used by protocols.
 
+  #### Params:
+  - func (function): A function (assertion) to be executed.
+  - *args: All the arguments passed to the function.
+  - cwd (str): Optional. Current working directory. Usually protocol's cwd.
+  - message (str): Optional. Custom message to display if no error messages were found in stdout/stderr.
 
+  #### Example:
+  assertHandle(self.assertIsNotNone, getattr(protocol, 'outputSet', None), cwd=protocol.getWorkingDir())
+  """
+  # Defining full path to error log
+  stderr = os.path.abspath(os.path.join(cwd, 'logs', 'run.stderr'))
+  stdout = os.path.abspath(os.path.join(cwd, 'logs', 'run.stdout'))
+
+  # Attempt to run assertion
+  try:
+    return func(*args)
+  except AssertionError:
+    # If assertion fails, show error log
+    # Getting error logs (stderr has priority over stdout)
+    # Most errors are dumped on stderr, while some others on stdout
+    errorMessage = ''
+    for stdFile in [stderr, stdout]:
+      if os.path.exists(stdFile):
+        errorMessage = subprocess.run(['cat', stdFile], check=True, capture_output=True).stdout.decode()
+        # Sometimes stderr file exists but it is empty, in those cases, fall back to stdout
+        if errorMessage:
+          break
+    if not errorMessage:
+      errorMessage = "Something went wrong with the protocol, but there are no stderr/stdout files right now, try manually opening the project to check it."
+      if message:
+        errorMessage += f"\n{message}"
+    raise AssertionError(f"Assertion {func.__name__} failed for the following reasons:\n\n{errorMessage}")

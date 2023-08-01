@@ -113,7 +113,7 @@ class ProtChemOperateSet(EMProtocol):
                 curList = []
                 for item in inSet.get():
                     opId = self.getAttrValue(item, opAttr)
-                    tmpDict[opId] = item.clone()
+                    tmpDict[opId] = [] if not opId in tmpDict else tmpDict[opId] + [item.clone()]
                     curList.append(opId)
                 idsLists.append(curList)
 
@@ -122,7 +122,8 @@ class ProtChemOperateSet(EMProtocol):
                 interIds = interIds.intersection(set(idList))
 
             for interId in interIds:
-                self.addItem(outputDict, interId, tmpDict[interId])
+                for item in tmpDict[interId]:
+                    self.addItem(outputDict, interId, item)
 
         elif self.operation.get() == DIFFERENCE:
             removeIds = []

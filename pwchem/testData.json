@@ -1,0 +1,20 @@
+{
+	"datasets": ["model_building_tutorial"],
+	"skippable": {
+		"gpu": [
+
+		],
+		"dependencies": [
+			{
+				"name": "scipion-chem-autodock",
+				"module": "autodock",
+				"tests": [
+					"tests_docking.TestScoreDocking",
+					"tests_docking.TestConsensusDocking"
+				]
+			}
+		],
+		"others": [
+		]
+	}
+}

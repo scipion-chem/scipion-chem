@@ -168,7 +168,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
 
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
         if self.inputSmallMolecules.get().getProteinFile():
-            outPharm.setProteinFile(abspath(self.inputSmallMolecules.get().getProteinFile()))
+            outPharm.setProteinFile(self.inputSmallMolecules.get().getProteinFile())
         for feat in radii:
             feat_radii = radii[feat]
             for i, loc in enumerate(centers[feat]):

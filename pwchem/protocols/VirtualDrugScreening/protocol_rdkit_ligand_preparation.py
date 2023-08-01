@@ -141,7 +141,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
         for mol in self.inputSmallMolecules.get():
-            tempSmall = os.path.abspath(self._getExtraPath("{}*.sdf".format(mol.getMolName())))
+            tempSmall = self._getExtraPath("{}*.sdf".format(mol.getMolName()))
             for molFile in sorted(list(glob.glob(tempSmall))):
                 mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=molFile), outDir=self._getExtraPath(),
                                            mapBy='order')
@@ -158,6 +158,18 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
                     newSmallMol.setConfId(confId)
                     newSmallMol.setMappingFile(pwobj.String(mapFile))
                     outputSmallMolecules.append(newSmallMol)
+
+        failedIds = []
+        for failFile in glob.glob(self._getExtraPath('failedPreparations_*.txt')):
+          with open(failFile) as fr:
+            failedIds += fr.read().strip().split('\n')
+            os.remove(failFile)
+
+        allFails = self.getFailsPath()
+        with open(allFails, 'w') as f:
+          failedIds.sort()
+          f.write('\n'.join(failedIds))
+
 
         if len(outputSmallMolecules) > 0:
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
@@ -262,4 +274,10 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
         return outFile
 
+    def getFailsPath(self):
+      return self._getPath('failedPreparations.txt')
 
+    def _summary(self):
+      if os.path.exists(self.getFailsPath()):
+        return ['Preparation of some molecules failed. These are listed in {}'.
+                  format(self.getFailsPath())]

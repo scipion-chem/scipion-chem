@@ -183,7 +183,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
         if self.isLocalMultiple():
             # Format multiple local files placed in filesPath with filesPattern
             outDir = os.path.abspath(self._getExtraPath())
-            for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
+            for filename in glob.glob(os.path.join(os.getcwd(), self.filesPath.get(), self.filesPattern.get())):
                 fnSmall = os.path.join(self.filesPath.get(), filename)
 
                 # Files need to be converted if they are maestro or they are asked to be optimized 3D
