@@ -234,13 +234,15 @@ class Plugin(pwem.Plugin):
 		protocol.runJob('java -jar {}'.format(cls.getProgramHome(JCHEM_DIC, 'jchempaint-{}.jar'.format(JCHEM_DIC['version']))), arguments='', env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
-	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False):
+	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False, silent=True):
 		""" Run openbabel command from a given protocol. """
 		full_program = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
 		if not popen:
 			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 		else:
-			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
+			if silent:
+				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
 
 	@classmethod
 	def runPLIP(cls, args, cwd=None):

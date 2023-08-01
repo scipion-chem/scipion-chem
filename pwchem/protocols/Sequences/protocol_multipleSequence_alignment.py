@@ -112,7 +112,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         for seqId in outSeqDic:
             outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
 
-        outSeqs.setAlignmentFileName(output_file)
+        outSeqs.setAlignmentFileName(os.path.relpath(output_file))
         outSeqs.setAligned(True)
         self._defineOutputs(outputSequences=outSeqs)
 

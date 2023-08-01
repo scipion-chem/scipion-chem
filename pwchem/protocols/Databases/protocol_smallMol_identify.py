@@ -102,6 +102,8 @@ class ProtChemSmallMolIdentify(EMProtocol):
                     for dbName in DbChoices:
                         if dbName in smiDic[smi]:
                             setattr(mol, dbName, pwobj.String(smiDic[smi][dbName]))
+                        else:
+                            setattr(mol, dbName, pwobj.String(None))
 
                     # Setting molname
                     chdbName = self.getEnumText('nameDatabase')

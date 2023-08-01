@@ -1354,13 +1354,13 @@ class MDSystem(data.EMFile):
         self._trjFile.set(value)
 
     def getForceField(self):
-        return self._ff
+        return self._ff.get()
 
     def setForceField(self, value):
         self._ff.set(value)
 
     def getWaterForceField(self):
-        return self._wff
+        return self._wff.get()
 
     def setWaterForceField(self, value):
         self._wff.set(value)

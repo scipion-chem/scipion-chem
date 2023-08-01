@@ -103,7 +103,7 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
-def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
+def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
     try:
@@ -111,7 +111,8 @@ def insistentRun(protocol, programPath, progArgs, nMax=5, **kwargs):
       finished = True
     except Exception:
       i += 1
-      time.sleep(1)
+      time.sleep(sleepTime)
+
   if i > 1 and i <= nMax:
     print('Program {} run without error after {} trials'.format(programPath, i))
   elif i > nMax:
@@ -405,7 +406,7 @@ def getPDBCoords(pdbFile):
 ##################################################
 # ADT grids
 
-def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn_ffFile=None):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
@@ -415,7 +416,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   protAtomTypes = parseAtomTypes(protFile)
 
-  if ligandFns == None:
+  if ligandFns == None or not addLigTypes:
       ligAtomTypes = 'A C HD N NA OA SA'
   else:
       ligAtomTypes = set([])
@@ -429,8 +430,8 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   with open(os.path.abspath(gpf_file), "w") as file:
     file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
-    if zn_ffFile:
-        file.write("parameter_file %s                        # force field default parameter file\n" % (zn_ffFile))
+    if znFFfile:
+        file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
     file.write("spacing %s                          # spacing(A)\n" % (spacing))
     file.write("receptor_types %s     # receptor atom types\n" % (protAtomTypes))
@@ -443,7 +444,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     file.write("elecmap %s.e.map                   # electrostatic potential map\n" % (protName))
     file.write("dsolvmap %s.d.map                  # desolvation potential map\n" % (protName))
     file.write("dielectric -0.1465                   # <0, AD4 distance-dep.diel;>0, constant\n")
-    if zn_ffFile:
+    if znFFfile:
         file.write('''nbp_r_eps 0.25 23.2135 12 6 NA TZ\nnbp_r_eps 2.1   3.8453 12 6 OA Zn\nnbp_r_eps 2.25  7.5914 12 6 SA Zn\nnbp_r_eps 1.0   0.0    12 6 HD Zn\nnbp_r_eps 2.0   0.0060 12 6 NA Zn\nnbp_r_eps 2.0   0.2966 12 6  N Zn''')
 
   return os.path.abspath(gpf_file)
@@ -468,7 +469,7 @@ def calculate_centerMass(atomStructFile):
     return
 
 
-def parseAtomTypes(pdbqtFile, allowed=None):
+def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
     with open(pdbqtFile) as f:
@@ -476,14 +477,15 @@ def parseAtomTypes(pdbqtFile, allowed=None):
         if line.startswith('ATOM') or line.startswith('HETATM'):
           pLine = line.split()
           at = pLine[-1]
-          if allowed is None or at in allowed:
-            atomTypes.add(at)
+          if (allowed is None or at in allowed) and not at in ignore:
+              atomTypes.add(at)
   else:
       struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
       for atom in struct.get_atoms():
         atomId = atom.get_id()
-        atomTypes.add(removeNumberFromStr(atomId))
+        if not removeNumberFromStr(atomId) in ignore:
+          atomTypes.add(removeNumberFromStr(atomId))
 
   return atomTypes
 

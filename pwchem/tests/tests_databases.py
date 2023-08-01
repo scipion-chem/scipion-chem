@@ -102,6 +102,7 @@ class TestZINCFilter(TestIdentifyLigands):
 
 	def test(self):
 		pIdent = self._runIdentify(self.protImportSmallMols)
+		self._waitOutput(pIdent, 'outputSmallMolecules')
 		pFilt = self._runZINCFilter(pIdent)
 		self._waitOutput(pFilt, 'outputSmallMolecules')
 		assertHandle(self.assertIsNotNone, getattr(pFilt, 'outputSmallMolecules', None), cwd=pFilt.getWorkingDir())

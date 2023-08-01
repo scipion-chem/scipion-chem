@@ -15,23 +15,6 @@
 			}
 		],
 		"others": [
-			{
-				"test": "tests_databases.TestIdentifyLigands",
-				"reason": "Already was failing. Needs fix"
-			},
-			{
-				"test": "tests_databases.TestZINCFilter",
-				"reason": "Already was failing. Needs fix"
-			},
-			{
-				"test": "tests_databases.TestFetchLigands",
-				"reason": "Broken link. Waiting for remote fix"
-			}
-			,
-			{
-				"test": "tests_databases.TestFetchLigands",
-				"reason": "Broken link. Waiting for remote fix"
-			}
 		]
 	}
 }

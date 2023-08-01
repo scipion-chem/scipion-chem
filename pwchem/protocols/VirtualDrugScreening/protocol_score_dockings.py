@@ -31,13 +31,15 @@ This protocol is used to score docking positions obtained by several software us
 available in the Open Drug Discovery Toolkit (ODDT, https://github.com/oddt/oddt)
 
 """
-from pyworkflow.protocol import params
-from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message
-from pwchem.objects import SetOfSmallMolecules
-from pwchem.utils import *
 import os
 
+from pyworkflow.protocol import params
+from pyworkflow.utils import Message
+from pwem.protocols import EMProtocol
+
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.utils import *
+from pwchem.constants import RDKIT_DIC
 from pwchem import Plugin
 
 scriptName = 'scores_docking_oddt.py'

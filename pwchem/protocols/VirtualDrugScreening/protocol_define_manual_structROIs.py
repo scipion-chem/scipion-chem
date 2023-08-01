@@ -216,7 +216,7 @@ class ProtDefineStructROIs(EMProtocol):
             pocketFile = self.createPocketFile(clust, i)
             pocket = StructROI(pocketFile, pdbFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
+                pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
             pocket.calculateContacts()
             outPockets.append(pocket)
 
@@ -360,10 +360,22 @@ class ProtDefineStructROIs(EMProtocol):
                     resNameList = [res.get_resname() for res in clust]
                     if self.isSublist(residueTypes, resNameList):
                         oCoords += list(a.get_coord() for res in clust for a in res.get_atoms())
+                        self.addToPatternFile(clust)
                         for res in clust:
                             print(res, cMassResidues[res])
 
         return oCoords
+
+    def getPatternFile(self):
+        return os.path.abspath(self._getExtraPath('patternFile.txt'))
+    def addToPatternFile(self, resList):
+        pFile, openMode = self.getPatternFile(), 'a'
+        if not os.path.exists(pFile):
+            openMode = 'w'
+
+        with open(pFile, openMode) as f:
+            resIds = ['{}_{}'.format(res.get_resname(), res.get_id()[1]) for res in resList]
+            f.write('{}\n'.format(','.join(resIds)))
 
     def mapSurfaceCoords(self, oCoords):
         sCoords = []
