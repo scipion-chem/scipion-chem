@@ -95,7 +95,9 @@ class ProtocolConsensusDocking(EMProtocol):
         group = form.addGroup('Representative')
         group.addParam('repAttr', params.StringParam, default='',
                       label='Criteria to choose cluster representative: ',
-                      help='Criteria to follow on docking clusters to choose a representative')
+                      help='Criteria to follow on docking clusters to choose a representative. '
+                           'It will extract the representative as the pose with max/min (next argument) value '
+                           'of this attribute')
         group.addParam('maxmin', params.BooleanParam, default=True,
                       label='Keep maximum values: ',
                       help='True to keep the maximum values. False to get the minimum')
