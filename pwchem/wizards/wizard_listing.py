@@ -98,7 +98,7 @@ class AddLigandFilterExpression(AddElementWizard):
         towrite += '\n'
         form.setVar(outputParam[0], towrite)
 
-AddLigandFilterExpression().addTarget(protocol=ProtocolLigandFiltering,
+AddLigandFilterExpression().addTarget(protocol=ProtocolGeneralLigandFiltering,
                                       targets=['addFilter'],
                                       inputs=['mode', 'filter', 'filterValue', 'atomTypeFilter'],
                                       outputs=['filterList'])

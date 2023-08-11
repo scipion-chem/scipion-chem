@@ -27,6 +27,30 @@ from pwchem.protocols import ProtocolShapeDistancesFiltering, ProtocolFingerprin
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
 
+generalFilter = ''''''
+
+class TestGeneralFiltering(TestImportBase):
+	@classmethod
+	def _runFilter(cls, inProt, mode=0):
+		protADME = cls.newProtocol(
+			ProtocolADMEFiltering,
+			ruleChoice=mode
+		)
+		protADME.inputSmallMolecules.set(inProt)
+		protADME.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(protADME, wait=False)
+		return protADME
+
+	def test(self):
+		protsADME = []
+		for i in range(2):
+			protsADME.append(self._runADME(inProt=self.protImportSmallMols, mode=i))
+
+		for p in protsADME:
+			self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
+			assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
+
 class TestADMEFiltering(TestImportBase):
 	@classmethod
 	def _runADME(cls, inProt, mode=0):

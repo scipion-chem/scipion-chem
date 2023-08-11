@@ -1,9 +1,9 @@
-#Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
-# # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors: Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
+# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ ATKEY, ANKEY, CKEY = 'typeAtom',  'numAtoms', 'numCycles'
 
 scriptName = 'ligand_filter_script.py'
 
-class ProtocolLigandFiltering(EMProtocol):
+class ProtocolGeneralLigandFiltering(EMProtocol):
     """
     Filters a set of ligands by some user defined attributes: forbidden / necessary atom types, max/min size...
     """
@@ -88,7 +88,7 @@ class ProtocolLigandFiltering(EMProtocol):
       inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
       for it, subset in enumerate(inputSubsets):
         aSteps += [self._insertFunctionStep('filterStep', subset, it, prerequisites=[])]
-      self._insertFunctionStep('createOutputStep')
+      self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
 
     def filterStep(self, molSet, it):
         '''Filter the Set of Small molecules with the defined filters'''
