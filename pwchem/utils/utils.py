@@ -26,7 +26,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, json, requests, time, subprocess, sys
+import os, shutil, json, requests, time, subprocess, sys, multiprocessing
 # import glob
 import random as rd
 import numpy as np
@@ -752,6 +752,35 @@ def calculate_SASA(structFile, outFile):
         for residue in chain:
           resId = residue.get_id()[1]
           f.write('{}:{}\t{}\n'.format(chainID, resId, residue.sasa))
+
+def runInParallel(func, *args, paramList, jobs):
+  """
+  This function creates a pool of workers to run the given function in parallel.
+  Also returns a list with the failed commands.
+  """
+  # Create a pool of worker processes
+  nJobs = len(paramList) if len(paramList) < jobs else jobs
+  pool = multiprocessing.Pool(processes=nJobs)
+
+  # Apply the given function to the given param list using the pool
+  results = [pool.apply_async(func, args=(param, *args,)) for param in paramList]
+
+  # Initializing list of failed commands
+  failedCommands = []
+
+  # Check if any process encountered an error
+  for result in results:
+    if result.get():
+      failedCommands.append(result.get())
+
+  # Close the pool to release resources
+  pool.close()
+
+  # Join the pool, waiting for all processes to complete
+  pool.join()
+
+  # Return list of failed commands
+  return failedCommands
 
 ################# Test utils #####################
 def assertHandle(func, *args, cwd='', message=''):
