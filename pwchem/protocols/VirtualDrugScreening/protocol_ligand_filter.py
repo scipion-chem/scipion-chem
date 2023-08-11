@@ -36,7 +36,7 @@ from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.constants import RDKIT_DIC
-from pwchem.utils import getBaseName, runInParallel, makeSubsets
+from pwchem.utils import getBaseName, makeSubsets
 
 ATYPE, SIZE, HASCYCLES = 'Contains at least x atom type', 'Contains at least x atoms', 'Contains at least x cycles'
 ATKEY, ANKEY, CKEY = 'typeAtom',  'numAtoms', 'numCycles'
