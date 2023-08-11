@@ -80,6 +80,29 @@ Add_FilterExpression().addTarget(protocol=ProtChemZINCFilter,
                                  inputs=['mode', {'subGroup': subChoices}],
                                  outputs=['filterList'])
 
+class AddLigandFilterExpression(AddElementWizard):
+    """Add filter expression in ligand filter protocol"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        keepStr = protocol.getEnumText(inputParam[0])
+        filterStr, fValue = protocol.getEnumText(inputParam[1]), getattr(protocol, inputParam[2]).get()
+
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        towrite = prevList + '{} molecule if {} '.format(keepStr, filterStr.replace('x', str(fValue)).lower())
+        if getattr(protocol, inputParam[1]).get() == 0:
+            towrite += getattr(protocol, inputParam[3]).get()
+        towrite += '\n'
+        form.setVar(outputParam[0], towrite)
+
+AddLigandFilterExpression().addTarget(protocol=ProtocolLigandFiltering,
+                                      targets=['addFilter'],
+                                      inputs=['mode', 'filter', 'filterValue', 'atomTypeFilter'],
+                                      outputs=['filterList'])
+
 
 class AddElementSummaryWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""
