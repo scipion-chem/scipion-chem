@@ -22,10 +22,33 @@
 # ***************************************************************************
 
 # Scipion chem imports
-from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering
-from pwchem.protocols import ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering
+from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
+	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
+
+generalFilter = '''Remove molecule if contains at least 1 atom type B
+Keep molecule if contains at least 2 atoms 
+Remove molecule if contains at least 3 cycles '''
+
+class TestGeneralFiltering(TestImportBase):
+	@classmethod
+	def _runFilter(cls, inProt):
+		protFilter = cls.newProtocol(
+			ProtocolGeneralLigandFiltering,
+			filterList=generalFilter
+		)
+		protFilter.inputSmallMolecules.set(inProt)
+		protFilter.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(protFilter, wait=False)
+		return protFilter
+
+	def test(self):
+		protFilter = self._runFilter(inProt=self.protImportSmallMols)
+		self._waitOutput(protFilter, 'outputSmallMolecules', sleepTime=10)
+		assertHandle(self.assertIsNotNone, getattr(protFilter, 'outputSmallMolecules', None),
+								 cwd=protFilter.getWorkingDir())
 
 class TestADMEFiltering(TestImportBase):
 	@classmethod
