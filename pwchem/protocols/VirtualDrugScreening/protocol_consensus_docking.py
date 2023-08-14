@@ -32,7 +32,7 @@ same or different software
 
 """
 
-import os, re
+import os, re, glob
 from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.metrics.pairwise import pairwise_distances
 
@@ -107,8 +107,22 @@ class ProtocolConsensusDocking(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        self._insertFunctionStep('consensusStep')
-        self._insertFunctionStep('createOutputStep')
+        cStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
+        conStep = self._insertFunctionStep('consensusStep', prerequisites=[cStep])
+        self._insertFunctionStep('createOutputStep', prerequisites=[conStep])
+
+    def convertInputStep(self):
+        allMols = self.getAllInputMols()
+        outDir = self.getInputMolsDir()
+        os.mkdir(outDir)
+
+        maeMols, _ = self.getMAEMoleculeFiles(allMols)
+        if len(maeMols) > 0:
+            try:
+                from schrodingerScipion.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
+            except:
+                print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
     def consensusStep(self):
         molDic = self.buildMolDic()
@@ -189,11 +203,24 @@ class ProtocolConsensusDocking(EMProtocol):
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputMolsDir(self):
+        return os.path.abspath(self._getExtraPath('inputMolecules'))
+
+    def getMAEMoleculeFiles(self, molList):
+        maeMols, otherMols = [], []
+        for mol in molList:
+            molFile = os.path.abspath(mol.getPoseFile())
+            if '.mae' in molFile:
+                maeMols.append(mol)
+            else:
+                otherMols.append(mol)
+        return maeMols, otherMols
+
     def buildMolDic(self):
         dic = {}
         for i, pSet in enumerate(self.inputMoleculesSets):
             for mol in pSet.get():
-                dic[mol.getPoseFile()] = i
+                dic[mol.getUniqueName()] = i
         return dic
 
     def createIndepOutputs(self):
@@ -354,7 +381,7 @@ class ProtocolConsensusDocking(EMProtocol):
     def countMolsInCluster(self, cluster, molDic):
         setIds = []
         for mol in cluster:
-            setId = molDic[mol.getPoseFile()]
+            setId = molDic[mol.getUniqueName()]
             if self.sameClust.get() or not setId in setIds:
                 setIds.append(setId)
         return len(setIds)
@@ -512,11 +539,22 @@ class ProtocolConsensusDocking(EMProtocol):
 
         return mol
 
+    def getConvMolNames(self):
+        molDir = self.getInputMolsDir()
+        convMolsName  = {}
+        for molFile in glob.glob(os.path.join(molDir, '*')):
+            convMolsName[getBaseName(molFile)] = molFile
+        return convMolsName
+
     def getAllInputMols(self):
         mols = []
+        convMolNames = self.getConvMolNames()
         for molSet in self.inputMoleculesSets:
             for mol in molSet.get():
-                mols.append(mol.clone())
+                newMol = mol.clone()
+                if mol.getUniqueName() in convMolNames:
+                    newMol.setPoseFile(os.path.relpath(convMolNames[newMol.getUniqueName()]))
+                mols.append(newMol)
         return mols
 
 
