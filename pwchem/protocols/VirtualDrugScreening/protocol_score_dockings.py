@@ -31,10 +31,10 @@ This protocol is used to score docking positions obtained by several software us
 available in the Open Drug Discovery Toolkit (ODDT, https://github.com/oddt/oddt)
 
 """
-import os
+import os, glob, time
 
 from pyworkflow.protocol import params
-from pyworkflow.utils import Message
+from pyworkflow.utils import Message, createLink
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
@@ -123,18 +123,37 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self.molFiles = []
-        self.createGUISummary()
-        self.getPoseFilesStr()
         sSteps, wSteps = [], []
+        self.createGUISummary()
+
+        cStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
         #Performing every score listed in the form
         for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
             if wStep.strip():
                 if not wStep in wSteps:
-                    sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
+                    sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[cStep]))
                     wSteps.append(wStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
+
+    def convertInputStep(self):
+        allMols = self.getAllInputMols()
+        outDir = self.getInputMolsDir()
+        os.mkdir(outDir)
+
+        maeMols, otherMols = self.getMAEMoleculeFiles(allMols)
+        if len(maeMols) > 0:
+            try:
+                from schrodingerScipion.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
+            except:
+                print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+
+        for mol in otherMols:
+            molFile = mol.getPoseFile()
+            molExt = os.path.splitext(molFile)[-1]
+            molBaseFile = os.path.join(outDir, mol.getUniqueName() + molExt)
+            createLink(molFile, molBaseFile)
 
     def scoringStep(self, wStep, i):
         # Perform the scoring using the ODDT package
@@ -149,8 +168,8 @@ class ProtocolScoreDocking(EMProtocol):
         sDic = self.getScoresDic()
         newMols = self.defineOutputSet()
         for mol in consensusMols:
-            inFile = os.path.abspath(mol.getPoseFile())
-            for resIdx, oddtScore in sDic[inFile].items():
+            molName = mol.getUniqueName()
+            for resIdx, oddtScore in sDic[molName].items():
                 setattr(mol, "_oddtScore_{}".format(resIdx), Float(oddtScore))
             newMols.append(mol)
 
@@ -193,6 +212,27 @@ class ProtocolScoreDocking(EMProtocol):
             f.write(self.createSummary())
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputMolsDir(self):
+        return os.path.abspath(self._getExtraPath('inputMolecules'))
+
+    def getMAEMoleculeFiles(self, molList):
+        maeMols, otherMols = [], []
+        for mol in molList:
+            molFile = os.path.abspath(mol.getPoseFile())
+            if '.mae' in molFile:
+                maeMols.append(mol)
+            else:
+                otherMols.append(mol)
+        return maeMols, otherMols
+
+    def getInputMolFiles(self):
+        molDir = self.getInputMolsDir()
+        molFiles = []
+        for molFile in glob.glob(os.path.join(molDir, '*')):
+            if not '.mae' in molFile:
+                molFiles.append(molFile)
+        return molFiles
+
     def getInputReceptorFile(self):
         return self.inputMoleculesSets[0].get().getProteinFile()
 
@@ -256,7 +296,8 @@ class ProtocolScoreDocking(EMProtocol):
         resIdx = resFile.split('results_')[1].split('.')[0]
         with open(resFile) as f:
             for line in f:
-                resDic[line.split()[0]] = float(line.split()[1])
+                file = line.split()[0]
+                resDic[getBaseName(file)] = float(line.split()[1])
         return resIdx, resDic
 
     def getResultFiles(self):
@@ -279,11 +320,11 @@ class ProtocolScoreDocking(EMProtocol):
         sDic = {}
         for resFile in self.getResultFiles():
             resIdx, resDic = self.parseResults(resFile)
-            for file in resDic:
-                if file in sDic:
-                    sDic[file][resIdx] = resDic[file]
+            for fileBase in resDic:
+                if fileBase in sDic:
+                    sDic[fileBase][resIdx] = resDic[fileBase]
                 else:
-                    sDic[file] = {resIdx: resDic[file]}
+                    sDic[fileBase] = {resIdx: resDic[fileBase]}
         return sDic
 
     def getScoreFunction(self, msjDic):
@@ -312,10 +353,10 @@ class ProtocolScoreDocking(EMProtocol):
         return fName
 
     def getPoseFilesStr(self):
-        poseFilesFile = self._getTmpPath('poseFIles.txt')
+        poseFilesFile = self._getTmpPath('poseFiles.txt')
         if not os.path.exists(poseFilesFile):
-            allMols = self.getAllInputMols()
-            poseFilesStr = ' '.join([os.path.abspath(mol.getPoseFile()) for mol in allMols])
+            molFiles = self.getInputMolFiles()
+            poseFilesStr = ' '.join([molFile for molFile in molFiles])
             with open(poseFilesFile, 'w') as f:
                 f.write(poseFilesStr)
         else:
