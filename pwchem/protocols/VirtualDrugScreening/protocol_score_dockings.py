@@ -229,7 +229,7 @@ class ProtocolScoreDocking(EMProtocol):
         molDir = self.getInputMolsDir()
         molFiles = []
         for molFile in glob.glob(os.path.join(molDir, '*')):
-            if not '.mae' in molFile:
+            if '.mae' not in molFile:
                 molFiles.append(molFile)
         return molFiles
 
