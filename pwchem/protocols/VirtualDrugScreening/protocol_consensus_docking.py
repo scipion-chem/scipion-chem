@@ -121,7 +121,7 @@ class ProtocolConsensusDocking(EMProtocol):
             try:
                 from schrodingerScipion.utils.utils import convertMAEMolSet
                 convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
-            except ModuleNotFoundError:
+            except ImportError:
                 print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
     def consensusStep(self):
