@@ -102,7 +102,7 @@ def getCondaActivationCmd(scipionExecutable):
 			if line.startswith('CONDA_ACTIVATION_CMD'):
 				return line.split('=')[1].strip()
 
-def testPythonCommand(pythonCommand):
+def testPythonCommand(scipion, pythonCommand):
 	"""
 	This function executes the given Python command within scipion3 env
 	and returns True if it succeeded or False if it failed.
@@ -137,7 +137,7 @@ def getAllTests(scipion, pluginModule, testPrefix):
 	# If no tests were found, check if module was not found or if plugin has no tests
 	if not filteredLines:
 		# If import caused an error, module was not found
-		if not testPythonCommand(f"import {pluginModule}"):
+		if not testPythonCommand(scipion, f"import {pluginModule}"):
 			printFatalError(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?")
 	
 	# Return full list of tests
@@ -189,7 +189,7 @@ def removeGPUTests(testList, noGPU, gpuSkippableTests):
 	# Return modified list of tests
 	return testList
 
-def removeDependecyTests(testList, dependenciesSkippableTests):
+def removeDependecyTests(scipion, testList, dependenciesSkippableTests):
 	""" This function removes the depencendy related tests if the dependencies are not met. """
 	# Removing dependency tests if dependencies are not present
 	for dependency in dependenciesSkippableTests:
@@ -200,7 +200,7 @@ def removeDependecyTests(testList, dependenciesSkippableTests):
 		# Try to import module if provided
 		if dependencyTestModule:
 			# Creating import command to run within scipion3 conda env
-			if testPythonCommand(f"import {dependencyTestModule}"):
+			if testPythonCommand(scipion, f"import {dependencyTestModule}"):
 				continue
 
 		# If no module was provided or import raised a ModuleNotFoundError exception, skip tests
@@ -227,13 +227,13 @@ def removeOtherTests(testList, otherSkippableTests):
 	# Return modified test list
 	return testList
 
-def removeSkippableTests(testList, noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests):
+def removeSkippableTests(scipion, testList, noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests):
 	""" This function removes from the list of all tests, the ones that have to be skipped. """
 	# Remove GPU skippable tests
 	testList = removeGPUTests(testList, noGPU, gpuSkippableTests)
 
 	# Removing dependency tests if dependencies are not present
-	testList = removeDependecyTests(testList, dependenciesSkippableTests)
+	testList = removeDependecyTests(scipion, testList, dependenciesSkippableTests)
 
 	# Removing other tests for reasons stated
 	testList = removeOtherTests(testList, otherSkippableTests)
@@ -303,7 +303,7 @@ def main(args):
 		otherSkippableTests = allSkippableTests.get('others', [])
 
 		# Removing skippable tests
-		filteredLines = removeSkippableTests(filteredLines, args.noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests)
+		filteredLines = removeSkippableTests(args.scipion, filteredLines, args.noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests)
 
 	# Downloading in parallel required datasets if there are any
 	if datasets:
