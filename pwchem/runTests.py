@@ -102,6 +102,14 @@ def getCondaActivationCmd(scipionExecutable):
 			if line.startswith('CONDA_ACTIVATION_CMD'):
 				return line.split('=')[1].strip()
 
+def testPythonCommand(pythonCommand):
+	"""
+	This function executes the given Python command within scipion3 env
+	and returns 0 if it succeeded or 1 if it failed.
+	"""
+	command = f"{getCondaActivationCmd(scipion)} && conda activate scipion3 && python -c '{pythonCommand}' 2>/dev/null && echo 1 || echo 0"
+	return int(subprocess.check_output(command, shell=True).decode().replace('\n', ''))
+
 ################################## MAIN EXECUTION FUNCTIONS ##################################
 def getAllTests(scipion, pluginModule, testPrefix):
 	""" This function finds the full list of tests from a given module. """
@@ -126,9 +134,11 @@ def getAllTests(scipion, pluginModule, testPrefix):
 		if line.startswith(scipionTestsStartingSpaces):
 			filteredLines.append(line.replace(f'{scipionTestsStartingSpaces}scipion3 {testPrefix}', ''))
 	
-	# If no tests were found, module was not found
+	# If no tests were found, check if module was not found or if plugin has no tests
 	if not filteredLines:
-		printFatalError(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?")
+		# If import caused an error, module was not found
+		if not testPythonCommand(f"import {pluginModule}"):
+			printFatalError(f"ERROR: No tests were found for module {args.plugin}. Are you sure this module is properly installed?")
 	
 	# Return full list of tests
 	return filteredLines
@@ -190,9 +200,7 @@ def removeDependecyTests(testList, dependenciesSkippableTests):
 		# Try to import module if provided
 		if dependencyTestModule:
 			# Creating import command to run within scipion3 conda env
-			command = f"{getCondaActivationCmd(args.scipion)} && conda activate scipion3 && python -c 'import {dependencyTestModule}' 2>/dev/null && echo 1 || echo 0"
-			sucess = int(subprocess.check_output(command, shell=True).decode().replace('\n', ''))
-			if sucess:
+			if testPythonCommand(f"import {dependencyTestModule}"):
 				continue
 
 		# If no module was provided or import raised a ModuleNotFoundError exception, skip tests
@@ -279,6 +287,12 @@ def main(args):
 
 	# Getting full list of tests
 	filteredLines = getAllTests(args.scipion, args.plugin, testPrefix)
+
+	# If test list is empty, plugin has no tests
+	if not filteredLines:
+		# This case is considered a sucess since nothing actually failed
+		printAndFlush(colorStr(f"Module {args.plugin} has not tests. Nothing to run.", color='yellow'))
+		sys.exit(0)
 
 	# Obtaining datasets and skippable tests according to situation
 	datasets, allSkippableTests = readTestDataFile(args.testData)
