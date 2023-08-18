@@ -553,7 +553,7 @@ def relabelAtomsMol2(atomFile, i=''):
   '''Relabel the atom names so each atom type goes from 1 to x, so if there is only one oxygen named O7,
   it will be renamed to O1'''
   atomCount = {}
-  auxFile = atomFile.replace(os.path.basename(atomFile), 'aux{}.mol2'.format(i))
+  auxFile = os.path.join(os.path.dirname(atomFile), f'{getBaseName(atomFile)}_aux{i}.mol2')
   atomLines = False
   with open(auxFile, 'w') as fOut:
     with open(atomFile) as fIn:
