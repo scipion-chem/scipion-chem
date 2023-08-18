@@ -534,6 +534,20 @@ def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None, he
   io.save(outFn, CleanStructureSelect(chain_ids, HETATM, waters, het2keep))
   return outFn
 
+def convertMol2(mol, outDir):
+  '''Uses OBabel binary to convert a SmallMolecule object to mol2 format and save it in the outDir
+  Performs the atom map relabelling needed to keep track'''
+  molFile = os.path.abspath(mol.getFileName())
+  inName, inExt = os.path.splitext(os.path.basename(molFile))
+  oFile = os.path.abspath(os.path.join(outDir, inName + '.mol2'))
+
+  if not molFile.endswith('.mol2'):
+    args = f' -i{inExt[1:]} {os.path.abspath(molFile)} -omol2 -O {oFile}'
+    runOpenBabel(protocol=None, args=args, cwd=outDir, popen=True)
+    relabelMapAtomsMol2(oFile)
+  else:
+    os.link(molFile, oFile)
+  return oFile
 
 def relabelAtomsMol2(atomFile, i=''):
   '''Relabel the atom names so each atom type goes from 1 to x, so if there is only one oxygen named O7,
