@@ -534,6 +534,20 @@ def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None, he
   io.save(outFn, CleanStructureSelect(chain_ids, HETATM, waters, het2keep))
   return outFn
 
+def obabelMolConversion(mol, outFormat, outDir):
+  '''Converts a molecule into the specified format using OBabel binary'''
+  outFormat = outFormat[1:] if outFormat.startswith('.') else outFormat
+  molFile = os.path.abspath(mol.getFileName())
+  inName, inExt = os.path.splitext(os.path.basename(molFile))
+  oFile = os.path.abspath(os.path.join(outDir, f'{inName}.{outFormat}'))
+
+  if not molFile.endswith(f'.{outFormat}'):
+    args = f' -i{inExt[1:]} {os.path.abspath(molFile)} -o{outFormat} -O {oFile}'
+    runOpenBabel(protocol=None, args=args, cwd=outDir, popen=True)
+    relabelMapAtomsMol2(oFile)
+  else:
+    os.link(molFile, oFile)
+  return oFile
 
 def relabelAtomsMol2(atomFile, i=''):
   '''Relabel the atom names so each atom type goes from 1 to x, so if there is only one oxygen named O7,
