@@ -81,28 +81,28 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
         group = form.addGroup('Display docking poses')
         group.addParam('displaySetDock', EnumParam,
-                       choices=self.getChoices(vType=SET)[0], default=0,
+                       choices=self.setLabels, default=0,
                        label='Display docking poses in set: ',
                        help='Display all ligands docked in this set')
 
         group.addParam('displayROIDock', EnumParam,
-                       choices=self.getChoices(vType=POCKET)[0], default=0,
+                       choices=self.pocketLabels, default=0,
                        label='Display docking poses in ROI: ',
                        help='Display all conformers and positions docked on this ROI')
 
         group.addParam('displayMoleculeDock', EnumParam,
-                       choices=self.getChoices(vType=MOLECULE)[0], default=0,
+                       choices=self.moleculeLabels, default=0,
                        label='Display docking poses of molecule: ',
                        help='Display all conformers and positions of this molecule')
 
         group.addParam('displaySingleDock', EnumParam,
-                       choices=self.getChoices(vType=SINGLE)[0], default=0,
+                       choices=self.singleLabels, default=0,
                        label='Display docking pose of ligand: ',
                        help='Display this single ligand with the target')
 
         group = form.addGroup('Visualize with PLIP')
         group.addParam('displayPymolPLIP', EnumParam,
-                       choices=self.getChoices(vType=SINGLE)[0], default=0,
+                       choices=self.singleLabels, default=0,
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
 
@@ -117,17 +117,17 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     group = form.addGroup('Display molecules')
     group.addParam('displaySet', EnumParam,
-                   choices=self.getChoices(vType=SET)[0], default=0,
+                   choices=self.pocketLabels, default=0,
                    label='Display molecules in set: ',
                    help='Display all ligands in this set')
 
     group.addParam('displayMolecule', EnumParam,
-                  choices=self.getChoices(vType=MOLECULE)[0], default=0,
+                  choices=self.moleculeLabels, default=0,
                   label='Display molecule conformers: ',
                   help='Display all conformers saved for this molecule')
 
     group.addParam('displaySingle', EnumParam,
-                  choices=self.getChoices(vType=SINGLE)[0], default=0,
+                  choices=self.singleLabels, default=0,
                   label='Display single molecule: ',
                   help='Display this single ligand with the target')
 
@@ -158,16 +158,16 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   def getChoices(self, vType=SET, pymol=True):
     outputLigandsDic = {}
     if issubclass(type(self.protocol), SetOfSmallMolecules):
-        '''If the viewer has been called for a SetOfMolecules'''
-        molSet = self.protocol
-        oLabel = 'outputSmallMolecules'
-        outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oLabel)
+      '''If the viewer has been called for a SetOfMolecules'''
+      molSet = self.protocol
+      oLabel = 'outputSmallMolecules'
+      outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oLabel)
     else:
-        '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
-        for oAttr in self.protocol.iterOutputAttributes():
-            if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
-              molSet = getattr(self.protocol, oAttr[0])
-              outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oAttr[0])
+      '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
+      for oAttr in self.protocol.iterOutputAttributes():
+        if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
+          molSet = getattr(self.protocol, oAttr[0])
+          outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oAttr[0])
 
     outputLabels = list(outputLigandsDic.keys())
     outputLabels = natural_sort(outputLabels)
