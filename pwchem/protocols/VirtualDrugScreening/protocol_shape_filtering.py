@@ -43,8 +43,7 @@ scriptName = 'shape_distances_script.py'
 class ProtocolShapeDistancesFiltering(EMProtocol):
     """
     Performs shape filtering of a set of ligands by the calculation of Tanimoto and Protrude distances between
-     a molecule in smi format and a query.
-
+    a molecule in smi format and a query.
     """
 
     _label = 'Shape Distance filtering'
