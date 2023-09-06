@@ -34,7 +34,7 @@ from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 
 # Scipion chem imports
-#from pwchem.utils import 
+from pwchem.utils import String
 
 OBJECT, ITEM = 0, 1
 
@@ -42,6 +42,9 @@ class ProtAddAttribute(EMProtocol):
   _label = 'Add attribute'
 
   def _defineParams(self, form):
+    # From input condition string
+    fromInputCondition = 'fromInput=='
+
     form.addSection(label=Message.LABEL_INPUT)
     group = form.addGroup('Attribute')
     group.addParam('atKey', params.StringParam, label="Attribute name: ", default='',
@@ -56,19 +59,19 @@ class ProtAddAttribute(EMProtocol):
                       '(in case it is a set)')
 
     group.addParam('inputObject', params.PointerParam, label="Input object: ",
-                    important=True, pointerClass='EMObject', condition='fromInput==0',
+                    important=True, pointerClass='EMObject', condition=f'{fromInputCondition}0',
                     help='Object you want to label with a new attribute')
-    group.addParam('atValue', params.StringParam, label="Attribute value: ", default='', condition='fromInput==0',
+    group.addParam('atValue', params.StringParam, label="Attribute value: ", default='', condition=f'{fromInputCondition}0',
                     help='Value of the new attribute of the object')
 
     group.addParam('inputSet', params.PointerParam, label="Input set: ",
-                    important=True, pointerClass='EMSet', condition='fromInput==1',
+                    important=True, pointerClass='EMSet', condition=f'{fromInputCondition}1',
                     help='Set containing the items you want to label with a new attribute')
-    group.addParam('mapKey', params.StringParam, label="Mapping key: ", default='', condition='fromInput==1',
+    group.addParam('mapKey', params.StringParam, label="Mapping key: ", default='', condition=f'{fromInputCondition}1',
                     help='Key of each item attribute to map the correspondance. '
                       'E.g: use the item ID to select the new attribute value for each item')
 
-    group.addParam('inputFile', params.FileParam, label="Map attribute file: ", condition='fromInput==1',
+    group.addParam('inputFile', params.FileParam, label="Map attribute file: ", condition=f'{fromInputCondition}1',
                     help='File containing the mapping of the items to the attribute values. It must be a csv '
                       'file where each line contains the "key, value"')
 
