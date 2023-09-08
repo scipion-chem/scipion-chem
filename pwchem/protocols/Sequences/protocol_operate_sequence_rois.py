@@ -45,7 +45,7 @@ UNION, INTERSECTION, DIFF, SYM_DIFF = 0, 1, 2, 3
 
 class ProtOperateSeqROI(EMProtocol):
     """
-    Implements operations for several sets of sequence ROIs: union, intersection, difference,...
+    Implements operations for several sets of sequence ROIs: union, intersection, difference...
     """
     _label = 'Operate sequence ROIs'
     _operations = ['Union', 'Intersection', 'Difference', 'Symmetric_difference']
