@@ -37,7 +37,7 @@ from pwchem import Plugin
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
-    """Run multiple sequence alignment for a set of sequences"""
+    """Runs multiple sequence alignment for a set of sequences"""
     _label = 'multiple sequence alignment'
 
     def _defineParams(self, form):
