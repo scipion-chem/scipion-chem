@@ -28,12 +28,12 @@
 import os, glob
 
 # Scipion em imports
-from pyworkflow.tests import *
+from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
 from pwchem.tests.tests_imports import TestImportBase
-from pwchem.protocols import *
+from pwchem.protocols import ProtChemImportSmallMolecules, ConvertStructures, ProtChemExportCSV, ProtChemOperateSet
 from pwchem.utils import assertHandle
 
 class TestImportBoth(BaseTest):
