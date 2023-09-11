@@ -26,18 +26,21 @@
 # *
 # **************************************************************************
 
-
+# General imports
 import os, shutil, parmed
 
+# Scipion chem imports
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam
+from pyworkflow.utils import Message
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 from pwem.convert.atom_struct import toCIF, toPdb
 
-from pwchem import Plugin
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule, MDSystem
-from pwchem.utils import getBaseFileName
-from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC, MDTRAJ_DIC
+# Plugin imports
+from ... import Plugin
+from ...objects import SetOfSmallMolecules, SmallMolecule, MDSystem
+from ...utils import getBaseFileName
+from ...constants import RDKIT_DIC, OPENBABEL_DIC, MDTRAJ_DIC
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
 extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
@@ -51,22 +54,25 @@ class ConvertStructures(EMProtocol):
     _program = ""
 
     def _defineParams(self, form):
-        form.addSection(label='Input')
+        # Input type condition
+        inputTypeCondition = 'inputType=='
+
+        form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
         group.addParam('inputType', EnumParam, default=0,
                        choices=["Small molecules", 'Target structure', 'MDSystem'], label='Input type: ',
                        help='Input type to convert: small molecule, protein structure or Molecular Dynamics system.')
 
-        group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules", condition='inputType==0',
+        group.addParam('inputSmallMolecules', PointerParam, pointerClass="SetOfSmallMolecules", condition=f'{inputTypeCondition}0',
                       label='Set of small molecules:', allowsNull=False,
                       help="The allowed format are pdb, cif, mol2, sdf and smi")
 
         group.addParam('inputStructure', PointerParam, pointerClass="AtomStruct",
-                      condition='inputType==1', label='Input structure:', allowsNull=False,
+                      condition=f'{inputTypeCondition}1', label='Input structure:', allowsNull=False,
                       help="The allowed format are pdb or cif")
 
         group.addParam('inputMDSystem', PointerParam, pointerClass="MDSystem",
-                       condition='inputType==2', label='Input MDSystem:', allowsNull=False,
+                       condition=f'{inputTypeCondition}2', label='Input MDSystem:', allowsNull=False,
                        help="Any system with a system file and trajectory file that mdtraj can read")
 
         group = form.addGroup('Output')
@@ -76,29 +82,29 @@ class ConvertStructures(EMProtocol):
                        help="Output format for the converted molecules")
 
         group.addParam('useManager', EnumParam, default=0, label='Convert using: ',
-                      condition='inputType==0', choices=[RDKIT, OBABEL],
+                      condition=f'{inputTypeCondition}0', choices=[RDKIT, OBABEL],
                       help='Whether to convert the input molecules using RDKit or OpenBabel')
 
 
         group.addParam('outputFormatTarget', EnumParam, default=0,
-                      condition='inputType==1', choices=['PDB', 'cif'], label='Output format')
+                      condition=f'{inputTypeCondition}1', choices=['PDB', 'cif'], label='Output format')
 
         group.addParam('convSysFile', BooleanParam, default=False, label='Convert coordinates file: ',
-                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+                       condition=f'{inputTypeCondition}2', help="Convert coordinates file from the MDSystem")
         group.addParam('outputSysFormat', EnumParam, default=0, label='System coordinates output format: ',
-                       condition='inputType==2 and convSysFile', choices=['PDB'],
+                       condition=f'{inputTypeCondition}2 and convSysFile', choices=['PDB'],
                        help="Output format for the coordinates of the system.")
         
         group.addParam('convTopFile', BooleanParam, default=True, label='Convert topology file: ',
-                       condition='inputType==2', help="Convert topology file from the MDSystem")
+                       condition=f'{inputTypeCondition}2', help="Convert topology file from the MDSystem")
         group.addParam('outputTopFormat', EnumParam, default=0, label='Trajectory output format: ',
-                       condition='inputType==2 and convTopFile', choices=['PSF', 'TOP', 'PRMTOP'],
+                       condition=f'{inputTypeCondition}2 and convTopFile', choices=['PSF', 'TOP', 'PRMTOP'],
                        help="Output format for the topology.")
 
         group.addParam('convTrjFile', BooleanParam, default=True, label='Convert trajectory file: ',
-                       condition='inputType==2', help="Convert coordinates file from the MDSystem")
+                       condition=f'{inputTypeCondition}2', help="Convert coordinates file from the MDSystem")
         group.addParam('outputTrjFormat', EnumParam, default=0, label='Trajectory output format: ',
-                       condition='inputType==2 and convTrjFile', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
+                       condition=f'{inputTypeCondition}2 and convTrjFile', choices=['DCD', 'GRO', 'NETCDF', 'PDB', 'TRR', 'XTC'],
                        help="Output format for the trajectory.")
 
     # --------------------------- Steps functions --------------------
@@ -251,5 +257,4 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatTarget.get() == 2:
                 summary.append('Converted to Mol2')
         return summary
-    
     
