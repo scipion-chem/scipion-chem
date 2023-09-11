@@ -34,7 +34,7 @@ from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 
 # Scipion chem imports
-from pwchem.utils import String
+from ...utils import String
 
 OBJECT, ITEM = 0, 1
 
