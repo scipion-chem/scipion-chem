@@ -719,7 +719,7 @@ class AddSequenceWizard(SelectResidueWizard):
             outStr = [os.path.splitext(os.path.basename(pdbFile))[0]]
             AS = True
         elif issubclass(type(inputObj), Sequence):
-            outStr = [inputObj.getId()]
+            outStr = [inputObj.getId().replace("|", "_")]
 
         if AS:
             # Chain

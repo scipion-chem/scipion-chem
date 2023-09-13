@@ -1306,7 +1306,7 @@ class ProteinResidue(data.EMObject):
 
 
 class MDSystem(data.EMFile):
-    """A system atom structure (prepared for MD). Base class fro Gromacs, Amber
+    """A system atom structure (prepared for MD). Base class for Gromacs, Amber
         _topoFile: topology file
         _trjFile: trajectory file
         _ff: main force field
