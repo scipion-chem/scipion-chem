@@ -142,7 +142,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
 
-        outputMols = performBatchThreading(self.generateOutput, inputMols, nt, cloneItem=False)
+        outputMols = performBatchThreading(self.generateOutput, inputMols, nt, cloneItem=True)
         for newSmallMol in outputMols:
           outputSmallMolecules.append(newSmallMol)
 
