@@ -379,9 +379,9 @@ class ProtocolLigandsFetching(EMProtocol):
 
 	def fetchFromLigandChemBL(self, ligandsDic):
 		ligNames = {}
-		for ligandId in ligandsDic:
+		for i, ligandId in enumerate(ligandsDic):
 			jDic = self.getJDic('ChEMBL', 'molecule', ligandId)
-			ligNames['noTarget'] = {ligandId: jDic['molecules'][0]['molecule_structures']['canonical_smiles']}
+			ligNames[f'noTarget_{i}'] = {ligandId: jDic['molecules'][0]['molecule_structures']['canonical_smiles']}
 		return ligNames
 
 	def fetchLigandsFromTargets(self, targetIds, iBase, allLigandNames):
