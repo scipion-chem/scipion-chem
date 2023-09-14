@@ -58,13 +58,13 @@ def makeSubsets(oriSet, nt, cloneItem=True):
   if nt > len(oriSet):
       nt = len(oriSet)
 
-  subsets = [[] for i in range(nt)]
+  subsets = [[] for _ in range(nt)]
   for i, obj in enumerate(oriSet):
     nObj = obj.clone() if cloneItem else obj
     subsets[i%nt].append(nObj)
   return subsets
 
-def performBatchThreading(task, inSet, nt, cloneItem=True, *args, **kwargs):
+def performBatchThreading(task, inSet, nt, cloneItem=True, **kwargs):
   '''Uses threading to divide a task over an input set among a number of threads
   Input:
       -task: function. Task to perform
