@@ -145,6 +145,7 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         outputMols = performBatchThreading(self.generateOutput, inputMols, nt, cloneItem=True)
         for newSmallMol in outputMols:
           outputSmallMolecules.append(newSmallMol)
+        outputSmallMolecules.updateMolClass()
 
         failedIds = []
         for failFile in glob.glob(self._getExtraPath('failedPreparations_*.txt')):
