@@ -133,6 +133,7 @@ class ConvertStructures(EMProtocol):
                     self.convErrors.append(fnRoot)
 
             if len(outputSmallMolecules) > 0:
+                outputSmallMolecules.updateMolClass()
                 self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
                 self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
