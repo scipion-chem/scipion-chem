@@ -56,6 +56,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
+    self.protocolObject = self.protocol
     self.singleLabels, self.singleLigandsDic = self.getChoices(vType=SINGLE)
     self.moleculeLabels, self.moleculeLigandsDic = self.getChoices(vType=MOLECULE)
     self.pocketLabels, self.pocketLigandsDic = self.getChoices(vType=POCKET)
@@ -67,6 +68,12 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                     label='Display ligands set and attributes in table format: ',
                     help='Display the ligands set in the set in table format with their respective attributes')
 
+  def getOutputSetLabels(self):
+    if not self.setLabels:
+      for oAttr in self.protocolObject.iterOutputAttributes():
+        if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
+          self.setLabels.append(oAttr[0])
+    return self.setLabels
 
   def _defineParams(self, form):
     #Doking section
@@ -135,41 +142,33 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     form.addSection(label='Table view')
     self.defineParamsTable(form)
 
-  def updateLigandsDic(self, outputLigandsDic, molSet, vType, oLabelSet=None):
-    if vType == SET:
-        oLabel = oLabelSet
-        outputLigandsDic[oLabel] = molSet
-    else:
-        for mol in molSet:
-          curMol = mol.clone()
-          if vType == SINGLE:
-            oLabel = curMol.getUniqueName()
-          elif vType == MOLECULE:
-            oLabel = curMol.getMolName()
-          elif vType == POCKET:
-            oLabel = 'g_{}'.format(curMol.getGridId())
-
-          if not oLabel in outputLigandsDic:
-            outputLigandsDic[oLabel] = [curMol]
-          else:
-            outputLigandsDic[oLabel] += [curMol]
-    return outputLigandsDic
-
   def getChoices(self, vType=SET, pymol=True):
-    outputLigandsDic = {}
+    '''Return based on the subgroups of the output set(s):
+        outputLabels: list of labels with the choices of subgroups that can be made for selection vType
+                      (single, molecule, pocket or set)
+        outputLigandsDic: dictionary containing the items contained in each of the subgroups in the labels
+                          the dictionary is  separated by each of the output sets:
+                          {outputSetLabel1: {outputSubGroupLabel1: [indexes]}, }
+    '''
+    outputLigandsDic, outputLabels = {}, []
     if issubclass(type(self.protocol), SetOfSmallMolecules):
       '''If the viewer has been called for a SetOfMolecules'''
       molSet = self.protocol
-      oLabel = 'outputSmallMolecules'
-      outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oLabel)
+      setLabel = 'outputSmallMolecules'
+      outputLigandsDic[setLabel] = molSet.getGroupIndexes()[vType]
+      outputLabels = [setLabel]
+
     else:
       '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
-      for oAttr in self.protocol.iterOutputAttributes():
-        if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
-          molSet = getattr(self.protocol, oAttr[0])
-          outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oAttr[0])
+      molSets = self.getOutputMolSets()
+      for setLabel, molSet in molSets.items():
+          molSet = getattr(self.protocol, setLabel)
+          curLigDic = molSet.getGroupIndexes(setLabel)[vType]
 
-    outputLabels = list(outputLigandsDic.keys())
+          outputLabels += list(curLigDic.keys())
+          outputLigandsDic[setLabel] = curLigDic
+
+    outputLabels = list(set(outputLabels))
     outputLabels = natural_sort(outputLabels)
     if vType in SET and pymol and len(outputLabels) > 1:
         outputLabels = ['All'] + outputLabels
@@ -197,14 +196,40 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
 ################# MAIN VIEWER FUNCTIONS ###################
 
+  def getOutputMolSets(self):
+    '''Return the sets of output molecules in the protocol'''
+    outputMolSets = {}
+    for oAttr in self.protocolObject.iterOutputAttributes():
+      if type(getattr(self.protocolObject, oAttr[0])) == SetOfSmallMolecules:
+        outputMolSets[oAttr[0]] = getattr(self.protocolObject, oAttr[0])
+    return outputMolSets
+
+  def index2MolDic(self, molSets, groupDic):
+    '''From the sets of molecules selected in the output, return a dictionary with the index dictionaries
+    of form {groupLabel: [mols]}
+    '''
+    molDic = {}
+    for molSetLabel, molSet in molSets.items():
+      indexDic = groupDic[molSetLabel]
+      for groupLabel, indexes in indexDic.items():
+        if groupLabel in molDic:
+          molDic[groupLabel] += molSet.getMolsFromIds(indexes)
+        else:
+          molDic[groupLabel] = molSet.getMolsFromIds(indexes)
+    return molDic
+
   def getGroupMols(self, groupDic, sLabel):
+    '''Return the molecules determined by the sLabel in the dictionary of index (groupDic)
+    '''
+    molSets = self.getOutputMolSets()
+    molDic = self.index2MolDic(molSets, groupDic)
     if sLabel != 'All':
-        mols = sortMolsByUnique(groupDic[sLabel])
+        mols = sortMolsByUnique(molDic[sLabel])
     else:
         mols = []
         for sLab in self.setLabels:
           if sLab != 'All':
-              mols += sortMolsByUnique(groupDic[sLab])
+              mols += sortMolsByUnique(molDic[sLab])
     return mols
 
   def writeMolsPML(self, mols, addTarget=True, disable=True, pose=True):
