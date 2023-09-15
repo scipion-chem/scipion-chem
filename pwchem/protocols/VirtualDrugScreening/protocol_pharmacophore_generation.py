@@ -44,7 +44,6 @@ scriptName = 'pharmacophore_generation.py'
 class ProtocolPharmacophoreGeneration(EMProtocol):
     """
     Perform the construction of a consensus pharmacophore from a set of docked small molecules
-
     """
     _label = 'Pharmacophore generation'
 

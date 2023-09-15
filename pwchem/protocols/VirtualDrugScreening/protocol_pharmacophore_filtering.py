@@ -41,7 +41,6 @@ scriptName = 'pharmacophore_filtering.py'
 class ProtocolPharmacophoreFiltering(EMProtocol):
     """
     Perform the filtering of a set of small molecules that match an input pharmacophore.
-
     """
     _label = 'Pharmacophore filtering'
 

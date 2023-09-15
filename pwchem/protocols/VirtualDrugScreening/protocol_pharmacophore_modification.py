@@ -41,7 +41,6 @@ class ProtocolPharmacophoreModification(EMProtocol):
     """
     Perform the modification of a pharmacophore.
     Allows to add, remove or modify its chemical features
-
     """
     _label = 'Pharmacophore modification'
 
