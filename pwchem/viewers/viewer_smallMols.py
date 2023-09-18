@@ -349,9 +349,9 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     pmlsDir = self.getPmlsDir()
 
     ligandLabel = self.getEnumText('displayPymolPLIP')
-    mol = self.singleLigandsDic[ligandLabel][0].clone()
+    mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
     if len(mols) > 0:
-
+      mol = mols[0].clone()
       mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
                                         os.path.join(pmlsDir, ligandLabel + '.pdb'))
 
