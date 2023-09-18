@@ -300,11 +300,6 @@ class ProtocolScoreDocking(EMProtocol):
             for mol in pSet.get():
                 yield mol.clone()
 
-    def scoreDockings(self, receptorFile, msjDic, i):
-        paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
-        self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
-        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
-
     def parseResults(self, resFile):
         resDic = {}
         resIdx = resFile.split('_')[1]
