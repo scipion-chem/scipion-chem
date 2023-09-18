@@ -530,7 +530,7 @@ class SetOfSmallMolecules(data.EMSet):
                 elif vType == POCKET:
                     oLabel = 'g_{}'.format(curMol.getGridId())
 
-                if not oLabel in outputLigandsDic:
+                if oLabel not in outputLigandsDic:
                     outputLigandsDic[oLabel] = [curMol.getObjId()]
                 else:
                     outputLigandsDic[oLabel] += [curMol.getObjId()]
