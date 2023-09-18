@@ -122,6 +122,13 @@ class ProtocolScoreDocking(EMProtocol):
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
+    def getnThreads(self):
+        '''Get the number of threads available for each scoring execution'''
+        nPockets = len(self.workFlowSteps.get().strip().split('\n'))
+        nThreads = self.numberOfThreads.get() // nPockets
+        nThreads = 1 if nThreads == 0 else nThreads
+        return nThreads
+
     def _insertAllSteps(self):
         sSteps, wSteps = [], []
         self.createGUISummary()
@@ -155,10 +162,17 @@ class ProtocolScoreDocking(EMProtocol):
             molBaseFile = os.path.join(outDir, mol.getUniqueName() + molExt)
             createLink(molFile, molBaseFile)
 
+    def performScoring(self, molFiles, molLists, it, receptorFile, msjDic, iS):
+        paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}_{}.txt'.format(iS, it)))
+        self.writeParamsFile(paramsPath, receptorFile, molFiles, msjDic, iS, it)
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath(), popen=True)
+
     def scoringStep(self, wStep, i):
         # Perform the scoring using the ODDT package
+        nt = self.getnThreads()
         receptorFile = self.getInputReceptorFile()
-        results = self.scoreDockings(receptorFile, eval(wStep), i)
+        performBatchThreading(self.performScoring, self.getInputMolFiles(), nt, cloneItem=False,
+                              receptorFile=receptorFile, msjDic=eval(wStep), iS=i)
 
     def createOutputStep(self):
         self.relabelDic = {}
@@ -293,7 +307,7 @@ class ProtocolScoreDocking(EMProtocol):
 
     def parseResults(self, resFile):
         resDic = {}
-        resIdx = resFile.split('results_')[1].split('.')[0]
+        resIdx = resFile.split('_')[1]
         with open(resFile) as f:
             for line in f:
                 file = line.split()[0]
@@ -352,10 +366,9 @@ class ProtocolScoreDocking(EMProtocol):
             fName = ''
         return fName
 
-    def getPoseFilesStr(self):
-        poseFilesFile = self._getTmpPath('poseFiles.txt')
+    def getPoseFilesStr(self, molFiles, it):
+        poseFilesFile = self._getTmpPath(f'poseFiles_{it}.txt')
         if not os.path.exists(poseFilesFile):
-            molFiles = self.getInputMolFiles()
             poseFilesStr = ' '.join([molFile for molFile in molFiles])
             with open(poseFilesFile, 'w') as f:
                 f.write(poseFilesStr)
@@ -365,12 +378,12 @@ class ProtocolScoreDocking(EMProtocol):
 
         return poseFilesStr
 
-    def writeParamsFile(self, paramsFile, recFile, msjDic, i):
-        poseFilesStr = self.getPoseFilesStr()
+    def writeParamsFile(self, paramsFile, recFile, molFiles, msjDic, iS, it):
+        poseFilesStr = self.getPoseFilesStr(molFiles, it)
         with open(paramsFile, 'w') as f:
             scoreChoice = msjDic['scoreChoice']
 
-            f.write('outputPath: results_{}.tsv\n'.format(i))
+            f.write('outputPath: results_{}_{}.tsv\n'.format(iS, it))
             modelFile = os.path.abspath(Plugin.getODDTModelsPath(self.getModelFileName(msjDic)))
             f.write('function: {}\n'.format(self.getScoreFunction(msjDic)))
             if os.path.exists(modelFile) and scoreChoice != 'Vina':
