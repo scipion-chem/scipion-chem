@@ -482,9 +482,10 @@ class SetOfSmallMolecules(data.EMSet):
                     break
         self._molClass.set(mClass)
 
-    def append(self, item):
+    def append(self, item, update=False):
         super().append(item)
-        self.updateMolClass()
+        if update:
+            self.updateMolClass()
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])

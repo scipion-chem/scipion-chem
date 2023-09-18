@@ -283,6 +283,7 @@ class ProtocolLigandsFetching(EMProtocol):
 				smallMolecule = SmallMolecule(smallMolFilename=os.path.relpath(fnSmall), molName='guess')
 				outputSmallMolecules.append(smallMolecule)
 
+		outputSmallMolecules.updateMolClass()
 		self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
 	# --------------------------- Summary functions -----------------------------------
