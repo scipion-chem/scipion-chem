@@ -177,8 +177,8 @@ class ProtChemZINCFilter(EMProtocol):
             except:
                 print("Could not retrieve {} information from ZINC. Keeping the molecule by default".format(zincId))
                 with open(presFile, 'a') as f:
-                    f.write('{}\t-\t{}\t-\t{}\t{}\n'.format(zincId, '\t'.join(['Not_found'] * len(keepBools)),
-                                                            '\t'.join(['Not_found'] * len(remBools)), add))
+                    f.write('{}\t-\t{}\t-\t{}\t{}\n'.format(zincId, '\t'.join(['Not_found'] * len(filDic['Keep'])),
+                                                            '\t'.join(['Not_found'] * len(filDic['Remove'])), add))
 
             if add:
                 molLists[it].append(mol)
