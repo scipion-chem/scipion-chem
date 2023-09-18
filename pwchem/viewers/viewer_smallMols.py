@@ -28,7 +28,7 @@ import os
 
 from pyworkflow.protocol.params import EnumParam
 import pyworkflow.viewer as pwviewer
-from pyworkflow.gui.dialog import showError
+from pyworkflow.gui.dialog import showError, askYesNoCancel
 from pwem.viewers.viewer_chimera import Chimera, ChimeraView
 
 from pwchem.objects import SetOfSmallMolecules
@@ -230,6 +230,12 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         for sLab in self.setLabels:
           if sLab != 'All':
               mols += sortMolsByUnique(molDic[sLab])
+    if len(mols) > 1000:
+      res = askYesNoCancel('Slow display',
+                  f'Trying to display a high number of molecules ({len(mols)}) might be slow, do you want to continue?',
+                  self.getTkRoot())
+      if res != 0:
+        return []
     return mols
 
   def writeMolsPML(self, mols, addTarget=True, disable=True, pose=True):
@@ -294,79 +300,84 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           ligandLabel, sLabel = 'All', 'allSetDockedMolecules'
 
       mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
-      if self.displaySoftware.get() == PYMOL:
-          return self.viewPymolMols(mols, sLabel)
-      elif self.displaySoftware.get() == CHIMERAX:
-          return self.viewChimeraXMols(mols, sLabel)
-      elif self.displaySoftware.get() == VIEWDOCKX:
-          return self.viewDockChimeraXMols(mols, sLabel)
+      if len(mols) > 0:
+        if self.displaySoftware.get() == PYMOL:
+            return self.viewPymolMols(mols, sLabel)
+        elif self.displaySoftware.get() == CHIMERAX:
+            return self.viewChimeraXMols(mols, sLabel)
+        elif self.displaySoftware.get() == VIEWDOCKX:
+            return self.viewDockChimeraXMols(mols, sLabel)
 
   def _viewROIDock(self, e=None):
     ligandLabel = self.getEnumText('displayROIDock')
 
     mols = self.getGroupMols(self.pocketLigandsDic, ligandLabel)
-    if self.displaySoftware.get() == PYMOL:
-        return self.viewPymolMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == CHIMERAX:
-        return self.viewChimeraXMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == VIEWDOCKX:
-      return self.viewDockChimeraXMols(mols, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewDockChimeraXMols(mols, ligandLabel)
 
 
   def _viewMoleculeDock(self, e=None):
     ligandLabel = self.getEnumText('displayMoleculeDock')
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
-    if self.displaySoftware.get() == PYMOL:
-        return self.viewPymolMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == CHIMERAX:
-        return self.viewChimeraXMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == VIEWDOCKX:
-      return self.viewDockChimeraXMols(mols, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewDockChimeraXMols(mols, ligandLabel)
 
   def _viewSingleDock(self, e=None):
     ligandLabel = self.getEnumText('displaySingleDock')
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
-    if self.displaySoftware.get() == PYMOL:
-        return self.viewPymolMols(mols, ligandLabel, disable=False)
-    elif self.displaySoftware.get() == CHIMERAX:
-        return self.viewChimeraXMols(mols, ligandLabel, disable=False)
-    elif self.displaySoftware.get() == VIEWDOCKX:
-      return self.viewDockChimeraXMols(mols, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel, disable=False)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel, disable=False)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewDockChimeraXMols(mols, ligandLabel)
 
   def _viewPymolPLIP(self, e=None):
     pmlsDir = self.getPmlsDir()
 
     ligandLabel = self.getEnumText('displayPymolPLIP')
     mol = self.singleLigandsDic[ligandLabel][0].clone()
+    if len(mols) > 0:
 
-    mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
-                                      os.path.join(pmlsDir, ligandLabel + '.pdb'))
+      mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
+                                        os.path.join(pmlsDir, ligandLabel + '.pdb'))
 
-    pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
-                         cwd=os.path.abspath(pmlsDir))
+      pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
+                           cwd=os.path.abspath(pmlsDir))
 
-    pmlFile, pmlFiles = '', []
-    for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-        if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
-            pmlFiles.append(file)
+      pmlFile, pmlFiles = '', []
+      for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
+          if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
+              pmlFiles.append(file)
 
-    for file in pmlFiles:
-        for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
-            if ligName in file:
-                pmlFile = file
-                break
-    if pmlFile == '' and len(pmlFiles) > 0:
-        pmlFile = pmlFiles[0]
+      for file in pmlFiles:
+          for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
+              if ligName in file:
+                  pmlFile = file
+                  break
+      if pmlFile == '' and len(pmlFiles) > 0:
+          pmlFile = pmlFiles[0]
 
-    if pmlFile != '':
-      pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
-      pymolV = PyMolViewer(project=self.getProject())
-      return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
-    else:
-      showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
-      print('PLIP found no interactions in the docking position')
+      if pmlFile != '':
+        pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
+        pymolV = PyMolViewer(project=self.getProject())
+        return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+      else:
+        showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
+        print('PLIP found no interactions in the docking position')
 
 ################### MOLECULES VIEWS #################
 
@@ -378,28 +389,31 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       ligandLabel, sLabel = 'All', 'allSetMolecules'
 
     mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
-    if self.displaySoftwareMol.get() == PYMOL:
-      return self.viewPymolMols(mols, sLabel, pose=False, addTarget=False)
-    elif self.displaySoftwareMol.get() == CHIMERAX:
-      return self.viewChimeraXMols(mols, sLabel, pose=False, addTarget=False)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, sLabel, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, sLabel, pose=False, addTarget=False)
 
   def _viewMolecule(self, e=None):
     ligandLabel = self.getEnumText('displayMolecule')
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
-    if self.displaySoftwareMol.get() == PYMOL:
-      return self.viewPymolMols(mols, ligandLabel, pose=False, addTarget=False)
-    elif self.displaySoftwareMol.get() == CHIMERAX:
-      return self.viewChimeraXMols(mols, ligandLabel, pose=False, addTarget=False)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, ligandLabel, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, ligandLabel, pose=False, addTarget=False)
 
   def _viewSingle(self, e=None):
     ligandLabel = self.getEnumText('displaySingle')
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
-    if self.displaySoftwareMol.get() == PYMOL:
-      return self.viewPymolMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
-    elif self.displaySoftwareMol.get() == CHIMERAX:
-      return self.viewChimeraXMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
 
     ###################   TABLE VIEW ####################
 
