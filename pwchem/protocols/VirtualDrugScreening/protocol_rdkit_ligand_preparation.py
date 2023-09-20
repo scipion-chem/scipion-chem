@@ -152,10 +152,11 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
             failedIds += fr.read().strip().split('\n')
             os.remove(failFile)
 
-        allFails = self.getFailsPath()
-        with open(allFails, 'w') as f:
-          failedIds.sort()
-          f.write('\n'.join(failedIds))
+        if len(failedIds) > 0:
+          allFails = self.getFailsPath()
+          with open(allFails, 'w') as f:
+            failedIds.sort()
+            f.write('\n'.join(failedIds))
 
 
         if len(outputSmallMolecules) > 0:
