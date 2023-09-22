@@ -245,6 +245,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
             smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
 
             outputSmallMolecules.append(smallMolecule)
+
+        outputSmallMolecules.updateMolClass()
         self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
 

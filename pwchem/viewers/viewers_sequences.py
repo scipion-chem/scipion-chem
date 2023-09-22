@@ -67,7 +67,7 @@ class SequenceAliViewer(pwviewer.Viewer):
         seqFiles = []
         if issubclass(cls, SetOfSequences) or issubclass(cls, Sequence):
             if hasattr(obj, '_aligned') and getattr(obj, '_aligned'):
-                seqFiles += [obj.getAlignmentFileName()]
+                seqFiles += [os.path.abspath(obj.getAlignmentFileName())]
             else:
                 seqFiles += [self.showDefView(obj)]
 

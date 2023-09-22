@@ -28,7 +28,7 @@ import os
 
 from pyworkflow.protocol.params import EnumParam
 import pyworkflow.viewer as pwviewer
-from pyworkflow.gui.dialog import showError
+from pyworkflow.gui.dialog import showError, askYesNoCancel
 from pwem.viewers.viewer_chimera import Chimera, ChimeraView
 
 from pwchem.objects import SetOfSmallMolecules
@@ -56,6 +56,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
+    self.protocolObject = self.protocol
     self.singleLabels, self.singleLigandsDic = self.getChoices(vType=SINGLE)
     self.moleculeLabels, self.moleculeLigandsDic = self.getChoices(vType=MOLECULE)
     self.pocketLabels, self.pocketLigandsDic = self.getChoices(vType=POCKET)
@@ -67,6 +68,12 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                     label='Display ligands set and attributes in table format: ',
                     help='Display the ligands set in the set in table format with their respective attributes')
 
+  def getOutputSetLabels(self):
+    if not self.setLabels:
+      for oAttr in self.protocolObject.iterOutputAttributes():
+        if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
+          self.setLabels.append(oAttr[0])
+    return self.setLabels
 
   def _defineParams(self, form):
     #Doking section
@@ -81,28 +88,28 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
         group = form.addGroup('Display docking poses')
         group.addParam('displaySetDock', EnumParam,
-                       choices=self.getChoices(vType=SET)[0], default=0,
+                       choices=self.setLabels, default=0,
                        label='Display docking poses in set: ',
                        help='Display all ligands docked in this set')
 
         group.addParam('displayROIDock', EnumParam,
-                       choices=self.getChoices(vType=POCKET)[0], default=0,
+                       choices=self.pocketLabels, default=0,
                        label='Display docking poses in ROI: ',
                        help='Display all conformers and positions docked on this ROI')
 
         group.addParam('displayMoleculeDock', EnumParam,
-                       choices=self.getChoices(vType=MOLECULE)[0], default=0,
+                       choices=self.moleculeLabels, default=0,
                        label='Display docking poses of molecule: ',
                        help='Display all conformers and positions of this molecule')
 
         group.addParam('displaySingleDock', EnumParam,
-                       choices=self.getChoices(vType=SINGLE)[0], default=0,
+                       choices=self.singleLabels, default=0,
                        label='Display docking pose of ligand: ',
                        help='Display this single ligand with the target')
 
         group = form.addGroup('Visualize with PLIP')
         group.addParam('displayPymolPLIP', EnumParam,
-                       choices=self.getChoices(vType=SINGLE)[0], default=0,
+                       choices=self.singleLabels, default=0,
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
 
@@ -117,17 +124,17 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     group = form.addGroup('Display molecules')
     group.addParam('displaySet', EnumParam,
-                   choices=self.getChoices(vType=SET)[0], default=0,
+                   choices=self.setLabels, default=0,
                    label='Display molecules in set: ',
                    help='Display all ligands in this set')
 
     group.addParam('displayMolecule', EnumParam,
-                  choices=self.getChoices(vType=MOLECULE)[0], default=0,
+                  choices=self.moleculeLabels, default=0,
                   label='Display molecule conformers: ',
                   help='Display all conformers saved for this molecule')
 
     group.addParam('displaySingle', EnumParam,
-                  choices=self.getChoices(vType=SINGLE)[0], default=0,
+                  choices=self.singleLabels, default=0,
                   label='Display single molecule: ',
                   help='Display this single ligand with the target')
 
@@ -135,41 +142,33 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     form.addSection(label='Table view')
     self.defineParamsTable(form)
 
-  def updateLigandsDic(self, outputLigandsDic, molSet, vType, oLabelSet=None):
-    if vType == SET:
-        oLabel = oLabelSet
-        outputLigandsDic[oLabel] = molSet
-    else:
-        for mol in molSet:
-          curMol = mol.clone()
-          if vType == SINGLE:
-            oLabel = curMol.getUniqueName()
-          elif vType == MOLECULE:
-            oLabel = curMol.getMolName()
-          elif vType == POCKET:
-            oLabel = 'g_{}'.format(curMol.getGridId())
-
-          if not oLabel in outputLigandsDic:
-            outputLigandsDic[oLabel] = [curMol]
-          else:
-            outputLigandsDic[oLabel] += [curMol]
-    return outputLigandsDic
-
   def getChoices(self, vType=SET, pymol=True):
-    outputLigandsDic = {}
+    '''Return based on the subgroups of the output set(s):
+        outputLabels: list of labels with the choices of subgroups that can be made for selection vType
+                      (single, molecule, pocket or set)
+        outputLigandsDic: dictionary containing the items contained in each of the subgroups in the labels
+                          the dictionary is  separated by each of the output sets:
+                          {outputSetLabel1: {outputSubGroupLabel1: [indexes]}, }
+    '''
+    outputLigandsDic, outputLabels = {}, []
     if issubclass(type(self.protocol), SetOfSmallMolecules):
-        '''If the viewer has been called for a SetOfMolecules'''
-        molSet = self.protocol
-        oLabel = 'outputSmallMolecules'
-        outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oLabel)
-    else:
-        '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
-        for oAttr in self.protocol.iterOutputAttributes():
-            if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
-              molSet = getattr(self.protocol, oAttr[0])
-              outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oAttr[0])
+      '''If the viewer has been called for a SetOfMolecules'''
+      molSet = self.protocol
+      setLabel = 'outputSmallMolecules'
+      outputLigandsDic[setLabel] = molSet.getGroupIndexes()[vType]
+      outputLabels = [setLabel]
 
-    outputLabels = list(outputLigandsDic.keys())
+    else:
+      '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
+      molSets = self.getOutputMolSets()
+      for setLabel, molSet in molSets.items():
+          molSet = getattr(self.protocol, setLabel)
+          curLigDic = molSet.getGroupIndexes(setLabel)[vType]
+
+          outputLabels += list(curLigDic.keys())
+          outputLigandsDic[setLabel] = curLigDic
+
+    outputLabels = list(set(outputLabels))
     outputLabels = natural_sort(outputLabels)
     if vType in SET and pymol and len(outputLabels) > 1:
         outputLabels = ['All'] + outputLabels
@@ -197,14 +196,46 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
 ################# MAIN VIEWER FUNCTIONS ###################
 
+  def getOutputMolSets(self):
+    '''Return the sets of output molecules in the protocol'''
+    outputMolSets = {}
+    for oAttr in self.protocolObject.iterOutputAttributes():
+      if type(getattr(self.protocolObject, oAttr[0])) == SetOfSmallMolecules:
+        outputMolSets[oAttr[0]] = getattr(self.protocolObject, oAttr[0])
+    return outputMolSets
+
+  def index2MolDic(self, molSets, groupDic):
+    '''From the sets of molecules selected in the output, return a dictionary with the index dictionaries
+    of form {groupLabel: [mols]}
+    '''
+    molDic = {}
+    for molSetLabel, molSet in molSets.items():
+      indexDic = groupDic[molSetLabel]
+      for groupLabel, indexes in indexDic.items():
+        if groupLabel in molDic:
+          molDic[groupLabel] += molSet.getMolsFromIds(indexes)
+        else:
+          molDic[groupLabel] = molSet.getMolsFromIds(indexes)
+    return molDic
+
   def getGroupMols(self, groupDic, sLabel):
+    '''Return the molecules determined by the sLabel in the dictionary of index (groupDic)
+    '''
+    molSets = self.getOutputMolSets()
+    molDic = self.index2MolDic(molSets, groupDic)
     if sLabel != 'All':
-        mols = sortMolsByUnique(groupDic[sLabel])
+        mols = sortMolsByUnique(molDic[sLabel])
     else:
         mols = []
         for sLab in self.setLabels:
           if sLab != 'All':
-              mols += sortMolsByUnique(groupDic[sLab])
+              mols += sortMolsByUnique(molDic[sLab])
+    if len(mols) > 1000:
+      res = askYesNoCancel('Slow display',
+                  f'Trying to display a high number of molecules ({len(mols)}) might be slow, do you want to continue?',
+                  self.getTkRoot())
+      if res != 0:
+        return []
     return mols
 
   def writeMolsPML(self, mols, addTarget=True, disable=True, pose=True):
@@ -269,79 +300,84 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           ligandLabel, sLabel = 'All', 'allSetDockedMolecules'
 
       mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
-      if self.displaySoftware.get() == PYMOL:
-          return self.viewPymolMols(mols, sLabel)
-      elif self.displaySoftware.get() == CHIMERAX:
-          return self.viewChimeraXMols(mols, sLabel)
-      elif self.displaySoftware.get() == VIEWDOCKX:
-          return self.viewDockChimeraXMols(mols, sLabel)
+      if len(mols) > 0:
+        if self.displaySoftware.get() == PYMOL:
+            return self.viewPymolMols(mols, sLabel)
+        elif self.displaySoftware.get() == CHIMERAX:
+            return self.viewChimeraXMols(mols, sLabel)
+        elif self.displaySoftware.get() == VIEWDOCKX:
+            return self.viewDockChimeraXMols(mols, sLabel)
 
   def _viewROIDock(self, e=None):
     ligandLabel = self.getEnumText('displayROIDock')
 
     mols = self.getGroupMols(self.pocketLigandsDic, ligandLabel)
-    if self.displaySoftware.get() == PYMOL:
-        return self.viewPymolMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == CHIMERAX:
-        return self.viewChimeraXMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == VIEWDOCKX:
-      return self.viewDockChimeraXMols(mols, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewDockChimeraXMols(mols, ligandLabel)
 
 
   def _viewMoleculeDock(self, e=None):
     ligandLabel = self.getEnumText('displayMoleculeDock')
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
-    if self.displaySoftware.get() == PYMOL:
-        return self.viewPymolMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == CHIMERAX:
-        return self.viewChimeraXMols(mols, ligandLabel)
-    elif self.displaySoftware.get() == VIEWDOCKX:
-      return self.viewDockChimeraXMols(mols, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewDockChimeraXMols(mols, ligandLabel)
 
   def _viewSingleDock(self, e=None):
     ligandLabel = self.getEnumText('displaySingleDock')
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
-    if self.displaySoftware.get() == PYMOL:
-        return self.viewPymolMols(mols, ligandLabel, disable=False)
-    elif self.displaySoftware.get() == CHIMERAX:
-        return self.viewChimeraXMols(mols, ligandLabel, disable=False)
-    elif self.displaySoftware.get() == VIEWDOCKX:
-      return self.viewDockChimeraXMols(mols, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel, disable=False)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel, disable=False)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewDockChimeraXMols(mols, ligandLabel)
 
   def _viewPymolPLIP(self, e=None):
     pmlsDir = self.getPmlsDir()
 
     ligandLabel = self.getEnumText('displayPymolPLIP')
-    mol = self.singleLigandsDic[ligandLabel][0].clone()
+    mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      mol = mols[0].clone()
+      mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
+                                        os.path.join(pmlsDir, ligandLabel + '.pdb'))
 
-    mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
-                                      os.path.join(pmlsDir, ligandLabel + '.pdb'))
+      pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
+                           cwd=os.path.abspath(pmlsDir))
 
-    pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
-                         cwd=os.path.abspath(pmlsDir))
+      pmlFile, pmlFiles = '', []
+      for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
+          if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
+              pmlFiles.append(file)
 
-    pmlFile, pmlFiles = '', []
-    for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-        if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
-            pmlFiles.append(file)
+      for file in pmlFiles:
+          for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
+              if ligName in file:
+                  pmlFile = file
+                  break
+      if pmlFile == '' and len(pmlFiles) > 0:
+          pmlFile = pmlFiles[0]
 
-    for file in pmlFiles:
-        for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
-            if ligName in file:
-                pmlFile = file
-                break
-    if pmlFile == '' and len(pmlFiles) > 0:
-        pmlFile = pmlFiles[0]
-
-    if pmlFile != '':
-      pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
-      pymolV = PyMolViewer(project=self.getProject())
-      return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
-    else:
-      showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
-      print('PLIP found no interactions in the docking position')
+      if pmlFile != '':
+        pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
+        pymolV = PyMolViewer(project=self.getProject())
+        return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+      else:
+        showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
+        print('PLIP found no interactions in the docking position')
 
 ################### MOLECULES VIEWS #################
 
@@ -353,28 +389,31 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       ligandLabel, sLabel = 'All', 'allSetMolecules'
 
     mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
-    if self.displaySoftwareMol.get() == PYMOL:
-      return self.viewPymolMols(mols, sLabel, pose=False, addTarget=False)
-    elif self.displaySoftwareMol.get() == CHIMERAX:
-      return self.viewChimeraXMols(mols, sLabel, pose=False, addTarget=False)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, sLabel, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, sLabel, pose=False, addTarget=False)
 
   def _viewMolecule(self, e=None):
     ligandLabel = self.getEnumText('displayMolecule')
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
-    if self.displaySoftwareMol.get() == PYMOL:
-      return self.viewPymolMols(mols, ligandLabel, pose=False, addTarget=False)
-    elif self.displaySoftwareMol.get() == CHIMERAX:
-      return self.viewChimeraXMols(mols, ligandLabel, pose=False, addTarget=False)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, ligandLabel, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, ligandLabel, pose=False, addTarget=False)
 
   def _viewSingle(self, e=None):
     ligandLabel = self.getEnumText('displaySingle')
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
-    if self.displaySoftwareMol.get() == PYMOL:
-      return self.viewPymolMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
-    elif self.displaySoftwareMol.get() == CHIMERAX:
-      return self.viewChimeraXMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
 
     ###################   TABLE VIEW ####################
 

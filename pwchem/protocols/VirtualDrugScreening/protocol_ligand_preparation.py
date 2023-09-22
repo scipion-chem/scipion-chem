@@ -249,6 +249,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:
+            outputSmallMolecules.updateMolClass()
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
             self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
 
