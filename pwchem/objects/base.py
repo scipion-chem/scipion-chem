@@ -384,8 +384,8 @@ class SmallMolecule(data.EMObject):
                 numType = {}
                 for i, line in enumerate(fIn):
                     if i >= 4:
-                        if len(line.split()) > 4:
-                            elements = line.split()
+                        elements = line.split()
+                        if len(elements) > 7:
                             atomType, coords = elements[3], elements[:3]
                             if atomType in numType:
                                 numType[atomType] += 1
