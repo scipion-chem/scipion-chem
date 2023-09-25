@@ -420,7 +420,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   def _viewTable(self, e=None):
     if self.checkIfProtocol():
       ligandLabel = self.getEnumText('displayTable')
-      molSet = self.setLigandsDic[ligandLabel]
+      molSet = self.getOutputMolSets()[ligandLabel]
     else:
       molSet = self.protocol
 
