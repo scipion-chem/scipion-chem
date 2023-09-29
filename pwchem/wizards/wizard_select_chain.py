@@ -238,6 +238,18 @@ class AddResidueWizard(AddROIWizard):
 
         form.setVar(outputParam[0], prevList + roiDef)
 
+class SetResidueWizard(AddResidueWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
+                       json.loads(getattr(protocol, inputParams[1]).get())
+
+    resDef = '{"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}' % \
+             (chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
+    form.setVar(outputParam[0], resDef)
 
 AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
                              targets=['addResidue'],
