@@ -157,6 +157,27 @@ class DeleteElementWizard(VariableWizard):
         except:
             print('Incorrect index')
 
+class WatchElementWizard(VariableWizard):
+    """Watch the parameters of the step of the workflow defined by the index"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        protocol = form.protocol
+        try:
+            index = int(protocol.watchStep.get().strip())
+            if protocol.countSteps() >= index > 0:
+                workSteps = protocol.workFlowSteps.get().split('\n')
+                msjDic = eval(workSteps[index - 1])
+                for pName in msjDic:
+                    if pName in protocol.getStageParamsDic(type='Normal').keys():
+                        form.setVar(pName, msjDic[pName])
+                    elif pName in protocol.getStageParamsDic(type='Enum').keys():
+                        enumParam = protocol.getParam(pName)
+                        idx = enumParam.choices.index(msjDic[pName])
+                        form.setVar(pName, idx)
+        except:
+            print('Incorrect index')
+
 
 AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
