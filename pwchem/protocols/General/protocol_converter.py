@@ -72,7 +72,7 @@ class ConvertStructures(EMProtocol):
         group = form.addGroup('Output')
         group.addParam('outputFormatSmall', EnumParam, default=2, condition='inputType==0',
                        choices=['PDB', 'Mol2', 'SDF', 'Smiles'],
-                       label='Output format',
+                       label='Output format: ',
                        help="Output format for the converted molecules")
 
         group.addParam('useManager', EnumParam, default=0, label='Convert using: ',
