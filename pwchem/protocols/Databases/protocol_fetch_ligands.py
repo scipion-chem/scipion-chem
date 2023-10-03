@@ -103,13 +103,12 @@ class ProtocolLigandsFetching(EMProtocol):
 										help='Select database for fetching of the ligand')
 
 		group.addParam('fromString', params.BooleanParam, default=False, label='Manually write input IDs: ',
-										expertLevel=params.LEVEL_ADVANCED,
 										help='Whether to input the IDs from a string or a SetOfDatabaseIds object')
 		group.addParam('inputIDs', params.PointerParam, label="Input entry IDs: ",
 										condition='not fromString', pointerClass="SetOfDatabaseID", allowsNull=True,
 										help='Set of IDs to perform the ligand fetching on according to the predefined parameters:'
 												'IDs from Uniprot, from target or directly ligands.')
-		group.addParam('inputIDsStr', params.StringParam, label="Input entry IDs (,): ",
+		group.addParam('inputIDsStr', params.TextParam, label="Input entry IDs (,): ",
 										condition='fromString',
 										help='Set of IDs to perform the ligand fetching on according to the predefined parameters:'
 												'IDs from Uniprot, from target or directly ligands. Comma separated.')
@@ -283,6 +282,7 @@ class ProtocolLigandsFetching(EMProtocol):
 				smallMolecule = SmallMolecule(smallMolFilename=os.path.relpath(fnSmall), molName='guess')
 				outputSmallMolecules.append(smallMolecule)
 
+		outputSmallMolecules.updateMolClass()
 		self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
 	# --------------------------- Summary functions -----------------------------------
@@ -379,9 +379,9 @@ class ProtocolLigandsFetching(EMProtocol):
 
 	def fetchFromLigandChemBL(self, ligandsDic):
 		ligNames = {}
-		for ligandId in ligandsDic:
+		for i, ligandId in enumerate(ligandsDic):
 			jDic = self.getJDic('ChEMBL', 'molecule', ligandId)
-			ligNames['noTarget'] = {ligandId: jDic['molecules'][0]['molecule_structures']['canonical_smiles']}
+			ligNames[f'noTarget_{i}'] = {ligandId: jDic['molecules'][0]['molecule_structures']['canonical_smiles']}
 		return ligNames
 
 	def fetchLigandsFromTargets(self, targetIds, iBase, allLigandNames):

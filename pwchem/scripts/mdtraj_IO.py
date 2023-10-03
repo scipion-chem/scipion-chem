@@ -52,7 +52,7 @@ if __name__ == "__main__":
                         required=False, default='')
 
     args = parser.parse_args()
-    sysFile, outFile, trjFile = args.inputFilename, args.outputName, args.inputTraj
+    sysFile, outFile, trjFile = args.inputSystem, args.outputName, args.inputTraj
 
     if trjFile == '':
         convertSystem(sysFile, outFile)

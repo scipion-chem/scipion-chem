@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import enum, io, subprocess
+import enum, io, subprocess, pickle
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
 from scipy import spatial
@@ -384,8 +384,8 @@ class SmallMolecule(data.EMObject):
                 numType = {}
                 for i, line in enumerate(fIn):
                     if i >= 4:
-                        if len(line.split()) > 4:
-                            elements = line.split()
+                        elements = line.split()
+                        if len(elements) > 7:
                             atomType, coords = elements[3], elements[:3]
                             if atomType in numType:
                                 numType[atomType] += 1
@@ -482,9 +482,10 @@ class SetOfSmallMolecules(data.EMSet):
                     break
         self._molClass.set(mClass)
 
-    def append(self, item):
+    def append(self, item, update=False):
         super().append(item)
-        self.updateMolClass()
+        if update:
+            self.updateMolClass()
 
     def getSetPath(self):
         return os.path.abspath(self._mapperPath[0])
@@ -513,6 +514,70 @@ class SetOfSmallMolecules(data.EMSet):
             names.append(mol.getUniqueName())
         return names
 
+    def updateLigandsDic(self, outputLigandsDic, molSet, vType, oLabelSet='outputSmallMolecules'):
+        '''Generates and updates a dictionary containing the indexes of the objects for each of the subsets found
+        in the set for the viewer: based on set, molecule, pocket and single'''
+        SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
+        if vType == SET:
+            oLabel = oLabelSet
+            outputLigandsDic[oLabel] = [mol.getObjId() for mol in molSet]
+        else:
+            for mol in molSet:
+                curMol = mol.clone()
+                if vType == SINGLE:
+                    oLabel = curMol.getUniqueName()
+                elif vType == MOLECULE:
+                    oLabel = curMol.getMolName()
+                elif vType == POCKET:
+                    oLabel = 'g_{}'.format(curMol.getGridId())
+
+                if oLabel not in outputLigandsDic:
+                    outputLigandsDic[oLabel] = [curMol.getObjId()]
+                else:
+                    outputLigandsDic[oLabel] += [curMol.getObjId()]
+        return outputLigandsDic
+
+    def getGroupIndexesPath(self, setLabel=None):
+        setLabel = getBaseName(self.getSetPath()) if setLabel is None else setLabel
+        return os.path.join(os.path.dirname(self.getSetPath()), f'{setLabel}_indexGroups.pickle')
+
+    def saveGroupIndexes(self, setLabel=None, outputLigandsDic=None):
+        '''Computes the subgroups dictionary and saves it into the corresponding file or saves it directly if passed'''
+        setLabel = getBaseName(self.getSetPath()) if setLabel is None else setLabel
+        outputLigandsDic = self.getGroupIndexes() if outputLigandsDic is None else outputLigandsDic
+        indexFile = open(self.getGroupIndexesPath(setLabel), 'wb')
+        pickle.dump(outputLigandsDic, indexFile)
+
+    def getGroupIndexes(self, setLabel=None):
+        '''Return the dictionary containing the subsets information as:
+            {subGroupLabel: [subGroupIndexes]}
+        Check if the pickle file containing it exists and loads it (if not compute) else, it generates it
+        '''
+        setLabel = getBaseName(self.getSetPath()) if setLabel is None else setLabel
+        indexFile = self.getGroupIndexesPath(setLabel)
+        if os.path.exists(indexFile):
+            with open(indexFile, 'rb') as f:
+                outputLigandsDic = pickle.load(f)
+        else:
+            outputLigandsDic = self.computeGroupIndexes(setLabel)
+            self.saveGroupIndexes(setLabel, outputLigandsDic)
+        return outputLigandsDic
+
+    def computeGroupIndexes(self, setLabel=None):
+        '''Generete the subgroup index dictionaries'''
+        setLabel = getBaseName(self.getSetPath()) if setLabel is None else setLabel
+        outputLigandsDic = {}
+        for vType in ['single', 'molecule', 'pocket', 'set']:
+            outputLigandsDic[vType] = self.updateLigandsDic({}, self, vType, oLabelSet=setLabel)
+        return outputLigandsDic
+
+    def getMolsFromIds(self, itemIds):
+        '''Return a list of molecules '''
+        mols, mapper = [], self._getMapper()
+        for itemId in itemIds:
+            mols.append(mapper.selectById(itemId).clone())
+        self.close()
+        return mols
 
 class BindingSite(data.EMObject):
     """ Binding site """
@@ -1306,7 +1371,7 @@ class ProteinResidue(data.EMObject):
 
 
 class MDSystem(data.EMFile):
-    """A system atom structure (prepared for MD). Base class fro Gromacs, Amber
+    """A system atom structure (prepared for MD). Base class for Gromacs, Amber
         _topoFile: topology file
         _trjFile: trajectory file
         _ff: main force field

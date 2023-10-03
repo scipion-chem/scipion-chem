@@ -217,7 +217,7 @@ class Plugin(pwem.Plugin):
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):

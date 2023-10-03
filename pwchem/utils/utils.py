@@ -236,7 +236,9 @@ def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
       for line in f1:
-        f.write(line)
+        if line.strip() != 'END':
+          f.write(line)
+
     with open(fn2) as f2:
       for line in f2:
         if hetatm2 and line.startswith('ATOM'):
