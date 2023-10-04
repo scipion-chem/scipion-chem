@@ -92,7 +92,7 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
     _viewerOptions = ['PyMol', 'ChimeraX']
 
     def _defineParams(self, form):
-      form.addSection(label='Visualization of consensus Structural ROIs')
+      form.addSection(label='Visualization of AtomStruct')
       group = form.addGroup('AtomStruct General Viewer')
       group.addParam('displaySoftware', EnumParam,
                      choices=self._viewerOptions, default=0,
