@@ -89,7 +89,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
         group.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
                       help="Maximum RMSD for clustering different docked molecules")
-        group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings',
+        group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings: ',
                       help="Min number of docked molecules to be considered consensus docking")
 
         group = form.addGroup('Representative')
