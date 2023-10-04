@@ -236,7 +236,7 @@ def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
       for line in f1:
-        if line.strip() != 'END':
+        if line.strip() != 'END' and not line.startswith('CONECT'):
           f.write(line)
 
     with open(fn2) as f2:

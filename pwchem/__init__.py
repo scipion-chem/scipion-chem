@@ -247,7 +247,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'openbabel')
+		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
 		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
   ##################### UTILS ###########################
