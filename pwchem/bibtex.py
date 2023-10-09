@@ -1,4 +1,3 @@
-# coding: latin-1
 # **************************************************************************
 # *
 # * Authors:     roberto marabini
@@ -26,42 +25,42 @@
 # **************************************************************************
 _bibtexStr = """
 @Article{Cock2009,
-   Author="Cock, P. J.  and Antao, T.  and Chang, J. T.  and Chapman, B. A.  and Cox, C. J.  and Dalke, A.  and Friedberg, I.  and Hamelryck, T.  and Kauff, F.  and Wilczynski, B.  and de Hoon, M. J. ",
-   Title="{{B}iopython: freely available {P}ython tools for computational molecular biology and pwchem}",
-   Journal="Bioinformatics",
-   Year="2009",
-   Volume="25",
-   Number="11",
-   Pages="1422--1423",
-   Month="Jun"
+	author={Cock, P. J. and Antao, T. and Chang, J. T. and Chapman, B. A. and Cox, C. J. and Dalke, A. and Friedberg, I. 
+		and Hamelryck, T. and Kauff, F. and Wilczynski, B. and de Hoon, M. J.},
+	title={{B}iopython: freely available {P}ython tools for computational molecular biology and pwchem},
+	journal={Bioinformatics},
+	year={2009},
+	volume={25},
+	Number={11},
+	pages={1422--1423},
+	month={Jun}
 }
 
 @Article{Morris2009,
-   Author="Morris, G. M., Huey, R., Lindstrom, W., Sanner, M. F., Belew, R. K., Goodsell, D. S. and Olson, A. J.",
-   Title="{Autodock4 and AutoDockTools4: automated docking with selective receptor flexiblity}",
-   Journal="J. Computational Chemistry",
-   Year="2009",
-   Volume="16",
-   Pages="2785--2791"
+	author={Morris, G. M. and Huey, R. and Lindstrom, W. and Sanner, M. F. and Belew, R. K. and Goodsell, D. S. and Olson, A. J.},
+	title={Autodock4 and AutoDockTools4: automated docking with selective receptor flexiblity},
+	journal={J. Computational Chemistry},
+	year={2009},
+	volume={16},
+	pages={2785--2791}
 }
 
 @Article{Zheng2019,
-   Author="Zheng, W. and Li, Y. and Zhang, C. and Pearce, R. and Mortuza, S. M and Zhang, Y.",
-   Title="{Deep-learning contact-map guided protein structure prediction in CASP13}",
-   Journal="Proteins: Structure, Function, and Bioinformatics",
-   Year="2019",
-   Volume="87",
-   Pages="1149-1164"
+	author={Zheng, W. and Li, Y. and Zhang, C. and Pearce, R. and Mortuza, S. M and Zhang, Y.},
+	title={Deep-learning contact-map guided protein structure prediction in CASP13},
+	journal={Proteins: Structure, Function, and Bioinformatics},
+	year={2019},
+	volume={87},
+	pages={1149-1164}
 }
 
-@Article{Wójcikowski2015,
-    author = "Wójcikowski, Maciej and Zielenkiewicz, Piotr and Siedlecki, Pawel",
-    year = "2015",
-    month = "12",
-    title = "Open Drug Discovery Toolkit (ODDT): A new open-source player in the drug discovery field",
-    volume = "7",
-    journal = "Journal of Cheminformatics",
-    doi = "10.1186/s13321-015-0078-2"
+@Article{WÃ³jcikowski2015,
+	author={WÃ³jcikowski, Maciej and Zielenkiewicz, Piotr and Siedlecki, Pawel},
+	year={2015},
+	month={12},
+	title={Open Drug Discovery Toolkit (ODDT): A new open-source player in the drug discovery field},
+	volume={7},
+	journal={Journal of Cheminformatics},
+	doi={10.1186/s13321-015-0078-2}
 }
-
 """
