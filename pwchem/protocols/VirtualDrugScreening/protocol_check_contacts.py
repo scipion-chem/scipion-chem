@@ -66,19 +66,56 @@ class ProtocolContactsDocking(EMProtocol):
                        help="Distance threshold where atoms of ligand-residue will be considered in contact")
         form.addParam('contactLevelRec', params.EnumParam,
                       display=params.EnumParam.DISPLAY_HLIST, expertLevel=params.LEVEL_ADVANCED,
-                      default=0, label='Store receptor contacts at level: ', choices=['Residue', 'Atom'],
+                      default=RESIDUE, label='Store receptor contacts at level: ', choices=['Residue', 'Atom'],
                       help="Whether to store the residue or the atom in contact for the receptor")
         form.addParam('contactLevelLig', params.EnumParam,
                       display=params.EnumParam.DISPLAY_HLIST, expertLevel=params.LEVEL_ADVANCED,
-                      default=0, label='Store ligand contacts at level: ', choices=['Residue', 'Atom'],
+                      default=ATOM, label='Store ligand contacts at level: ', choices=['Residue', 'Atom'],
                       help="Whether to store the residue or the atom in contact for the ligand")
 
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        cStep = self._insertFunctionStep('getContactsStep', prerequisites=[])
+        convStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
+        cStep = self._insertFunctionStep('getContactsStep', prerequisites=[convStep])
         self._insertFunctionStep('createOutputStep', prerequisites=[cStep])
+
+    def obabelMolConversion(self, mols, molLists, it, outFormat, outDir, pose=False):
+        '''Converts a molecule into the specified format using OBabel binary'''
+        outFormat = outFormat[1:] if outFormat.startswith('.') else outFormat
+        for mol in mols:
+            molFile = mol.getFileName() if not pose else mol.getPoseFile()
+            molFile = os.path.abspath(molFile)
+            inName, inExt = os.path.splitext(os.path.basename(molFile))
+            oFile = os.path.abspath(os.path.join(outDir, f'{inName}.{outFormat}'))
+
+            if not molFile.endswith(f'.{outFormat}'):
+                args = f' -i{inExt[1:]} {os.path.abspath(molFile)} -o{outFormat} -O {oFile}'
+                runOpenBabel(protocol=None, args=args, cwd=outDir, popen=True)
+            else:
+                os.link(molFile, oFile)
+        return oFile
+
+    def convertInputStep(self):
+        inMols = self.inputMolecules.get()
+        outDir = self.getInputMolsDir()
+        os.mkdir(outDir)
+
+        maeMols, otherMols = self.getMAEMoleculeFiles(inMols)
+        if len(maeMols) > 0:
+            try:
+                from schrodingerScipion.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
+            except ImportError:
+                print(
+                    'Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+
+        performBatchThreading(self.obabelMolConversion, otherMols, self.numberOfThreads.get(), cloneItem=True,
+                              outFormat='.pdb', outDir=outDir, pose=True)
+
+        recFile = inMols.getProteinFile()
+        self.convertReceptor2PDB(recFile)
 
 
     def performContactAnalysis(self, molFns, molLists, it, recFile, outDir):
@@ -91,32 +128,13 @@ class ProtocolContactsDocking(EMProtocol):
 
 
     def getContactsStep(self):
-        recFile = self.inputMolecules.get().getProteinFile()
-        molFns = [mol.getPoseFile() for mol in self.inputMolecules.get()]
+        recFile = self.getReceptorPDB()
+        molFns = self.getInputMolFiles()
 
         outDir = self.getOutputDir()
         os.mkdir(outDir)
         performBatchThreading(self.performContactAnalysis, molFns, self.numberOfThreads.get(), cloneItem=False,
                               recFile=recFile, outDir=outDir)
-
-
-    def parseOutFiles(self):
-        '''Return a dictionary of form: {ligandFile: {ligAtom: [recAtoms]}}
-        with the contacts of atoms or residues stored in each of the output files.'''
-        fileDic = {}
-        outDir = self.getOutputDir()
-        for file in os.listdir(outDir):
-            with open(os.path.join(outDir, file)) as f:
-                for line in f:
-                    if line.startswith('LIGFILE'):
-                        ligFile = line.split('::')[1].strip()
-                        fileDic[ligFile] = {}
-                    elif line.startswith('LIGAND'):
-                        ligName = line.split('::')[1].strip()
-                    elif line.startswith('\tRECEPTOR'):
-                        recNames = line.split('::')[1].strip().split(',')
-                        fileDic[ligFile][ligName] = recNames
-        return fileDic
 
 
     def createOutputStep(self):
@@ -126,9 +144,9 @@ class ProtocolContactsDocking(EMProtocol):
         contactDic = self.parseOutFiles()
         for mol in inpSet:
             molFile = os.path.abspath(mol.getPoseFile())
-            if molFile in contactDic:
-                cDic = contactDic[molFile]
-                contactFile = self.getContactFileName(molFile, self.getOutputDir())
+            contactFile = self.getContactFileName(molFile, self.getOutputDir())
+            if contactFile in contactDic:
+                cDic = contactDic[contactFile]
                 setattr(mol, "contactsFile", String(os.path.relpath(contactFile)))
 
                 cStrs = []
@@ -170,6 +188,38 @@ class ProtocolContactsDocking(EMProtocol):
         return os.path.abspath(self._getExtraPath('contacts'))
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputMolsDir(self):
+        return os.path.abspath(self._getExtraPath('inputMolecules'))
+
+    def getMAEMoleculeFiles(self, molList):
+        maeMols, otherMols = [], []
+        for mol in molList:
+            molFile = os.path.abspath(mol.getPoseFile())
+            if '.mae' in molFile:
+                maeMols.append(mol.clone())
+            else:
+                otherMols.append(mol.clone())
+        return maeMols, otherMols
+
+    def getInputMolFiles(self):
+        molFiles = []
+        molDir = self.getInputMolsDir()
+        for file in os.listdir(molDir):
+            if not 'receptor.pdb' in file:
+                molFiles.append(os.path.join(molDir, file))
+        return molFiles
+
+    def getReceptorPDB(self):
+        outDir = self.getInputMolsDir()
+        return os.path.abspath(os.path.join(outDir, 'receptor.pdb'))
+
+    def convertReceptor2PDB(self, proteinFile):
+        inExt = os.path.splitext(os.path.basename(proteinFile))[1]
+        oFile = self.getReceptorPDB()
+        if not os.path.exists(oFile):
+          args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), oFile)
+          runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+        return oFile
 
     def parseSingleFile(self, ASFile):
         '''Parse all the atoms stored in a AtomStructFile'''
@@ -276,6 +326,24 @@ class ProtocolContactsDocking(EMProtocol):
                 fOut.write(f'LIGAND {ligLvlStr} :: {ligStr}\n')
                 fOut.write(f'\tRECEPTOR {recLvlStr} :: {",".join(recStrs)}\n')
 
+    def parseOutFiles(self):
+        '''Return a dictionary of form: {ligandFile: {ligAtom: [recAtoms]}}
+        with the contacts of atoms or residues stored in each of the output files.'''
+        fileDic = {}
+        outDir = self.getOutputDir()
+        for file in os.listdir(outDir):
+            contactFile = os.path.join(outDir, file)
+            with open(contactFile) as f:
+                for line in f:
+                    if line.startswith('LIGFILE'):
+                        ligFile = line.split('::')[1].strip()
+                        fileDic[contactFile] = {}
+                    elif line.startswith('LIGAND'):
+                        ligName = line.split('::')[1].strip()
+                    elif line.startswith('\tRECEPTOR'):
+                        recNames = line.split('::')[1].strip().split(',')
+                        fileDic[contactFile][ligName] = recNames
+        return fileDic
 
 
 
