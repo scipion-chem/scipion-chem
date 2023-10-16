@@ -158,10 +158,6 @@ class ProtocolRMSDDocking(EMProtocol):
             pDic[mapDic[prevLabel.upper()]] = posDic[prevLabel.upper()]
         return pDic
 
-    def is_het(self, residue):
-        res = residue.id[0]
-        return res != " " and res != "W"
-
     def getLigandPosDic(self, item, molName=None):
         onlyHeavy = self.onlyHeavy.get()
         if issubclass(type(item), SmallMolecule):
@@ -182,7 +178,7 @@ class ProtocolRMSDDocking(EMProtocol):
             for model in parser:
                 for chain in model:
                     for residue in chain:
-                        if self.is_het(residue) and residue.resname == molName:
+                        if is_het(residue) and residue.resname == molName:
                             for atom in residue:
                                 atomId, coords = atom.get_id(), atom.get_coord()
                                 if not atomId.startswith('H') or not onlyHeavy:

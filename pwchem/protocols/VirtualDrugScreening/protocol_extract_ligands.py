@@ -40,11 +40,6 @@ from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import *
 
 
-def is_het(residue):
-    res = residue.id[0]
-    return res != " " and res != "W"
-
-
 class ResidueSelect(Select):
     def __init__(self, chain, residue):
         self.chain = chain

@@ -124,8 +124,8 @@ def getVarName(var):
 def getBaseName(file):
   return os.path.splitext(os.path.basename(file.strip()))[0]
 
-def getLigCoords(ASFile, ligName):
-  """ Return the coordinates of the ligand specified in the atomic structure file. """
+def parseAtomStruct(ASFile):
+  '''Parse an atom struct using biopython'''
   if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
     pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
     parser = PDBParser().get_structure(pdb_code, ASFile)
@@ -134,15 +134,24 @@ def getLigCoords(ASFile, ligName):
     parser = MMCIFParser().get_structure(pdb_code, ASFile)
   else:
     print('Unknown AtomStruct file format')
-    return
+    parser = None
+  return parser
 
-  coords = []
-  for model in parser:
-    for chain in model:
-      for residue in chain:
-        if residue.resname == ligName:
-          for atom in residue:
-            coords.append(list(atom.get_coord()))
+def is_het(residue):
+  res = residue.id[0]
+  return res != " " and res != "W"
+
+def getLigCoords(ASFile, ligName):
+  """ Return the coordinates of the ligand specified in the atomic structure file. """
+  parser = parseAtomStruct(ASFile)
+  if parser:
+    coords = []
+    for model in parser:
+      for chain in model:
+        for residue in chain:
+          if residue.resname == ligName:
+            for atom in residue:
+              coords.append(list(atom.get_coord()))
   return coords
 
 
@@ -503,17 +512,13 @@ class CleanStructureSelect(Select):
     self.HETATM, self.het2keep= rem_HETATM, het2keep
     self.waters = rem_WATER
 
-  def is_het(self, residue):
-    res = residue.id[0]
-    return res != " " and res != "W"
-
   def accept_chain(self, chain):
     return not self.chain_ids or chain.id in self.chain_ids
 
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
     accept = True
-    if self.HETATM and self.is_het(residue) and not residue.resname in self.het2keep:
+    if self.HETATM and is_het(residue) and not residue.resname in self.het2keep:
       accept = False
     elif self.waters and residue.id[0] == 'W':
       accept = False
