@@ -26,7 +26,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, json, requests, time, subprocess, sys, multiprocessing
+import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
 # import glob
 import random as rd
 import numpy as np
@@ -708,10 +708,27 @@ def groupConsecutiveIdxs(idxs):
     return groups
 
 def natural_sort(listi, rev=False):
-  import re
+  '''Sort a list of strs containing numbers, taking into account that number real value
+  [A3, A1, B2, B4] -> [A1, A3, B2, B4]
+  '''
   convert = lambda text: int(text) if text.isdigit() else text.lower()
   alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
   return sorted(listi, key=alphanum_key, reverse=rev)
+
+def number_sort(strings, rev=False):
+  '''Sort a list of strs containing numbers, taking into account only that number real value,
+  ignoring the letter part
+  [A3, A1, B2, B4] -> [A1, B2, A3, B4]
+  '''
+  def key_func(string):
+    # Use regular expression to extract the numeric part of the string
+    match = re.search(r'\d+', string)
+    if match:
+      return int(match.group())
+    else:
+      return float('inf')  # If there are no numbers, put at the end
+
+  return sorted(strings, key=key_func, reverse=rev)
 
 
 def fillEmptyAttributes(inputSets):

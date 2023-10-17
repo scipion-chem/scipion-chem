@@ -306,6 +306,34 @@ class ProtocolContactsDocking(EMProtocol):
     def getContactFileName(self, ligFile, outDir):
         return os.path.join(outDir, getBaseName(ligFile) + '_contacts.txt')
 
+    def getLigEquivalenceDic(self, cDic):
+        '''Return a dictionary with {ligRep: [ligAtoms]}
+        - ligRep: Str representing atom/residue of the ligand
+        - ligAtom: BioPython Atom object contained by the ligRep
+        '''
+        ligDic = {}
+        for ligAtom in cDic:
+            ligRep = self.getNameFromAtom(ligAtom, self.contactLevelLig.get())
+            if ligRep in ligDic:
+                ligDic[ligRep].append(ligAtom)
+            else:
+                ligDic[ligRep] = [ligAtom]
+        return ligDic
+
+    def getRecContactReps(self, cDic, ligDic, ligRep):
+        '''Given a ligRep, return all the recRep of contact receptor representant.
+        - cDic: dic containing contact info {ligAtom: recAtom}
+        - ligDic: dic containing ligand representations {ligRep: [ligAtoms]}
+        - ligRep: ligand representation to check contacts
+        '''
+        recReps = []
+        for ligAtom in ligDic[ligRep]:
+            for recAtom in cDic[ligAtom]:
+                recRep = self.getNameFromAtom(recAtom, self.contactLevelRec.get())
+                recReps.append(recRep)
+        recReps = number_sort(set(recReps))
+        return recReps
+
     def writeContactFile(self, contactDic, ligFile, outDir):
         ligLvlStr = 'RESIDUE' if self.contactLevelLig.get() == RESIDUE else 'ATOM'
         recLvlStr = 'RESIDUE' if self.contactLevelRec.get() == RESIDUE else 'ATOM'
@@ -316,14 +344,15 @@ class ProtocolContactsDocking(EMProtocol):
             fOut.write(f'## ATOM representation: AtomName.AtomSerialNumber(Number of atom in whole structure)\n')
             fOut.write(f'LIGFILE:: {os.path.abspath(ligFile)}\n')
 
-            ligDic = {self.getNameFromAtom(ligAtom, self.contactLevelLig.get()): ligAtom for ligAtom in contactDic}
-            ligStrs = natural_sort(list(ligDic.keys()))
-            for ligStr in ligStrs:
-                recStrs = [self.getNameFromAtom(recAtom, self.contactLevelRec.get())
-                           for recAtom in contactDic[ligDic[ligStr]]]
-                recStrs = natural_sort(set(recStrs))
+            # Get ligand representations of atoms/residues and corresponding Atoms Bio objects
+            ligDic = self.getLigEquivalenceDic(contactDic)
+            ligStrs = number_sort(list(ligDic.keys()))
 
-                fOut.write(f'LIGAND {ligLvlStr} :: {ligStr}\n')
+            for ligRep in ligStrs:
+                # For each ligand rep, get receptor contact representantions
+                recStrs = self.getRecContactReps(contactDic, ligDic, ligRep)
+
+                fOut.write(f'LIGAND {ligLvlStr} :: {ligRep}\n')
                 fOut.write(f'\tRECEPTOR {recLvlStr} :: {",".join(recStrs)}\n')
 
     def parseOutFiles(self):
