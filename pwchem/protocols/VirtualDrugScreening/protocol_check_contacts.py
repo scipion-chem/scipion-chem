@@ -62,7 +62,7 @@ class ProtocolContactsDocking(EMProtocol):
                        label="Input Docked Small Molecules: ",
                        help='Select the docked molecules whose contacts you want to get')
 
-        form.addParam('threshold', params.FloatParam, default=5.0, label='Distance threshold (A): ',
+        form.addParam('threshold', params.FloatParam, default=4.0, label='Distance threshold (A): ',
                        help="Distance threshold where atoms of ligand-residue will be considered in contact")
         form.addParam('contactLevelRec', params.EnumParam,
                       display=params.EnumParam.DISPLAY_HLIST, expertLevel=params.LEVEL_ADVANCED,
