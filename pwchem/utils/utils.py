@@ -737,6 +737,13 @@ def getAllAttributes(inputSets):
 def getBaseFileName(filename):
   return os.path.splitext(os.path.basename(filename))[0]
 
+def addToDic(dic, key, item):
+  '''Add an element to a dic list creting it if the key was not there'''
+  if key in dic:
+    dic[key].append(item)
+  else:
+    dic[key] = [item]
+  return dic
 
 ################# Wizard utils #####################
 
