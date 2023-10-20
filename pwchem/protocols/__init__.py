@@ -46,7 +46,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import Pro
 from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import ProtocolScoreDocking
 # from pwchem.protocols.VirtualDrugScreening.protocol_oddt_descriptors import ProtocolODDTDescriptors
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
-from pwchem.protocols.VirtualDrugScreening.protocol_check_contacts import ProtocolContactsDocking
+from pwchem.protocols.VirtualDrugScreening.protocol_define_contact_structROIs import ProtDefineContactStructROIs
 
 from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
 
