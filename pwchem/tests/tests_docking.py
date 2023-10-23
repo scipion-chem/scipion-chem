@@ -455,5 +455,5 @@ class TestMapLigandContacts(TestExtractLigand):
 
 		protContacts = self._runDefineContacts(protExtract)
 		self._waitOutput(protContacts, 'outputStructROIs')
-		assertHandle(self.assertIsNotNone, getattr(protContacts, 'outputSmallMolecules', None),
+		assertHandle(self.assertIsNotNone, getattr(protContacts, 'outputStructROIs', None),
 								 cwd=protContacts.getWorkingDir())
