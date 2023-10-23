@@ -768,6 +768,36 @@ def addToDic(dic, key, item):
     dic[key] = [item]
   return dic
 
+
+def clusterSurfaceCoords(surfCoords, intraDist):
+  clusters = []
+  for coord in surfCoords:
+    newClusters = []
+    newClust = [coord]
+    for clust in clusters:
+      merge = False
+      for cCoord in clust:
+        dist = calculateDistance(coord, cCoord)
+        if dist < intraDist:
+          merge = True
+          break
+
+      if merge:
+        newClust += clust
+      else:
+        newClusters.append(clust)
+
+    newClusters.append(newClust)
+    clusters = newClusters.copy()
+  return clusters
+
+def createPocketFile(clust, i, outDir):
+  outFile = os.path.join(outDir, f'pocketFile_{i}.pdb')
+  with open(outFile, 'w') as f:
+    for j, coord in enumerate(clust):
+      f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
+  return outFile
+
 ################# Wizard utils #####################
 
 def getChainIds(chainStr):

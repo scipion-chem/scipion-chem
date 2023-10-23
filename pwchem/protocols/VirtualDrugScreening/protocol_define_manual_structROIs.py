@@ -205,7 +205,7 @@ class ProtDefineStructROIs(EMProtocol):
                 if self.surfaceCoords:
                     pocketCoords = self.mapSurfaceCoords(pocketCoords)
 
-                self.coordsClusters += self.clusterSurfaceCoords(pocketCoords)
+                self.coordsClusters += clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
@@ -213,7 +213,7 @@ class ProtDefineStructROIs(EMProtocol):
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
-            pocketFile = self.createPocketFile(clust, i)
+            pocketFile = createPocketFile(clust, i, outDir=self._getExtraPath())
             pocket = StructROI(pocketFile, pdbFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
@@ -401,28 +401,6 @@ class ProtDefineStructROIs(EMProtocol):
         distances = distance.cdist([coord], self.structSurface)
         closestIndexes = distances < self.maxDepth.get()
         return list(self.structSurface[closestIndexes[0]])
-
-    def clusterSurfaceCoords(self, surfCoords):
-        clusters = []
-        for coord in surfCoords:
-            newClusters = []
-            newClust = [coord]
-            for clust in clusters:
-                merge = False
-                for cCoord in clust:
-                    dist = calculateDistance(coord, cCoord)
-                    if dist < self.maxIntraDistance.get():
-                        merge = True
-                        break
-
-                if merge:
-                    newClust += clust
-                else:
-                    newClusters.append(clust)
-
-            newClusters.append(newClust)
-            clusters = newClusters.copy()
-        return clusters
 
     def createPocketFile(self, clust, i):
         outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))

@@ -163,7 +163,7 @@ class ProtDefineContactStructROIs(EMProtocol):
             surfStruct = self.getInputSurfaceStructure()
             pocketCoords = self.mapSurfaceCoords(pocketCoords, surfStruct)
 
-        coordsClusters += self.clusterSurfaceCoords(pocketCoords)
+        coordsClusters += clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
 
         with open(self.getClusterCoordsPickle(), 'wb') as f:
           pickle.dump(coordsClusters, f)
@@ -176,7 +176,7 @@ class ProtDefineContactStructROIs(EMProtocol):
           coordsClusters = pickle.load(f)
 
         for i, clust in enumerate(coordsClusters):
-            pocketFile = self.createPocketFile(clust, i)
+            pocketFile = createPocketFile(clust, i, outDir=self._getExtraPath())
             pocket = StructROI(pocketFile, pdbFile)
             pocket.calculateContacts()
             outPockets.append(pocket)
@@ -436,37 +436,6 @@ class ProtDefineContactStructROIs(EMProtocol):
         distances = distance.cdist([coord], surfStruct)
         closestIndexes = distances < self.maxDepth.get()
         return list(surfStruct[closestIndexes[0]])
-
-    def clusterSurfaceCoords(self, surfCoords):
-        clusters = []
-        for coord in surfCoords:
-            newClusters = []
-            newClust = [coord]
-            for clust in clusters:
-                merge = False
-                for cCoord in clust:
-                    dist = calculateDistance(coord, cCoord)
-                    if dist < self.maxIntraDistance.get():
-                        merge = True
-                        break
-
-                if merge:
-                    newClust += clust
-                else:
-                    newClusters.append(clust)
-
-            newClusters.append(newClust)
-            clusters = newClusters.copy()
-        return clusters
-
-
-    # ----------- Create output functions ---------------
-    def createPocketFile(self, clust, i):
-        outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))
-        with open(outFile, 'w') as f:
-            for j, coord in enumerate(clust):
-                f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-        return outFile
 
 
 
