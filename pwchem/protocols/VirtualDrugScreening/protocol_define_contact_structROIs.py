@@ -50,7 +50,7 @@ class ProtDefineContactStructROIs(EMProtocol):
     Defines a set of structural ROIs ligand-receptor contacts
     """
     _label = 'Define contact structural ROIs'
-    typeLabels = {'All': 'smallmolecules', 'ROI': 'pocket', 'Molecule': 'molecule',
+    typeLabels = {'All': 'set', 'ROI': 'pocket', 'Molecule': 'molecule',
                   'Single Ligand': 'single'}
 
     def __init__(self, **kwargs):
@@ -228,7 +228,10 @@ class ProtDefineContactStructROIs(EMProtocol):
       vType = self.typeLabels[self.getEnumText('selectionType')]
 
       groupDic = molSet.getGroupIndexes()[vType]
-      indexes = groupDic[self.ligandSelection.get()]
+      if vType != 'set':
+        indexes = groupDic[self.ligandSelection.get()]
+      else:
+        indexes = list(groupDic.values())[0]
       return molSet.getMolsFromIds(indexes)
 
     def getMAEMoleculeFiles(self, molList):
