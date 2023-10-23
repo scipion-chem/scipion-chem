@@ -238,21 +238,10 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         return []
     return mols
 
-  def writeMolsPML(self, mols, addTarget=True, disable=True, pose=True):
-    pmlStr, molFiles = '', []
-    for mol in mols:
-        molFile = mol.getPoseFile() if pose else mol.getFileName()
-        if not molFile in molFiles:
-            pmlStr += buildPMLDockingSingleStr(self, molFile, mol.getUniqueName(),
-                                               addTarget=addTarget, disable=disable)
-            molFiles.append(molFile)
-            addTarget = False
-    return pmlStr
-  
   def viewPymolMols(self, mols, ligandLabel, addTarget=True, disable=True, pose=True, e=None):
     pmlsDir = self.getPmlsDir()
     pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
-    writePmlFile(pmlFile, self.writeMolsPML(mols, addTarget=addTarget, disable=disable, pose=pose))
+    writePmlFile(pmlFile, buildPMLDockingGroupsStr(self, mols, addTarget=addTarget, disable=disable, pose=pose))
 
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))

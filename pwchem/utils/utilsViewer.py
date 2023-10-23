@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os
+from ..utils import addToDic, getBaseName, natural_sort
 
 def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=True):
     pmlStr = ''
@@ -39,6 +40,45 @@ def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=T
     pmlStr += 'load {}, {}{}\nhide spheres, {}\nshow sticks, {}\n'. \
         format(pdbFile, molName, disableStr, molName, molName)
     return pmlStr
+
+def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True):
+    if addTarget and pose:
+        genRecFile = os.path.abspath(viewer.protocol.getOriginalReceptorFile())
+
+    # Build complex groups, in case mols have different receptor files
+    cGroups, uNames = {}, {}
+    for mol in mols:
+        molFile = mol.getPoseFile() if pose else mol.getFileName()
+        if addTarget and pose:
+            if mol.getProteinFile():
+                recFile = mol.getProteinFile()
+            else:
+                recFile = genRecFile
+
+            cGroups = addToDic(cGroups, recFile, molFile)
+        else:
+            cGroups = addToDic(cGroups, 'all', molFile)
+        uNames[molFile] = mol.getUniqueName()
+
+    pmlStr, ci = '', 1
+    schStr = ', mimic=1, object_props=*, atom_props=*'
+    for recFile, molFiles in cGroups.items():
+        gNames = []
+        if recFile != 'all':
+            gNames += [getBaseName(recFile)]
+            pmlStr += f'load {os.path.abspath(recFile)}, {gNames[-1]}{schStr}\n'
+
+        molFiles = natural_sort(set(molFiles))
+        for molFile in molFiles:
+            gNames.append(uNames[molFile])
+            disableStr = '\ndisable {}'.format(gNames[-1]) if disable else ''
+            pmlStr += f'load {os.path.abspath(molFile)}, {gNames[-1]}{schStr}{disableStr}\n'
+
+    if recFile != 'all':
+        pmlStr += f'group Complex{ci}, {" ".join(gNames)} add\n'
+        ci += 1
+    return pmlStr
+
 
 def writePmlFile(pmlFile, pmlStr):
     with open(pmlFile, 'w') as f:

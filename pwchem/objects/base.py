@@ -236,6 +236,8 @@ class SmallMolecule(data.EMObject):
         self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
         self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
+        self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))   # to be used when each mol has diff receptor
+
     def __str__(self):
         s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
         return s
@@ -325,6 +327,12 @@ class SmallMolecule(data.EMObject):
     def getPDBFileName(self):
         if hasattr(self, '_PDBFile'):
             return self._PDBFile.get()
+
+    def setProteinFile(self, value):
+        self.proteinFile.set(value)
+
+    def getProteinFile(self):
+        return self.proteinFile.get()
 
     def getMolClass(self):
         return self._type
