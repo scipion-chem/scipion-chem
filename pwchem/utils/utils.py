@@ -124,14 +124,14 @@ def getVarName(var):
 def getBaseName(file):
   return os.path.splitext(os.path.basename(file.strip()))[0]
 
-def parseAtomStruct(ASFile):
+def parseAtomStruct(asFile):
   '''Parse an atom struct using biopython'''
-  if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
-    pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-    parser = PDBParser().get_structure(pdb_code, ASFile)
-  elif ASFile.endswith('.cif'):
-    pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-    parser = MMCIFParser().get_structure(pdb_code, ASFile)
+  if asFile.endswith('.pdb') or asFile.endswith('.ent'):
+    pdb_code = os.path.basename(os.path.splitext(asFile)[0])
+    parser = PDBParser().get_structure(pdb_code, asFile)
+  elif asFile.endswith('.cif'):
+    pdb_code = os.path.basename(os.path.splitext(asFile)[0])
+    parser = MMCIFParser().get_structure(pdb_code, asFile)
   else:
     print('Unknown AtomStruct file format')
     parser = None
@@ -141,9 +141,9 @@ def is_het(residue):
   res = residue.id[0]
   return res != " " and res != "W"
 
-def getLigCoords(ASFile, ligName):
+def getLigCoords(asFile, ligName):
   """ Return the coordinates of the ligand specified in the atomic structure file. """
-  parser = parseAtomStruct(ASFile)
+  parser = parseAtomStruct(asFile)
   if parser:
     coords = []
     for model in parser:
@@ -518,7 +518,7 @@ class CleanStructureSelect(Select):
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
     accept = True
-    if self.HETATM and is_het(residue) and not residue.resname in self.het2keep:
+    if self.HETATM and is_het(residue) and residue.resname not in self.het2keep:
       accept = False
     elif self.waters and residue.id[0] == 'W':
       accept = False

@@ -125,18 +125,17 @@ class ProtDefineContactStructROIs(EMProtocol):
                 print(
                     'Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
-        convMolFiles = runInParallel(obabelMolConversion, '.pdb', outDir, True,
-                                     paramList=[item.clone() for item in otherMols], jobs=self.numberOfThreads.get())
+        runInParallel(obabelMolConversion, '.pdb', outDir, True,
+                      paramList=[item.clone() for item in otherMols], jobs=self.numberOfThreads.get())
 
         recFile = self.inputSmallMols.get().getProteinFile()
         self.convertReceptor2PDB(recFile)
 
     def performContactAnalysis(self, molFns, molLists, it, recFile, outDir):
         for ligFile in molFns:
-            recAtoms, ligAtoms = self.parseRecLigAtoms(ASFile=recFile, ligFile=ligFile)
+            recAtoms, ligAtoms = self.parseRecLigAtoms(asFile=recFile, ligFile=ligFile)
 
             contactDic = self.getLigandContacts(recAtoms, ligAtoms)
-            # contactList = self.getAllContactPairs(contactDic)
             self.writeContactFile(contactDic, ligFile, outDir)
 
     def getContactsStep(self):
@@ -258,23 +257,23 @@ class ProtDefineContactStructROIs(EMProtocol):
         molFiles = []
         molDir = self.getInputMolsDir()
         for file in os.listdir(molDir):
-            if not 'receptor.pdb' in file:
+            if 'receptor.pdb' not in file:
                 molFiles.append(os.path.join(molDir, file))
         return molFiles
 
-    def parseRecLigAtoms(self, ASFile, ligFile=None, ligName=None):
+    def parseRecLigAtoms(self, asFile, ligFile=None, ligName=None):
         '''Return two list of the form with the atoms for the receptor and ligand or heteroatoms
         '''
         if ligFile:
-            recAtoms, ligAtoms = self.parseSingleFile(ASFile), self.parseSingleFile(ligFile)
+            recAtoms, ligAtoms = self.parseSingleFile(asFile), self.parseSingleFile(ligFile)
         else:
-            recAtoms, ligAtoms = self.parseCombinedFile(ASFile, ligName=ligName)
+            recAtoms, ligAtoms = self.parseCombinedFile(asFile, ligName=ligName)
         return recAtoms, ligAtoms
 
-    def parseSingleFile(self, ASFile):
+    def parseSingleFile(self, asFile):
         '''Parse all the atoms stored in a AtomStructFile'''
         atoms = []
-        parser = parseAtomStruct(ASFile)
+        parser = parseAtomStruct(asFile)
 
         for model in parser:
             for chain in model:
@@ -283,20 +282,19 @@ class ProtDefineContactStructROIs(EMProtocol):
                         atoms.append(atom)
         return atoms
 
-    def parseCombinedFile(self, ASFile, ligName=None):
+    def parseCombinedFile(self, asFile, ligName=None):
         '''Parse a combined AtomStruct file trying to separate the receptor from the ligand atoms'''
         recAtoms, ligAtoms = [], []
-        parser = parseAtomStruct(ASFile)
+        parser = parseAtomStruct(asFile)
 
         for model in parser:
-            for chain in model:
-                for residue in chain:
-                    if is_het(residue) and (residue.resname == ligName or not ligName):
-                        for atom in residue:
-                            ligAtoms.append(atom)
-                    else:
-                        for atom in residue:
-                            recAtoms.append(atom)
+            for residue in model.get_residues():
+                if is_het(residue) and (residue.resname == ligName or not ligName):
+                    for atom in residue:
+                        ligAtoms.append(atom)
+                else:
+                    for atom in residue:
+                        recAtoms.append(atom)
         return recAtoms, ligAtoms
 
     def getAtomsCoords(self, atoms):
@@ -328,8 +326,8 @@ class ProtDefineContactStructROIs(EMProtocol):
 
         outFile = self.getContactFileName(ligFile, outDir)
         with open(outFile, 'w') as fOut:
-            fOut.write(f'## RESIDUE representation: ResidueName.ResidueNumber(Number of residue in sequence)\n')
-            fOut.write(f'## ATOM representation: AtomName.AtomSerialNumber(Number of atom in whole structure)\n')
+            fOut.write('## RESIDUE representation: ResidueName.ResidueNumber(Number of residue in sequence)\n')
+            fOut.write('## ATOM representation: AtomName.AtomSerialNumber(Number of atom in whole structure)\n')
             fOut.write(f'LIGFILE:: {os.path.abspath(ligFile)}\n')
 
             # Get ligand representations of atoms/residues and corresponding Atoms Bio objects
@@ -398,7 +396,6 @@ class ProtDefineContactStructROIs(EMProtocol):
 
     def getContactCoords(self, conStrs, recFile, areResidues=True):
       '''Return the coordinates of the residues/atoms in the contact strings'''
-      inFile = self.getReceptorPDB()
       structure = parseAtomStruct(recFile)
       coords = []
       for model in structure:
@@ -430,7 +427,7 @@ class ProtDefineContactStructROIs(EMProtocol):
             closerSCoords = self.closerSurfaceCoords(coord, surfStruct)
             for cCoord in closerSCoords:
                 cCoord = list(cCoord)
-                if not cCoord in sCoords:
+                if cCoord not in sCoords:
                   sCoords.append(cCoord)
 
         return sCoords
