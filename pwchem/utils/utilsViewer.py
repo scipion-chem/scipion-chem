@@ -74,9 +74,9 @@ def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=Tr
             disableStr = '\ndisable {}'.format(gNames[-1]) if disable else ''
             pmlStr += f'load {os.path.abspath(molFile)}, {gNames[-1]}{schStr}{disableStr}\n'
 
-    if recFile != 'all':
-        pmlStr += f'group Complex{ci}, {" ".join(gNames)} add\n'
-        ci += 1
+        if recFile != 'all':
+            pmlStr += f'group Complex{ci}, {" ".join(gNames)} add\n'
+            ci += 1
     return pmlStr
 
 
