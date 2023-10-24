@@ -116,7 +116,7 @@ class ProtMapSequenceROI(EMProtocol):
         if pocketCoords:
             if self.surfaceCoords:
                 pocketCoords = self.mapSurfaceCoords(pocketCoords)
-            self.coordsClusters = self.clusterSurfaceCoords(pocketCoords)
+            self.coordsClusters = clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
         else:
             print('Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln"))
 
@@ -125,7 +125,7 @@ class ProtMapSequenceROI(EMProtocol):
         if self.coordsClusters:
             outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
             for i, clust in enumerate(self.coordsClusters):
-                pocketFile = self.createPocketFile(clust, i)
+                pocketFile = createPocketFile(clust, i, self._getExtraPath())
                 pocket = StructROI(pocketFile, self.getASFileName())
                 pocket.setNumberOfPoints(len(clust))
                 if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
@@ -252,28 +252,6 @@ class ProtMapSequenceROI(EMProtocol):
         distances = distance.cdist([coord], self.structSurface)
         closestIndexes = distances < self.maxDepth.get()
         return list(self.structSurface[closestIndexes[0]])
-
-    def clusterSurfaceCoords(self, surfCoords):
-        clusters = []
-        for coord in surfCoords:
-            newClusters = []
-            newClust = [coord]
-            for clust in clusters:
-                merge = False
-                for cCoord in clust:
-                    dist = calculateDistance(coord, cCoord)
-                    if dist < self.maxIntraDistance.get():
-                        merge = True
-                        break
-
-                if merge:
-                    newClust += clust
-                else:
-                    newClusters.append(clust)
-
-            newClusters.append(newClust)
-            clusters = newClusters.copy()
-        return clusters
 
     def createPocketFile(self, clust, i):
         outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))

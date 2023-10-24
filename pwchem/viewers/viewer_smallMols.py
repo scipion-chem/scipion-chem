@@ -34,7 +34,7 @@ from pwem.viewers.viewer_chimera import Chimera, ChimeraView
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
-from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB, natural_sort
+from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
@@ -469,7 +469,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       receptorFile = outFile
 
     mergePDBs(receptorFile, molFile, auxPath, hetatm2=True)
-    clean_PDB(auxPath, outPath, waters=True, HETATM=False)
+    cleanPDB(auxPath, outPath, waters=True, hetatm=False)
     return outPath
 
 

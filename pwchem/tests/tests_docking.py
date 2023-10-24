@@ -29,7 +29,7 @@ from pwem.protocols import ProtImportPdb
 # Scipion chem imports
 from pwchem.protocols import ProtExtractLigands, ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands
 from pwchem.protocols import ProtDefineStructROIs, ProtocolScoreDocking, ProtocolConsensusDocking
-from pwchem.protocols import ProtChemPrepareReceptor, ProtocolRMSDDocking
+from pwchem.protocols import ProtChemPrepareReceptor, ProtocolRMSDDocking, ProtDefineContactStructROIs
 from pwchem.tests import TestDefineStructROIs
 from pwchem.utils import assertHandle
 
@@ -428,3 +428,32 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 				assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 		else:
 			print('No docking plugins found installed. Try installing AutoDock')
+
+
+class TestMapLigandContacts(TestExtractLigand):
+	@classmethod
+	def setUpClass(cls):
+		tests.setupTestProject(cls)
+		cls.ds = DataSet.getDataSet('model_building_tutorial')
+		cls._runImportPDB()
+
+	@classmethod
+	def _runDefineContacts(cls, inputProt):
+		protDefContacts = cls.newProtocol(
+			ProtDefineContactStructROIs
+		)
+
+		protDefContacts.inputSmallMols.set(inputProt)
+		protDefContacts.inputSmallMols.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(protDefContacts)
+		return protDefContacts
+
+	def test(self):
+		protExtract = self._runExtractLigand(self.protImportPDB)
+		self._waitOutput(protExtract, 'outputSmallMolecules')
+
+		protContacts = self._runDefineContacts(protExtract)
+		self._waitOutput(protContacts, 'outputStructROIs')
+		assertHandle(self.assertIsNotNone, getattr(protContacts, 'outputStructROIs', None),
+								 cwd=protContacts.getWorkingDir())

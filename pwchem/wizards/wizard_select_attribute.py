@@ -160,3 +160,31 @@ CheckSequencesAttribute().addTarget(protocol=chemprot.ProtExtractSeqsROI,
                                     targets=['thres'],
                                     inputs=['thres', 'inputAttribute'],
                                     outputs=[])
+
+class SelectMoleculesSubGroup(VariableWizard):
+  """Select a molecules subgroup label """
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    molSet = getattr(protocol, inputParam[0]).get()
+    vType = protocol.getEnumText(inputParam[1])
+    vType = protocol.typeLabels[vType]
+
+    ligDic = molSet.getGroupIndexes()[vType]
+    outputLabels = list(ligDic.keys())
+
+    finalOutputLabels = []
+    for i in outputLabels:
+      finalOutputLabels.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalOutputLabels)
+    dlg = dialog.ListDialog(form.root, "Select molecule subgroup", provider,
+                            "Select one of the subgroups")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+
+SelectMoleculesSubGroup().addTarget(protocol=chemprot.ProtDefineContactStructROIs,
+                                    targets=['ligandSelection'],
+                                    inputs=['inputSmallMols', 'selectionType'],
+                                    outputs=['ligandSelection'])
