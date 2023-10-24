@@ -27,22 +27,18 @@
 
 # General imports
 import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
-# import glob
 import random as rd
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
 from Bio.PDB.SASA import ShrakeRupley
-#from sklearn.cluster import DBSCAN
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.convert.atom_struct import cifToPdb
-from pwem.objects.data import Sequence, Object, String, Integer, Float
+from pwem.objects.data import  Object, String, Integer, Float
 
 # Plugin imports
 from pwchem.constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
-from pwchem.utils.scriptUtils import makeSubsets, performBatchThreading
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt': 'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -512,7 +508,7 @@ class CleanStructureSelect(Select):
     """ Recognition of heteroatoms - Remove water molecules """
     return not ((self.HETATM and isHet(residue) and residue.resname not in self.het2keep) or (self.waters and residue.id[0] == 'W'))
 
-def clean_PDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[]):
+def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[]):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseFileName(structFile)
   if structFile.endswith('.pdb') or structFile.endswith('.ent'):
@@ -694,15 +690,15 @@ def natural_sort(listi, rev=False):
   [A3, A1, B2, B4] -> [A1, A3, B2, B4]
   '''
   convert = lambda text: int(text) if text.isdigit() else text.lower()
-  alphanumKey = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+  alphanumKey = lambda key: [convert(c) for c in re.split('(\d+)', key)]
   return sorted(listi, key=alphanumKey, reverse=rev)
 
-def number_sort(strings, rev=False):
+def numberSort(strings, rev=False):
   '''Sort a list of strs containing numbers, taking into account only that number real value,
   ignoring the letter part
   [A3, A1, B2, B4] -> [A1, B2, A3, B4]
   '''
-  def key_func(string):
+  def keyFunct(string):
     # Use regular expression to extract the numeric part of the string
     match = re.search(r'\d+', string)
     if match:
@@ -710,7 +706,7 @@ def number_sort(strings, rev=False):
     else:
       return float('inf')  # If there are no numbers, put at the end
 
-  return sorted(strings, key=key_func, reverse=rev)
+  return sorted(strings, key=keyFunct, reverse=rev)
 
 
 def fillEmptyAttributes(inputSets):

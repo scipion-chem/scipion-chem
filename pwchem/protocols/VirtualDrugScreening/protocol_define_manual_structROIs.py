@@ -188,7 +188,7 @@ class ProtDefineStructROIs(EMProtocol):
         parser = PDBParser()
         pdbFile = self.getProteinFileName()
         if self.origin.get() == LIGANDS and not self.extLig:
-            pdbFile = clean_PDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
+            pdbFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
                                 waters=True, HETATM=True)
 
         structure = parser.get_structure(self.getProteinName(), pdbFile)

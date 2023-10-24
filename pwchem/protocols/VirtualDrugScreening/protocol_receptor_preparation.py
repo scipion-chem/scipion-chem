@@ -29,7 +29,7 @@ from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, 
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import clean_PDB
+from pwchem.utils import cleanPDB
 from pwchem.constants import MGL_DIC
 
 class ProtChemPrepareReceptor(EMProtocol):
@@ -88,7 +88,7 @@ class ProtChemPrepareReceptor(EMProtocol):
                 chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        cleanedPDB = clean_PDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+        cleanedPDB = cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
                                self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
 
     def createOutput(self):

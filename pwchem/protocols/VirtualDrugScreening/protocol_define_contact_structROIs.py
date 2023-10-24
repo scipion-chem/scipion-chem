@@ -41,7 +41,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreading, clusterSurfaceCoords,\
-    number_sort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr
+    numberSort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
@@ -156,7 +156,7 @@ class ProtDefineContactStructROIs(EMProtocol):
           nConStrs, areRes = self.parseContacts(os.path.join(cDir, contFile))
           conStrs += nConStrs
 
-        conStrs = number_sort(list(set(conStrs)))
+        conStrs = numberSort(list(set(conStrs)))
 
         coordsClusters = []
         recFile = self.getReceptorPDB()
@@ -334,7 +334,7 @@ class ProtDefineContactStructROIs(EMProtocol):
 
             # Get ligand representations of atoms/residues and corresponding Atoms Bio objects
             ligDic = self.getLigEquivalenceDic(contactDic)
-            ligStrs = number_sort(list(ligDic.keys()))
+            ligStrs = numberSort(list(ligDic.keys()))
 
             for ligRep in ligStrs:
                 # For each ligand rep, get receptor contact representantions
@@ -379,7 +379,7 @@ class ProtDefineContactStructROIs(EMProtocol):
             for recAtom in cDic[ligAtom]:
                 recRep = self.getNameFromAtom(recAtom, self.contactLevelRec.get())
                 recReps.append(recRep)
-        recReps = number_sort(set(recReps))
+        recReps = numberSort(set(recReps))
         return recReps
 
 
