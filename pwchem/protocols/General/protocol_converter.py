@@ -138,7 +138,6 @@ class ConvertStructures(EMProtocol):
 
         elif isinstance(self.inputObject.get(), AtomStruct):
             fnStructure = os.path.abspath(self.inputObject.get().getFileName())
-            args = self.inputArg(os.path.abspath(fnStructure))
             fnRoot = os.path.splitext(os.path.split(fnStructure)[1])[0]
 
             outFormat = extDic[self.getEnumText('outputFormatTarget')]
