@@ -37,8 +37,9 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects.data import  Object, String, Integer, Float
 
 # Plugin imports
-from pwchem.constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
-from pwchem import Plugin as pwchemPlugin
+from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
+from .. import Plugin as pwchemPlugin
+from ..utils.scriptUtils import makeSubsets, performBatchThreading
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt': 'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
