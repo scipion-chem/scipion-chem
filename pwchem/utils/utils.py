@@ -34,7 +34,7 @@ from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.objects.data import  Object, String, Integer, Float
+from pwem.objects.data import Sequence, Object, String, Integer, Float
 
 # Plugin imports
 from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
