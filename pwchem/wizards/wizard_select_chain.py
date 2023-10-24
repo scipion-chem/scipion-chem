@@ -105,7 +105,7 @@ class SelectLigandAtom(VariableWizard):
 class SelectLigandWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
-  def is_het(self, residue):
+  def isHet(self, residue):
     res = residue.id[0]
     return res != " " and res != "W"
 
@@ -132,7 +132,7 @@ class SelectLigandWizard(VariableWizard):
     for model in parser:
       for chain in model:
         for residue in chain:
-          if self.is_het(residue):
+          if self.isHet(residue):
             if not residue.resname in molNames:
               molNames.append(residue.resname)
     return molNames
