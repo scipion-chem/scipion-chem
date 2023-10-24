@@ -69,13 +69,14 @@ def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=Tr
             pmlStr += f'load {os.path.abspath(recFile)}, {gNames[-1]}{schStr}\n'
 
         molFiles = natural_sort(set(molFiles))
-        for molFile in molFiles:
+        for mi, molFile in enumerate(molFiles):
             gNames.append(uNames[molFile])
-            disableStr = '\ndisable {}'.format(gNames[-1]) if disable else ''
+            disableStr = f'\ndisable {gNames[-1]}' if (disable and mi != 0) else ''
             pmlStr += f'load {os.path.abspath(molFile)}, {gNames[-1]}{schStr}{disableStr}\n'
 
         if recFile != 'all':
-            pmlStr += f'group Complex{ci}, {" ".join(gNames)} add\n'
+            disableStr = f'\ndisable Complex{ci}' if (disable and ci!=1) else ''
+            pmlStr += f'group Complex{ci}, {" ".join(gNames)} add{disableStr}\n'
             ci += 1
     return pmlStr
 
