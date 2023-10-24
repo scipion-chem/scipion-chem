@@ -178,7 +178,7 @@ class ProtocolRMSDDocking(EMProtocol):
             for model in parser:
                 for chain in model:
                     for residue in chain:
-                        if is_het(residue) and residue.resname == molName:
+                        if isHet(residue) and residue.resname == molName:
                             for atom in residue:
                                 atomId, coords = atom.get_id(), atom.get_coord()
                                 if not atomId.startswith('H') or not onlyHeavy:

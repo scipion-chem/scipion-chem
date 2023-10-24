@@ -50,7 +50,7 @@ class ResidueSelect(Select):
 
     def accept_residue(self, residue):
         """ Recognition of heteroatoms - Remove water molecules """
-        return residue == self.residue and is_het(residue)
+        return residue == self.residue and isHet(residue)
 
 
 class ProtExtractLigands(EMProtocol):
@@ -157,7 +157,7 @@ class ProtExtractLigands(EMProtocol):
         for model in struct:
             for chain in model:
                 for residue in chain:
-                    if not is_het(residue) or len(list(residue.get_atoms())) < self.nAtoms.get():
+                    if not isHet(residue) or len(list(residue.get_atoms())) < self.nAtoms.get():
                         continue
                     print(f"saving {chain} {residue}")
                     outFile = self._getPath(f"{struct_name}_{residue.get_resname()}-{i}.pdb")

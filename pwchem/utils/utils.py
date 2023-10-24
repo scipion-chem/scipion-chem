@@ -127,17 +127,17 @@ def getBaseName(file):
 def parseAtomStruct(asFile):
   '''Parse an atom struct using biopython'''
   if asFile.endswith('.pdb') or asFile.endswith('.ent'):
-    pdb_code = os.path.basename(os.path.splitext(asFile)[0])
-    parser = PDBParser().get_structure(pdb_code, asFile)
+    pdbCode = os.path.basename(os.path.splitext(asFile)[0])
+    parser = PDBParser().get_structure(pdbCode, asFile)
   elif asFile.endswith('.cif'):
-    pdb_code = os.path.basename(os.path.splitext(asFile)[0])
-    parser = MMCIFParser().get_structure(pdb_code, asFile)
+    pdbCode = os.path.basename(os.path.splitext(asFile)[0])
+    parser = MMCIFParser().get_structure(pdbCode, asFile)
   else:
     print('Unknown AtomStruct file format')
     parser = None
   return parser
 
-def is_het(residue):
+def isHet(residue):
   res = residue.id[0]
   return res != " " and res != "W"
 
@@ -153,7 +153,6 @@ def getLigCoords(asFile, ligName):
             coords.append(list(atom.get_coord()))
   return coords
 
-
 def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   if not structureHandler:
     structureHandler = AtomicStructHandler()
@@ -168,24 +167,19 @@ def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir=outDir)
   return fileName
 
-
 def getRawPDBStr(pdbFile, ter=True):
   outStr = ''
   with open(pdbFile) as fIn:
     for line in fIn:
-      if line.startswith('ATOM') or line.startswith('HETATM'):
-        outStr += line
-      elif ter and line.startswith('TER'):
+      if line.startswith('ATOM') or line.startswith('HETATM') or (ter and line.startswith('TER')):
         outStr += line
   return outStr
-
 
 def writeRawPDB(pdbFile, outFile, ter=True):
   '''Creates a new pdb with only the ATOM and HETATM lines'''
   with open(outFile, 'w') as f:
     f.write(getRawPDBStr(pdbFile, ter))
   return outFile
-
 
 def writePDBLine(j):
   '''j: elements to write in the pdb'''
@@ -284,7 +278,7 @@ def createColorVectors(nColors):
   colors = []
   while len(colors) < nColors:
     newColor = rd.sample(sampling, 3)
-    if not newColor in colors:
+    if newColor not in colors:
       colors += [newColor]
   return colors
 
@@ -308,8 +302,8 @@ def writeSurfPML(pockets, pmlFileName):
 
 def pdbqt2other(protocol, pdbqtFile, otherFile):
   '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
-  inName, inExt = os.path.splitext(os.path.basename(otherFile))
-  if not inExt in ['.pdb', '.mol2', '.sdf', '.mol']:
+  inExt = os.path.splitext(os.path.basename(otherFile))[1]
+  if inExt not in ['.pdb', '.mol2', '.sdf', '.mol']:
     inExt, otherFile = 'pdb', otherFile.replace(inExt, '.pdb')
 
   args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
@@ -368,7 +362,7 @@ def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
   '''Appends a molecule to a conformers file.
     If outConfFile == None, the output conformers file path is the same as as the start'''
   if outConfFile == None:
-    iName, iExt = os.path.splitext(confFile)
+    iExt = os.path.splitext(confFile)[1]
     outConfFile = confFile.replace(iExt, '_aux' + iExt)
     rename = True
 
@@ -420,8 +414,8 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
-  protName, protExt = os.path.splitext(os.path.basename(protFile))
-  gpf_file = os.path.join(outDir, protName + '.gpf')
+  protName = os.path.splitext(os.path.basename(protFile))[0]
+  gpfFile = os.path.join(outDir, protName + '.gpf')
   npts = int(round(npts))
 
   protAtomTypes = parseAtomTypes(protFile)
@@ -438,7 +432,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
-  with open(os.path.abspath(gpf_file), "w") as file:
+  with open(os.path.abspath(gpfFile), "w") as file:
     file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
     if znFFfile:
         file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
@@ -457,7 +451,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     if znFFfile:
         file.write('''nbp_r_eps 0.25 23.2135 12 6 NA TZ\nnbp_r_eps 2.1   3.8453 12 6 OA Zn\nnbp_r_eps 2.25  7.5914 12 6 SA Zn\nnbp_r_eps 1.0   0.0    12 6 HD Zn\nnbp_r_eps 2.0   0.0060 12 6 NA Zn\nnbp_r_eps 2.0   0.2966 12 6  N Zn''')
 
-  return os.path.abspath(gpf_file)
+  return os.path.abspath(gpfFile)
 
 
 def calculate_centerMass(atomStructFile):
@@ -469,10 +463,10 @@ def calculate_centerMass(atomStructFile):
   try:
     structureHandler = AtomicStructHandler()
     structureHandler.read(atomStructFile)
-    center_coord = structureHandler.centerOfMass(geometric=True)
+    centerCoord = structureHandler.centerOfMass(geometric=True)
     structure = structureHandler.getStructure()
 
-    return structure, center_coord[0], center_coord[1], center_coord[2]  # structure, x,y,z
+    return structure, centerCoord[0], centerCoord[1], centerCoord[2]  # structure, x,y,z
 
   except Exception as e:
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
@@ -487,14 +481,14 @@ def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1'
         if line.startswith('ATOM') or line.startswith('HETATM'):
           pLine = line.split()
           at = pLine[-1]
-          if (allowed is None or at in allowed) and not at in ignore:
+          if (allowed is None or at in allowed) and at not in ignore:
               atomTypes.add(at)
   else:
       struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
       for atom in struct.get_atoms():
         atomId = atom.get_id()
-        if not removeNumberFromStr(atomId) in ignore:
+        if removeNumberFromStr(atomId) not in ignore:
           atomTypes.add(removeNumberFromStr(atomId))
 
   return atomTypes
@@ -506,38 +500,32 @@ def sortSet(seti):
 
 
 class CleanStructureSelect(Select):
-  def __init__(self, chain_ids, rem_HETATM, rem_WATER, het2keep=[]):
-    self.chain_ids = chain_ids
-    self.HETATM, self.het2keep= rem_HETATM, het2keep
-    self.waters = rem_WATER
+  def __init__(self, chainIds, remHETATM, remWATER, het2keep=[]):
+    self.chain_ids = chainIds
+    self.HETATM, self.het2keep= remHETATM, het2keep
+    self.waters = remWATER
 
   def accept_chain(self, chain):
     return not self.chain_ids or chain.id in self.chain_ids
 
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
-    accept = True
-    if self.HETATM and is_het(residue) and residue.resname not in self.het2keep:
-      accept = False
-    elif self.waters and residue.id[0] == 'W':
-      accept = False
-    return accept
+    return not ((self.HETATM and isHet(residue) and residue.resname not in self.het2keep) or (self.waters and residue.id[0] == 'W'))
 
-
-def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None, het2keep=[]):
+def clean_PDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[]):
   """ Extraction of the heteroatoms of .pdb files """
-  struct_name = getBaseFileName(struct_file)
-  if struct_file.endswith('.pdb') or struct_file.endswith('.ent'):
-    struct = PDBParser().get_structure(struct_name, struct_file)
-  elif struct_file.endswith('.cif'):
-    struct = MMCIFParser().get_structure(struct_name, struct_file)
+  structName = getBaseFileName(structFile)
+  if structFile.endswith('.pdb') or structFile.endswith('.ent'):
+    struct = PDBParser().get_structure(structName, structFile)
+  elif structFile.endswith('.cif'):
+    struct = MMCIFParser().get_structure(structName, structFile)
   else:
-    print('Unknown format for file ', struct_file)
+    print('Unknown format for file ', structFile)
     exit()
 
   io = PDBIO()
   io.set_structure(struct)
-  io.save(outFn, CleanStructureSelect(chain_ids, HETATM, waters, het2keep))
+  io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep))
   return outFn
 
 def obabelMolConversion(mol, outFormat, outDir, pose=False):
@@ -574,7 +562,6 @@ def relabelAtomsMol2(atomFile, i=''):
             atomCount[atom] += 1
           else:
             atomCount[atom] = 1
-          numSize = len(str(atomCount[atom]))
           line = line[:8] + ' ' * (2 - len(atom)) + atom + str(atomCount[atom]).ljust(8) + line[18:]
 
         if line.startswith('@<TRIPOS>ATOM'):
@@ -606,10 +593,9 @@ def relabelMapAtomsMol2(atomFile, i=''):
             atomName = line.split()[1]
             atomType = removeNumberFromStr(atomName)
 
-            atomCount[atomType] = 1 if not atomType in atomCount else atomCount[atomType] + 1
+            atomCount[atomType] = 1 if atomType not in atomCount else atomCount[atomType] + 1
             atomName = atomName if atomType != atomName else atomName + str(atomCount[atomType])
 
-            numSize = len(str(atomCount[atomType]))
             line = line[:8] + ' ' * (2 - len(atomType)) + atomName.ljust(8 + len(atomType)) + line[18:]
 
         if line.startswith('@<TRIPOS>ATOM'):
@@ -626,17 +612,13 @@ def removeNumberFromStr(s):
   for i in s:
     if not i.isdigit():
       newS += i
-    else:
-      pass
   return newS
 
 
 def getNumberFromStr(s):
   num = ''
   for i in s:
-    if not i.isdigit():
-      pass
-    else:
+    if i.isdigit():
       num += i
   return num
 
@@ -712,8 +694,8 @@ def natural_sort(listi, rev=False):
   [A3, A1, B2, B4] -> [A1, A3, B2, B4]
   '''
   convert = lambda text: int(text) if text.isdigit() else text.lower()
-  alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
-  return sorted(listi, key=alphanum_key, reverse=rev)
+  alphanumKey = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+  return sorted(listi, key=alphanumKey, reverse=rev)
 
 def number_sort(strings, rev=False):
   '''Sort a list of strs containing numbers, taking into account only that number real value,
@@ -749,7 +731,7 @@ def getAllAttributes(inputSets):
     item = inpSet.get().getFirstItem()
     attrKeys = item.getObjDict().keys()
     for attrK in attrKeys:
-      if not attrK in attributes:
+      if attrK not in attributes:
         value = item.__getattribute__(attrK)
         attributes[attrK] = value.clone()
         attributes[attrK].set(None)
@@ -803,11 +785,11 @@ def getChainIds(chainStr):
   '''Parses a line of json with the description of a chain or chains and returns the ids'''
   chainJson = json.loads(chainStr)
   if 'chain' in chainJson:
-    chain_ids = [chainJson["chain"].upper().strip()]
+    chainIds = [chainJson["chain"].upper().strip()]
   elif 'model-chain' in chainJson:
     modelChains = chainJson["model-chain"].upper().strip()
-    chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
-  return chain_ids
+    chainIds = [x.split('-')[1] for x in modelChains.split(',')]
+  return chainIds
 
 
 def calculate_SASA(structFile, outFile):

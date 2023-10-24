@@ -31,6 +31,7 @@ This protocol is used to define structural regions from the contacts between a s
 
 """
 import os, pickle
+import numpy as np
 from scipy.spatial import distance
 from Bio.PDB.ResidueDepth import get_surface
 
@@ -39,7 +40,8 @@ from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfStructROIs, StructROI
-from pwchem.utils import *
+from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreading, clusterSurfaceCoords,\
+    number_sort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
@@ -119,7 +121,7 @@ class ProtDefineContactStructROIs(EMProtocol):
         maeMols, otherMols = self.getMAEMoleculeFiles(inMols)
         if len(maeMols) > 0:
             try:
-                from schrodingerScipion.utils.utils import convertMAEMolSet
+                from pwchemSchrodinger.utils.utils import convertMAEMolSet
                 convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
             except ImportError:
                 print(
@@ -289,7 +291,7 @@ class ProtDefineContactStructROIs(EMProtocol):
 
         for model in parser:
             for residue in model.get_residues():
-                if is_het(residue) and (residue.resname == ligName or not ligName):
+                if isHet(residue) and (residue.resname == ligName or not ligName):
                     for atom in residue:
                         ligAtoms.append(atom)
                 else:
