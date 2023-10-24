@@ -469,7 +469,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       receptorFile = outFile
 
     mergePDBs(receptorFile, molFile, auxPath, hetatm2=True)
-    cleanPDB(auxPath, outPath, waters=True, HETATM=False)
+    cleanPDB(auxPath, outPath, waters=True, hetatm=False)
     return outPath
 
 
