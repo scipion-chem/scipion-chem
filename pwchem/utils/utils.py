@@ -147,11 +147,10 @@ def getLigCoords(asFile, ligName):
   if parser:
     coords = []
     for model in parser:
-      for chain in model:
-        for residue in chain:
-          if residue.resname == ligName:
-            for atom in residue:
-              coords.append(list(atom.get_coord()))
+      for residue in model.get_residues():
+        if residue.resname == ligName:
+          for atom in residue:
+            coords.append(list(atom.get_coord()))
   return coords
 
 
