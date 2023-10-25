@@ -41,7 +41,8 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreading, clusterSurfaceCoords,\
-    numberSort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr
+    numberSort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr, \
+    getMAEMoleculeFiles
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
@@ -118,7 +119,7 @@ class ProtDefineContactStructROIs(EMProtocol):
         outDir = self.getInputMolsDir()
         os.mkdir(outDir)
 
-        maeMols, otherMols = self.getMAEMoleculeFiles(inMols)
+        maeMols, otherMols = getMAEMoleculeFiles(inMols)
         if len(maeMols) > 0:
             try:
                 from pwchemSchrodinger.utils.utils import convertMAEMolSet
@@ -234,17 +235,6 @@ class ProtDefineContactStructROIs(EMProtocol):
       else:
         indexes = list(groupDic.values())[0]
       return molSet.getMolsFromIds(indexes)
-
-    def getMAEMoleculeFiles(self, molList):
-        '''Return in different lists the mae and non-mae files'''
-        maeMols, otherMols = [], []
-        for mol in molList:
-            molFile = os.path.abspath(mol.getPoseFile())
-            if '.mae' in molFile:
-                maeMols.append(mol.clone())
-            else:
-                otherMols.append(mol.clone())
-        return maeMols, otherMols
 
     def convertReceptor2PDB(self, proteinFile):
         inExt = os.path.splitext(os.path.basename(proteinFile))[1]

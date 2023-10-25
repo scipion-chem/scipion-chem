@@ -432,12 +432,6 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 
 class TestMapLigandContacts(TestExtractLigand):
 	@classmethod
-	def setUpClass(cls):
-		tests.setupTestProject(cls)
-		cls.ds = DataSet.getDataSet('model_building_tutorial')
-		cls._runImportPDB()
-
-	@classmethod
 	def _runDefineContacts(cls, inputProt):
 		protDefContacts = cls.newProtocol(
 			ProtDefineContactStructROIs

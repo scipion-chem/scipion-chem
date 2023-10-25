@@ -116,7 +116,7 @@ class ProtocolConsensusDocking(EMProtocol):
         outDir = self.getInputMolsDir()
         os.mkdir(outDir)
 
-        maeMols, _ = self.getMAEMoleculeFiles(allMols)
+        maeMols, _ = getMAEMoleculeFiles(allMols)
         if len(maeMols) > 0:
             try:
                 from schrodingerScipion.utils.utils import convertMAEMolSet
@@ -205,16 +205,6 @@ class ProtocolConsensusDocking(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
-
-    def getMAEMoleculeFiles(self, molList):
-        maeMols, otherMols = [], []
-        for mol in molList:
-            molFile = os.path.abspath(mol.getPoseFile())
-            if '.mae' in molFile:
-                maeMols.append(mol)
-            else:
-                otherMols.append(mol)
-        return maeMols, otherMols
 
     def buildMolDic(self):
         dic = {}

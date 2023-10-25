@@ -325,6 +325,16 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
     pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
   return sdfFile
 
+def getMAEMoleculeFiles(molList):
+  '''Return in different lists the mae and non-mae files'''
+  maeMols, otherMols = [], []
+  for mol in molList:
+    molFile = os.path.abspath(mol.getPoseFile())
+    if '.mae' in molFile:
+      maeMols.append(mol.clone())
+    else:
+      otherMols.append(mol.clone())
+  return maeMols, otherMols
 
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
   pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
