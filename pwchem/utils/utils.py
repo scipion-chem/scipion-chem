@@ -320,8 +320,8 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
     baseName = os.path.splitext(os.path.basename(sdfFile))[0]
     outDir = os.path.abspath(os.path.dirname(sdfFile))
   if not os.path.exists(sdfFile) or overWrite:
-    args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(molFile),
-                                                                                  os.path.abspath(outDir), baseName)
+    args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
+           f'--outputName {baseName} --overWrite'
     pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
   return sdfFile
 

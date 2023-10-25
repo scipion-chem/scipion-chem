@@ -71,7 +71,12 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
         outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat)))
         outObj = pybel.Outputfile(outFormat, outFile, overwrite=overW)
 
-        for mol in mols:
+        for i, mol in enumerate(mols):
+            if outName:
+                if len(mols) == 1:
+                    mol.title = outName
+                else:
+                    mol.title = f'{outName}_{i}'
             outObj.write(mol)
         outObj.close()
         return outFile
