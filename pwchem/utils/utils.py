@@ -895,3 +895,18 @@ def removeElements(elements):
         shutil.rmtree(item)
       else:
         os.remove(item)
+
+def createMSJDic(protocol):
+  msjDic = {}
+  for pName in protocol.getStageParamsDic(type='Normal').keys():
+    if hasattr(protocol, pName):
+      msjDic[pName] = getattr(protocol, pName).get()
+    else:
+      print('Something is wrong with parameter ', pName)
+
+  for pName in protocol.getStageParamsDic(type='Enum').keys():
+    if hasattr(protocol, pName):
+      msjDic[pName] = protocol.getEnumText(pName)
+    else:
+      print('Something is wrong with parameter ', pName)
+  return msjDic

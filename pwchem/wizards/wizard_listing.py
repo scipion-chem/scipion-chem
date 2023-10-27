@@ -35,6 +35,7 @@ information such as name and number of residues.
 # Imports
 from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
+from pwchem.utils import createMSJDic
 
 class AddElementWizard(VariableWizard):
     """Add the content of a parameter to another"""
@@ -117,7 +118,7 @@ class AddElementSummaryWizard(VariableWizard):
             index = int(getattr(protocol, inputParam[0]).get())
         else:
             index = numSteps + 1
-        msjDic = protocol.createMSJDic()
+        msjDic = createMSJDic(protocol)
         if index > numSteps:
             prevStr = getattr(protocol, outputParam[0]).get() \
                 if getattr(protocol, outputParam[0]).get() is not None else ''
