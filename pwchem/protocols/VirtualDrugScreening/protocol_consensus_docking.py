@@ -119,8 +119,8 @@ class ProtocolConsensusDocking(EMProtocol):
         maeMols, _ = getMAEMoleculeFiles(allMols)
         if len(maeMols) > 0:
             try:
-                from schrodingerScipion.utils.utils import convertMAEMolSet
-                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
+                from pwchemSchrodinger.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
             except ImportError:
                 print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
