@@ -171,7 +171,8 @@ class WatchElementWizard(VariableWizard):
                 msjDic = eval(workSteps[index - 1])
                 for pName in msjDic:
                     if pName in protocol.getStageParamsDic(type='Normal').keys():
-                        form.setVar(pName, msjDic[pName])
+                        val = eval(msjDic[pName]) if msjDic[pName] in ['True', 'False'] else msjDic[pName]
+                        form.setVar(pName, val)
                     elif pName in protocol.getStageParamsDic(type='Enum').keys():
                         enumParam = protocol.getParam(pName)
                         idx = enumParam.choices.index(msjDic[pName])
