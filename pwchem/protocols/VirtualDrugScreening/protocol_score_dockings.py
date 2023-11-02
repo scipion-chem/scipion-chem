@@ -56,6 +56,8 @@ class ProtocolScoreDocking(EMProtocol):
     _enumParamNames = ['scoreChoice', 'scoreVersionRF', 'scoreVersionPLEC', 'trainData']
     _defParams = {'scoreChoice': 'Vina', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016',
                   'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False}
+    _omitParamNames = {}
+
 
     def __init__(self, **args):
         super().__init__(**args)
@@ -437,6 +439,22 @@ class ProtocolScoreDocking(EMProtocol):
             else:
                 print('Something is wrong with parameter ', pName)
         return msjDic
+
+    def getStageParamsDic(self, type='All'):
+        '''Return a dictionary as {paramName: param} of the stage parameters of the formulary.
+        Type'''
+        paramsDic = {}
+        for paramName, param in self._definition.iterAllParams():
+            if not paramName in self._omitParamNames and not isinstance(param, params.Group) and not isinstance(param,
+                                                                                                                params.Line):
+                if type == 'All':
+                    paramsDic[paramName] = param
+                elif type == 'Enum' and isinstance(param, params.EnumParam):
+                    paramsDic[paramName] = param
+                elif type == 'Normal' and not isinstance(param, params.EnumParam):
+                    paramsDic[paramName] = param
+        return paramsDic
+
 
 
 
