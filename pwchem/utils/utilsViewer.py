@@ -41,6 +41,15 @@ def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=T
         format(pdbFile, molName, disableStr, molName, molName)
     return pmlStr
 
+def buildSchShowStr(name, isReceptor=True):
+    schStrBase = ', mimic=1, object_props=*, atom_props=*'
+    schStr = f'{schStrBase}\nhide lines, {name}'
+    if isReceptor:
+        schStr += f'\nshow cartoon, {name}'
+    else:
+        schStr += f'\nshow sticks, {name}'
+    return schStr
+
 def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True):
     if addTarget and pose:
         genRecFile = os.path.abspath(viewer.protocol.getOriginalReceptorFile())
@@ -61,22 +70,25 @@ def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=Tr
         uNames[molFile] = mol.getUniqueName()
 
     pmlStr, ci = '', 1
-    schStr = ', mimic=1, object_props=*, atom_props=*'
+
     for recFile, molFiles in cGroups.items():
         gNames = []
         if recFile != 'all':
-            gNames += [getBaseName(recFile)]
+            gNames += [f'{getBaseName(recFile)}_{ci}']
+            schStr = '' if '.mae' not in recFile else buildSchShowStr(gNames[-1], True)
             pmlStr += f'load {os.path.abspath(recFile)}, {gNames[-1]}{schStr}\n'
 
         molFiles = natural_sort(set(molFiles))
         for mi, molFile in enumerate(molFiles):
             gNames.append(uNames[molFile])
+            schStr = '' if '.mae' not in molFile else buildSchShowStr(gNames[-1], False)
             disableStr = f'\ndisable {gNames[-1]}' if (disable and mi != 0) else ''
             pmlStr += f'load {os.path.abspath(molFile)}, {gNames[-1]}{schStr}{disableStr}\n'
 
         if recFile != 'all':
-            disableStr = f'\ndisable Complex{ci}' if (disable and ci!=1) else ''
-            pmlStr += f'group Complex{ci}, {" ".join(gNames)} add{disableStr}\n'
+            complexName = f'{gNames[0]}_{ci}' if len(gNames) > 2 else f'{gNames[-1]}_{ci}'
+            disableStr = f'\ndisable {complexName}' if (disable and ci != 1) else ''
+            pmlStr += f'group {complexName}, {" ".join(gNames)} add{disableStr}\n'
             ci += 1
     return pmlStr
 
