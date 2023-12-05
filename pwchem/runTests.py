@@ -344,16 +344,14 @@ if __name__ == "__main__":
 	)
 	parser.add_argument("scipion", help="Path to Scipion executable, relative or absolute")
 	parser.add_argument("plugin", help="Name of the plugin's Python module")
-	parser.add_argument("-j", "--jobs", type=int, help="Number of jobs. Defaults to max available")
+	parser.add_argument("-j", "--jobs", type=int, default=multiprocessing.cpu_count(), help="Number of jobs. Defaults to max available")
 	parser.add_argument("-noGPU", action='store_true', help="If set, no tests that need a GPU will run. Use it in enviroments where a GPU cannot be accessed.")
-	parser.add_argument("-testData", help="Location of the test data JSON file.")
+	parser.add_argument("-testData", default='', help="Location of the test data JSON file.")
 	args = parser.parse_args()
 
-	# Set the number of jobs
-	args.jobs = args.jobs if args.jobs else multiprocessing.cpu_count()
-
 	# Set the test data file path
-	args.testData = os.path.expanduser(args.testData) if args.testData else ''
+	if args.testData:
+		args.testData = os.path.expanduser(args.testData)
 
 	# Call main function
 	main(args)
