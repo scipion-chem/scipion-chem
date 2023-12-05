@@ -1387,6 +1387,7 @@ class MDSystem(data.EMFile):
 
     def __init__(self, filename=None, **kwargs):
         super().__init__(filename=filename, **kwargs)
+        self._oriStructFile = pwobj.String(kwargs.get('oriStructFile', None))
         self._topoFile = pwobj.String(kwargs.get('topoFile', None))
         self._trjFile = pwobj.String(kwargs.get('trjFile', None))
         self._ff = pwobj.String(kwargs.get('ff', None))
@@ -1426,6 +1427,12 @@ class MDSystem(data.EMFile):
     def setTrajectoryFile(self, value):
         self._trjFile.set(value)
 
+    def getOriStructFile(self):
+        return self._oriStructFile.get()
+
+    def setOriStructFile(self, value):
+        self._oriStructFile.set(value)
+
     def getForceField(self):
         return self._ff.get()
 
@@ -1437,6 +1444,9 @@ class MDSystem(data.EMFile):
 
     def setWaterForceField(self, value):
         self._wff.set(value)
+
+    def getSystemName(self):
+        return getBaseName(self.getSystemFile())
 
 
 class PharmFeature(data.EMObject):
