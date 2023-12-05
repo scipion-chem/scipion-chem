@@ -204,12 +204,12 @@ class Plugin(pwem.Plugin):
 		# Instantiating install helper
 		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-		installer.getCondaEnvCommand().addCondaPackages(['mdtraj'], channel='conda-forge')\
+		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, scriptDir=None):
+	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None):
 		""" Run a script from a given protocol using a specific environment """
 		scriptName = cls.getScriptsDir(scriptName) if not scriptDir else os.path.join(scriptDir, scriptName)
 		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
@@ -217,7 +217,10 @@ class Plugin(pwem.Plugin):
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			if wait:
+				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			else:
+				subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):
