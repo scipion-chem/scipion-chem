@@ -159,7 +159,7 @@ class Plugin(pwem.Plugin):
 
 		# Generating installation commands
 		openbabel_installer.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer'], channel='conda-forge') \
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
 		
 		# Instantiating shape it install helper
@@ -253,7 +253,7 @@ class Plugin(pwem.Plugin):
 		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
 		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
-  ##################### UTILS ###########################
+##################### UTILS ###########################
 	@classmethod
 	def getPluginHome(cls, path=""):
 		import pwchem
