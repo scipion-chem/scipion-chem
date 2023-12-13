@@ -69,19 +69,20 @@ load {}
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
 
-aux = list(map(int, stored.list))
+aux = {}
 aux.sort()
-stored.list = list(map(str, aux))
+
+stored.list = list(map(str, stored.list))
 #print(stored.list)
 lastSTP=stored.list[-1]	#get the index of the last residu
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))'''
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
 load {}, protein
@@ -368,19 +369,20 @@ load {}
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
 
-aux = list(map(int, stored.list))
+aux = {}
 aux.sort()
-stored.list = list(map(str, aux))
+
+stored.list = list(map(str, stored.list))
 #print(stored.list)
 lastSTP=stored.list[-1]	#get the index of the last residu
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
 
 python
 {}
