@@ -65,7 +65,7 @@ class ProtChemPrepareReceptor(EMProtocol):
         form.addParam('inputAtomStruct', params.PointerParam, pointerClass="AtomStruct",
                       label='Atomic Structure: ', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-        cGroup = self.defineCleanParams(form)
+        self.defineCleanParams(form)
 
         pGroup = form.addGroup('PDBFixer')
         pGroup.addParam("usePDBFixer", params.BooleanParam, label='Use PDBFixer: ', default=False, important=True,
