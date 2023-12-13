@@ -363,23 +363,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
             item.setObjId(i+1)
         return inSet, idsDic
 
-    def createOutPDB(self, idsDic):
-        outStr = self.getTemplateOutPDB()
-        for pocket in self.consensusPockets:
-            outFile = pocket.getProteinFile()
-            newId, oldId = pocket.getObjId(), idsDic[pocket.getObjId()]
-            outStr += self.parseHETATM(outFile, oldId, newId)
-
-        outPDBFile = self._getExtraPath(self.getPDBName()) + '_out.pdb'
-        with open(outPDBFile, 'w') as f:
-            f.write(outStr)
-            f.write('\nTER\n')
-
-        pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
-        with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outPDBFile.split('/')[-1]))
-        return os.path.abspath(outPDBFile), os.path.abspath(pmlFile)
-
     def getTemplateOutPDB(self):
         templatePocket = None
         for pock in self.consensusPockets:

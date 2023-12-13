@@ -25,51 +25,60 @@
 # **************************************************************************
 import os, json
 
-from pyworkflow.protocol.params import PointerParam, StringParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 
 from pwchem.utils import cleanPDB
-from pwchem.constants import MGL_DIC
+from pwchem import Plugin as pwchemPlugin
 
 class ProtChemPrepareReceptor(EMProtocol):
     """Prepare receptor by removing HETATM atoms, waters, keeping only specific chains..."""
     _label = 'target preparation'
     _program = ""
     def defineCleanParams(self, form, w=True, h=True, hk=True, c=True):
-      clean = form.addGroup('Clean Structure File')
+      cGroup = form.addGroup('Clean Structure File')
       if w:
-          clean.addParam("waters", BooleanParam,
-                         label='Remove waters',
-                         default=True, important=True,
+          cGroup.addParam("waters", params.BooleanParam,
+                         label='Remove waters: ', default=True, important=True,
                          help='Remove all waters molecules from a pdb file')
       if h:
-          clean.addParam("HETATM", BooleanParam,
-                         label='Remove ligands HETATM',
-                         default=True, important=True,
+          cGroup.addParam("HETATM", params.BooleanParam,
+                         label='Remove ligands HETATM: ', default=True, important=True,
                          help='Remove all ligands and HETATM contained in the protein')
       if hk:
-          clean.addParam('het2keep', StringParam, condition='HETATM', default='',
-                         label='Heteroatom residues to keep', expertLevel=LEVEL_ADVANCED,
+          cGroup.addParam('het2keep', params.StringParam, condition='HETATM', default='',
+                         label='Heteroatom residues to keep: ', expertLevel=params.LEVEL_ADVANCED,
                          help='Specify specific heteroatom residues to keep')
       if c:
-          clean.addParam("rchains", BooleanParam,
-                         label='Select specific chains: ',
-                         default=False, important=True,
+          cGroup.addParam("rchains", params.BooleanParam,
+                         label='Select specific chains: ', default=False, important=True,
                          help='Keep only the chains selected')
 
-          clean.addParam("chain_name", StringParam,
-                         label="Keep chains: ", important=True,
-                         condition="rchains==True",
+          cGroup.addParam("chain_name", params.StringParam,
+                         label="Keep chains: ", important=True, condition="rchains==True",
                          help="Select the chain(s) you want to keep in the structure")
-      return clean
+      return cGroup
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputAtomStruct', PointerParam, pointerClass="AtomStruct",
-                      label='Atomic Structure:', allowsNull=False,
+        form.addParam('inputAtomStruct', params.PointerParam, pointerClass="AtomStruct",
+                      label='Atomic Structure: ', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-        clean = self.defineCleanParams(form)
+        self.defineCleanParams(form)
+
+        pGroup = form.addGroup('PDBFixer')
+        pGroup.addParam("usePDBFixer", params.BooleanParam, label='Use PDBFixer: ', default=False, important=True,
+                        help='Whether to use PDBFixer to further.')
+        form.addParam('addAtoms', params.EnumParam, default=0, condition="usePDBFixer",
+                      label="Add missing atoms: ", choices=['All', 'Heavy', 'Hydrogen', 'None'],
+                      help='Use PDBFixer to add the missing atoms specified in the PDB atomic structure')
+        form.addParam('addRes', params.BooleanParam, default=True,
+                      label="Add missing residues: ",  condition="usePDBFixer",
+                      help='Use PDBFixer to add missing residues')
+        form.addParam('repNonStd', params.BooleanParam, default=False,
+                      label="Replace non-standard residues: ", condition="usePDBFixer",
+                      help='Use PDBFixer to replace nonstandard residues with standard equivalents')
 
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
@@ -88,8 +97,15 @@ class ProtChemPrepareReceptor(EMProtocol):
                 chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        cleanedPDB = cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                               self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
+        cleanedPDB = os.path.abspath(cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
+                                              self.waters.get(), self.HETATM.get(), chain_ids, het2keep))
+
+        addResStr = ' --add-residues' if self.addRes else ''
+        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
+        addAtomsStr = self.getEnumText("addAtoms").lower()
+
+        args = f'{cleanedPDB} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {cleanedPDB}'
+        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
 
     def createOutput(self):
         fnOut = self.getPreparedFile()

@@ -1215,6 +1215,7 @@ class SetOfStructROIs(data.EMSet):
         pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
         # Creates the pml for pymol visualization
+        idList = [pock.getObjId() for pock in self]
         with open(pmlFile, 'w') as f:
             if bBox:
                 toWrite = FUNCTION_BOUNDING_BOX
@@ -1223,9 +1224,9 @@ class SetOfStructROIs(data.EMSet):
                     toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
                                                         [pDia * bBox] * 3,
                                                         'BoundingBox_' + str(pocket.getObjId()))
-                f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, toWrite))
+                f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, idList, toWrite))
             else:
-                f.write(PML_STR.format(outHETMFile))
+                f.write(PML_STR.format(outHETMFile, idList))
 
         return pmlFile
 
