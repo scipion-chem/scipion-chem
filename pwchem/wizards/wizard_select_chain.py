@@ -619,9 +619,8 @@ class SelectElementWizard(VariableWizard):
           eleList.append(element.__str__())
     return eleList
 
-  def displayDialog(self, form):
+  def displayDialog(self, form, inputParam):
     protocol = form.protocol
-    inputParam, outputParam = self.getInputOutput(form)
     try:
       scipionSet = getattr(protocol, inputParam[0]).get()
       listOfElements = self.getListOfElements(protocol, scipionSet)
@@ -639,7 +638,7 @@ class SelectElementWizard(VariableWizard):
 
   def show(self, form, *params):
     inputParam, outputParam = self.getInputOutput(form)
-    dlg = self.displayDialog(form)
+    dlg = self.displayDialog(form, inputParam)
     form.setVar(outputParam[0], dlg.values[0].get())
 
 class SelectMultiElementWizard(SelectElementWizard):
@@ -648,7 +647,7 @@ class SelectMultiElementWizard(SelectElementWizard):
 
   def show(self, form, *params):
     inputParam, outputParam = self.getInputOutput(form)
-    dlg = self.displayDialog(form)
+    dlg = self.displayDialog(form, inputParam)
     values = [val.get() for val in dlg.values]
     form.setVar(outputParam[0], ','.join(values))
 
