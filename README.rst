@@ -6,6 +6,8 @@ CHEM scipion plugin
 
 Base Scipion plugin defining objects and protocols for CHEMoinformatics and virtual drug screening
 
+Full documentation can be found in the `Scipion Chem official documentation page <https://scipion-chem.github.io/docs/index.html>`_.
+
 ===================
 Install this plugin
 ===================
