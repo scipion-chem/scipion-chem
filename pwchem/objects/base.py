@@ -212,8 +212,6 @@ class SetOfSequencesChem(data.SetOfSequences):
         return [seq.getSeqName() for seq in self]
 
     def getInteractMolNames(self):
-        # intDic = self.getInteractScoresDic()
-        # return [molName for molName in intDic]
         return [mol.getMolName() for mol in self.getInteractMols()]
 
 
