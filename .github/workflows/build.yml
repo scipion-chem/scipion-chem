@@ -14,6 +14,16 @@ jobs:
 
     # Define the steps to be taken in the job
     steps:
+    # Free up space from preinstalled things
+    - name: Freeing up space
+      run: |
+        echo "######## BEFORE FREEING UP SPACE ########"
+        df -h
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        echo -e "\n\n######## AFTER FREEING UP SPACE ########"
+        df -h
+        
     # Installing scipion and miniconda dependencies
     - name: Install dependencies
       run: |
