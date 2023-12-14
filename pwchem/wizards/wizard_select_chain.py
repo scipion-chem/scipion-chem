@@ -609,39 +609,17 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
 
 
 class SelectElementWizard(VariableWizard):
-    """Lists the items in a SetOfX and choose one"""
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def getListOfElements(self, protocol, scipionSet):
-      eleList = []
-      if scipionSet is not None:
-        for element in scipionSet:
-            eleList.append(element.__str__())
-      return eleList
-
-    def show(self, form, *params):
-      protocol = form.protocol
-      inputParam, outputParam = self.getInputOutput(form)
-      try:
-        scipionSet = getattr(protocol, inputParam[0]).get()
-        listOfElements = self.getListOfElements(protocol, scipionSet)
-      except Exception as e:
-        print("ERROR: ", e)
-        return
-
-      finalList = []
-      for i in listOfElements:
-        finalList.append(String(i))
-      provider = ListTreeProviderString(finalList)
-      dlg = dialog.ListDialog(form.root, "Set items", provider,
-                              "Select one of items in the set")
-      form.setVar(outputParam[0], dlg.values[0].get())
-
-class SelectMultiElementWizard(SelectElementWizard):
-  """Lists the items in a SetOfX and choose one or several"""
+  """Lists the items in a SetOfX and choose one"""
   _targets, _inputs, _outputs = [], {}, {}
 
-  def show(self, form, *params):
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for element in scipionSet:
+          eleList.append(element.__str__())
+    return eleList
+
+  def displayDialog(self, form):
     protocol = form.protocol
     inputParam, outputParam = self.getInputOutput(form)
     try:
@@ -657,6 +635,20 @@ class SelectMultiElementWizard(SelectElementWizard):
     provider = ListTreeProviderString(finalList)
     dlg = dialog.ListDialog(form.root, "Set items", provider,
                             "Select one of items in the set")
+    return dlg
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form)
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+class SelectMultiElementWizard(SelectElementWizard):
+  """Lists the items in a SetOfX and choose one or several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form)
     values = [val.get() for val in dlg.values]
     form.setVar(outputParam[0], ','.join(values))
 
