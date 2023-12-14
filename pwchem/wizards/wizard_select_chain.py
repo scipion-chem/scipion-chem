@@ -637,6 +637,30 @@ class SelectElementWizard(VariableWizard):
                               "Select one of items in the set")
       form.setVar(outputParam[0], dlg.values[0].get())
 
+class SelectMultiElementWizard(SelectElementWizard):
+  """Lists the items in a SetOfX and choose one or several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+    try:
+      scipionSet = getattr(protocol, inputParam[0]).get()
+      listOfElements = self.getListOfElements(protocol, scipionSet)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Set items", provider,
+                            "Select one of items in the set")
+    values = [val.get() for val in dlg.values]
+    form.setVar(outputParam[0], ','.join(values))
+
+
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""
     _targets, _inputs, _outputs = [], {}, {}
