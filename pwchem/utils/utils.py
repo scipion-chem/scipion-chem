@@ -910,3 +910,55 @@ def createMSJDic(protocol):
     else:
       print('Something is wrong with parameter ', pName)
   return msjDic
+
+
+########### SEQUENCE INTERACTING MOL UTILS ########
+
+def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres):
+  '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
+  The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
+  intDic = inSeqs.getInteractScoresDic()
+
+  seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
+  seqNames, molNames = filterNames(seqNames, molNames, filtSeqNames, filtMolNames)
+
+  intAr = formatInteractionsArray(intDic, seqNames, molNames)
+  intAr, seqNames, molNames = filterScores(intAr, seqNames, molNames, scThres)
+  return intAr, seqNames, molNames
+
+def filterNames(seqNames, molNames, filtSeqNames, filtMolNames):
+  if 'All' not in filtSeqNames:
+    seqNames = [seqName for seqName in seqNames if seqName in filtSeqNames]
+
+  if 'All' not in filtMolNames:
+    molNames = [molName for molName in molNames if molName in filtMolNames]
+
+  return seqNames, molNames
+
+def filterScores(intAr, seqNames, molNames, scThres):
+  ips, ims = [], []
+
+  for ip, seqName in enumerate(seqNames):
+    if any(intAr[ip, :] >= scThres):
+      ips.append(ip)
+
+  for im, molName in enumerate(molNames):
+    if any(intAr[:, im] >= scThres):
+      ims.append(im)
+
+  if len(seqNames) != len(ips):
+    seqNames = list(np.array(seqNames)[ips])
+    intAr = intAr[ips, :]
+
+  if len(molNames) != len(ims):
+    molNames = list(np.array(molNames)[ims])
+    intAr = intAr[:, ims]
+
+  return intAr, seqNames, molNames
+
+def formatInteractionsArray(intDic, seqNames, molNames):
+  intAr = np.zeros((len(seqNames), len(molNames)))
+  for i, seqName in enumerate(seqNames):
+    for j, molName in enumerate(molNames):
+      intAr[i, j] = intDic[seqName][molName]
+  return intAr

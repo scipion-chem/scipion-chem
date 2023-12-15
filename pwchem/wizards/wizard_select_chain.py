@@ -651,6 +651,34 @@ class SelectMultiElementWizard(SelectElementWizard):
     values = [val.get() for val in dlg.values]
     form.setVar(outputParam[0], ','.join(values))
 
+class SelectMultiSeqWizard(SelectMultiElementWizard):
+  """Lists the items in a SetOfSequences and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for element in scipionSet:
+        eleList.append(element.getSeqName())
+    return ['All'] + eleList
+
+class SelectMultiMolWizard(SelectMultiElementWizard):
+  """Lists the interacting mols in a SetOfSequences and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, seqSet):
+    return ['All'] + seqSet.getInteractMolNames()
+
+SelectMultiSeqWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                 targets=['chooseSeq'],
+                                 inputs=['inputSequences'],
+                                 outputs=['chooseSeq'])
+
+SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                 targets=['chooseMol'],
+                                 inputs=['inputSequences'],
+                                 outputs=['chooseMol'])
+
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""

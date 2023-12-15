@@ -39,9 +39,9 @@ from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem
 from pwchem.protocols import ProtExtractInteractingMols
 from pwchem.constants import *
+from pwchem.utils import getFilteredOutput
 
-def heatmap(data, row_labels, col_labels, ax=None,
-            cbar_kw=None, cbarlabel="", **kwargs):
+def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kwargs):
   """
   Create a heatmap from a numpy array and two lists of labels.
 
@@ -49,16 +49,16 @@ def heatmap(data, row_labels, col_labels, ax=None,
   ----------
   data
       A 2D numpy array of shape (M, N).
-  row_labels
+  rowLabels
       A list or array of length M with the labels for the rows.
-  col_labels
+  colLabels
       A list or array of length N with the labels for the columns.
   ax
       A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
       not provided, use current axes or create a new one.  Optional.
-  cbar_kw
+  cbarKw
       A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
-  cbarlabel
+  cbarLabel
       The label for the colorbar.  Optional.
   **kwargs
       All other arguments are forwarded to `imshow`.
@@ -67,19 +67,19 @@ def heatmap(data, row_labels, col_labels, ax=None,
   if ax is None:
     ax = plt.gca()
 
-  if cbar_kw is None:
-    cbar_kw = {}
+  if cbarKw is None:
+    cbarKw = {}
 
   # Plot the heatmap
   im = ax.imshow(data, **kwargs)
 
   # Create colorbar
-  cbar = ax.figure.colorbar(im, ax=ax, **cbar_kw)
-  cbar.ax.set_ylabel(cbarlabel, rotation=-90, va="bottom")
+  cbar = ax.figure.colorbar(im, ax=ax, **cbarKw)
+  cbar.ax.set_ylabel(cbarLabel, rotation=-90, va="bottom")
 
   # Show all ticks and label them with the respective list entries.
-  ax.set_xticks(np.arange(data.shape[1]), labels=col_labels)
-  ax.set_yticks(np.arange(data.shape[0]), labels=row_labels)
+  ax.set_xticks(np.arange(data.shape[1]), labels=colLabels)
+  ax.set_yticks(np.arange(data.shape[0]), labels=rowLabels)
 
   # Let the horizontal axes labeling appear on top.
   ax.tick_params(top=True, bottom=False,
@@ -286,9 +286,9 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
         seqNames, molNames = outSeqs.getSequenceNames(), outSeqs.getInteractMolNames()
         if len(seqNames) * len(molNames) > 1000:
             try:
-                msg = f"A heatmap with the scores of the selected sequence-molecule pairs will be displayed.\n" \
-                      f"Big sets of sequences/molecules might take a while to process and display.\n" \
-                      f"Do you want to continue?"
+                msg = "A heatmap with the scores of the selected sequence-molecule pairs will be displayed.\n" \
+                      "Big sets of sequences/molecules might take a while to process and display.\n" \
+                      "Do you want to continue?"
                 answer = askokcancel("Display heatmap", msg, parent=None)
             except:
                 answer = True
@@ -296,18 +296,21 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
             answer = True
 
         if answer:
-            intAr, seqNames, molNames = self.getFilteredOutput()
+            filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
+            intAr, seqNames, molNames = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
 
             fig, ax = plt.subplots()
             im, cbar = heatmap(intAr, seqNames, molNames, ax=ax,
-                               cmap="YlGn", cbarlabel="ConPLex interaction score")
+                               cmap="YlGn", cbarLabel="ConPLex interaction score")
             texts = annotate_heatmap(im, valfmt="{x:.2f}")
             fig.tight_layout()
             plt.show()
 
     def _generateProts(self, paramName=None):
         project = self.getProject()
-        _, seqNames, _ = self.getFilteredOutput()
+        outSeqs = self.getOutSequences()
+        filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
+        _, seqNames, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
 
         objIds = []
         for seq in self.getOutSequences():
@@ -331,7 +334,9 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
 
     def _generateMols(self, paramName=None):
         project = self.getProject()
-        _, _, filtMolNames = self.getFilteredOutput()
+        outSeqs = self.getOutSequences()
+        filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
+        _, _, filtMolNames = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
 
         try:
             msg = f"An output of the following {len(filtMolNames)} molecules will be generated:\n{','.join(filtMolNames)}"
@@ -373,55 +378,4 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
                 if type(getattr(self.protocol, oAttr[0])) == SetOfSequencesChem:
                     seqSet = getattr(self.protocol, oAttr[0])
         return seqSet.getInteractMols() is not None
-
-    def getFilteredOutput(self):
-        inSeqs = self.getOutSequences()
-        intDic = inSeqs.getInteractScoresDic()
-
-        seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
-        seqNames, molNames = self.filterNames(seqNames, molNames)
-
-        intAr = self.formatInteractionsArray(intDic, seqNames, molNames)
-        intAr, seqNames, molNames = self.filterScores(intAr, seqNames, molNames)
-        return intAr, seqNames, molNames
-
-    def filterNames(self, seqNames, molNames):
-        inSeqNames = self.getEnumText('chooseSeq')
-        if 'All' not in inSeqNames:
-            seqNames = [seqName for seqName in seqNames if seqName in inSeqNames]
-
-        inMolNames = self.getEnumText('chooseMol')
-        if 'All' not in inMolNames:
-            molNames = [molName for molName in molNames if molName in inMolNames]
-
-        return seqNames, molNames
-
-    def filterScores(self, intAr, seqNames, molNames):
-        ips, ims = [], []
-        scThres = self.scThres.get()
-
-        for ip, seqName in enumerate(seqNames):
-            if any(intAr[ip, :] >= scThres):
-                ips.append(ip)
-
-        for im, molName in enumerate(molNames):
-            if any(intAr[:, im] >= scThres):
-                ims.append(im)
-
-        if not len(seqNames) == len(ips):
-            seqNames = list(np.array(seqNames)[ips])
-            intAr = intAr[ips, :]
-
-        if not len(molNames) == len(ims):
-            molNames = list(np.array(molNames)[ims])
-            intAr = intAr[:, ims]
-
-        return intAr, seqNames, molNames
-
-    def formatInteractionsArray(self, intDic, seqNames, molNames):
-        intAr = np.zeros((len(seqNames), len(molNames)))
-        for i, seqName in enumerate(seqNames):
-            for j, molName in enumerate(molNames):
-                intAr[i, j] = intDic[seqName][molName]
-        return intAr
 

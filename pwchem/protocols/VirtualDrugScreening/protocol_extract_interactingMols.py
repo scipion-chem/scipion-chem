@@ -24,14 +24,13 @@
 # *
 # **************************************************************************
 
-import numpy as np
-
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 
 from pwem.protocols import EMProtocol
 
 from ...objects import SetOfSmallMolecules
+from ...utils import getFilteredOutput
 
 
 class ProtExtractInteractingMols(EMProtocol):
@@ -65,12 +64,12 @@ class ProtExtractInteractingMols(EMProtocol):
 
   def createOutputStep(self):
     inSeqs = self.inputSequences.get()
-    _, _, molNames = self.getFilteredOutput()
+    filtSeqNames, filtMolNames = self.chooseSeq.get().strip().split(','), self.chooseMol.get().strip().split(',')
+    _, _, molNames = getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, self.scThres.get())
 
     seqName = None
-    inSeqNames = self.chooseSeq.get().split(',')
-    if len(inSeqNames) == 1 and inSeqNames[0].strip() != 'All':
-      seqName = inSeqNames[0].strip()
+    if len(filtSeqNames) == 1 and filtSeqNames[0].strip() != 'All':
+      seqName = filtSeqNames[0].strip()
 
     outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
     for mol in self.getInputMols():
@@ -87,55 +86,5 @@ class ProtExtractInteractingMols(EMProtocol):
   def getInputMols(self):
     return self.inputSequences.get().getInteractMols()
 
-  def getFilteredOutput(self):
-    inSeqs = self.inputSequences.get()
-    intDic = inSeqs.getInteractScoresDic()
-
-    seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
-    seqNames, molNames = self.filterNames(seqNames, molNames)
-
-    intAr = self.formatInteractionsArray(intDic, seqNames, molNames)
-    intAr, seqNames, molNames = self.filterScores(intAr, seqNames, molNames)
-    return intAr, seqNames, molNames
-
-  def filterNames(self, seqNames, molNames):
-    inSeqNames = self.chooseSeq.get().split(',')
-    if 'All' not in inSeqNames:
-      seqNames = [seqName for seqName in seqNames if seqName in inSeqNames]
-
-    inMolNames = self.chooseMol.get().split(',')
-    if 'All' not in inMolNames:
-      molNames = [molName for molName in molNames if molName in inMolNames]
-
-    return seqNames, molNames
-
-  def filterScores(self, intAr, seqNames, molNames):
-    ips, ims = [], []
-    scThres = self.scThres.get()
-
-    for ip, seqName in enumerate(seqNames):
-      if any(intAr[ip, :] >= scThres):
-        ips.append(ip)
-
-    for im, molName in enumerate(molNames):
-      if any(intAr[:, im] >= scThres):
-        ims.append(im)
-
-    if not len(seqNames) == len(ips):
-      seqNames = list(np.array(seqNames)[ips])
-      intAr = intAr[ips, :]
-
-    if not len(molNames) == len(ims):
-      molNames = list(np.array(molNames)[ims])
-      intAr = intAr[:, ims]
-
-    return intAr, seqNames, molNames
-
-  def formatInteractionsArray(self, intDic, seqNames, molNames):
-    intAr = np.zeros((len(seqNames), len(molNames)))
-    for i, seqName in enumerate(seqNames):
-      for j, molName in enumerate(molNames):
-        intAr[i, j] = intDic[seqName][molName]
-    return intAr
 
 
