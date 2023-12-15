@@ -100,7 +100,7 @@ def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kw
   return im, cbar
 
 
-def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
+def annotateHeatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
                      threshold=None, **textkw):
   """
@@ -300,9 +300,9 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
             intAr, seqNames, molNames = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
 
             fig, ax = plt.subplots()
-            im, cbar = heatmap(intAr, seqNames, molNames, ax=ax,
+            im, _ = heatmap(intAr, seqNames, molNames, ax=ax,
                                cmap="YlGn", cbarLabel="ConPLex interaction score")
-            texts = annotate_heatmap(im, valfmt="{x:.2f}")
+            annotateHeatmap(im, valfmt="{x:.2f}")
             fig.tight_layout()
             plt.show()
 
