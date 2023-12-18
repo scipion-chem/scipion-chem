@@ -81,10 +81,7 @@ class ProtExtractInteractingMols(EMProtocol):
 
     self._defineOutputs(outputSmallMolecules=outMols)
 
-
   ############## UTILS ########################
   def getInputMols(self):
     return self.inputSequences.get().getInteractMols()
-
-
 
