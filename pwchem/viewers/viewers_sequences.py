@@ -63,7 +63,6 @@ def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kw
   **kwargs
       All other arguments are forwarded to `imshow`.
   """
-
   if ax is None:
     ax = plt.gca()
 
@@ -99,7 +98,6 @@ def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kw
 
   return im, cbar
 
-
 def annotateHeatmap(im, data=None, valfmt="{x:.2f}",
                      textcolors=("black", "white"),
                      threshold=None, **textkw):
@@ -127,7 +125,6 @@ def annotateHeatmap(im, data=None, valfmt="{x:.2f}",
       All other arguments are forwarded to each call to `text` used to create
       the text labels.
   """
-
   if not isinstance(data, (list, np.ndarray)):
     data = im.get_array()
 
@@ -168,7 +165,6 @@ class SequenceAliView(pwviewer.CommandView):
 
     def show(self):
         Popen(self._cmd, cwd=self._cwd, shell=True)
-
 
 class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
@@ -215,7 +211,6 @@ class SequenceAliViewer(pwviewer.Viewer):
         views.append(SequenceAliView(seqFiles, cwd=outDir))
 
         return views
-
 
 class SequenceChemViewer(pwviewer.ProtocolViewer):
     """ Protocol viewer to visualize different type of sequence objects
@@ -353,7 +348,6 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
             project.launchProtocol(protFilter, wait=True)
 
     ############ UTILS ##############
-
     def getOutSequences(self):
         if self.checkIfProtocol():
             for oAttr in self.protocol.iterOutputAttributes():
@@ -376,4 +370,3 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
                 if type(getattr(self.protocol, oAttr[0])) == SetOfSequencesChem:
                     seqSet = getattr(self.protocol, oAttr[0])
         return seqSet.getInteractMols() is not None
-

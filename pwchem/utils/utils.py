@@ -230,7 +230,6 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-
 def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
@@ -245,7 +244,6 @@ def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
           sLine[0] = 'HETATM'
           line = writePDBLine(sLine)
         f.write(line)
-
 
 def getScipionObj(value):
   if isinstance(value, Object):
@@ -279,7 +277,6 @@ def createColorVectors(nColors):
       colors += [newColor]
   return colors
 
-
 def createSurfacePml(pockets):
   pdbFile = pockets.getProteinFile()
   colors = createColorVectors(len(pockets))
@@ -296,7 +293,6 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
-
 def pdbqt2other(protocol, pdbqtFile, otherFile):
   '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
   inExt = os.path.splitext(os.path.basename(otherFile))[1]
@@ -306,7 +302,6 @@ def pdbqt2other(protocol, pdbqtFile, otherFile):
   args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
   runOpenBabel(protocol=protocol, args=args, popen=True)
   return os.path.abspath(otherFile)
-
 
 def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   '''Convert molecule files to sdf using openbabel'''
@@ -339,7 +334,6 @@ def getMAEMoleculeFiles(molList):
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
   pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
 
-
 def splitConformerFile(confFile, outDir):
   fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
   if '_prep_' in fnRoot:
@@ -363,7 +357,6 @@ def splitConformerFile(confFile, outDir):
   newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
   writeFile(towrite, newFile)
   return outDir
-
 
 def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
   '''Appends a molecule to a conformers file.
@@ -392,17 +385,14 @@ def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
 
   return outConfFile
 
-
 def writeFile(towrite, file):
   with open(file, 'w') as f:
     f.write(towrite)
-
 
 def getProteinMaxDiameter(protFile):
   protCoords = np.array(getPDBCoords(protFile))
   minCoords, maxCoords = protCoords.min(axis=0), protCoords.max(axis=0)
   return max(maxCoords - minCoords)
-
 
 def getPDBCoords(pdbFile):
   coords = []
@@ -413,10 +403,8 @@ def getPDBCoords(pdbFile):
         coords.append((float(line[6]), float(line[7]), float(line[8])))
   return coords
 
-
 ##################################################
 # ADT grids
-
 def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
@@ -479,7 +467,6 @@ def calculate_centerMass(atomStructFile):
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
     return
 
-
 def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
@@ -504,7 +491,6 @@ def sortSet(seti):
   seti = list(seti)
   seti.sort()
   return seti
-
 
 class CleanStructureSelect(Select):
   def __init__(self, chainIds, remHETATM, remWATER, het2keep=[]):
@@ -613,7 +599,6 @@ def relabelMapAtomsMol2(atomFile, i=''):
   shutil.move(auxFile, atomFile)
   return atomFile
 
-
 def removeNumberFromStr(s):
   newS = ''
   for i in s:
@@ -621,14 +606,12 @@ def removeNumberFromStr(s):
       newS += i
   return newS
 
-
 def getNumberFromStr(s):
   num = ''
   for i in s:
     if i.isdigit():
       num += i
   return num
-
 
 def calculateDistance(coord1, coord2):
   dist = 0
@@ -639,7 +622,6 @@ def calculateDistance(coord1, coord2):
     dist += (c1 - c2) ** 2
   return dist ** (1 / 2)
 
-
 def calculateRMSD(coords1, coords2):
   rmsd = 0
   for c1, c2 in zip(coords1, coords2):
@@ -649,7 +631,6 @@ def calculateRMSD(coords1, coords2):
     for x1, x2 in zip(c1, c2):
       rmsd += (x1 - x2) ** 2
   return (rmsd / len(coords2)) ** (1 / 2)
-
 
 def calculateRMSDKeys(coordDic1, coordDic2):
   '''Calculate the RMSD from two dic containing coordinates, using the keys of the
@@ -667,14 +648,11 @@ def calculateRMSDKeys(coordDic1, coordDic2):
       count += 1
   return (rmsd / count) ** (1 / 2)
 
-
 ################# UTILS Sequence Object ################
-
 def getSequenceFastaName(sequence):
   '''Return a fasta name for the sequence.
     Priorizes the Id; if None, just "sequence"'''
   return cleanPipeIds(sequence.getId()) if sequence.getId() is not None else 'sequence'
-
 
 def cleanPipeIds(idStr):
   '''Return a guessed ID when they contain "|"'''
@@ -719,7 +697,6 @@ def numberSort(strings, rev=False):
 
   return sorted(strings, key=keyFunct, reverse=rev)
 
-
 def fillEmptyAttributes(inputSets):
   '''Fill all items with empty attributes'''
   attributes = getAllAttributes(inputSets)
@@ -729,7 +706,6 @@ def fillEmptyAttributes(inputSets):
         if not hasattr(item, attr):
           item.__setattr__(attr, attributes[attr])
   return inputSets
-
 
 def getAllAttributes(inputSets):
   '''Return a dic with {attrName: ScipionObj=None}'''
@@ -744,7 +720,6 @@ def getAllAttributes(inputSets):
         attributes[attrK].set(None)
   return attributes
 
-
 def getBaseFileName(filename):
   return os.path.splitext(os.path.basename(filename))[0]
 
@@ -755,7 +730,6 @@ def addToDic(dic, key, item):
   else:
     dic[key] = [item]
   return dic
-
 
 def clusterSurfaceCoords(surfCoords, intraDist):
   clusters = []
@@ -787,7 +761,6 @@ def createPocketFile(clust, i, outDir):
   return outFile
 
 ################# Wizard utils #####################
-
 def getChainIds(chainStr):
   '''Parses a line of json with the description of a chain or chains and returns the ids'''
   chainJson = json.loads(chainStr)
@@ -797,7 +770,6 @@ def getChainIds(chainStr):
     modelChains = chainJson["model-chain"].upper().strip()
     chainIds = [x.split('-')[1] for x in modelChains.split(',')]
   return chainIds
-
 
 def calculate_SASA(structFile, outFile):
   if structFile.endswith('.pdb') or structFile.endswith('.ent'):
@@ -911,9 +883,7 @@ def createMSJDic(protocol):
       print('Something is wrong with parameter ', pName)
   return msjDic
 
-
 ########### SEQUENCE INTERACTING MOL UTILS ########
-
 def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres):
   '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
   The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
@@ -962,3 +932,4 @@ def formatInteractionsArray(intDic, seqNames, molNames):
     for j, molName in enumerate(molNames):
       intAr[i, j] = intDic[seqName][molName]
   return intAr
+  
