@@ -135,7 +135,7 @@ class SetOfSequencesChem(data.SetOfSequences):
         return os.path.abspath(self._mapperPath[0])
 
     def getSetDir(self):
-        return '/'.join(self.getSetPath().split('/')[:-1])
+        return os.path.dirname(self.getSetPath())
 
     def getAligned(self):
         return self._aligned.get()

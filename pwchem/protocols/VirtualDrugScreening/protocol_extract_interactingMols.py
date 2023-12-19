@@ -65,7 +65,7 @@ class ProtExtractInteractingMols(EMProtocol):
   def createOutputStep(self):
     inSeqs = self.inputSequences.get()
     filtSeqNames, filtMolNames = self.chooseSeq.get().strip().split(','), self.chooseMol.get().strip().split(',')
-    _, _, molNames = getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, self.scThres.get())
+    molNames = getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, self.scThres.get())[-1]
 
     seqName = None
     if len(filtSeqNames) == 1 and filtSeqNames[0].strip() != 'All':

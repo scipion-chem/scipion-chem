@@ -192,10 +192,8 @@ class SequenceAliViewer(pwviewer.Viewer):
         return outPath
 
     def getOutDir(self):
-        if self.getProtocol():
-            return os.path.abspath(self.getProtocol()._getExtraPath())
-        else:
-            return os.path.abspath(self.getProject().getTmpPath())
+        return os.path.abspath(self.getProtocol()._getExtraPath()
+                               if self.getProtocol() else self.getProject().getTmpPath())
 
     def _visualize(self, obj, **kwargs):
         outDir = self.getOutDir()
