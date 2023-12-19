@@ -150,7 +150,7 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
 
 
 class AtomStructPymolViewer(PyMolViewer):
-    _label = 'Viewer AtomStruct'
+    _label = 'Pymol viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = []
 

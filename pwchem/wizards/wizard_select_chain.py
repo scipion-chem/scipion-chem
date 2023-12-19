@@ -609,33 +609,76 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
 
 
 class SelectElementWizard(VariableWizard):
-    """Lists the items in a SetOfX and choose one"""
-    _targets, _inputs, _outputs = [], {}, {}
+  """Lists the items in a SetOfX and choose one"""
+  _targets, _inputs, _outputs = [], {}, {}
 
-    def getListOfElements(self, protocol, scipionSet):
-      eleList = []
-      if scipionSet is not None:
-        for element in scipionSet:
-            eleList.append(element.__str__())
-      return eleList
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for element in scipionSet:
+          eleList.append(element.__str__())
+    return eleList
 
-    def show(self, form, *params):
-      protocol = form.protocol
-      inputParam, outputParam = self.getInputOutput(form)
-      try:
-        scipionSet = getattr(protocol, inputParam[0]).get()
-        listOfElements = self.getListOfElements(protocol, scipionSet)
-      except Exception as e:
-        print("ERROR: ", e)
-        return
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      scipionSet = getattr(protocol, inputParam[0]).get()
+      listOfElements = self.getListOfElements(protocol, scipionSet)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
 
-      finalList = []
-      for i in listOfElements:
-        finalList.append(String(i))
-      provider = ListTreeProviderString(finalList)
-      dlg = dialog.ListDialog(form.root, "Set items", provider,
-                              "Select one of items in the set")
-      form.setVar(outputParam[0], dlg.values[0].get())
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Set items", provider,
+                            "Select one of items in the set")
+    return dlg
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form, inputParam)
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+class SelectMultiElementWizard(SelectElementWizard):
+  """Lists the items in a SetOfX and choose one or several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form, inputParam)
+    values = [val.get() for val in dlg.values]
+    form.setVar(outputParam[0], ','.join(values))
+
+class SelectMultiSeqWizard(SelectMultiElementWizard):
+  """Lists the items in a SetOfSequences and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for element in scipionSet:
+        eleList.append(element.getSeqName())
+    return ['All'] + eleList
+
+class SelectMultiMolWizard(SelectMultiElementWizard):
+  """Lists the interacting mols in a SetOfSequences and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, seqSet):
+    return ['All'] + seqSet.getInteractMolNames()
+
+SelectMultiSeqWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                 targets=['chooseSeq'],
+                                 inputs=['inputSequences'],
+                                 outputs=['chooseSeq'])
+
+SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                 targets=['chooseMol'],
+                                 inputs=['inputSequences'],
+                                 outputs=['chooseMol'])
+
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""

@@ -25,8 +25,10 @@
 # **************************************************************************
 
 import enum, io, subprocess, pickle
+
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
+
 from scipy import spatial
 from pwchem.utils import *
 from pwchem.constants import *
@@ -67,7 +69,11 @@ class SetOfDatabaseID(data.EMSet):
 class SequenceChem(data.Sequence):
     def __init__(self, **kwargs):
         data.Sequence.__init__(self, **kwargs)
-        self._attrFile = pwobj.String(kwargs.get('attributesFile', False))
+        self._attrFile = pwobj.String(kwargs.get('attributesFile', None))
+
+        # Dictionary that contains the interacting score of each SequenceChem with each SmallMolecule,
+        # so there is no need to create 1 SetOfSmallMolecules per SequenceChem {molId: score}
+        self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
 
     def __str__(self):
         return "SequenceChem (name = {})\n".format(self.getSeqName())
@@ -92,12 +98,44 @@ class SequenceChem(data.Sequence):
                 attrDic[key.strip()] = eval(values.strip())
         return attrDic
 
+    def getInteractScoresDic(self):
+        '''Returns a dictionary of the form {molName: score}, from the file where the interaction scores are stored.
+        '''
+        with open(self.getInteractScoresFile(), 'rb') as f:
+            intDic = pickle.load(f)
+        return intDic
+
+    def setInteractScoresDic(self, intDic, outFile):
+        '''From a dictionary of the form {molName: score}, writes a file in outFile
+        containing that information to be stored in the object'''
+        with open(outFile, 'wb') as f:
+            pickle.dump(intDic, f)
+        self.setInteractScoresFile(outFile)
+
+    def getInteractScoresFile(self):
+        return self._interactScoresFile.get()
+
+    def setInteractScoresFile(self, intFile):
+        self._interactScoresFile.set(intFile)
 
 class SetOfSequencesChem(data.SetOfSequences):
     def __init__(self, **kwargs):
         data.SetOfSequences.__init__(self, **kwargs)
         self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
         self._alignFile = pwobj.String(kwargs.get('alignFile', None))
+
+        self._interactMols = pwobj.Pointer()
+        self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
+
+    def copyInfo(self, other):
+        """ Copy basic information from other set of classes to current one"""
+        self.copyAttributes(other, '_aligned', '_alignFile', '_interactMols', '_interactScoresFile')
+
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return os.path.dirname(self.getSetPath())
 
     def getAligned(self):
         return self._aligned.get()
@@ -124,6 +162,57 @@ class SetOfSequencesChem(data.SetOfSequences):
         alignStr = super().__str__()
         alignStr += ', aligned={}'.format(self._aligned.get())
         return alignStr
+
+    def getInteractMols(self):
+        return self._interactMols.get()
+
+    def getInteractMolsPointer(self):
+        return self._interactMols
+
+    def setInteractMols(self, mols=None):
+        if mols.isPointer():
+            self._interactMols.copy(mols)
+        else:
+            self._interactMols.set(mols)
+
+    def getInteractScoresDic(self, calculate=False):
+        '''Returns a dictionary of the form {seqName: {molName: score}},
+        from the files where the interaction scores are stored.
+        '''
+        if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
+            with open(self.getInteractScoresFile(), 'rb') as f:
+                intDic = pickle.load(f)
+        else:
+            intDic = {}
+            for seq in self:
+                with open(seq.getInteractScoresFile(), 'rb') as f:
+                    intDic[seq.getSeqName()] = pickle.load(f)
+        return intDic
+
+    def setInteractScoresDic(self, intDic=None, outFile=None):
+        '''From a dictionary of the form {seqName: {molName: score}}, writes a file in outFile
+        containing that information to be stored in the object.
+        If intDic=None, it is build from the elements of the set
+        If outFile=None, the file is saved in the same directory as the set mapper'''
+        if not intDic:
+            intDic = self.getInteractScoresDic()
+        if not outFile:
+            outFile = os.path.join(self.getSetDir(), f'{super().__str__()}_interactions.pickle')
+        with open(outFile, 'wb') as f:
+            pickle.dump(intDic, f)
+        self.setInteractScoresFile(outFile)
+
+    def getInteractScoresFile(self):
+        return self._interactScoresFile.get()
+
+    def setInteractScoresFile(self, intFile):
+        self._interactScoresFile.set(intFile)
+
+    def getSequenceNames(self):
+        return [seq.getSeqName() for seq in self]
+
+    def getInteractMolNames(self):
+        return [mol.getMolName() for mol in self.getInteractMols()]
 
 
 class SequenceVariants(data.EMFile):
