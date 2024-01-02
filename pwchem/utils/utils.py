@@ -100,6 +100,15 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
+def organizeThreads(nTasks, nThreads):
+  if nTasks > nThreads:
+    return [1] * nTasks
+  else:
+    subsets = [0 for _ in range(nTasks)]
+    for i in range(nThreads):
+      subsets[i % nTasks] += 1
+  return subsets
+
 def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
