@@ -76,6 +76,9 @@ def embedAndOptimize(mol):
 
 def writeMol(mol, outFile, cid=-1):
     w = Chem.SDWriter(outFile)
+    molName = os.path.split(os.path.splitext(outFile)[0])[-1]
+    if not mol.HasProp('_Name') or not mol.GetProp('_Name'):
+        mol.SetProp('_Name', molName)
     w.write(mol, cid)
     w.close()
 
