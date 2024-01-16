@@ -72,9 +72,8 @@ cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues S
 aux = {}
 aux.sort()
 
+lastSTP=max(list(map(int, stored.list)))	#get the index of the last residu
 stored.list = list(map(str, stored.list))
-#print(stored.list)
-lastSTP=stored.list[-1]	#get the index of the last residu
 hide lines, resn STP
 
 #show spheres, resn STP
