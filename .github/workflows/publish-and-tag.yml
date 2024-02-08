@@ -1,0 +1,55 @@
+# Workflow to send master to pypi and tag  the branch:
+# You need to edit FOLDER_WITH_VERSION with the folder that has the __version__ value. 
+name: master/main to pypi with comments and tag
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  # Will trigger when changes are pushed to master
+  push:
+    branches: [ master, main ]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Checkout repository
+    - name: Checkout repository
+      uses: actions/checkout@main
+    
+    # Install MPI
+    - name: Set up MPI
+      uses: mpi4py/setup-mpi@master
+    
+    # Install Python
+    - name: Set up Python
+      uses: actions/setup-python@main
+      with:
+        python-version: '3.10'
+    
+    # Install Python packages
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine Pillow
+        pip install -r requirements.txt
+    
+    # Build and publish package using organization's username and password
+    - name: Build and publish
+      env:
+        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: |
+        python setup.py sdist bdist_wheel
+        twine upload dist/* -c "{{ secrets.PYPI_COMMENT }}"
+    
+    # Get package version and tag
+    - name: Get version and tag
+      env:
+        FOLDER_WITH_VERSION: ${{ vars.FOLDER_WITH_VERSION }}
+      run: |
+        export PACKAGE_VERSION=$(python -c "import $FOLDER_WITH_VERSION; print('VERSION', 'v'+$FOLDER_WITH_VERSION.__version__)" | grep VERSION | sed "s/VERSION //g")
+        git tag $PACKAGE_VERSION
+        git push origin $PACKAGE_VERSION
