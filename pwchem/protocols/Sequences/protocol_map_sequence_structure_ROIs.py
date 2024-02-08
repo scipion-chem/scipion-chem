@@ -235,7 +235,7 @@ class ProtMapSequenceROI(EMProtocol):
         coords = []
         for roiId, roiCoords in coordDic.items():
             for coord in roiCoords:
-                if not coord in coords:
+                if coord not in coords:
                     coords.append(coord)
         return coords
 
@@ -268,7 +268,7 @@ class ProtMapSequenceROI(EMProtocol):
                 closerSCoords = self.closerSurfaceCoords(coord)
                 for cCoord in closerSCoords:
                     cCoord = list(cCoord)
-                    if not cCoord in sCoords[roiId]:
+                    if cCoord not in sCoords[roiId]:
                       sCoords[roiId].append(cCoord)
 
         return sCoords
