@@ -77,9 +77,13 @@ class ProtMapSequenceROI(EMProtocol):
                        help='Preview the alignment of the specified Sequence and AtomStruct chain')
 
         group = form.addGroup('Distances')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
+        group.addParam('doCluster', params.BooleanParam, default=True,
+                       label='Cluster output coordinates: ',
+                       help='Whether to cluster the ROI coordinates and extract those clusters as the final '
+                            'structural ROIs or define a structural ROI for each sequence ROI input.')
+        group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition='doCluster',
                        label='Maximum distance between pocket points (A): ',
-                       help='Maximum distance between two pocket atoms to considered them same pocket')
+                       help='Maximum distance between two cluster atoms to considered them same cluster')
         group.addParam('surfaceCoords', params.BooleanParam, default=True,
                        label='Map coordinates to surface? ',
                        help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
@@ -116,7 +120,14 @@ class ProtMapSequenceROI(EMProtocol):
         if pocketCoords:
             if self.surfaceCoords:
                 pocketCoords = self.mapSurfaceCoords(pocketCoords)
-            self.coordsClusters = clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
+
+            if self.doCluster:
+                allCoords = self.mergeCoords(pocketCoords)
+                self.coordsClusters = clusterSurfaceCoords(allCoords, self.maxIntraDistance.get())
+                self.coordsClusters = {i: coords for i, coords in enumerate(self.coordsClusters)}
+            else:
+                self.coordsClusters = pocketCoords
+
         else:
             print('Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln"))
 
@@ -124,7 +135,7 @@ class ProtMapSequenceROI(EMProtocol):
         inpStruct = self.inputAtomStruct.get()
         if self.coordsClusters:
             outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
-            for i, clust in enumerate(self.coordsClusters):
+            for i, clust in self.coordsClusters.items():
                 pocketFile = createPocketFile(clust, i, self._getExtraPath())
                 pocket = StructROI(pocketFile, self.getASFileName())
                 pocket.setNumberOfPoints(len(clust))
@@ -220,31 +231,45 @@ class ProtMapSequenceROI(EMProtocol):
 
         return mapDic
 
+    def mergeCoords(self, coordDic):
+        coords = []
+        for roiId, roiCoords in coordDic.items():
+            for coord in roiCoords:
+                if coord not in coords:
+                    coords.append(coord)
+        return coords
+
     def getROICoords(self, mapDic, structModel):
-        resIdxs = []
+        resIdxs = {}
         for roi in self.inputSequenceROIs.get():
+            roiId = roi.getObjId()
+            resIdxs[roiId] = []
             for roiIdx in range(roi.getROIIdx(), roi.getROIIdx2() + 1):
                 if roiIdx in mapDic:
                     #Only added a residue if there was correspondance in the alignment
-                    resIdxs.append(mapDic[roiIdx])
+                    resIdxs[roiId].append(mapDic[roiIdx])
 
-        coords = []
+        coords = {}
         chainId = json.loads(self.chain_name.get())['chain']
-        for resId in resIdxs:
-            residue = structModel[chainId][resId]
-            atoms = residue.get_atoms()
-            for a in atoms:
-                coords.append(list(a.get_coord()))
+        for roiId in resIdxs:
+            coords[roiId] = []
+            for resId in resIdxs[roiId]:
+                residue = structModel[chainId][resId]
+                atoms = residue.get_atoms()
+                for a in atoms:
+                    coords[roiId].append(list(a.get_coord()))
         return coords
 
     def mapSurfaceCoords(self, oCoords):
-        sCoords = []
-        for coord in oCoords:
-            closerSCoords = self.closerSurfaceCoords(coord)
-            for cCoord in closerSCoords:
-                cCoord = list(cCoord)
-                if not cCoord in sCoords:
-                  sCoords.append(cCoord)
+        sCoords = {}
+        for roiId in oCoords:
+            sCoords[roiId] = []
+            for coord in oCoords[roiId]:
+                closerSCoords = self.closerSurfaceCoords(coord)
+                for cCoord in closerSCoords:
+                    cCoord = list(cCoord)
+                    if cCoord not in sCoords[roiId]:
+                      sCoords[roiId].append(cCoord)
 
         return sCoords
 
