@@ -154,7 +154,7 @@ class ProtocolScoreDocking(EMProtocol):
         if len(maeMols) > 0:
             try:
                 from pwchemSchrodinger.utils.utils import convertMAEMolSet
-                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
             except ImportError:
                 print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
