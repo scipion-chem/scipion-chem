@@ -1,8 +1,115 @@
-import subprocess, argparse, multiprocessing, sys, json, os
+import subprocess, argparse, multiprocessing, sys, json, os, copy
 from collections.abc import Callable
 from typing import List, Union, Tuple, Dict
 
-################################## UTILS FUNCTIONS ##################################
+################################## INTERNAL UTILS FUNCTIONS ##################################
+def removeLooseDependencyTests(testList: List[str], dependantTests: Dict) -> Tuple[List[str], Dict]:
+	"""
+	### This function removes all dependant tests where at least one of its dependencies cannot be met.
+
+	#### Params:
+	- testList (list(str)): List of tests.
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+
+	#### Return:
+	- (list(str)): Updated list of tests.
+	- (dict): Updated list of tests that depend on other tests and can be run.
+	"""
+	# Get test name and dependencies for each test
+	for test, deps in list(dependantTests.items()):
+		# Check if each dependency is in the main list
+		for dep in deps:
+			if dep not in testList:
+				# If dependency cannot be met, delete test from list
+				if test in testList:
+					testList.remove(test)
+					printSkippingTest(test, skipType='other', reason=f"Missing dependency with test {dep}")
+				del dependantTests[test]
+
+	return testList, dependantTests
+
+def removeLooseDependencyTestsCascade(testList: List[str], dependantTests: Dict) -> Tuple[List[str], Dict]:
+	"""
+	### This function removes all dependant tests where at least one of its dependencies cannot be met.
+	### It also handles cascading removals.
+
+	#### Params:
+	- testList (list(str)): List of tests.
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+
+	#### Return:
+	- (list(str)): Updated list of tests.
+	- (dict): Updated list of tests that depend on other tests and can be run.
+	"""
+	while True:
+		# Call removal function until it stops removing tests
+		initialLen = len(testList)
+		testList, dependantTests = removeLooseDependencyTests(testList, dependantTests)
+		if len(testList) == initialLen:
+			break
+
+	return testList, dependantTests
+
+def removeDependentTests(testList: List[str], dependantTests: Dict) -> Tuple[List[str], Dict]:
+	"""
+	### This function removes the tests that depend on other tests that cannot be ran.
+
+	#### Params:
+	- testList (list(str)): List of tests.
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+
+	#### Return:
+	- (list(str)): Updated list of tests.
+	- (dict): List of tests that deppend on other tests and can be run.
+	"""
+	# Remove tests from the dictionary where at least one of its dependencies is not in the main test list
+	testList, dependantTests = removeLooseDependencyTestsCascade(testList, dependantTests)
+
+	# Find all tests with a circular dependency
+	circularTests = {}
+	for test in dependantTests:
+		path = findCircularDependency(test, dependantTests)
+		if path and test in path:
+			circularTests[test] = path
+	
+	# Remove all tests with a circular dependency
+	for test in circularTests.keys():
+		if test in testList:
+			testList.remove(test)
+			depStr = ' --> '.join(circularTests[test])
+			printSkippingTest(test, skipType='other', reason=f"It has a circular dependency: {depStr}")
+		del dependantTests[test]
+
+	# Remove tests that depend on removed tests (cascading removals)
+	testList, dependantTests = removeLooseDependencyTestsCascade(testList, dependantTests)
+
+	return testList, dependantTests
+
+def getFirstExecutionLevel(dependantTests: Dict) -> List[str]:
+	"""
+	### This function returns the tests of the first execution level given a dictionary with test dependencies.
+
+	#### Params:
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+
+	#### Return:
+	- (list(str)): List of the tests of the first level.
+	"""
+	# Initialize list
+	levelList = []
+
+	# Create a copy of the dictionary to iterate over it
+	dependantTestsCopy = copy.deepcopy(dependantTests)
+
+	# For every test, check if at least one of its dependencies is another test of the list
+	for test, deps in list(dependantTestsCopy.items()):
+		if not any(dep in dependantTests.keys() for dep in deps):
+			levelList.append(test)
+			del dependantTestsCopy[test]
+	
+	return levelList
+
+################################## GENERAL UTILS FUNCTIONS ##################################
 def colorStr(string: str, color: str) -> str:
 	"""
 	### This function returns the input string wrapped in the specified color.
@@ -107,6 +214,27 @@ def runTest(test: str, scipionExecutable: str, testPrefix: str) -> Union[str, No
 		printAndFlush(colorStr(f"Test {test} failed with above message.", color='red'))
 		return test
 
+def runTestBatch(testList: List[str], jobs: int, scipion: str, testPrefix: str, plugin: str) -> List[str]:
+	"""
+	### This function runs the given list of tests and returns the failed ones.
+
+	#### Params:
+	- testList (list(str)): List of tests to run.
+	- testList (int): Max number of jobs to use.
+	- scipion (str): Path to Scipion's executable.
+	- testPrefix (str): Prefix of the test.
+	- plugin (str): Module name of the plugin.
+
+	#### Return:
+	- (list(str)): List of all the failed tests.
+	"""
+	# Showing message with number of tests
+	nJobs = len(testList) if len(testList) < jobs else jobs
+	printAndFlush(colorStr(f"Running a total of {len(testList)} tests for {plugin} in batches of {nJobs} processes...", color='blue'))
+
+	# Run all the tests in parallel
+	return runInParallel(runTest, scipion, testPrefix, paramList=testList, jobs=nJobs)
+
 def printAndFlush(message: str):
 	"""
 	### This function prints a given message flushing stdout.
@@ -145,6 +273,37 @@ def printSkippingTest(test: str, skipType: str='', dependency: str='', reason: s
 	else:
 		# Error message when skip type is not recogniced
 		printFatalError(f"ERROR: Test skip type \"{skipType}\" not recognized.")
+
+def findCircularDependency(test: str, dependantTests: List[Dict], path: List[str]=None) -> Union[List[str], bool]:
+	"""
+	### This function returns a list of all the tests involved in a circular path, or False if there is no such path.
+
+	#### Params:
+	- test (str): Name of the test being checked for a circular dependency.
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+	- path (list(str)): Optional: List of tests that might form a circular dependency.
+
+	#### Return:
+	- (list(str)): List with the test forming a circular path, False if there is no such path.
+	"""
+	# Initialize circular path
+	path = [] if path is None else path
+
+	# If test is in path, we have a circular path
+	if test in path:
+		# Only return the part of the path that starts with current test
+		# and ends with such test
+		return path[path.index(test):] + [test]
+	# Add test to path (visit node)
+	path.append(test)
+
+	# Check if every dependency is in a circular path
+	for dep in dependantTests.get(test, []):
+		circularPath = findCircularDependency(dep, dependantTests, path=path[:])
+		# If the return is not False, then it's a non-empty list with a circular path
+		if circularPath:
+			return circularPath
+	return False
 
 def printFatalError(message: str):
 	"""
@@ -232,7 +391,7 @@ def getAllTests(scipion: str, pluginModule: str, testPrefix: str) -> List[str]:
 	# Return full list of tests
 	return filteredLines
 
-def readTestDataFile(testDataFilePath: str) -> Tuple[Union[List[str], None], Union[Dict, None]]:
+def readTestDataFile(testDataFilePath: str) -> Tuple[Union[List[str], None], Union[Dict, None], Union[List[Dict], None]]:
 	"""
 	### This function returns a list with the necessary datasets for the tests, as well as an object with the different tests and the situations where to skip them.
 
@@ -242,15 +401,16 @@ def readTestDataFile(testDataFilePath: str) -> Tuple[Union[List[str], None], Uni
 	#### Return:
 	- (list(str) | None): List of dataset names if there are any, None otherwise.
 	- (dict | None): Dictionary containing all skippable tests if there are any, None otherwise.
+	- (list(dict)): List of tests dependant on other tests.
 	"""
 	# Read the JSON data from the file
 	try:
 		with open(testDataFilePath, 'r') as file:
 			dataFile = json.load(file)
-			return dataFile.get("datasets", []), dataFile.get("skippable", {})
+			return dataFile.get("datasets", []), dataFile.get("skippable", {}), dataFile.get("test-dependencies", [])
 	except FileNotFoundError:
 		printAndFlush(colorStr("No skippable tests file found, running all.", color='yellow'))
-		return None, None
+		return None, None, None
 	except PermissionError:
 		printFatalError(f"ERROR: Permission denied to open file '{testDataFilePath}'.")
 	except json.JSONDecodeError as e:
@@ -258,6 +418,61 @@ def readTestDataFile(testDataFilePath: str) -> Tuple[Union[List[str], None], Uni
 	except Exception as e:
 		printFatalError(f"An unexpected error occurred:\n{e}")
 	
+def sortDependentTests(dependantTests: Dict) -> Dict:
+	"""
+	### This function sorts the tests that depend on other tests into the order they must be ran.
+
+	#### Params:
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+
+	#### Return:
+	- (dict): Dictionary of tests that deppend on other tests, sorted in execution order.
+	"""
+	# Check if received dictionary contains data
+	if not dependantTests:
+		return {}
+
+	# Initialize empty dictionary
+	executionLevels = {}
+
+	# Obtain execution level in a loop until there are no more tests
+	level = 0
+	while dependantTests:
+		levelList = getFirstExecutionLevel(dependantTests)
+		for test in levelList:
+			executionLevels[level] = levelList
+			del dependantTests[test]
+		level += 1
+
+	return executionLevels
+
+def cleanAndSortDependentTests(testList: List[str], dependantTests: Dict) -> Tuple[List[str], Dict]:
+	"""
+	### This function sorts the tests that depend on other tests into the order they must be ran, skipping the ones that cannot be ran.
+
+	#### Params:
+	- testList (list(str)): List of tests.
+	- dependantTests (dict): Dictionary containing tests that depend on other tests.
+
+	#### Return:
+	- (list(str)): Updated list of tests.
+	- (dict): Dictionary of tests that deppend on other tests and can be run, sorted in execution order.
+	"""
+	# Remove tests that do not meet dependency criteria
+	testList, dependantTests = removeDependentTests(testList, dependantTests)
+
+	# Build execution levels, to run after the main list
+	executionLevels = sortDependentTests(dependantTests)
+
+	# Remove tests in the execution levels dictionary from the main list
+	testWithLevels = []
+	for level in executionLevels.values():
+		for test in level:
+			testWithLevels.append(test)
+	testList = [test for test in testList if test not in testWithLevels]
+	
+	return testList, executionLevels
+
 def downloadDatset(dataset: str, scipionExecutable: str) -> Union[str, None]:
 	"""
 	### This function downloads a given dataset for scipion tests.
@@ -455,8 +670,8 @@ def main(args: Dict):
 		printAndFlush(colorStr(f"Module {args.plugin} has not tests. Nothing to run.", color='yellow'))
 		sys.exit(0)
 
-	# Obtaining datasets and skippable tests according to situation
-	datasets, allSkippableTests = readTestDataFile(args.testData)
+	# Obtaining datasets, skippable tests, and dependant tests according to situation
+	datasets, allSkippableTests, dependantTests = readTestDataFile(args.testData)
 
 	if allSkippableTests:
 		gpuSkippableTests = allSkippableTests.get('gpu', [])
@@ -466,23 +681,34 @@ def main(args: Dict):
 		# Removing skippable tests
 		filteredLines = removeSkippableTests(args.scipion, filteredLines, args.noGPU, gpuSkippableTests, dependenciesSkippableTests, otherSkippableTests)
 
+	# Obtain tests with dependencies and add them to a separete list
+	# (or skip them if their dependencies cannot be met or they have a circular dependency)
+	if dependantTests:
+		filteredLines, dependantTests = cleanAndSortDependentTests(filteredLines, dependantTests)
+
 	# Downloading in parallel required datasets if there are any
 	if datasets:
-		printAndFlush(colorStr(f"Downloading {len(datasets)} datasets.", color="blue"))
+		printAndFlush(colorStr(f"Downloading {len(datasets)} datasets...", color="blue"))
 		failedDownloads = runInParallel(downloadDatset, args.scipion, paramList=datasets, jobs=len(datasets))
 
 		# Check if there were any errors
 		if failedDownloads:
 			printFatalError("The download of at least one dataset ended with errors. Exiting.")
 
-	# Showing initial message with number of tests
-	nJobs = len(filteredLines) if len(filteredLines) < args.jobs else args.jobs
-	printAndFlush(colorStr(f"Running a total of {len(filteredLines)} tests for {args.plugin} in batches of {nJobs} processes...", color='blue'))
+	# Showing initial message abount main tests and run them
+	if dependantTests:
+		printAndFlush(colorStr("Initial run of non-dependent tests.", color="blue"))
+	failedTests = runTestBatch(filteredLines, args.jobs, args.scipion, testPrefix, args.plugin)
 
-	# Run all the tests in parallel
-	failedTests = runInParallel(runTest, args.scipion, testPrefix, paramList=filteredLines, jobs=args.jobs)
+	# Run all dependent test in batches for each level and collect failed ones
+	for level in dependantTests.keys():
+		# Showing batch execution message and run it
+		printAndFlush(colorStr(f"Batch of dependent tests {level+1}/{len(dependantTests.keys())}.", color="blue"))
+		levelFailedTests = runTestBatch(dependantTests[level], args.jobs, args.scipion, testPrefix, args.plugin)
+		if levelFailedTests:
+			failedTests.extend(levelFailedTests)
 
-	# Get results grouped by orogin file and separated into passed and failed
+	# Get results grouped by origin file and separated into passed and failed
 	results = getResultDictionary(filteredLines, failedTests)
 
 	# Print summary of passed/failed tests
