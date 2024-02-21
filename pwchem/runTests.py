@@ -410,7 +410,7 @@ def readTestDataFile(testDataFilePath: str) -> Tuple[Union[List[str], None], Uni
 	try:
 		with open(testDataFilePath, 'r') as file:
 			dataFile = json.load(file)
-			return dataFile.get("datasets", []), dataFile.get("skippable", {}), dataFile.get("test-dependencies", [])
+			return dataFile.get("datasets", []), dataFile.get("skippable", {}), dataFile.get("test-dependencies", {})
 	except FileNotFoundError:
 		printAndFlush(colorStr("No skippable tests file found, running all.", color='yellow'))
 		return None, None, None
