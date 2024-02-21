@@ -229,8 +229,11 @@ def runTestBatch(testList: List[str], jobs: int, scipion: str, testPrefix: str, 
 	- (list(str)): List of all the failed tests.
 	"""
 	# Showing message with number of tests
-	nJobs = len(testList) if len(testList) < jobs else jobs
-	printAndFlush(colorStr(f"Running a total of {len(testList)} tests for {plugin} in batches of {nJobs} processes...", color='blue'))
+	testSize = len(testList)
+	nJobs = testSize if testSize < jobs else jobs
+	testWord = 'test' + ('s' if testSize > 1 else '')
+	batchMessage = f' in batches of {nJobs} processes' if testSize > 1 else ''
+	printAndFlush(colorStr(f"Running a total of {testSize} {testWord} for {plugin}{batchMessage}...", color='blue'))
 
 	# Run all the tests in parallel
 	return runInParallel(runTest, scipion, testPrefix, paramList=testList, jobs=nJobs)
