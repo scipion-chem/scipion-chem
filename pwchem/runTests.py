@@ -705,8 +705,8 @@ def main(args: Dict):
 		# Showing batch execution message and run it
 		printAndFlush(colorStr(f"Batch of dependent tests {level+1}/{len(dependantTests.keys())}.", color="blue"))
 		levelFailedTests = runTestBatch(dependantTests[level], args.jobs, args.scipion, testPrefix, args.plugin)
-		if levelFailedTests:
-			failedTests.extend(levelFailedTests)
+		failedTests.extend(levelFailedTests)
+		filteredLines.extend(dependantTests[level])
 
 	# Get results grouped by origin file and separated into passed and failed
 	results = getResultDictionary(filteredLines, failedTests)
