@@ -365,7 +365,7 @@ def getAllTests(scipion: str, pluginModule: str, testPrefix: str) -> List[str]:
 	- (list(str)): List of tests names.
 	"""
 	# Construct the test discovery command
-	command = f"{scipion} test --grep {pluginModule}"
+	command = f"{scipion} test --grep {pluginModule}."
 
 	# Run the shell command and capture the output
 	try:
