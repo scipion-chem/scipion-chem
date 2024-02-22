@@ -63,6 +63,6 @@ jobs:
       working-directory: ${{ github.workspace }}/../scipion
       run: |
         echo "First one, only with pwchem"
-        scipion3 test --grep pwchem
+        ./scipion3 test --grep pwchem
         echo "Second one, now with pwchem."
-        scipion3 test --grep pwchem.
+        ./scipion3 test --grep pwchem.
