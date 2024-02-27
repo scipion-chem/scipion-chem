@@ -40,6 +40,8 @@ from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesCh
 from pwchem.protocols import ProtExtractInteractingMols
 from pwchem.constants import *
 from pwchem.utils import getFilteredOutput
+from pwchem.viewers import BioinformaticsDataViewer
+
 
 def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kwargs):
   """
@@ -212,6 +214,54 @@ class SequenceAliViewer(pwviewer.Viewer):
 
         return views
 
+class SequenceGeneralViewer(pwviewer.ProtocolViewer):
+  """ Protocol viewer to visualize different type of sequence objects
+  """
+  _label = 'Sequence viewer'
+  _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+  _environments = [pwviewer.DESKTOP_TKINTER]
+
+  def __init__(self, **kwargs):
+    pwviewer.ProtocolViewer.__init__(self, **kwargs)
+
+  def _defineParams(self, form):
+    form.addSection(label='Sequence viewer')
+    aGroup = form.addGroup('AliView viewer')
+    aGroup.addParam('aliLabel', params.LabelParam, label='Display sequences with AliView: ',
+                    help='Display the output sequences using AliView')
+    
+    tGroup = form.addGroup('Table viewer')
+    tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
+                    help='Display the output sequences using table format')
+      
+  def _getVisualizeDict(self):
+    return {
+      # AliView
+      'aliLabel': self._viewSeqSet,
+
+      # Table
+      'tableLabel': self._viewTable,
+    }
+
+  def _viewSeqSet(self, e=None):
+    seqSet = self.protocol
+    setV = SequenceAliViewer(project=self.getProject())
+    views = setV._visualize(seqSet)
+    return views
+
+  def _viewTable(self, e=None):
+    seqSet = self.protocol
+
+    setV = BioinformaticsDataViewer(project=self.getProject())
+    views = setV._visualize(seqSet)
+    return views
+
+  def checkIfProtocol(self):
+    if isinstance(self.protocol, Protocol):
+      return True
+    else:
+      return False
+  
 class SequenceChemViewer(pwviewer.ProtocolViewer):
     """ Protocol viewer to visualize different type of sequence objects
     """
