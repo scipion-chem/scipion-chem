@@ -2,3 +2,4 @@ lxml
 scipy
 parmed
 scikit-learn
+selenium
