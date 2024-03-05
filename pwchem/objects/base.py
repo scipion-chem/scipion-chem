@@ -784,8 +784,9 @@ class SetOfSequenceROIs(data.EMSet):
         wholeSeqObj.exportToFile(outPath)
         for roi in self:
             roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
-            tmpSeq = ['-'] * (len(wholeSeq) - len(roiSeq) + 1)
-            tmpSeq[roiIdx-1] = roiSeq
+            tmpSeq = ['-'] * len(wholeSeq)
+            r1, r2 = roiIdx-1, roiIdx - 1 + len(roiSeq)
+            tmpSeq[r1:r2] = roiSeq
 
             tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
             tmpSeqObj.appendToFile(outPath, doClean=False)
