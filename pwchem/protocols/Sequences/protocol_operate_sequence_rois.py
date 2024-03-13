@@ -55,11 +55,11 @@ class ProtOperateSeqROI(EMProtocol):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
-        form.addParam('inputROIsSets', params.MultiPointerParam,
-                      pointerClass='SetOfSequenceROIs', allowsNull=False,
-                      label="Input Sequence ROIs Sets",
-                      help='Select the sequence ROIs sets to operate. If the input is only one set, '
-                           'the operation will be performed over its own elements')
+        group.addParam('inputROIsSets', params.MultiPointerParam,
+                       pointerClass='SetOfSequenceROIs', allowsNull=False,
+                       label="Input Sequence ROIs Sets",
+                       help='Select the sequence ROIs sets to operate. If the input is only one set, '
+                            'the operation will be performed over its own elements')
 
         group = form.addGroup('Operation')
         group.addParam('operation', params.EnumParam, choices=self._operations,
@@ -104,7 +104,6 @@ class ProtOperateSeqROI(EMProtocol):
         errors = []
         if len(self.inputROIsSets) < 2:
             errors.append('You must specify at least two input sets to operate')
-
         return errors
 
     def _warnings(self):
@@ -114,7 +113,7 @@ class ProtOperateSeqROI(EMProtocol):
             inpSeqs.append(roiSet.get().getSequence())
         if len(set(inpSeqs)) > 1:
             ws.append('Not all the sequences in the input sets are the same, this might lead to errors')
-        return  ws
+        return ws
 
     # --------------------------- UTILS functions -----------------------------------
     def getOperatedROIs(self):
