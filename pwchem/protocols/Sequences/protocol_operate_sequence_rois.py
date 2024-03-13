@@ -62,12 +62,16 @@ class ProtOperateSeqROI(EMProtocol):
                             'the operation will be performed over its own elements')
 
         group = form.addGroup('Operation')
-        group.addParam('operation', params.EnumParam, choices=self._operations,
-                       display=params.EnumParam.DISPLAY_HLIST,
+        group.addParam('operation', params.EnumParam, choices=self._operations, display=params.EnumParam.DISPLAY_HLIST,
                        label='Operation: ', default=UNION,
                        help='Operation to perform, in the order of the inputed sets')
-        group.addParam('keepNonOverlaping', params.BooleanParam,
-                       label='Keep non overlaping ROIs: ', default=True,
+
+        group.addParam('minOverlap', params.FloatParam, label='Minimum overlap proportion: ', default=0,
+                       help='Minimum overlap between two ROIs to consider them for the operation.'
+                            'The proportion will be calculated as the number of overlapped residues divided by the '
+                            'size of the smallest of the two ROIs.\nIf set to 0, '
+                            'the operation will be performed as long as there is at least 1 residue overlap')
+        group.addParam('keepNonOverlaping', params.BooleanParam, label='Keep non overlaping ROIs: ', default=True,
                        help='Whether to include in the final set those ROIs which do not overlap '
                             'with others in the other sets')
         group.addParam('keepName', params.BooleanParam, expertLevel=params.LEVEL_ADVANCED,
@@ -161,13 +165,14 @@ class ProtOperateSeqROI(EMProtocol):
             return list(set(r1).symmetric_difference(r2))
 
     def operateROIs(self, roi1, roi2, operation=None):
+        newROIs = []
         overIdxs = self.getOperationIdxs(roi1, roi2, operation='Intersection')
-        overIdxs.sort()
         operIdxs = self.getOperationIdxs(roi1, roi2, operation)
-        operIdxs.sort()
-        if len(overIdxs) > 0 and len(operIdxs) > 0:
+        operIdxs.sort(), overIdxs.sort()
+
+        overProp = len(overIdxs) / min(roi1.getROILength(), roi2.getROILength())
+        if overProp > self.minOverlap.get() and len(operIdxs) > 0:
             totalSequence = roi1._sequence
-            newROIs = []
             for consIdxs in self.getConsecutiveRanges(operIdxs):
                 roiStr = totalSequence.getSequence()[consIdxs[0]-1:consIdxs[-1]]
                 roiId = 'ROI_{}-{}'.format(consIdxs[0], consIdxs[-1])
@@ -182,9 +187,8 @@ class ProtOperateSeqROI(EMProtocol):
                 newROI = SequenceROI(sequence=totalSequence, seqROI=roiSeq,
                                      roiIdx=consIdxs[0], roiIdx2=consIdxs[-1])
                 newROIs.append(newROI)
-            return newROIs
-        else:
-            return []
+        return newROIs
+
 
 
     def getConsecutiveRanges(self, rang):

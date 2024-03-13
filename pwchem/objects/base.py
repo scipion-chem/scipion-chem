@@ -752,6 +752,9 @@ class SequenceROI(data.EMObject):
     def setROIIdx2(self, idx):
         self._roiIdx2.set(idx)
 
+    def getROILength(self):
+        return len(self.getROISequence())
+
 
 class SetOfSequenceROIs(data.EMSet):
     ITEM_TYPE = SequenceROI
