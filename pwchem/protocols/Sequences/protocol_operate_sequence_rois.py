@@ -31,6 +31,8 @@ This protocol is used to operate sequence ROIs (union, intrsection, difference a
 The operations is applied on the sets iteratively, in the order they are inputted (1 op 2, 12 op 3, 123 op 4, ...)
 
 """
+import sys
+
 from itertools import groupby
 from operator import itemgetter
 
@@ -41,14 +43,14 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
 
-UNION, INTERSECTION, DIFF, SYM_DIFF = 0, 1, 2, 3
+UNION, INTERSECTION, DIFF, SYM_DIFF, BEST = 0, 1, 2, 3, 4
 
 class ProtOperateSeqROI(EMProtocol):
     """
     Implements operations for several sets of sequence ROIs: union, intersection, difference...
     """
     _label = 'Operate sequence ROIs'
-    _operations = ['Union', 'Intersection', 'Difference', 'Symmetric_difference']
+    _operations = ['Union', 'Intersection', 'Difference', 'Symmetric_difference', 'Keep best']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -60,6 +62,12 @@ class ProtOperateSeqROI(EMProtocol):
                        label="Input Sequence ROIs Sets",
                        help='Select the sequence ROIs sets to operate. If the input is only one set, '
                             'the operation will be performed over its own elements')
+        group.addParam('operateIntraSet', params.BooleanParam, label='Operate items intra set: ', default=True,
+                       help='Whether to perform the operation "intra set": between each item for each set')
+        group.addParam('operateInterSet', params.BooleanParam, label='Operate items inter set: ', default=True,
+                       help='Whether to perform the operation "inter set": between items from each different set.'
+                            'This operation is performed after the intra set, so if both true, the inter set '
+                            'operation will be performed on the resulting ROIs of each intra operated set')
 
         group = form.addGroup('Operation')
         group.addParam('operation', params.EnumParam, choices=self._operations, display=params.EnumParam.DISPLAY_HLIST,
@@ -71,26 +79,37 @@ class ProtOperateSeqROI(EMProtocol):
                             'The proportion will be calculated as the number of overlapped residues divided by the '
                             'size of the smallest of the two ROIs.\nIf set to 0, '
                             'the operation will be performed as long as there is at least 1 residue overlap')
+        group.addParam('bestAttribute', params.StringParam, label='Best based on: ', default='',
+                       condition=f'operation=={BEST}',
+                       help='Which attribute of the ROI to use to determine best for overlapping ROIs')
+        group.addParam('bestDirection', params.BooleanParam, label='Higher is better: ', default=True,
+                       condition=f'operation=={BEST}',
+                       help='For the selected attribute, whether higher values mean better')
+
         group.addParam('keepNonOverlaping', params.BooleanParam, label='Keep non overlaping ROIs: ', default=True,
                        help='Whether to include in the final set those ROIs which do not overlap '
                             'with others in the other sets')
-        group.addParam('keepName', params.BooleanParam, expertLevel=params.LEVEL_ADVANCED,
-                       label='Keep name of ROIs: ', default=False,
-                       help='Whether to keep the name of those output ROIs which totally correspond to '
-                            'one in the input')
+        group.addParam('keepAttributes', params.BooleanParam, expertLevel=params.LEVEL_ADVANCED,
+                       label='Keep attributes of ROIs: ', default=True,
+                       help='Whether to keep the attributes of the output ROIs. The attributes will come from the '
+                            'first original ROI the output ROI comes from')
 
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        # Insert processing steps
         self._insertFunctionStep('defineOutputStep')
 
     def defineOutputStep(self):
-        operatedROIs = self.getOperatedROIs()
+        inSets = self.getInputListOfSets()
 
-        if len(operatedROIs) > 0:
+        if self.operateIntraSet.get():
+            inSets = self.getIntraOperatedROIs(inSets)
+        if self.operateInterSet.get():
+            inSets = self.getInterOperatedROIs(inSets)
+
+        if len(inSets) > 0:
             outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
-            for i, roi in enumerate(operatedROIs):
+            for i, roi in enumerate(inSets):
                 roi.setObjId(i)
                 outROIs.append(roi)
             self._defineOutputs(outputROIs=outROIs)
@@ -106,8 +125,17 @@ class ProtOperateSeqROI(EMProtocol):
 
     def _validate(self):
         errors = []
-        if len(self.inputROIsSets) < 2:
-            errors.append('You must specify at least two input sets to operate')
+        if self.operation.get() == BEST:
+            for inSet in self.inputROIsSets:
+                bAttr = self.bestAttribute.get()
+                if not hasattr(inSet.get().getFirstItem(), bAttr):
+                    errors.append(f'{inSet.get()} input set has no attribute {bAttr}')
+
+        if not self.operateIntraSet.get() and not self.operateInterSet.get():
+            errors.append('You have to choose at least one from intra/inter operation to be true')
+
+        if self.operateInterSet.get() and len(self.inputROIsSets) < 2:
+            errors.append('You must specify at least two input sets to operate inter set')
         return errors
 
     def _warnings(self):
@@ -120,73 +148,115 @@ class ProtOperateSeqROI(EMProtocol):
         return ws
 
     # --------------------------- UTILS functions -----------------------------------
-    def getOperatedROIs(self):
-        inSets = self.inputROIsSets
+    def getInputListOfSets(self):
+      inSets = []
+      for inPoint in self.inputROIsSets:
+        inSets.append(inPoint.get())
+      return inSets
 
+    def getIntraOperatedROIs(self, inSets):
+        newSets = []
+        for curSet in inSets:
+            curROIs = [roi.clone() for roi in curSet]
+            newSet = [curROIs.pop(0)]
+            finalSet = []
+            while curROIs:
+                for newROI in newSet:
+                    reset = False
+                    for curROI in curROIs:
+                        operatedROIs = self.operateROIs(newROI, curROI, operation=self.getEnumText('operation'))
+                        if operatedROIs:
+                            newSet.remove(newROI), curROIs.remove(curROI)
+                            newSet += operatedROIs
+                            reset = True
+                            break
+
+                    if reset:
+                        break
+                    else:
+                        finalSet += newSet
+                        newSet = [curROIs.pop(0)]
+
+            finalSet += newSet
+
+            newSets += finalSet
+        return newSets
+
+    def getInterOperatedROIs(self, inSets):
         prevSet = inSets[0]
         for curSet in inSets[1:]:
             newSet = []
-            curOver = [False] * len(curSet.get())
-            prevOver = [False] * len(prevSet.get())
-            for j, prevROI in enumerate(prevSet.get()):
-                for i, curROI in enumerate(curSet.get()):
-                    newROIs = self.operateROIs(prevROI, curROI)
+            curOver = [False] * len(curSet)
+            prevOver = [False] * len(prevSet)
+            for j, prevROI in enumerate(prevSet):
+                for i, curROI in enumerate(curSet):
+                    newROIs = self.operateROIs(prevROI, curROI, operation=self.getEnumText('operation'))
 
-                    if len(self.getOperationIdxs(prevROI, curROI, operation='Intersection')) > 0:
+                    if newROIs:
                         prevOver[j], curOver[i] = True, True
-
                     for newROI in newROIs:
                         newSet.append(newROI.clone())
 
             if self.keepNonOverlaping.get():
-                for i, curROI in enumerate(curSet.get()):
+                for i, curROI in enumerate(curSet):
                     if not curOver[i] and not self.operation.get() == DIFF:
                         newSet.append(curROI.clone())
 
-                for i, prevROI in enumerate(prevSet.get()):
+                for i, prevROI in enumerate(prevSet):
                     if not prevOver[i]:
                         newSet.append(prevROI.clone())
+            prevSet = newSet
 
         return newSet
 
 
-    def getOperationIdxs(self, roi1, roi2, operation=None):
+    def getOperationIdxs(self, roi1, roi2, operation):
         r1, r2 = range(roi1.getROIIdx(), roi1.getROIIdx2() + 1), range(roi2.getROIIdx(), roi2.getROIIdx2() + 1)
-        if (operation is None and self.operation.get() == UNION) or operation==self._operations[UNION]:
+        if operation == self._operations[UNION]:
             return list(set(r1).union(r2))
 
-        elif (operation is None and self.operation.get() == INTERSECTION) or operation==self._operations[INTERSECTION]:
+        elif operation == self._operations[INTERSECTION]:
             return list(set(r1).intersection(r2))
 
-        elif (operation is None and self.operation.get() == DIFF) or operation==self._operations[DIFF]:
+        elif operation == self._operations[DIFF]:
             return list(set(r1).difference(r2))
 
-        elif (operation is None and self.operation.get() == SYM_DIFF) or operation==self._operations[SYM_DIFF]:
+        elif operation == self._operations[SYM_DIFF]:
             return list(set(r1).symmetric_difference(r2))
 
-    def operateROIs(self, roi1, roi2, operation=None):
+        elif operation == self._operations[BEST]:
+            attr1, attr2 = getattr(roi1, self.bestAttribute.get()), getattr(roi2, self.bestAttribute.get())
+            bestROI = roi1 if attr1 >= attr2 and self.bestDirection.get() else roi2
+            return list(range(bestROI.getROIIdx(), bestROI.getROIIdx2()+1))
+
+    def operateROIs(self, roi1, roi2, operation):
         newROIs = []
         overIdxs = self.getOperationIdxs(roi1, roi2, operation='Intersection')
-        operIdxs = self.getOperationIdxs(roi1, roi2, operation)
-        operIdxs.sort(), overIdxs.sort()
-
+        overIdxs.sort()
         overProp = len(overIdxs) / min(roi1.getROILength(), roi2.getROILength())
-        if overProp > self.minOverlap.get() and len(operIdxs) > 0:
-            totalSequence = roi1._sequence
-            for consIdxs in self.getConsecutiveRanges(operIdxs):
-                roiStr = totalSequence.getSequence()[consIdxs[0]-1:consIdxs[-1]]
-                roiId = 'ROI_{}-{}'.format(consIdxs[0], consIdxs[-1])
-                if self.keepName:
-                    roi1Idxs, roi2Idxs = [roi1.getROIIdx(), roi1.getROIIdx2()], [roi2.getROIIdx(), roi2.getROIIdx2()]
-                    if consIdxs[0] == roi1Idxs[0] and consIdxs[-1] == roi1Idxs[1]:
-                        roiId = roi1.getROIId()
-                    elif consIdxs[0] == roi2Idxs[0] and consIdxs[-1] == roi2Idxs[1]:
-                        roiId = roi2.getROIId()
 
-                roiSeq = Sequence(sequence=roiStr, id=roiId)
-                newROI = SequenceROI(sequence=totalSequence, seqROI=roiSeq,
-                                     roiIdx=consIdxs[0], roiIdx2=consIdxs[-1])
-                newROIs.append(newROI)
+        if overProp > self.minOverlap.get():
+            operIdxs = self.getOperationIdxs(roi1, roi2, operation)
+            operIdxs.sort()
+            if len(operIdxs) > 0:
+                totalSequence = roi1._sequence
+                consRanges = self.getConsecutiveRanges(operIdxs)
+                for consIdxs in consRanges:
+                    roiStr = totalSequence.getSequence()[consIdxs[0]-1:consIdxs[-1]]
+                    roiId = 'ROI_{}-{}'.format(consIdxs[0], consIdxs[-1])
+                    roiSeq = Sequence(sequence=roiStr, id=roiId)
+                    if self.keepAttributes or operation == self._operations[BEST]:
+                        roi2Idxs = [roi2.getROIIdx(), roi2.getROIIdx2()]
+                        newROI = roi1
+                        if consIdxs[0] == roi2Idxs[0] and consIdxs[-1] == roi2Idxs[1]:
+                            newROI = roi2
+                        setattr(newROI, '_ROISequence', roiSeq)
+                        newROI.setROIIdx(consIdxs[0]), newROI.setROIIdx2(consIdxs[-1])
+                    else:
+                        newROI = SequenceROI(sequence=totalSequence, seqROI=roiSeq,
+                                             roiIdx=consIdxs[0], roiIdx2=consIdxs[-1])
+                    newROIs.append(newROI)
+
         return newROIs
 
 

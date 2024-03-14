@@ -115,6 +115,10 @@ SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtChemOperateSe
                                       targets=['filterColumn'],
                                       inputs=['operation', 'inputSet', 'inputMultiSet'],
                                       outputs=['filterColumn'])
+SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtOperateSeqROI,
+                                      targets=['bestAttribute'],
+                                      inputs=['operation', 'inputROIsSets', 'inputMultiSet'],
+                                      outputs=['bestAttribute'])
 
 
 ########################## Sequence Attributes ####################################
