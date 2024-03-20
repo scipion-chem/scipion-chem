@@ -39,6 +39,7 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import MultiEpitope, Sequence, SequenceROI
 from pwchem.utils import unifyAttributes
 
+SROI, MANU = 0, 1
 
 class ProtDefineMultiEpitope(EMProtocol):
     """
@@ -52,30 +53,31 @@ class ProtDefineMultiEpitope(EMProtocol):
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
         group.addParam('inputROIsSets', params.MultiPointerParam,
-                       pointerClass='SetOfSequenceROIs', allowsNull=False,
+                       pointerClass='SetOfSequenceROIs, MultiEpitope', allowsNull=False,
                        label="Input Sequence ROIs Sets",
                        help='Select the sequence ROIs sets to operate. If the input is only one set, '
                             'the operation will be performed over its own elements')
 
-        group = form.addGroup('Add epitope')
-        group.addParam('inSet', params.StringParam, label='From set: ', default='',
+        group = form.addGroup('Add epitope/linker')
+        group.addParam('origin', params.EnumParam, label='Define from: ', default=SROI,
+                       choices=['SequenceROI', 'Manually'], display=params.EnumParam.DISPLAY_HLIST,
+                       help='Whether to define the epitope/linker from a previously defined sequence ROI or manually')
+        group.addParam('inSet', params.StringParam, label='From set: ', default='', condition='origin==0',
                        help='Add input sequence ROI as epitope from this set')
         group.addParam('inROI', params.StringParam, label='Sequence ROI as epitope: ', default='',
-                       help='Choose a sequence ROI to add as epitope')
+                       condition='origin==0', help='Choose a sequence ROI to add as epitope')
+
+        group.addParam('manualROI', params.StringParam, label='Manual sequence: ', default='', condition='origin==1',
+                       help='Define a epitope/linker sequence manually to add to the multiepitope')
+
+        group.addParam('roiType', params.EnumParam, label='ROI type: ', default=0,
+                       choices=['Epitope', 'Linker'], display=params.EnumParam.DISPLAY_HLIST,
+                       help='Whether the new ROI is defined as epitope or linker')
         group.addParam('roiName', params.StringParam, label='Name for the epitope: ', default='',
                        expertLevel=params.LEVEL_ADVANCED,
                        help='Choose a name for the selected epitope')
         group.addParam('addROI', params.LabelParam, label='Add selected epitope: ',
                        help='Add the selected epitope to the multiepitope')
-
-        group = form.addGroup('Add linker')
-        group.addParam('inLinker', params.StringParam, label='Linker sequence: ', default='',
-                       help='Define a linker sequence to add to the multiepitope')
-        group.addParam('linkerName', params.StringParam, label='Name for the epitope: ', default='',
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help='Choose a name for the selected epitope')
-        group.addParam('addLinker', params.LabelParam, label='Add defined linker: ',
-                       help='Add the defined linker to the multiepitope')
 
         group = form.addGroup('Multiepitope summary')
         group.addParam('multiSummary', params.TextParam, width=100, label='Multiepitope summary:', default='',
@@ -85,16 +87,33 @@ class ProtDefineMultiEpitope(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('defineOutputStep')
-
-    def buildSumLine(self, type='Epitope'):
-      '''Returns the information line to be written in the summary'''
-      if type == 'Linker':
-        linkName = f'(Name {self.linkerName.get().strip()})' if self.linkerName.get().strip() else ""
-        sumLine = f'Linker: {self.inLinker.get().strip()} {linkName}'
+      
+    def getNewROIName(self):
+      if self.roiName.get().strip():
+        roiName = self.roiName.get().strip()
+      elif self.origin.get() == SROI:
+        inROI = self.getInputROI()
+        roiName = inROI.getROIId()
       else:
+        roiName = ''
+      return roiName
+
+    def buildSumLine(self, type=None):
+      '''Returns the information line to be written in the summary'''
+      type = self.getEnumText('roiType')
+      roiName = self.getNewROIName()
+
+      if self.origin.get() == SROI:
         inSet, inROI = self.getInputSet(), self.getInputROI()
-        roiName = self.roiName.get().strip() if self.roiName.get().strip() else inROI.getROIId()
-        sumLine = f'Epitope: {inROI.__str__()} (Set {inSet.getObjId()}, Item {inROI.getObjId()}, Name {roiName})'
+        sumLine = f'{type}: {inROI.__str__()} (Set {inSet.getObjId()}, Item {inROI.getObjId()})'
+        if roiName:
+          sumLine = sumLine[:-1] + f', Name {roiName})'
+
+      else:
+        sumLine = f'{type}: {self.manualROI.get().strip()}'
+        if roiName:
+          sumLine = sumLine + f' (Name {roiName})'
+
       return sumLine
 
     def defineOutputStep(self):
@@ -110,6 +129,8 @@ class ProtDefineMultiEpitope(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
+        if self.multiSummary.get().strip():
+          summary.append(self.multiSummary.get().strip())
         return summary
 
     def _methods(self):
@@ -134,7 +155,7 @@ class ProtDefineMultiEpitope(EMProtocol):
     def getInputSet(self, setId=None):
         multiPointer = self.inputROIsSets
         inSet = None
-        setId = self.inSet.get() if not setId else setId
+        setId = self.inSet.get() if setId is None else setId
         for inPointer in multiPointer:
             curSet = inPointer.get()
             if curSet.getObjId() == setId or curSet.__str__() == setId:
@@ -144,7 +165,7 @@ class ProtDefineMultiEpitope(EMProtocol):
     def getInputROI(self, setId=None, roiId=None):
         inROI = None
         inSet = self.getInputSet(setId)
-        roiId = self.inROI.get() if not roiId else roiId
+        roiId = self.inROI.get() if roiId is None else roiId
         for item in inSet:
             if item.getObjId() == roiId or item.__str__() == roiId:
                 inROI = item.clone()
@@ -165,37 +186,41 @@ class ProtDefineMultiEpitope(EMProtocol):
       else:
         inSet, inROI = self.getInputSet(), self.getInputROI()
         setId, itemId = inSet.getObjId(), inROI.getObjId()
-      return setId, itemId
+      return int(setId), int(itemId)
 
     def parseSummary(self):
-      lkCount = 1
+      epCount, lkCount = 0, 0
       outROIs, mSeq = [], ''
       for sumLine in self.multiSummary.get().split('\n'):
         sumLine = sumLine.strip()
         if sumLine:
-          if 'Linker:' in sumLine:
-            linkerSequence = sumLine.split('Linker:')[-1].split('(')[0].strip()
-            idxs = [len(mSeq)+1, len(mSeq) + len(linkerSequence)+1]
-            linkName = self.getElementName(sumLine) if self.getElementName(sumLine) else f'Linker_{lkCount}'
-            roiSeq = Sequence(sequence=linkerSequence, name=linkName, id=linkName,
-                              description='Linker for multiepitope')
-            seqROI = SequenceROI(seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1], type='Linker')
-            mSeq += linkerSequence
-            lkCount += 1
+          type = sumLine.split(') ')[1].split(':')[0]
+          curCount = lkCount if type == 'Linker' else epCount
+          curCount += 1
 
-          elif 'Epitope:' in sumLine:
+          if 'SequenceROI' in sumLine:
+            # From SequenceROI
             setId, roiId = self.getROIIds(sumLine)
             roiName = self.getElementName(sumLine)
             seqROI = self.getInputROI(setId, roiId)
-            epiSequence = seqROI.getROISequence()
+            roiSequence = seqROI.getROISequence()
 
-            idxs = [len(mSeq)+1, len(mSeq) + len(epiSequence)+1]
-            seqROI.setType('Epitope')
+            idxs = [len(mSeq) + 1, len(mSeq) + len(roiSequence) + 1]
+            seqROI.setType(type)
             seqROI.setROIIdxs(idxs)
             if roiName:
               seqROI.setROIId(roiName), seqROI.setROIName(roiName)
-            mSeq += epiSequence
 
+          else:
+            # Manual definition
+            roiSequence = sumLine.split(f'{type}:')[-1].split('(')[0].strip()
+            idxs = [len(mSeq)+1, len(mSeq) + len(roiSequence)+1]
+            roiName = self.getElementName(sumLine) if self.getElementName(sumLine) else f'{type}_{curCount}'
+            roiSeq = Sequence(sequence=roiSequence, name=roiName, id=roiName,
+                              description='Manually added')
+            seqROI = SequenceROI(seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1], type=type)
+
+          mSeq += roiSequence
           outROIs.append(seqROI)
 
       multiSeq = Sequence(sequence=mSeq, name='MultiEpitope', id='MultiEpitope',

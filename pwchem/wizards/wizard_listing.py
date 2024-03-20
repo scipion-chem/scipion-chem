@@ -98,11 +98,6 @@ AddNumberedElementWizard().addTarget(protocol=ProtChemGenerateVariants,
                                  outputs=['toMutateList'])
 
 AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
-                                      targets=['addLinker'],
-                                      inputs=['inLinker', 'Linker'],
-                                      outputs=['multiSummary'])
-
-AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
                                       targets=['addROI'],
                                       inputs=['inROI', 'Epitope'],
                                       outputs=['multiSummary'])
