@@ -87,6 +87,16 @@ class AddNumberedElementWizard(AddElementWizard):
         if sumLine.strip():
             form.setVar(outputParam[0], prevList + sumLine.strip() + '\n')
 
+AddNumberedElementWizard().addTarget(protocol=ProtDefineSeqROI,
+                                      targets=['addROI'],
+                                      inputs=['resPosition'],
+                                      outputs=['inROIs'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtChemGenerateVariants,
+                                 targets=['addVariant'],
+                                 inputs=['selectVariant'],
+                                 outputs=['toMutateList'])
+
 AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
                                       targets=['addLinker'],
                                       inputs=['inLinker', 'Linker'],
