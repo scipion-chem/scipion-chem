@@ -57,6 +57,51 @@ class AddElementWizard(VariableWizard):
             prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
             form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
 
+class AddNumberedElementWizard(AddElementWizard):
+    """Add the content of a parameter to another numbering (and labeling) the elements in the output"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getNewElementNumber(self, prevList):
+        return len(prevList.split('\n'))
+
+    def getSumLine(self, protocol, inputParam, outputParam):
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        elemNumber = self.getNewElementNumber(prevList)
+
+        if hasattr(protocol, 'buildSumLine'):
+            sumLineType = inputParam[1] if len(inputParam) > 1 else ''
+            sumLine = protocol.buildSumLine(sumLineType)
+        else:
+            inParam = getattr(protocol, inputParam[0]).get()
+            sumLine = inParam.strip()
+        if not sumLine:
+            return ''
+        return f'{elemNumber}) {sumLine}'
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        sumLine = self.getSumLine(protocol, inputParam, outputParam)
+        if sumLine.strip():
+            form.setVar(outputParam[0], prevList + sumLine.strip() + '\n')
+
+AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                      targets=['addLinker'],
+                                      inputs=['inLinker', 'Linker'],
+                                      outputs=['multiSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                      targets=['addROI'],
+                                      inputs=['inROI', 'Epitope'],
+                                      outputs=['multiSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtModifyMultiEpitope,
+                                      targets=['addMod'],
+                                      inputs=['inROI'],
+                                      outputs=['modSummary'])
+
 class Add_FilterExpression(AddElementWizard):
     """Add ID or keyword in NCBI fetch protocol to the list"""
     _targets, _inputs, _outputs = [], {}, {}

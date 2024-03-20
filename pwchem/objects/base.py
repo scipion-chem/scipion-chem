@@ -706,6 +706,7 @@ class SequenceROI(data.EMObject):
         self._ROISequence = kwargs.get('seqROI', None)  #Sequence object
         self._roiIdx = Integer(kwargs.get('roiIdx', None))
         self._roiIdx2 = Integer(kwargs.get('roiIdx2', None))
+        self._type = String(kwargs.get('type', None))
 
     def __str__(self):
         s = '{} (Idx: {}-{}, ROI: {})'.format(self.getClassName(), self.getROIIdx(), self.getROIIdx2(),
@@ -730,6 +731,15 @@ class SequenceROI(data.EMObject):
     def getROIId(self):
         return self._ROISequence.getId()
 
+    def setROIId(self, roiId):
+        self._ROISequence.setId(roiId)
+
+    def getROIName(self):
+        return self._ROISequence.getSeqName()
+
+    def setROIName(self, roiName):
+        self._ROISequence.setSeqName(roiName)
+
     def getROISequence(self):
         return self._ROISequence.getSequence()
 
@@ -752,8 +762,21 @@ class SequenceROI(data.EMObject):
     def setROIIdx2(self, idx):
         self._roiIdx2.set(idx)
 
+    def setROIIdxs(self, idxs):
+        self.setROIIdx(idxs[0])
+        self.setROIIdx2(idxs[1])
+
+    def getROIIdxs(self):
+        return [self._roiIdx.get(), self._roiIdx2.get()]
+
     def getROILength(self):
         return len(self.getROISequence())
+
+    def setType(self, type):
+        self._type.set(type)
+
+    def getType(self):
+        return self._type.get()
 
 
 class SetOfSequenceROIs(data.EMSet):
@@ -794,6 +817,39 @@ class SetOfSequenceROIs(data.EMSet):
             tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
             tmpSeqObj.appendToFile(outPath, doClean=False)
 
+class MultiEpitope(SetOfSequenceROIs):
+    ITEM_TYPE = SequenceROI
+
+    def __init__(self, **kwargs):
+      super().__init__(**kwargs)
+      self._sequence = kwargs.get('sequence', None)
+
+    def __str__(self):
+      s = '{} ({} epitopes)'.format(self.getClassName(), self.countEpitopes())
+      return s
+
+    def countEpitopes(self):
+      return len(self.getEpitopes())
+
+    def getEpitopes(self):
+      eps = []
+      for item in self:
+        if hasattr(item, '_type') and getattr(item, '_type') == 'Epitope':
+            eps.append(item)
+      return eps
+
+    def getLinkers(self):
+      links = []
+      for item in self:
+        if hasattr(item, '_type') and getattr(item, '_type') == 'Linker':
+            links.append(item)
+      return links
+
+    def getMultiEpitopeSequence(self):
+      s = ''
+      for item in self:
+        s += item.getROISequence()
+      return s
 
 class StructROI(data.EMFile):
     """ Represent a structural region of interest"""

@@ -34,7 +34,7 @@ from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.objects.data import Sequence, Object, String, Integer, Float
+from pwem.objects.data import Sequence, Object, String, Integer, Float, Pointer
 
 # Plugin imports
 from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
@@ -706,6 +706,34 @@ def numberSort(strings, rev=False):
 
   return sorted(strings, key=keyFunct, reverse=rev)
 
+def unifyAttributes(itemList):
+  '''Unify the attributes of the objects in a list by setting the missing ones with None so all items
+  end up having all the attributes'''
+  attributes = getAllItemAttributes(itemList)
+  for item in itemList:
+    for attr in attributes:
+      if not hasattr(item, attr):
+        item.__setattr__(attr, attributes[attr])
+  return itemList
+
+def getAllItemAttributes(itemList):
+  attributes = {}
+  for item in itemList:
+    newAttrs = getItemAttributes(item)
+    attributes.update(newAttrs)
+  return attributes
+
+def getItemAttributes(item):
+  '''Return a dic with the attributes of an object and its values set to None in the specified type'''
+  attributes = {}
+  attrKeys = item.getObjDict().keys()
+  for attrK in attrKeys:
+    if attrK not in attributes and hasattr(item, attrK):
+      value = item.__getattribute__(attrK)
+      attributes[attrK] = value.clone()
+      attributes[attrK].set(None)
+  return attributes
+
 def fillEmptyAttributes(inputSets):
   '''Fill all items with empty attributes'''
   attributes = getAllAttributes(inputSets)
@@ -720,13 +748,10 @@ def getAllAttributes(inputSets):
   '''Return a dic with {attrName: ScipionObj=None}'''
   attributes = {}
   for inpSet in inputSets:
-    item = inpSet.get().getFirstItem()
-    attrKeys = item.getObjDict().keys()
-    for attrK in attrKeys:
-      if attrK not in attributes:
-        value = item.__getattribute__(attrK)
-        attributes[attrK] = value.clone()
-        attributes[attrK].set(None)
+    if isinstance(inpSet, Pointer):
+      inpSet = inpSet.get()
+    item = inpSet.getFirstItem()
+    attributes.update(getItemAttributes(item))
   return attributes
 
 def getBaseFileName(filename):

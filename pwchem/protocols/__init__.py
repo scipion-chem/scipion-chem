@@ -72,6 +72,9 @@ from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import Prot
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
 
+from pwchem.protocols.Sequences.protocol_define_multiepitope import ProtDefineMultiEpitope
+from pwchem.protocols.Sequences.protocol_modify_multiepitope import ProtModifyMultiEpitope
+
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
 from pwchem.protocols.Databases.protocol_fetch_ligands import ProtocolLigandsFetching

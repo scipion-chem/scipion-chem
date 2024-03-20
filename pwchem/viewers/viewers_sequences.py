@@ -36,7 +36,7 @@ from pwem.objects import SetOfSequences, Sequence
 from pwem.protocols import ProtSubSet
 
 from pwchem import Plugin as pwchem_plugin
-from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem
+from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem, MultiEpitope
 from pwchem.protocols import ProtExtractInteractingMols
 from pwchem.constants import *
 from pwchem.utils import getFilteredOutput
@@ -172,7 +172,8 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+    _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
+                SequenceVariants]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -205,7 +206,7 @@ class SequenceAliViewer(pwviewer.Viewer):
         elif isinstance(obj, SequenceVariants):
             seqFiles += [self.showDefView(obj, outDir)]
 
-        elif isinstance(obj, SetOfSequenceROIs):
+        elif isinstance(obj, SetOfSequenceROIs) or isinstance(obj, MultiEpitope):
             outPath = os.path.join(outDir, f'viewSequences_{obj.getSequenceObj().getId()}.fasta')
             obj.exportToFile(outPath)
 
@@ -218,7 +219,8 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
   """ Protocol viewer to visualize different type of sequence objects
   """
   _label = 'Sequence viewer'
-  _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+  _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
+              SequenceVariants, SetOfSequenceROIs, MultiEpitope]
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   def __init__(self, **kwargs):
