@@ -715,6 +715,11 @@ SelectInputSetWizard().addTarget(protocol=ProtDefineMultiEpitope,
                                  targets=['inSet'],
                                  inputs=['inputROIsSets'],
                                  outputs=['inSet'])
+SelectInputSetWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                 targets=['inSet'],
+                                 inputs=['conditionalROIs'],
+                                 outputs=['inSet'])
+
 
 class SelectMultiElementWizard(SelectElementWizard):
   """Lists the items in a SetOfX and choose one or several"""

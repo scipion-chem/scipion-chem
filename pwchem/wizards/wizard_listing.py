@@ -58,7 +58,10 @@ class AddElementWizard(VariableWizard):
             form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
 
 class AddNumberedElementWizard(AddElementWizard):
-    """Add the content of a parameter to another numbering (and labeling) the elements in the output"""
+    """Add the content of a parameter to another numbering (and labeling) the elements in the output
+    Input[0]: name of the function in the protocol that builds the summary line
+    Input[1]: optional, parameters to pass to this function
+    """
     _targets, _inputs, _outputs = [], {}, {}
 
     def getNewElementNumber(self, prevList):
@@ -68,12 +71,12 @@ class AddNumberedElementWizard(AddElementWizard):
         prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
         elemNumber = self.getNewElementNumber(prevList)
 
-        if hasattr(protocol, 'buildSumLine'):
-            sumLineType = inputParam[1] if len(inputParam) > 1 else ''
-            sumLine = protocol.buildSumLine(sumLineType)
-        else:
-            inParam = getattr(protocol, inputParam[0]).get()
-            sumLine = inParam.strip()
+        sumLine = ''
+        if hasattr(protocol, inputParam[0]):
+            buildLineFunc = getattr(protocol, inputParam[0])
+            sumLineParams = inputParam[1] if len(inputParam) > 1 else []
+            sumLine = buildLineFunc(*sumLineParams)
+
         if not sumLine:
             return ''
         return f'{elemNumber}) {sumLine}'
@@ -89,23 +92,32 @@ class AddNumberedElementWizard(AddElementWizard):
 
 AddNumberedElementWizard().addTarget(protocol=ProtDefineSeqROI,
                                       targets=['addROI'],
-                                      inputs=['resPosition'],
+                                      inputs=['buildSumLine'],
                                       outputs=['inROIs'])
 
 AddNumberedElementWizard().addTarget(protocol=ProtChemGenerateVariants,
                                  targets=['addVariant'],
-                                 inputs=['selectVariant'],
+                                 inputs=['buildSumLine'],
                                  outputs=['toMutateList'])
 
 AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
                                       targets=['addROI'],
-                                      inputs=['inROI', 'Epitope'],
+                                      inputs=['buildSumLine'],
                                       outputs=['multiSummary'])
 
 AddNumberedElementWizard().addTarget(protocol=ProtModifyMultiEpitope,
                                       targets=['addMod'],
-                                      inputs=['inROI'],
+                                      inputs=['buildSumLine'],
                                       outputs=['modSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                      targets=['addFilter'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['filtSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                      targets=['addCondFilter'],
+                                      inputs=['buildCondSumLine'],
+                                      outputs=['condSummary'])
 
 class Add_FilterExpression(AddElementWizard):
     """Add ID or keyword in NCBI fetch protocol to the list"""

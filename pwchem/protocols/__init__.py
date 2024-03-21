@@ -74,6 +74,7 @@ from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtC
 
 from pwchem.protocols.Sequences.protocol_define_multiepitope import ProtDefineMultiEpitope
 from pwchem.protocols.Sequences.protocol_modify_multiepitope import ProtModifyMultiEpitope
+from pwchem.protocols.Sequences.protocol_combineScores_sequence_roi import ProtCombineScoresSeqROI
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs

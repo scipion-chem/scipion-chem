@@ -46,6 +46,18 @@ import pwchem.protocols as chemprot
 
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
+    def getInputSet(self, form, inputParam):
+      inputObj = getattr(form.protocol, inputParam)
+      if isinstance(inputObj, pwobj.Pointer):
+        inputSet = inputObj.get()
+      elif isinstance(inputObj, pwobj.PointerList):
+        inputSet = inputObj[0].get()
+      elif callable(inputObj):
+        inputSet = inputObj()
+      else:
+        inputSet = inputObj
+      return inputSet
+
     def getInputAttributes(self, form, inputParam):
       attrNames = ['_objId']
       item = self.getFirstItem(form, inputParam[0])
@@ -65,6 +77,14 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                       targets=['corrAttribute'],
                                       inputs=['inputMoleculesSets'],
                                       outputs=['corrAttribute'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtCombineScoresSeqROI,
+                                      targets=['selectAttribute'],
+                                      inputs=['inputSequenceROIs'],
+                                      outputs=['selectAttribute'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtCombineScoresSeqROI,
+                                      targets=['condAttribute'],
+                                      inputs=['getCondSet'],
+                                      outputs=['condAttribute'])
 
 
 class SelectMultiAttributeWizardChem(SelectAttributeWizard):
