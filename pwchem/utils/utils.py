@@ -967,3 +967,6 @@ def formatInteractionsArray(intDic, seqNames, molNames):
       intAr[i, j] = intDic[seqName][molName]
   return intAr
   
+def normalizeToRange(iterable, normRange=[0, 1]):
+  maxIt, minIt = max(iterable), min(iterable)
+  return [((normRange[1] - normRange[0]) * (i - minIt)) / (maxIt - minIt) + normRange[0] for i in iterable]

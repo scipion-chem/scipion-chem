@@ -641,6 +641,12 @@ class SelectElementWizard(VariableWizard):
     dlg = self.displayDialog(form, inputParam)
     form.setVar(outputParam[0], dlg.values[0].get())
 
+
+SelectElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                 targets=['inROI'],
+                                 inputs=['inputROIs'],
+                                 outputs=['inROI'])
+
 class SelectElementMultiPointWizard(SelectElementWizard):
   """Lists the items in a SetOfX selected from a multipointer"""
   _targets, _inputs, _outputs = [], {}, {}
