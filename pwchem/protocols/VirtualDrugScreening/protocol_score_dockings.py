@@ -294,7 +294,7 @@ class ProtocolScoreDocking(EMProtocol):
 
     def parseResults(self, resFile):
         resDic = {}
-        resIdx = resFile.split('_')[1]
+        resIdx = resFile.split('/')[-1].split('_')[1]
         with open(resFile) as f:
             for line in f:
                 file = line.split()[0]
