@@ -34,6 +34,7 @@ from pyworkflow.protocol import params, Protocol
 
 from pwem.objects import SetOfSequences, Sequence
 from pwem.protocols import ProtSubSet
+from pwem.viewers.mdviewer.viewer import MDViewer
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem, MultiEpitope
@@ -254,7 +255,10 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
   def _viewTable(self, e=None):
     seqSet = self.protocol
 
-    setV = BioinformaticsDataViewer(project=self.getProject())
+    try:
+      setV = MDViewer(project=self.getProject())
+    except:
+      setV = BioinformaticsDataViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
 

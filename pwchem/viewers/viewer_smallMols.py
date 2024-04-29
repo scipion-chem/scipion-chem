@@ -29,7 +29,9 @@ import os
 from pyworkflow.protocol.params import EnumParam
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import showError, askYesNoCancel
+
 from pwem.viewers.viewer_chimera import Chimera, ChimeraView
+from pwem.viewers.mdviewer.viewer import MDViewer
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
@@ -413,7 +415,10 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     else:
       molSet = self.protocol
 
-    setV = BioinformaticsDataViewer(project=self.getProject())
+    try:
+      setV = MDViewer(project=self.getProject())
+    except:
+      setV = BioinformaticsDataViewer(project=self.getProject())
     views = setV._visualize(molSet)
     return views
 
