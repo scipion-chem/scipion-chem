@@ -1451,13 +1451,6 @@ class SetOfStructROIs(data.EMSet):
                 pdbLine = writePDBLine(replacements)
                 outStr += pdbLine
 
-        elif pocket.getPocketClass() == 'P2Rank' or pocket.getPocketClass() == 'Standard':
-            for line in rawStr.split('\n'):
-                line = splitPDBLine(line)
-                line[5] = numId
-                pdbLine = writePDBLine(line)
-                outStr += pdbLine
-
         elif pocket.getPocketClass() == 'FPocket':
             for line in rawStr.split('\n'):
                 sline = line.split()
@@ -1475,6 +1468,13 @@ class SetOfStructROIs(data.EMSet):
                 line = line.split()
                 replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
                 pdbLine = writePDBLine(replacements)
+                outStr += pdbLine
+
+        else: # (P2Rank, ElliPro, Standard...)
+            for line in rawStr.split('\n'):
+                line = splitPDBLine(line)
+                line[5] = numId
+                pdbLine = writePDBLine(line)
                 outStr += pdbLine
 
         return outStr
