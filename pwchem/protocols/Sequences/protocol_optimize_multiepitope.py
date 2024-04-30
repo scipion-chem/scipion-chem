@@ -404,17 +404,15 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       toolbox.register("indices", buildMultiEpitopeZeros, epScores, self.pZero.get(),
                        self.maxEp.get(), self.minEp.get())
       toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.indices)
-      # todo: check why some inds given nan score
       toolbox.register("evaluate", self.multiEpitopeEval)
 
       toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
       toolbox = self.registerMate(toolbox)
-      # todo: check why decorators breaking individual production
       # todo: ensure min size in multiepitopes
-      # toolbox.decorate("mate", ensureDifferentIds(indOptions))
+      toolbox.decorate("mate", ensureDifferentIds(indOptions))
       toolbox.register("mutate", mutDifferentIdx, low=1, high=indOptions, indpb=self.mutIndProb.get())
-      # toolbox.decorate("mutate", ensureDifferentIds(indOptions))
+      toolbox.decorate("mutate", ensureDifferentIds(indOptions))
       toolbox = self.registerSelection(toolbox)
       return toolbox
 
@@ -481,7 +479,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       fitnesses = numpy.zeros(len(individuals))
       for (evalKey, softName), res in resultsDic.items():
         scores = numpy.array(list(map(float, res)))
-        scores = numpy.array(normalizeToRange(scores))
         fitnesses += scores * weigths[evalKey]
 
       return [(f,) for f in fitnesses]
