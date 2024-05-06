@@ -46,9 +46,31 @@ import pwchem.protocols as chemprot
 
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
+
+    def getInputPointer(self, multiPointer, pointerStr):
+      for i, pointer in enumerate(multiPointer):
+        if str(i).strip() == pointerStr.split('//')[0]:
+          break
+      return pointer
+
+    def getInputSet(self, form, inputParam, inputStr=None):
+      inputPointer = getattr(form.protocol, inputParam)
+      if issubclass(inputPointer.__class__, pwobj.PointerList):
+        inputPointer = inputPointer[0] if not inputStr else self.getInputPointer(inputPointer, inputStr)
+      return inputPointer.get()
+
+    def getFirstItem(self, form, inputParam, inputStr=None):
+        inputSet = self.getInputSet(form, inputParam, inputStr)
+        if issubclass(inputSet.__class__, pwobj.Set):
+            item = inputSet.getFirstItem()
+        elif issubclass(inputSet.__class__, pwobj.Object):
+            item = inputSet
+        return item
+
     def getInputAttributes(self, form, inputParam):
       attrNames = ['_objId']
-      item = self.getFirstItem(form, inputParam[0])
+      inputStr = getattr(form.protocol, inputParam[1]).get() if len(inputParam) > 1 else None
+      item = self.getFirstItem(form, inputParam[0], inputStr)
       for key, attr in item.getAttributesToStore():
         attrNames.append(key)
       return attrNames
@@ -65,6 +87,10 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                       targets=['corrAttribute'],
                                       inputs=['inputMoleculesSets'],
                                       outputs=['corrAttribute'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
+                                      targets=['defineScore'],
+                                      inputs=['inputMoleculesSets', 'defineInput'],
+                                      outputs=['defineScore'])
 
 
 class SelectMultiAttributeWizardChem(SelectAttributeWizard):
