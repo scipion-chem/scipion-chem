@@ -125,7 +125,7 @@ class ProtocolRankDocking(EMProtocol):
                 else:
                     self.voteDic[molName] = score * inpDic['Weight']
 
-        with open(self._getPath('results.tsv'), 'w') as f:
+        with open(self.getResultsFile(), 'w') as f:
             for molName, score in self.voteDic.items():
                 f.write(f'{molName}\t{score}\n')
 
@@ -133,7 +133,7 @@ class ProtocolRankDocking(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
-        if os.path.exists(self._getPath('results.tsv')):
+        if os.path.exists(self.getResultsFile()):
             resDic = self.parseResults()
             scDic = dict(sorted(resDic.items(), key=lambda x: x[1], reverse=True))
             summary += ['Mol Name\tRanking score']
@@ -155,7 +155,7 @@ class ProtocolRankDocking(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def parseResults(self):
       resDic = {}
-      resFile = self._getPath('results.tsv')
+      resFile = self.getResultsFile()
       with open(resFile) as f:
           for line in f:
               resDic[line.split()[0]] = float(line.split()[1])
@@ -180,6 +180,9 @@ class ProtocolRankDocking(EMProtocol):
         sumStr = f'{{"InputIndex": {inputIndex}, ' \
                  f'"Score": "{self.defineScore.get()}", "Weight": {self.defineWeight.get()}}}\n'
         return sumStr
+
+    def getResultsFile(self):
+      return self._getPath('results.tsv')
 
 
 
