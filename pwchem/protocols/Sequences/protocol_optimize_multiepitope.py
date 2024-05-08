@@ -35,7 +35,7 @@ from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import normalizeToRange
+from pwchem.utils import runInParallel
 from pwchem.utils.utilsDEAP import *
 
 from deap import base, creator, tools, algorithms
@@ -500,7 +500,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       for source, sDics in evalDics.items():
         nt = disJobs[source]
         if source == IEDB:
-          epiDic = self.performCoverageAnalysis(sDics)
+          epiDic = self.performCoverageAnalysis(individuals, sDics, nt)
 
         elif source == IIITD:
           from iiitd import Plugin as iiitdPlugin
@@ -516,23 +516,25 @@ class ProtOptimizeMultiEpitope(EMProtocol):
         resultsDic.update(epiDic)
       return resultsDic
 
-    def performCoverageAnalysis(self, sDics):
+    def performCoverageAnalysis(self, individuals, sDics, nt):
       from iedb import Plugin as iedbPlugin
       from iedb.utils import translateArea, buildMHCCoverageArgs, parseCoverageResults
 
       resDic = {}
-      # todo: analysis on sequences, not inputROIs
+      # todo: make functional
       inROIs = self.inputROIs.get()
       for (evalKey, soft), argDic in sDics.items():
         epFile = self._getExtraPath(f'inputEpitopes_{evalKey}.tsv')
-        oFile = os.path.abspath(self._getExtraPath(f'coverage_results_{evalKey}.tsv'))
+        oDir = os.path.abspath(self._getExtraPath())
 
         selPops = [p.strip() for p in argDic['pop'].split(',')]
         selPops = translateArea(selPops)
 
-        coveArgs = buildMHCCoverageArgs(inROIs, epFile, selPops, argDic['mhc'], oFile)
-        iedbPlugin.runPopulationCoverage(self, coveArgs)
+        coveArgs = buildMHCCoverageArgs(inROIs, epFile, selPops, argDic['mhc'], oDir, separated=False)
+        runInParallel(iedbPlugin.runPopulationCoverage, None,
+                      paramList=[coveArg for coveArg in coveArgs], jobs=nt)
 
+        oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_All_results.tsv')
         coveDic = parseCoverageResults(oFile)['average']
         resDic[(evalKey, soft)] = {'Score': coveDic['coverage'], 'outFile': oFile}
       return resDic
