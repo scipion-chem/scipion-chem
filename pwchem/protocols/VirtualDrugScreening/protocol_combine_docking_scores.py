@@ -59,7 +59,7 @@ class ProtocolRankDocking(EMProtocol):
         group.addParam('inputMoleculesSets', params.MultiPointerParam, pointerClass='SetOfSmallMolecules',
                         label="Input Docked Small Molecules: ",
                         help='Select the docked molecules to be ranked')
-        group.addParam('useScore', params.BooleanParam, label="Define scores: ", default=False,
+        group.addParam('useScore', params.BooleanParam, label="Weight rank by item score: ", default=False,
                        expertLevel=params.LEVEL_ADVANCED,
                        help='Use the selected score to weight the contribution of each vote.'
                             'The scores are normalized prior to be used as weight')
@@ -69,8 +69,8 @@ class ProtocolRankDocking(EMProtocol):
                        help='Define the scores used from each set and its weight.\n'
                             'If true, the inputs and scores in the summary list will be used. '
                             'Inputs not present in the list will be treated as default.\n'
-                            'By default, the inputs in the multipointer param, _energy attribute '
-                            'and weight 1 will be used.')
+                            'By default, the inputs in the multipointer param, _energy attribute, '
+                            ' weight 1 and small values are better will be used.')
         group.addParam('defineInput', params.StringParam, label="Select input: ", default='', condition='defineScores',
                        help='Select an input to define its score')
         group.addParam('defineScore', params.StringParam, label="Select score: ", default='', condition='defineScores',
@@ -78,6 +78,9 @@ class ProtocolRankDocking(EMProtocol):
         group.addParam('defineWeight', params.FloatParam, label="Select weight: ",
                        default=1.0, condition='defineScores',
                        help='Select a weight for the input with respect to the others defined')
+        group.addParam('defineDirection', params.BooleanParam, label="Small is good?: ",
+                       default=True, condition='defineScores',
+                       help='Define the direction of the score, whether small values are prefered')
 
         group.addParam('defineSummary', params.TextParam, width=70, label="Scores summary: ",
                        default='', condition='defineScores',
@@ -118,7 +121,7 @@ class ProtocolRankDocking(EMProtocol):
         for inpIdx, inpDic in inpSum.items():
             molSet = self.inputMoleculesSets[inpIdx].get()
 
-            curVote = self.rankVoting(molSet, inpDic['Score'])
+            curVote = self.rankVoting(molSet, inpDic['Score'], inpDic['Small'])
             for molName, score in curVote.items():
                 if molName in self.voteDic:
                     self.voteDic[molName] += score * inpDic['Weight']
@@ -167,18 +170,20 @@ class ProtocolRankDocking(EMProtocol):
         for scoreLine in self.defineSummary.get().split('\n'):
           if scoreLine.strip():
             lDic = json.loads(scoreLine)
-            inDic[lDic['InputIndex']] = {'Score': lDic['Score'], 'Weight': lDic['Weight']}
+            inDic[lDic['InputIndex']] = {'Score': lDic['Score'], 'Weight': lDic['Weight'],
+                                         'Small': bool(lDic['Small'])}
 
       for i, inPointer in enumerate(self.inputMoleculesSets):
         if i not in inDic:
-          inDic[i] = {'Score': '_energy', 'Weight': 1.0}
+          inDic[i] = {'Score': '_energy', 'Weight': 1.0, 'Small': True}
       return inDic
 
 
     def createElementLine(self):
         inputIndex = self.defineInput.get().split('//')[0]
         sumStr = f'{{"InputIndex": {inputIndex}, ' \
-                 f'"Score": "{self.defineScore.get()}", "Weight": {self.defineWeight.get()}}}\n'
+                 f'"Score": "{self.defineScore.get()}", "Weight": {self.defineWeight.get()}, ' \
+                 f'"Small": "{self.defineDirection.get()}"}}\n'
         return sumStr
 
     def getResultsFile(self):
