@@ -190,56 +190,6 @@ class ProtDefineStructROIs(EMProtocol):
         self._insertFunctionStep('definePocketsStep')
         self._insertFunctionStep('defineOutputStep')
 
-    def getPrevPointersIds(self, prevPointers):
-      ids = []
-      for p in prevPointers:
-        ids.append(p.get().getObjId())
-      return ids
-
-    def getNewPointers(self):
-      # todo: check pointers working properly
-      prevPointers = self.inputPointers
-      prevIds = self.getPrevPointersIds(prevPointers)
-      newObj = self.inSmallMols.get()
-      newId = newObj.getObjId()
-      if not newId in prevIds:
-        newIndex = len(prevPointers)
-        prevPointers.append(Pointer(newObj))
-      else:
-        newIndex = prevIds.index(newId)
-      return newIndex, prevPointers
-
-    def getDefinedROILine(self):
-      if self.origin.get() == COORDS:
-        roiDef = f'Coordinate: {{"X": {self.coordX.get()}, "Y": {self.coordY.get()}, "Z": {self.coordZ.get()}}}\n'
-
-      elif self.origin.get() == RESIDUES:
-        chainDic, resDic = json.loads(self.chain_name.get()), json.loads(self.resPosition.get())
-        roiDef = f'Residues: {{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
-                 f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
-
-      elif self.origin.get() == LIGANDS:
-        if not self.extLig.get():
-          roiDef = f'Ligand: {{"molName": "{self.molName.get()}", "remove": "{self.remMol.get()}"}}\n'
-        else:
-          newIndex, _ = self.getNewPointers()
-          roiDef = f'Ext-Ligand: {{"pointerIdx": "{newIndex}", "ligName": "{self.ligName.get()}"}}\n'
-
-      elif self.origin.get() == PPI:
-        chain1Dic, chain2Dic = json.loads(self.chain_name.get()), json.loads(self.chain_name2.get())
-        iDist = self.ppiDistance.get()
-
-        c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
-                 '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
-
-        roiDef = f'PPI: {{"chain1": "{c1}", "chain2": "{c2}", "interDist": "{iDist}"}}\n'
-
-      elif self.origin.get() == NRES:
-        resTypes, resDist = self.resNRes.get(), self.resDistance.get()
-        resLink = self.getEnumText("linkNRes")
-        roiDef = f'Near_Residues: {{"residues": "{resTypes}", "distance": "{resDist}", "linkage": "{resLink}"}}\n'
-      return roiDef
-
     def getSurfaceStep(self):
         parser = PDBParser()
         pdbFile = self.getProteinFileName()
@@ -266,6 +216,7 @@ class ProtDefineStructROIs(EMProtocol):
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
         pdbFile = self.getProteinFileName()
+        pdbFile = self.checkLigands(pdbFile)
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
@@ -311,6 +262,17 @@ class ProtDefineStructROIs(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
+    def checkLigands(self, pdbFile):
+      ligToRem = []
+      for roiStr in self.inROIs.get().split('\n'):
+        if roiStr.strip():
+          jSonStr = ':'.join(roiStr.split(':')[1:]).strip()
+          jDic = json.loads(jSonStr)
+          roiKey = roiStr.split()[1].strip()
+          if roiKey == 'Ligand:':
+            ligToRem.append(jDic['molName'])
+      pdbFile = cleanPDB(pdbFile, pdbFile, het2rem=ligToRem)
+      return pdbFile
 
     def getProteinFileName(self, inProtocol=True):
         inpStruct = self.inputAtomStruct.get()
@@ -345,6 +307,55 @@ class ProtDefineStructROIs(EMProtocol):
 
     def getProteinName(self):
       return os.path.splitext(os.path.basename(self.getProteinFileName()))[0]
+
+    def getPrevPointersIds(self, prevPointers):
+      ids = []
+      for p in prevPointers:
+        ids.append(p.get().getObjId())
+      return ids
+
+    def getNewPointers(self):
+      prevPointers = self.inputPointers
+      prevIds = self.getPrevPointersIds(prevPointers)
+      newObj = self.inSmallMols.get()
+      newId = newObj.getObjId()
+      if not newId in prevIds:
+        newIndex = len(prevPointers)
+        prevPointers.append(Pointer(newObj))
+      else:
+        newIndex = prevIds.index(newId)
+      return newIndex, prevPointers
+
+    def getDefinedROILine(self):
+      if self.origin.get() == COORDS:
+        roiDef = f'Coordinate: {{"X": {self.coordX.get()}, "Y": {self.coordY.get()}, "Z": {self.coordZ.get()}}}\n'
+
+      elif self.origin.get() == RESIDUES:
+        chainDic, resDic = json.loads(self.chain_name.get()), json.loads(self.resPosition.get())
+        roiDef = f'Residues: {{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
+                 f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
+
+      elif self.origin.get() == LIGANDS:
+        if not self.extLig.get():
+          roiDef = f'Ligand: {{"molName": "{self.molName.get()}", "remove": "{self.remMol.get()}"}}\n'
+        else:
+          newIndex, _ = self.getNewPointers()
+          roiDef = f'Ext-Ligand: {{"pointerIdx": "{newIndex}", "ligName": "{self.ligName.get()}"}}\n'
+
+      elif self.origin.get() == PPI:
+        chain1Dic, chain2Dic = json.loads(self.chain_name.get()), json.loads(self.chain_name2.get())
+        iDist = self.ppiDistance.get()
+
+        c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
+                 '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
+
+        roiDef = f'PPI: {{"chain1": "{c1}", "chain2": "{c2}", "interDist": "{iDist}"}}\n'
+
+      elif self.origin.get() == NRES:
+        resTypes, resDist = self.resNRes.get(), self.resDistance.get()
+        resLink = self.getEnumText("linkNRes")
+        roiDef = f'Near_Residues: {{"residues": "{resTypes}", "distance": "{resDist}", "linkage": "{resLink}"}}\n'
+      return roiDef
 
     def getOriginCoords(self, roiStr):
         oCoords = []
