@@ -319,7 +319,7 @@ class ProtDefineStructROIs(EMProtocol):
       prevIds = self.getPrevPointersIds(prevPointers)
       newObj = self.inSmallMols.get()
       newId = newObj.getObjId()
-      if not newId in prevIds:
+      if newId not in prevIds:
         newIndex = len(prevPointers)
         prevPointers.append(Pointer(newObj))
       else:

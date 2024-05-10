@@ -516,9 +516,8 @@ class CleanStructureSelect(Select):
     if self.remWATER and residue.id[0] == 'W':
       accept = False
     elif isHet(residue):
-      if self.remHETATM and residue.resname not in self.het2keep:
-        accept = False
-      elif not self.remHETATM and residue.resname in self.het2rem:
+      if (self.remHETATM and residue.resname not in self.het2keep) or \
+              (not self.remHETATM and residue.resname in self.het2rem):
         accept = False
     return accept
 
