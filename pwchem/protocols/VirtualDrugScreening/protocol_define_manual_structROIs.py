@@ -37,10 +37,10 @@ from Bio.PDB.ResidueDepth import get_surface
 from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
-from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb
+from pwem.objects import Pointer
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
@@ -71,7 +71,7 @@ class ProtDefineStructROIs(EMProtocol):
                       label='Extract ROIs from: ', choices=self.typeChoices,
                       help='The ROIs will be defined from a set of elements of this type')
 
-        line = group.addLine('coordsROI', condition='origin=={}'.format(COORDS),
+        line = group.addLine('Coordinates: ', condition='origin=={}'.format(COORDS),
                              help='Coordinates of the defiend ROI')
         line.addParam('coordX', params.IntParam, default=10, label='X: ')
         line.addParam('coordY', params.IntParam, default=10, label='Y: ')
@@ -102,6 +102,9 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('molName', params.StringParam,
                        condition='origin=={} and not extLig'.format(LIGANDS),
                        label='Molecule name: ', help='Name of the HETATM molecule in the AtomStruct')
+        group.addParam('remMol', params.BooleanParam, default=False, label='Remove molecule from structure: ',
+                       condition='origin=={} and not extLig'.format(LIGANDS),
+                        help='Whether to remove the molecule from the output structure in which the ROIs are defined')
 
         group.addParam('chain_name2', params.StringParam,
                        allowsNull=False, label='Chain of interest 2: ', condition='origin=={}'.format(PPI),
@@ -126,6 +129,9 @@ class ProtDefineStructROIs(EMProtocol):
                             'Single linkage will group residues where each of them is closer than the threshold to at '
                             'least one other residue.\nComplete linkage will require all residue pairs to be closer '
                             'than the threshold, which will lead to more "globular" regions')
+
+        group.addParam('addROI', params.LabelParam, label='Add defined ROI: ',
+                       help='Use this wizard to store the defined ROI in the list')
 
         group.addParam('addCoordinate', params.LabelParam, label='Add defined coordinate: ',
                        condition='origin=={}'.format(COORDS),
@@ -189,7 +195,7 @@ class ProtDefineStructROIs(EMProtocol):
         pdbFile = self.getProteinFileName()
         if self.origin.get() == LIGANDS and not self.extLig:
             pdbFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
-                                waters=True, HETATM=True)
+                                waters=True, hetatm=True)
 
         structure = parser.get_structure(self.getProteinName(), pdbFile)
         self.structModel = structure[0]
@@ -210,6 +216,7 @@ class ProtDefineStructROIs(EMProtocol):
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
         pdbFile = self.getProteinFileName()
+        pdbFile = self.checkLigands(pdbFile)
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
@@ -255,6 +262,17 @@ class ProtDefineStructROIs(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
+    def checkLigands(self, pdbFile):
+      ligToRem = []
+      for roiStr in self.inROIs.get().split('\n'):
+        if roiStr.strip():
+          jSonStr = ':'.join(roiStr.split(':')[1:]).strip()
+          jDic = json.loads(jSonStr)
+          roiKey = roiStr.split()[1].strip()
+          if roiKey == 'Ligand:':
+            ligToRem.append(jDic['molName'])
+      pdbFile = cleanPDB(pdbFile, pdbFile, het2rem=ligToRem)
+      return pdbFile
 
     def getProteinFileName(self, inProtocol=True):
         inpStruct = self.inputAtomStruct.get()
@@ -289,6 +307,55 @@ class ProtDefineStructROIs(EMProtocol):
 
     def getProteinName(self):
       return os.path.splitext(os.path.basename(self.getProteinFileName()))[0]
+
+    def getPrevPointersIds(self, prevPointers):
+      ids = []
+      for p in prevPointers:
+        ids.append(p.get().getObjId())
+      return ids
+
+    def getNewPointers(self):
+      prevPointers = self.inputPointers
+      prevIds = self.getPrevPointersIds(prevPointers)
+      newObj = self.inSmallMols.get()
+      newId = newObj.getObjId()
+      if newId not in prevIds:
+        newIndex = len(prevPointers)
+        prevPointers.append(Pointer(newObj))
+      else:
+        newIndex = prevIds.index(newId)
+      return newIndex, prevPointers
+
+    def getDefinedROILine(self):
+      if self.origin.get() == COORDS:
+        roiDef = f'Coordinate: {{"X": {self.coordX.get()}, "Y": {self.coordY.get()}, "Z": {self.coordZ.get()}}}\n'
+
+      elif self.origin.get() == RESIDUES:
+        chainDic, resDic = json.loads(self.chain_name.get()), json.loads(self.resPosition.get())
+        roiDef = f'Residues: {{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
+                 f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
+
+      elif self.origin.get() == LIGANDS:
+        if not self.extLig.get():
+          roiDef = f'Ligand: {{"molName": "{self.molName.get()}", "remove": "{self.remMol.get()}"}}\n'
+        else:
+          newIndex, _ = self.getNewPointers()
+          roiDef = f'Ext-Ligand: {{"pointerIdx": "{newIndex}", "ligName": "{self.ligName.get()}"}}\n'
+
+      elif self.origin.get() == PPI:
+        chain1Dic, chain2Dic = json.loads(self.chain_name.get()), json.loads(self.chain_name2.get())
+        iDist = self.ppiDistance.get()
+
+        c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
+                 '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
+
+        roiDef = f'PPI: {{"chain1": "{c1}", "chain2": "{c2}", "interDist": "{iDist}"}}\n'
+
+      elif self.origin.get() == NRES:
+        resTypes, resDist = self.resNRes.get(), self.resDistance.get()
+        resLink = self.getEnumText("linkNRes")
+        roiDef = f'Near_Residues: {{"residues": "{resTypes}", "distance": "{resDist}", "linkage": "{resLink}"}}\n'
+      return roiDef
 
     def getOriginCoords(self, roiStr):
         oCoords = []

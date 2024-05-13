@@ -101,11 +101,13 @@ class ProtOperateSeqROI(EMProtocol):
 
     def defineOutputStep(self):
         inSets = self.getInputListOfSets()
-
+        print(1, inSets)
         if self.operateIntraSet.get():
             inSets = self.getIntraOperatedROIs(inSets)
+        print(2, inSets)
         if self.operateInterSet.get():
             inSets = self.getInterOperatedROIs(inSets)
+        print(3, inSets)
 
         if len(inSets) > 0:
             outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
@@ -179,7 +181,7 @@ class ProtOperateSeqROI(EMProtocol):
 
             finalSet += newSet
 
-            newSets += finalSet
+            newSets.append(finalSet)
         return newSets
 
     def getInterOperatedROIs(self, inSets):
