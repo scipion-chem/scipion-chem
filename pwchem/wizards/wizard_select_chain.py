@@ -199,153 +199,23 @@ class AddROIWizard(VariableWizard):
     lenPrev = len(prevList.split('\n'))
     return prevList, lenPrev
 
-class AddCoordinatesWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
   def show(self, form, *params):
     inputParams, outputParam = self.getInputOutput(form)
     protocol = form.protocol
 
     prevList, lenPrev = self.getPrevList(protocol, outputParam)
+    roiDef = protocol.getDefinedROILine()
+    if protocol.origin.get() == 2 and protocol.extLig.get():
+      _, newPointers = protocol.getNewPointers()
+      form.setVar(outputParam[1], newPointers)
 
-    coords = []
-    for i in range(3):
-        coords.append(getattr(protocol, inputParams[i]).get())
+    form.setVar(outputParam[0], f'{prevList}{lenPrev}) {roiDef}')
 
-    roiDef = '%s) Coordinate: {"X": %s, "Y": %s, "Z": %s}\n' % \
-             (lenPrev, coords[0], coords[1], coords[2])
+AddROIWizard().addTarget(protocol=ProtDefineStructROIs,
+                         targets=['addROI'],
+                         inputs=[],
+                         outputs=['inROIs', 'inputPointers'])
 
-    form.setVar(outputParam[0], prevList + roiDef)
-
-AddCoordinatesWizard().addTarget(protocol=ProtDefineStructROIs,
-                                 targets=['addCoordinate'],
-                                 inputs=['coordX', 'coordY', 'coordZ'],
-                                 outputs=['inROIs'])
-
-class AddResidueWizard(AddROIWizard):
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def show(self, form, *params):
-        inputParams, outputParam = self.getInputOutput(form)
-        protocol = form.protocol
-        chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
-                           json.loads(getattr(protocol, inputParams[1]).get())
-
-        prevList, lenPrev = self.getPrevList(protocol, outputParam)
-
-        roiDef = '%s) Residues: {"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' % \
-                 (lenPrev, chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
-
-        form.setVar(outputParam[0], prevList + roiDef)
-
-class SetResidueWizard(AddResidueWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-    chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
-                       json.loads(getattr(protocol, inputParams[1]).get())
-
-    resDef = '{"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}' % \
-             (chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
-    form.setVar(outputParam[0], resDef)
-
-AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
-                             targets=['addResidue'],
-                             inputs=['chain_name', 'resPosition'],
-                             outputs=['inROIs'])
-
-class AddLigandWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-  
-  def getPrevPointersIds(self, prevPointers):
-      ids = []
-      for p in prevPointers:
-          ids.append(p.get().getObjId())
-      return ids
-  
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-    prevList, lenPrev = self.getPrevList(protocol, outputParam)
-    
-    if not getattr(protocol, inputParams[0]):
-        roiDef = '%s) Ligand: {"molName": "%s"}\n' % \
-                 (lenPrev, getattr(protocol, inputParams[3]).get())
-    else:
-        prevPointers = getattr(protocol, outputParam[1])
-        prevIds = self.getPrevPointersIds(prevPointers)
-        newObj = getattr(protocol, inputParams[1]).get()
-        newId = newObj.getObjId()
-
-        if not newId in prevIds:
-            newIndex = len(prevPointers)
-            prevPointers.append(Pointer(newObj))
-        else:
-            newIndex = prevIds.index(newId)
-
-        roiDef = '%s) Ext-Ligand: {"pointerIdx": "%s", "ligName": "%s"}\n' % \
-                 (lenPrev, newIndex, getattr(protocol, inputParams[2]).get())
-        form.setVar(outputParam[1], prevPointers)
-
-    form.setVar(outputParam[0], prevList + roiDef)
-
-
-
-AddLigandWizard().addTarget(protocol=ProtDefineStructROIs,
-                            targets=['addLigand'],
-                            inputs=['extLig', 'inSmallMols', 'ligName', 'molName'],
-                            outputs=['inROIs', 'inputPointers'])
-
-class AddPPIsWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-
-    prevList, lenPrev = self.getPrevList(protocol, outputParam)
-
-    chain1Dic, chain2Dic = json.loads(getattr(protocol, inputParams[0]).get()), \
-                           json.loads(getattr(protocol, inputParams[1]).get())
-    iDist = getattr(protocol, inputParams[2]).get()
-
-    c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
-             '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
-
-    roiDef = '%s) PPI: {"chain1": "%s", "chain2": "%s", "interDist": "%s"}\n' % \
-             (lenPrev, c1, c2, iDist)
-
-    form.setVar(outputParam[0], prevList + roiDef)
-
-AddPPIsWizard().addTarget(protocol=ProtDefineStructROIs,
-                          targets=['addPPI'],
-                          inputs=['chain_name', 'chain_name2', 'ppiDistance'],
-                          outputs=['inROIs'])
-
-class AddNResidueWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-    resTypes, resDist = getattr(protocol, inputParams[0]).get(), \
-                        getattr(protocol, inputParams[1]).get()
-    resLink = protocol.getEnumText(inputParams[2])
-
-    prevList, lenPrev = self.getPrevList(protocol, outputParam)
-
-    roiDef = '%s) Near_Residues: {"residues": "%s", "distance": "%s", "linkage": "%s"}\n' % \
-             (lenPrev, resTypes, resDist, resLink)
-
-    form.setVar(outputParam[0], prevList + roiDef)
-
-
-AddNResidueWizard().addTarget(protocol=ProtDefineStructROIs,
-                              targets=['addNRes'],
-                              inputs=['resNRes', 'resDistance', 'linkNRes'],
-                              outputs=['inROIs'])
 
 
 ######################## Variable wizards ####################
