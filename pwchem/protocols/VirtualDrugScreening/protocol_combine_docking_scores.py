@@ -39,6 +39,10 @@ import os, json
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
+from pwem.objects import Float
+
+from pwchem.objects import SetOfSmallMolecules
+
 
 def normalizeToRange(iterable, normRange=[0, 1]):
   maxIt, minIt = max(iterable), min(iterable)
@@ -115,11 +119,22 @@ class ProtocolRankDocking(EMProtocol):
             vote[molName] = score / nDocks
         return vote
 
+    def getBestMols(self, molSet, attr='_energy', smallIsGood=True, bestDic={}):
+      for mol in molSet:
+        energy = getattr(mol, attr)
+        molName = mol.getMolName()
+        if not molName in bestDic or \
+                (smallIsGood and energy < getattr(bestDic[molName], attr)) or\
+                (not smallIsGood and energy > getattr(bestDic[molName], attr)):
+          bestDic[molName] = mol.clone()
+      return bestDic
+
     def createOutputStep(self):
-        self.voteDic = {}
+        self.voteDic, bestMols = {}, {}
         inpSum = self.getInputSummary()
         for inpIdx, inpDic in inpSum.items():
             molSet = self.inputMoleculesSets[inpIdx].get()
+            bestMols = self.getBestMols(molSet, bestDic=bestMols)
 
             curVote = self.rankVoting(molSet, inpDic['Score'], inpDic['Small'])
             for molName, score in curVote.items():
@@ -132,6 +147,12 @@ class ProtocolRankDocking(EMProtocol):
             for molName, score in self.voteDic.items():
                 f.write(f'{molName}\t{score}\n')
 
+        outMols = SetOfSmallMolecules(filename=self._getPath('outputSmallMolecules.sqlite'))
+        for molName, mol in bestMols.items():
+          setattr(mol, 'rankScore', Float(self.voteDic[molName]))
+          outMols.append(mol)
+
+        self._defineOutputs(outputSmallMolecules=outMols)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
