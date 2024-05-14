@@ -10,6 +10,7 @@
 				"module": "autodock",
 				"tests": [
 					"tests_docking.TestScoreDocking",
+					"tests_docking.TestRankDockingScore",
 					"tests_docking.TestConsensusDocking"
 				]
 			}
