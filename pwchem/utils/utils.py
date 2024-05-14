@@ -524,7 +524,7 @@ class CleanStructureSelect(Select):
 def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseFileName(structFile)
-  if structFile.endswith('.pdb') or structFile.endswith('.ent'):
+  if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
     struct = PDBParser().get_structure(structName, structFile)
   elif structFile.endswith('.cif'):
     struct = MMCIFParser().get_structure(structName, structFile)
