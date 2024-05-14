@@ -398,6 +398,7 @@ class TestRankDockingScore(TestScoreDocking):
 		if len(inputDockProts) >= 2:
 			pRank = self._runCombineScores(inputDockProts)
 			assertHandle(os.path.exists, pRank.getResultsFile(), cwd=pRank.getWorkingDir(), message='No results found')
+			assertHandle(self.assertIsNotNone, getattr(pRank, 'outputSmallMolecules', None))
 		else:
 			print('No docking plugins found installed. Try installing AutoDock')
 
