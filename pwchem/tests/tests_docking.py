@@ -379,7 +379,7 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 		else:
 			print('No docking plugins found installed. Try installing AutoDock')
 
-class TestCombineDockingScores(TestScoreDocking):
+class TestRankDockingScore(TestScoreDocking):
 	def _runCombineScores(self, inputDockProts):
 		protRankScores = self.newProtocol(ProtocolRankDocking)
 

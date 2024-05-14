@@ -50,10 +50,10 @@ def normalizeToRange(iterable, normRange=[0, 1]):
 
 class ProtocolRankDocking(EMProtocol):
     """
-    Executes the ranking scoring to combine different origin docked molecules scores.
+    Executes the rank scoring to combine different origin docked molecules scores.
     The rank score will be defined by the ranking from the different docking scores for each set.
     """
-    _label = 'Ranking docking score'
+    _label = 'Rank docking score'
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
