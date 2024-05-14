@@ -271,7 +271,8 @@ class ProtDefineStructROIs(EMProtocol):
           roiKey = roiStr.split()[1].strip()
           if roiKey == 'Ligand:':
             ligToRem.append(jDic['molName'])
-      pdbFile = cleanPDB(pdbFile, pdbFile, het2rem=ligToRem)
+      if ligToRem:
+        pdbFile = cleanPDB(pdbFile, pdbFile, het2rem=ligToRem)
       return pdbFile
 
     def getProteinFileName(self, inProtocol=True):

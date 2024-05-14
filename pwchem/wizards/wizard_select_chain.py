@@ -549,6 +549,38 @@ SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  inputs=['inputSequences'],
                                  outputs=['chooseMol'])
 
+class SelectSetMultiPointerWizard(SelectElementWizard):
+  """Lists the items in a multipointer of SetOfX and choose one"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      scipionSet = getattr(protocol, inputParam[0])
+      listOfElements = self.getListOfElements(protocol, scipionSet)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "MultiPointer sets", provider,
+                            "Select one of the sets in the multipointer")
+    return dlg
+
+  def getListOfElements(self, protocol, scipionMultiPointer):
+    eleList = []
+    if scipionMultiPointer is not None:
+      for i, element in enumerate(scipionMultiPointer):
+        eleList.append(f'{i}//{element.get().__str__()}')
+    return eleList
+
+SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRankDocking,
+                                        targets=['defineInput'],
+                                        inputs=['inputMoleculesSets'],
+                                        outputs=['defineInput'])
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""
