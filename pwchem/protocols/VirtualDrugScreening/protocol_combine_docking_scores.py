@@ -123,7 +123,7 @@ class ProtocolRankDocking(EMProtocol):
       for mol in molSet:
         energy = getattr(mol, attr)
         molName = mol.getMolName()
-        if not molName in bestDic or \
+        if molName not in bestDic or \
                 (smallIsGood and energy < getattr(bestDic[molName], attr)) or\
                 (not smallIsGood and energy > getattr(bestDic[molName], attr)):
           bestDic[molName] = mol.clone()
