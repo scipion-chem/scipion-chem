@@ -88,7 +88,7 @@ class ProtScoreCorrelation(EMProtocol):
           form.addSection(label=f'Input {label}')
           self._defineInput(form, label=label, allowRatio=True)
 
-        form.addSection(label=f'Correlation')
+        form.addSection(label='Correlation')
         group = form.addGroup('Correlation')
         group.addParam('corrType', params.EnumParam, choices=['Pearson', 'Spearman'], default=0,
                        label='Correlation analysis: ',
@@ -98,6 +98,37 @@ class ProtScoreCorrelation(EMProtocol):
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self.correlationStep)
+
+    def correlationStep(self):
+      scoreDics = {}
+      for label in self._inLabels:
+        scoreDics[label] = self.getScoreDic(label)
+        if getattr(self, f'compareSet_{label}').get() in [DIFF, RATIO]:
+          setRatioDic = self.getScoreDic(f'{label}_ratio')
+          scoreDics[label] = self.operateSetDics(scoreDics[label], setRatioDic,
+                                                 op=self.getEnumText(f'compareSet_{label}'))
+
+      self.corResult = self.calculateCorrelation(scoreDics['1'], scoreDics['2'],
+                                                   corrAnalysis=self.getEnumText('corrType'))
+      with open(self.getOutputTxtPath(), 'w') as f:
+        f.write(f'{self.getEnumText("corrType")} correlation: {self.corResult[0]}\n'
+                f'With p-value: {self.corResult[1]}')
+
+      self.plotScoreDistribution(scoreDics['1'], scoreDics['2'], self.corResult)
+
+    # --------------------------- UTILS functions ------------------------------
+    def _validate(self):
+        """ Validate if the inputs are in mol2 or pdb format
+        """
+        errors = []
+        return errors
+
+    def _summary(self):
+        summ = []
+        if os.path.exists(self.getOutputTxtPath()):
+          with open(self.getOutputTxtPath()) as f:
+            summ.append(f.read())
+        return summ
 
     def parseScoreFile(self, file):
       scoreDic = {}
@@ -148,46 +179,17 @@ class ProtScoreCorrelation(EMProtocol):
     def plotScoreDistribution(self, d1, d2, corr):
         x, y = [d1[name] for name in d1 if name in d2], [d2[name] for name in d1 if name in d2]
         coef = np.polyfit(x, y, 1)
-        poly1d_fn = np.poly1d(coef)
+        poly1dFn = np.poly1d(coef)
 
         plt.title(f'Scores correlation ({self.getEnumText("corrType")}): {round(corr[0], 4)}')
         plt.xlabel("Input 1")
         plt.ylabel("Input 2")
-        plt.plot(x, y, 'yo', x, poly1d_fn(x), 'r')
+        plt.plot(x, y, 'yo', x, poly1dFn(x), 'r')
         plt.grid()
         plt.savefig(self.getOuputImgPath())
 
     def getOuputImgPath(self):
       return self._getExtraPath('scoreDistribution.png')
 
-    def correlationStep(self):
-      scoreDics = {}
-      for label in self._inLabels:
-        scoreDics[label] = self.getScoreDic(label)
-        if getattr(self, f'compareSet_{label}').get() in [DIFF, RATIO]:
-          setRatioDic = self.getScoreDic(f'{label}_ratio')
-          scoreDics[label] = self.operateSetDics(scoreDics[label], setRatioDic,
-                                                 op=self.getEnumText(f'compareSet_{label}'))
-
-      self.corResult = self.calculateCorrelation(scoreDics['1'], scoreDics['2'],
-                                                   corrAnalysis=self.getEnumText('corrType'))
-      with open(self._getPath('correlation.txt'), 'w') as f:
-        f.write(f'{self.getEnumText("corrType")} correlation: {self.corResult[0]}\n'
-                f'With p-value: {self.corResult[1]}')
-
-      self.plotScoreDistribution(scoreDics['1'], scoreDics['2'], self.corResult)
-
-    # --------------------------- UTILS functions ------------------------------
-    def _validate(self):
-        """ Validate if the inputs are in mol2 or pdb format
-        """
-        errors = []
-        return errors
-
-    def _summary(self):
-        summ = []
-        if os.path.exists(self._getPath('correlation.txt')):
-          with open(self._getPath('correlation.txt')) as f:
-            summ.append(f.read())
-        return summ
-
+    def getOutputTxtPath(self):
+      return self._getPath('correlation.txt')
