@@ -48,6 +48,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import Protoc
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_define_contact_structROIs import ProtDefineContactStructROIs
 from pwchem.protocols.VirtualDrugScreening.protocol_rank_docking_score import ProtocolRankDocking
+from pwchem.protocols.VirtualDrugScreening.protocol_scores_correlation import ProtScoreCorrelation
 
 from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
 
