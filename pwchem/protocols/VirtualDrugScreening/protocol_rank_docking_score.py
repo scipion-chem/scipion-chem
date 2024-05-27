@@ -134,7 +134,7 @@ class ProtocolRankDocking(EMProtocol):
         inpSum = self.getInputSummary()
         for inpIdx, inpDic in inpSum.items():
             molSet = self.inputMoleculesSets[inpIdx].get()
-            bestMols = self.getBestMols(molSet, bestDic=bestMols)
+            bestMols = self.getBestMols(molSet, inpDic['Score'], inpDic['Small'], bestDic=bestMols)
 
             curVote = self.rankVoting(molSet, inpDic['Score'], inpDic['Small'])
             for molName, score in curVote.items():
@@ -148,11 +148,34 @@ class ProtocolRankDocking(EMProtocol):
                 f.write(f'{molName}\t{score}\n')
 
         outMols = SetOfSmallMolecules(filename=self._getPath('outputSmallMolecules.sqlite'))
-        for molName, mol in bestMols.items():
-          setattr(mol, 'rankScore', Float(self.voteDic[molName]))
+        bestMols = self.fillEmptyAttributes(bestMols.values())
+        for mol in bestMols:
+          setattr(mol, 'rankScore', Float(self.voteDic[mol.getMolName()]))
           outMols.append(mol)
 
         self._defineOutputs(outputSmallMolecules=outMols)
+
+    def fillEmptyAttributes(self, inSet):
+        '''Fill all items with empty attributes'''
+        attributes = self.getAllAttributes(self.inputMoleculesSets)
+        for item in inSet:
+            for attr in attributes:
+                if not hasattr(item, attr):
+                    item.__setattr__(attr, attributes[attr])
+        return inSet
+
+    def getAllAttributes(self, inSets):
+        '''Return a dic with {attrName: ScipionObj=None}'''
+        attributes = {}
+        for inSet in inSets:
+            item = inSet.get().getFirstItem()
+            attrKeys = item.getObjDict().keys()
+            for attrK in attrKeys:
+                if not attrK in attributes:
+                    value = item.__getattribute__(attrK)
+                    attributes[attrK] = value.clone()
+                    attributes[attrK].set(None)
+        return attributes
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
