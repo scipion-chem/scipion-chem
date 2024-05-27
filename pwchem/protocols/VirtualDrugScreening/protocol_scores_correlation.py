@@ -99,6 +99,11 @@ class ProtScoreCorrelation(EMProtocol):
     def _insertAllSteps(self):
         self._insertFunctionStep(self.correlationStep)
 
+    def saveSummary(self):
+      with open(self.getOutputTxtPath(), 'w') as f:
+        f.write(f'{self.getEnumText("corrType")} correlation: {self.corResult[0]}\n'
+                f'With p-value: {self.corResult[1]}')
+
     def correlationStep(self):
       scoreDics = {}
       for label in self._inLabels:
@@ -110,9 +115,7 @@ class ProtScoreCorrelation(EMProtocol):
 
       self.corResult = self.calculateCorrelation(scoreDics['1'], scoreDics['2'],
                                                    corrAnalysis=self.getEnumText('corrType'))
-      with open(self.getOutputTxtPath(), 'w') as f:
-        f.write(f'{self.getEnumText("corrType")} correlation: {self.corResult[0]}\n'
-                f'With p-value: {self.corResult[1]}')
+      self.saveSummary()
 
       self.plotScoreDistribution(scoreDics['1'], scoreDics['2'], self.corResult)
 
@@ -177,7 +180,8 @@ class ProtScoreCorrelation(EMProtocol):
         return scipy.stats.spearmanr(vs1, vs2)
 
     def plotScoreDistribution(self, d1, d2, corr):
-        x, y = [d1[name] for name in d1 if name in d2], [d2[name] for name in d1 if name in d2]
+        molNames = [name for name in d1 if name in d2]
+        x, y = [d1[name] for name in molNames], [d2[name] for name in molNames]
         coef = np.polyfit(x, y, 1)
         poly1dFn = np.poly1d(coef)
 
@@ -186,6 +190,11 @@ class ProtScoreCorrelation(EMProtocol):
         plt.ylabel("Input 2")
         plt.plot(x, y, 'yo', x, poly1dFn(x), 'r')
         plt.grid()
+
+        if len(molNames) < 20:
+          for i, txt in enumerate(molNames):
+            plt.annotate(txt, (x[i], y[i]), fontsize=6)
+
         plt.savefig(self.getOuputImgPath())
 
     def getOuputImgPath(self):
