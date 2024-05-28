@@ -99,6 +99,8 @@ class ProtMapSequenceROI(EMProtocol):
         self._insertFunctionStep('definePocketsStep')
         self._insertFunctionStep('defineOutputStep')
 
+        self._mapWarning = 'Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln")
+
     def alignSequencesStep(self):
         seq, seq_name = self.getInputSequence()
         seqAS, seq_nameAS = self.getInputASSequence()
@@ -127,22 +129,24 @@ class ProtMapSequenceROI(EMProtocol):
                 self.coordsClusters = {i: coords for i, coords in enumerate(self.coordsClusters)}
             else:
                 self.coordsClusters = pocketCoords
-
         else:
-            print('Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln"))
+            print(self._mapWarning)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
         if self.coordsClusters:
             outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
             for i, clust in self.coordsClusters.items():
-                pocketFile = createPocketFile(clust, i, self._getExtraPath())
-                pocket = StructROI(pocketFile, self.getASFileName())
-                pocket.setNumberOfPoints(len(clust))
-                if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                    pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
-                pocket.calculateContacts()
-                outPockets.append(pocket)
+                if clust:
+                    pocketFile = createPocketFile(clust, i, self._getExtraPath())
+                    pocket = StructROI(pocketFile, self.getASFileName())
+                    pocket.setNumberOfPoints(len(clust))
+                    if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+                        pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
+                    pocket.calculateContacts()
+                    outPockets.append(pocket)
+                else:
+                    print(self._mapWarning)
 
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
@@ -199,7 +203,6 @@ class ProtMapSequenceROI(EMProtocol):
 
     def getInputASSequence(self):
         from pwem.convert.atom_struct import AtomicStructHandler
-        inputObj = getattr(self, 'inputAtomStruct').get()
         ASFile = self.getASFileName()
         seq_name = os.path.basename(ASFile)
         handler = AtomicStructHandler(ASFile)

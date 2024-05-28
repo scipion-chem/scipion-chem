@@ -477,4 +477,17 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     cleanPDB(auxPath, outPath, waters=True, hetatm=False)
     return outPath
 
+class CorrelationViewer(pwviewer.Viewer):
+    from pwchem.protocols.VirtualDrugScreening.protocol_scores_correlation import ProtScoreCorrelation
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [
+      ProtScoreCorrelation,
+    ]
 
+    def __init__(self, **kwargs):
+      pwviewer.Viewer.__init__(self, **kwargs)
+
+    def _visualize(self, protocol, **kwargs):
+      from PIL import Image
+      image = Image.open(protocol.getOuputImgPath())
+      image.show()

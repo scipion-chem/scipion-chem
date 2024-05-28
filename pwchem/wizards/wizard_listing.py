@@ -52,10 +52,21 @@ class AddElementWizard(VariableWizard):
         inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
 
-        inParam = getattr(protocol, inputParam[0]).get()
-        if inParam and inParam.strip() != '':
-            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
-            form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
+        prevList, newLine = self.curePrevList(getattr(protocol, outputParam[0]).get()), ''
+        if len(inputParam) > 0:
+            inParam = getattr(protocol, inputParam[0]).get()
+            if inParam and inParam.strip() != '':
+                newLine = f'{inParam.strip()}\n'
+        elif hasattr(protocol, 'createElementLine'):
+            newLine = protocol.createElementLine()
+
+        form.setVar(outputParam[0], prevList + newLine)
+
+AddElementWizard().addTarget(protocol=ProtocolRankDocking,
+                             targets=['defineSummary'],
+                             inputs=[],
+                             outputs=['defineSummary'])
+
 
 class AddNumberedElementWizard(AddElementWizard):
     """Add the content of a parameter to another numbering (and labeling) the elements in the output
@@ -264,7 +275,6 @@ AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])
-
 DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],

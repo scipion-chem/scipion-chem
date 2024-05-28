@@ -46,21 +46,31 @@ import pwchem.protocols as chemprot
 
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
-    def getInputSet(self, form, inputParam):
-      inputObj = getattr(form.protocol, inputParam)
-      if isinstance(inputObj, pwobj.Pointer):
-        inputSet = inputObj.get()
-      elif isinstance(inputObj, pwobj.PointerList):
-        inputSet = inputObj[0].get()
-      elif callable(inputObj):
-        inputSet = inputObj()
-      else:
-        inputSet = inputObj
-      return inputSet
+
+    def getInputPointer(self, multiPointer, pointerStr):
+      for i, pointer in enumerate(multiPointer):
+        if str(i).strip() == pointerStr.split('//')[0]:
+          break
+      return pointer
+
+    def getInputSet(self, form, inputParam, inputStr=None):
+      inputPointer = getattr(form.protocol, inputParam)
+      if issubclass(inputPointer.__class__, pwobj.PointerList):
+        inputPointer = inputPointer[0] if not inputStr else self.getInputPointer(inputPointer, inputStr)
+      return inputPointer.get()
+
+    def getFirstItem(self, form, inputParam, inputStr=None):
+        inputSet = self.getInputSet(form, inputParam, inputStr)
+        if issubclass(inputSet.__class__, pwobj.Set):
+            item = inputSet.getFirstItem()
+        elif issubclass(inputSet.__class__, pwobj.Object):
+            item = inputSet
+        return item
 
     def getInputAttributes(self, form, inputParam):
       attrNames = ['_objId']
-      item = self.getFirstItem(form, inputParam[0])
+      inputStr = getattr(form.protocol, inputParam[1]).get() if len(inputParam) > 1 else None
+      item = self.getFirstItem(form, inputParam[0], inputStr)
       for key, attr in item.getAttributesToStore():
         attrNames.append(key)
       return attrNames
@@ -77,18 +87,22 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                       targets=['corrAttribute'],
                                       inputs=['inputMoleculesSets'],
                                       outputs=['corrAttribute'])
-SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtCombineScoresSeqROI,
-                                      targets=['selectAttribute'],
-                                      inputs=['inputSequenceROIs'],
-                                      outputs=['selectAttribute'])
-SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtCombineScoresSeqROI,
-                                      targets=['condAttribute'],
-                                      inputs=['getCondSet'],
-                                      outputs=['condAttribute'])
-SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
-                                      targets=['inScore'],
-                                      inputs=['inputROIs'],
-                                      outputs=['inScore'])
+
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
+                                      targets=['defineScore'],
+                                      inputs=['inputMoleculesSets', 'defineInput'],
+                                      outputs=['defineScore'])
+
+for label in ['1', '2', '1_ratio', '2_ratio']:
+  SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
+                                        targets=[f'inputID_{label}'],
+                                        inputs=[f'inputSet_{label}'],
+                                        outputs=[f'inputID_{label}'])
+
+  SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
+                                        targets=[f'inputScore_{label}'],
+                                        inputs=[f'inputSet_{label}'],
+                                        outputs=[f'inputScore_{label}'])
 
 
 class SelectMultiAttributeWizardChem(SelectAttributeWizard):
