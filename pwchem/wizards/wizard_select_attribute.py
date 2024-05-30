@@ -92,6 +92,10 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       targets=['defineScore'],
                                       inputs=['inputMoleculesSets', 'defineInput'],
                                       outputs=['defineScore'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitopeGrape,
+                                      targets=['inScore'],
+                                      inputs=['inputROISets', 'inSet'],
+                                      outputs=['inScore'])
 
 for label in ['1', '2', '1_ratio', '2_ratio']:
   SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,

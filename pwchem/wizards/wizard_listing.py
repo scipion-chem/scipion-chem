@@ -130,22 +130,27 @@ AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
                                       inputs=['buildCondSumLine'],
                                       outputs=['condSummary'])
 
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
                                       targets=['addScore'],
                                       inputs=['buildScoreSumLine'],
                                       outputs=['scoreSummary'])
+
 AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                       targets=['addEval'],
                                       inputs=['buildEvalSumLine'],
                                       outputs=['evalSummary'])
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                      targets=['addManual'],
-                                      inputs=['buildManualSumLine'],
-                                      outputs=['manualSummary'])
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+# AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+#                                       targets=['addManual'],
+#                                       inputs=['buildManualSumLine'],
+#                                       outputs=['manualSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
                                       targets=['addLinker'],
                                       inputs=['buildLinkerSumLine'],
                                       outputs=['linkerSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+                                      targets=['addEval'],
+                                      inputs=['buildEvalSumLine'],
+                                      outputs=['evalSummary'])
 
 class Add_FilterExpression(AddElementWizard):
     """Add ID or keyword in NCBI fetch protocol to the list"""

@@ -604,8 +604,13 @@ class SelectMultiElementWizard(SelectElementWizard):
   def show(self, form, *params):
     inputParam, outputParam = self.getInputOutput(form)
     dlg = self.displayDialog(form, inputParam)
-    values = [val.get() for val in dlg.values]
-    form.setVar(outputParam[0], ','.join(values))
+    values = [val.get().strip() for val in dlg.values]
+    form.setVar(outputParam[0], ', '.join(values))
+
+SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+                                     targets=['seleLinker'],
+                                     inputs=['inLinkerSet'],
+                                     outputs=['seleLinker'])
 
 class SelectMultiSeqWizard(SelectMultiElementWizard):
   """Lists the items in a SetOfSequences and choose several"""
@@ -685,6 +690,17 @@ SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRankDocking,
                                         targets=['defineInput'],
                                         inputs=['inputMoleculesSets'],
                                         outputs=['defineInput'])
+
+SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+                                        targets=['inSet'],
+                                        inputs=['inputROISets'],
+                                        outputs=['inSet'])
+SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+                                        targets=['linkProtSet'],
+                                        inputs=['inputROISets'],
+                                        outputs=['linkProtSet'])
+
+
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""

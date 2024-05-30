@@ -78,6 +78,8 @@ from pwchem.protocols.Sequences.protocol_define_multiepitope import ProtDefineMu
 from pwchem.protocols.Sequences.protocol_modify_multiepitope import ProtModifyMultiEpitope
 from pwchem.protocols.Sequences.protocol_combineScores_sequence_roi import ProtCombineScoresSeqROI
 from pwchem.protocols.Sequences.protocol_optimize_multiepitope import ProtOptimizeMultiEpitope
+from pwchem.protocols.Sequences.protocol_optimize_multiepitope_grape import ProtOptimizeMultiEpitopeGrape
+
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
