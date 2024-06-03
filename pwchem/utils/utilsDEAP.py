@@ -210,6 +210,34 @@ class RepGrammar(Grammar):
         self.noRepNTs = noRepNTs
         self.weightDic = weightDic
 
+def random_initialisation(ind_class, pop_size, bnf_grammar,
+                          min_init_genome_length, max_init_genome_length,
+                          max_init_depth, codon_size, codon_consumption,
+                          genome_representation):
+    """
+
+    """
+    population = []
+
+    for i in range(pop_size):
+      genome = []
+      init_genome_length = random.randint(min_init_genome_length, max_init_genome_length)
+      for j in range(init_genome_length):
+        genome.append(random.randint(0, codon_size))
+      ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption)
+      while not ind:
+        ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption)
+      population.append(ind)
+
+    if genome_representation == 'list':
+      return population
+    elif genome_representation == 'numpy':
+      for ind in population:
+        ind.genome = np.array(ind.genome)
+      return population
+    else:
+      raise ValueError("Unkonwn genome representation")
+
 def getNonRepeatedIndex(curIdx, repIdxs, nRules):
     '''Checks whether the index for that production rule has already been used and choses next available index
     - curIdx (int): index currently chosen
@@ -304,11 +332,18 @@ def mapper_noRepeated(genome, grammar, max_depth):
 
     return phenotype, nodes, depth, used_codons, invalid, 0, structure
 
+def cleanPhenotype(phen):
+    '''Remove the unmatched production rules from the phenotype that have not been transformed to terminals'''
+    unPhenots = re.findall(r" ?\<\w+\> ?", phen)
+    for up in unPhenots:
+      phen = phen.replace(up, '')
+    return phen
+
 def mapper_weighted(genome, grammar, max_depth):
     """
     This mapper uses the genome as random seeds to generate the phenotype, having the epitopes weights that are
     used to randomly choose them"""
-
+    # todo: return None if invalid
     idx_genome = 0
     phenotype = grammar.start_rule
     next_NT = re.search(r"\<(\w+)\>", phenotype).group()
@@ -328,7 +363,7 @@ def mapper_weighted(genome, grammar, max_depth):
         index_production_chosen = getWeightedIndex(genome[idx_genome], repIdxs, grammar.n_rules[NT_index], weights)
         if next_NT in repDic:
             if index_production_chosen == None:
-                break
+              return None
             repDic[next_NT].append(index_production_chosen)
 
         structure.append(index_production_chosen)
@@ -364,7 +399,7 @@ def mapper_weighted(genome, grammar, max_depth):
         used_codons = idx_genome
 
     depth = max(list_depth)
-
+    phenotype = cleanPhenotype(phenotype)
     return phenotype, nodes, depth, used_codons, invalid, 0, structure
 
 def getProteinNames(bnfGrammar):
@@ -374,6 +409,7 @@ def getProteinPhenotype(ind, pName):
     '''Return the substring containing the epitopes and linkers of the given protein name from the phenotype
     '''
     eps = re.findall(fr'{pName}C?\[\d+\]', ind.phenotype)
+    print('Eps: ', eps, ind.phenotype)
     if len(eps) > 1:
         epStr = re.findall(fr'{pName}C?\[\d+\].*{pName}C?\[\d+\]', ind.phenotype)[0]
     else:
@@ -999,6 +1035,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     logbook.record(gen=gen, nevals=len(invalid_ind), **record)
     if verbose:
       print(logbook.stream)
+      print('Scores: ', fitnessDic)
 
   return population, logbook
 

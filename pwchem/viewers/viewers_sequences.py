@@ -162,8 +162,8 @@ class SequenceAliView(pwviewer.CommandView):
     """ View for calling an external command. """
 
     def __init__(self, seqFiles, cwd, **kwargs):
-        pwviewer.CommandView.__init__(self, '{}/aliview/aliview {}'.
-                                      format(pwchem_plugin.getProgramHome(ALIVIEW_DIC), ' '.join(seqFiles)),
+        pwviewer.CommandView.__init__(self,
+                                      f'pwchem_plugin.getProgramHome(ALIVIEW_DIC)/aliview/aliview {" ".join(seqFiles)}',
                                       cwd=cwd, **kwargs)
 
     def show(self):
@@ -246,15 +246,21 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
       'tableLabel': self._viewTable,
     }
 
-  def _viewSeqSet(self, e=None):
+  def getOutputObject(self):
     seqSet = self.protocol
+    if self.checkIfProtocol():
+      # todo: grab output from the protocol independent of the type or name
+      seqSet = seqSet.outputROIs
+    return seqSet
+
+  def _viewSeqSet(self, e=None):
+    seqSet = self.getOutputObject()
     setV = SequenceAliViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
 
   def _viewTable(self, e=None):
-    seqSet = self.protocol
-
+    seqSet = self.getOutputObject()
     try:
       setV = MDViewer(project=self.getProject())
     except:

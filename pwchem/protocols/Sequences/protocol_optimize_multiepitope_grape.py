@@ -29,7 +29,7 @@
 """
 This protocol is used to optimize a multiepitope object based on some predictor scores using genetic algorithms
 """
-import numpy, json, random, time, os, re
+import numpy, json, random, time, os, re, sys
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -159,7 +159,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
   """
   _label = 'Optimize multiepitope grape'
 
-  _agTypes = ['eaSimple']
+  _agTypes = ['Simple', 'MuPlusLambda', 'MuCommaLambda']
   # _mutTypes = ['Random', 'Shuffle']
   _crossTypes = ['Epitope cluster swap']
   _selectionTypes = ['Tournament', 'Roulette', 'Best']
@@ -169,7 +169,8 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
                      DDG: ['chooseDDGEvaluator'],
                      }
 
-  _gaAlgorithms = {SIMP: myEaSimple, MUPLUS: myEaMuPlusLambda, MUCOMMA: myEaMuCommaLambda}
+  _gaAlgorithms = {SIMP: ge_eaSimpleChem, MUPLUS: ge_eaMuPlusLambdaChem, 
+                   MUCOMMA: ge_eaMuCommaLambdaChem}
   _cxAlgorithms = {P1: tools.cxOnePoint, P2: tools.cxTwoPoint, UNI: tools.cxUniform}
   _selAlgorithms = {TOUR: tools.selTournament, ROUL: tools.selRoulette, BEST: tools.selBest}
 
@@ -237,9 +238,9 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     line.addParam('minEp', params.IntParam, label='Min: ', default=3)
     line.addParam('maxEp', params.IntParam, label='Max: ', default=10)
 
-    # line = group.addLine('Number of residues: ', help='Range of possible total number of residues')
-    # line.addParam('minRes', params.IntParam, label='Min: ', default=10)
-    # line.addParam('maxRes', params.IntParam, label='Max: ', default=1000)
+    form.addParam('randomSeed', params.IntParam, label='Random seed: ', default=0,
+                  expertLevel=params.LEVEL_ADVANCED,
+                  help='Choose a random seed to ensure reproducibility')
 
     form.addSection(label='Epitope sampling')
     group = form.addGroup('Epitope sampling scores')
@@ -322,7 +323,6 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     group.addParam('nPop', params.IntParam, label='Population size: ', default=20,
                    help='Number of individuals in the population (per generation)')
 
-    # todo: adapt to available types. Create new types
     group.addParam('gaType', params.EnumParam, label='GA type: ', default=SIMP, choices=self._agTypes,
                    help='Choose a strategy for the linkers to be chosen. For more information: '
                         'https://deap.readthedocs.io/en/master/api/algo.html#complete-algorithms')
@@ -339,12 +339,12 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     #                     'individual')
     group.addParam('mutProb', params.FloatParam, label='Mutate probability: ', default=0.4,
                    help='Probability for a individual to be mutated for the next generation.')
-    group.addParam('mutIndProb', params.FloatParam, label='Epitope mutation probability: ', default=0.25,
-                   help='Probability for each epitope in the individual to be mutated independently')
-    # todo: add probs for different types of mutations
+    line = group.addLine('Mutation probabilities: ', help='Probabilities for the different types of mutation')
+    line.addParam('mutEProb', params.FloatParam, label='Epitope replacement: ', default=0.33)
+    line.addParam('mutSProb', params.FloatParam, label='Epitope cluster reorder: ', default=0.33)
+    line.addParam('mutLProb', params.FloatParam, label='Linker replacement: ', default=0.33)
 
     group = form.addGroup('Crossover')
-    # Todo: adapt to available types
     group.addParam('crossType', params.EnumParam, label='Crossover type: ', default=0, choices=self._crossTypes,
                    help='Choose a strategy for the crossover. For more information: '
                         'https://deap.readthedocs.io/en/master/api/tools.html#crossover')
@@ -355,7 +355,6 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
                    help='Probability for each epitope in the individual to be crossed independently')
 
     group = form.addGroup('Selection')
-    # Todo: adapt to available types
     group.addParam('selType', params.EnumParam, label='Selection type: ', default=0, choices=self._selectionTypes,
                    help='Choose a strategy for the selection. For more information: '
                         'https://deap.readthedocs.io/en/master/api/tools.html#selection')
@@ -376,15 +375,16 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     self._insertFunctionStep(self.defineOutputStep)
 
   def optimizeMultiepitopeStep(self):
+    if self.randomSeed.get() != 0:
+      random.seed(self.randomSeed.get())
+      np.random.seed(self.randomSeed.get())
+
     epiDic = self.getEpitopesPerProt(self.inputROISets)
     linkDic = self.getLinkersPerProt()
     compDic = self.getCompEpitopesPerProt()
     nEpiDic, nLinkDic, nCompDic = self.makeCountDic(epiDic), self.makeCountDic(linkDic), self.makeCountDic(compDic)
-
     wDic = self.getEpitopeScores()
-
     self.seqsMapper = self.getROIsMapper(epiDic, linkDic, compDic)
-    print('self.seqsMapper: ', self.seqsMapper)
 
     nPop, nGen = self.nPop.get(), self.nGen.get()
     mutProb, crossProb = self.mutProb.get(), self.crossProb.get()
@@ -395,39 +395,32 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     bnfGrammar = RepGrammar(grammarFile, nonRepNTs, self.convertWDic(wDic))
 
     deapToolbox = self.defineDeapToolbox(bnfGrammar)
-
-    RANDOM_SEED = 44
-    random.seed(RANDOM_SEED)
+    # todo: fix: when cleaning phenotypes, ensureall prots in: probably better to discard and redo the ind
     population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
                                                min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
                                                codon_size=255, codon_consumption='weighted',
-                                               genome_representation='list', )
+                                               genome_representation='list')
+    print('Initial pop: ', [ind.phenotype for ind in population])
 
     hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
+    kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen,
+              'mutEpb': self.mutEProb.get(), 'mutSpb': self.mutSProb.get(), 'mutLpb': self.mutLProb.get(),
+              'halloffame': hof, 'verbose': True}
+    if self.gaType.get() != SIMP:
+      lamb = round(nPop * self.varProp.get())
+      kwargs.update({'mu': nPop, 'lambda_': int(lamb)})
 
-    # prepare the statistics object:
-    stats = tools.Statistics(key=lambda ind: ind.fitness.values)
-    stats.register("avg", np.nanmean)
-    stats.register("std", np.nanstd)
-    stats.register("min", np.nanmin)
-    stats.register("max", np.nanmax)
+    gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
+    print('gaAlgorithm: ', gaAlgorithm)
+    population, logbook = gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
 
-    # perform the Grammatical Evolution flow:
-    population, logbook = ge_eaSimpleWithElitismNoTrain(population, deapToolbox, cxpb=crossProb,
-                                                                   mutpb=mutProb, mutSpb=crossProb,
-                                                                   ngen=nGen, elite_size=0,
-                                                                   bnf_grammar=bnfGrammar,
-                                                                   report_items=REPORT_ITEMS,
-                                                                   stats=stats, halloffame=hof, verbose=False)
-
-    print('Final pop: ', population)
+    print('Final pop: ', [ind.phenotype for ind in population])
     print('Scores: ', [ind.fitness.values for ind in population])
-    print('Fame: ', hof.items)
+    print('Fame: ', [ind.phenotype for ind in hof.items])
     print('Scores: ', [ind.fitness.values for ind in hof.items])
 
-    best = hof.items[0].phenotype
-    print("Best individual: \n", best, best.fitness.values)
-    print("\nTraining Fitness: ", hof.items[0].fitness.values[0])
+    best = hof.items[0]
+    print("Best individual: \n", best.phenotype, best.fitness.values)
 
   def defineOutputStep(self):
     # todo: make functional: evaluations should be callable to extract the scores from another protocol
@@ -462,7 +455,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     toolbox.register("evaluate", self.multiEpitopeEval)
 
     # Tournament selection:
-    toolbox.register("select", tools.selTournament, tournsize=3)
+    toolbox.register("select", tools.selTournament, tournsize=self.tournSize.get())
 
     # Single-point crossover:
     toolbox.register("mate", crossover_multiepitope)
@@ -481,16 +474,28 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     '''Returns the set of multiepitope sequences codified into a set of DEAP individuals'''
     seqs = {}
     for i, ind in enumerate(individuals):
-      if not ind.invalid:
-        curSeqs = []
-        for roiCode in ind.phenotype.split():
-          pName, roiIdx = self.idxsFromCode(roiCode)
-          curSeqs += [self.seqsMapper[pName][roiIdx]]
-        seqs[i] = ''.join(curSeqs)
+      curSeqs = []
+      for roiCode in ind.phenotype.split():
+        pName, roiIdx = self.idxsFromCode(roiCode)
+        curSeqs += [self.seqsMapper[pName][roiIdx]]
+      seqs[i] = ''.join(curSeqs)
+
     return seqs
 
   def getInputProteinNames(self):
     return list(self.getInputROIsMapper().keys())
+
+  def getROIsPerProt(self, multiPointer):
+    '''Return mapper with the input ROI sequences as:
+        {protName: [rois]}'''
+    mapDic = {}
+    for roiPointer in multiPointer:
+      roiSet = roiPointer.get()
+      protName = roiSet.getSequenceObj().getId()
+      mapDic[protName] = []
+      for roi in roiSet:
+        mapDic[protName].append(roi)
+    return mapDic
 
   def getEpitopesPerProt(self, multiPointer):
     '''Return mapper with the input ROI sequences as:
@@ -535,7 +540,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     return cEpiDic
 
   def getInputROIsMapper(self):
-    '''Returns a dict as {roiSetIdx: roiSet}'''
+    '''Returns a dict as {pName: roiSet}'''
     return {roiPointer.get().getSequenceObj().getId(): roiPointer.get() for roiPointer in self.inputROISets}
 
   def getEpitopeScores(self):
@@ -605,10 +610,16 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     Returns a list of individual fitnesses: [(f1,), ...]
     '''
     resultsDic = self.performEvaluations(individuals)
+    print('ResultDic. ', resultsDic, len(resultsDic))
     weigths = self.getEvalWeights()
+    print('ws: ', weigths, len(weigths))
     fitnesses = numpy.zeros(len(individuals))
+    print('fitnesses: ', fitnesses, len(fitnesses))
     for (evalKey, softName), res in resultsDic.items():
+      print('res: ', res, len(res))
+      # todo: toxinpred returning only 4 scores
       scores = numpy.array(list(map(float, res)))
+      print('Scores: ', scores)
       fitnesses += scores * weigths[evalKey]
 
     return [(f,) for f in fitnesses]
@@ -622,8 +633,9 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     '''
     jobs = self.numberOfThreads.get()
     evalDics = self.getEvalDics()
-    # todo: get a register of already evaluated individuals
+    print('Individuals: ', individuals, len(individuals))
     sequences = self.getMultiEpitopeSeqs(individuals)
+    print('Sequences: ', sequences, len(sequences))
 
     resultsDic = {}
     disJobs = self.getDistributedJobs(evalDics, jobs)
@@ -642,40 +654,71 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
 
       else:
         continue
-
       resultsDic.update(epiDic)
     return resultsDic
+
+  def getROIsFromInd(self, ind, prot2ROIsDic):
+    '''Return the ROIs present in a ind'''
+    curEps = []
+    pNames = self.getInputProteinNames()
+    for roiCode in ind.phenotype.split():
+      pName, roiIdx = self.idxsFromCode(roiCode)
+      if pName in pNames:
+        curEps += [prot2ROIsDic[pName][roiIdx]]
+    return curEps
+
+  def removeEmptyAlleleROIs(self, rois, mhc):
+    from iedb.utils import getMHCAlleles
+    nRois = []
+    for roi in rois:
+      alleles = getMHCAlleles(roi, mhc)
+      if alleles:
+        nRois.append(roi)
+    return nRois
 
   def performCoverageAnalysis(self, individuals, sDics, nt):
     from iedb import Plugin as iedbPlugin
     from iedb.utils import translateArea, buildMHCCoverageArgs, parseCoverageResults
-
     resDic = {}
-    # todo: make functional
-    inROIs = self.inputROIs.get()
-    for (evalKey, soft), argDic in sDics.items():
-      epFile = self._getExtraPath(f'inputEpitopes_{evalKey}.tsv')
+    roisMapDic = self.getROIsPerProt(self.inputROISets)
+    for evalKey, evalDic in sDics.items():
       oDir = os.path.abspath(self._getExtraPath())
 
-      selPops = [p.strip() for p in argDic['pop'].split(',')]
+      selPops = [p.strip() for p in evalDic['pop'].split(',')]
       selPops = translateArea(selPops)
 
-      coveArgs = buildMHCCoverageArgs(inROIs, epFile, selPops, argDic['mhc'], oDir, separated=False)
-      runInParallel(iedbPlugin.runPopulationCoverage, None,
-                    paramList=[coveArg for coveArg in coveArgs], jobs=nt)
+      coveArgs = []
+      for i, ind in enumerate(individuals):
+        epFile = self._getExtraPath(f'inputEpitopes_{evalKey}_{i}.tsv')
+        inROIs = self.getROIsFromInd(ind, roisMapDic)
+        inROIs = self.removeEmptyAlleleROIs(inROIs, evalDic['mhc'])
+        if inROIs:
+          coveArgs += buildMHCCoverageArgs(inROIs, epFile, selPops, evalDic['mhc'], oDir, separated=False)
+        else:
+          oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_{i}_All_results.tsv')
+          if os.path.exists(oFile):
+            os.remove(oFile)
 
-      oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_All_results.tsv')
-      coveDic = parseCoverageResults(oFile)['average']
-      resDic[(evalKey, soft)] = {'Score': coveDic['coverage'], 'outFile': oFile}
+      if coveArgs:
+        runInParallel(iedbPlugin.runPopulationCoverage, None,
+                      paramList=[coveArg for coveArg in coveArgs], jobs=nt)
+
+      coverages = []
+      for i in range(len(individuals)):
+        oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_{i}_All_results.tsv')
+        if os.path.exists(oFile):
+          coverage = parseCoverageResults(oFile)['average']['coverage']
+        else:
+          coverage = 0
+        coverages.append(coverage)
+      resDic[(evalKey, IEDB)] = coverages
     return resDic
 
   def getEvalDics(self):
     '''Returns a dictionary for each of the sources chosen in the evaluations (IEDB, IIITD, DDG)
     This dictionary are of the form: {source: {(evalKey, softwareName): {parameterName: parameterValue}}}
     '''
-    mapFuncs = {}
-
-    evalDics = {}
+    mapFuncs, evalDics = {}, {}
     for i, sline in enumerate(self.evalSummary.get().split('\n')):
       if sline.strip():
         sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
@@ -708,7 +751,8 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
         evalDics[source].update({evalKey: sDic})
 
     for source, evalDic in evalDics.items():
-      evalDics[source] = mapFuncs[source](evalDic)
+      if source != IEDB:
+        evalDics[source] = mapFuncs[source](evalDic)
 
     return evalDics
 
@@ -723,11 +767,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
   def getDistributedJobs(self, evalDics, totalJobs):
     jobs = {source: 0 for source in evalDics}
     for source, sDics in evalDics.items():
-      if source == IEDB:
-        # not parallelized
-        jobs[source] = 1
-      else:
-        jobs[source] = len(sDics)
+      jobs[source] = len(sDics)
 
     i = 0
     sources = list(jobs.keys())
@@ -735,6 +775,13 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     while sum(jobs.values()) > totalJobs and not all(jobs.values()) == 1:
       if jobs[sources[i % len(sources)]] > 1:
         jobs[sources[i % len(sources)]] -= 1
+      i += 1
+
+    i = 0
+    while sum(jobs.values()) < totalJobs:
+      jobs[sources[i % len(sources)]] += 1
+      i += 1
+
     return jobs
 
   def getEvalParams(self):
@@ -755,25 +802,6 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
       except:
         pass
     return params
-
-  def mergeEpsLinks(self, eps, links):
-    '''Concatenates the epitopes and liners into a single string'''
-    res = [0] * (len(eps) + len(links))
-    res[::2], res[1::2] = eps, links
-    return ''.join(res)
-
-  def getLinkers(self, nEps):
-    '''Returns an iterable with the linkers given the selected strategy and number of epitopes'''
-    nLinkers = nEps - 1
-    outLinks = [self.inLinker.get().strip()] * nLinkers
-
-    # todo: linkers other than random
-    # todo: linkers condified in individual so no different every evaluation, for now 1 linker
-    # linkDic = self.parseLinkers()
-    # linkers, linkWs = list(linkDic.keys()), list(linkDic.values())
-    # outLinks = numpy.random.choice(linkers, nLinkers, True, linkWs)
-    return outLinks
-
 
   def parseSamplingScores(self):
     '''Return {protName: {scoreName: weight}}'''
@@ -801,7 +829,6 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
         linkers = sDic['Linker(s)'].split(' // ')
         linkDic[pName] += linkers
     return linkDic
-
 
   def getEvalWeights(self):
     evalWs = {}
