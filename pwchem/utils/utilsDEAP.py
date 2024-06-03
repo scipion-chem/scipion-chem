@@ -390,22 +390,6 @@ def performCrossProtein(child0, child1, proteinCrosses):
             child1.phenotype = child1.phenotype.replace(phen1, phen0)
     return child0, child1
 
-def crossover_multiepitope(parent0, parent1, bnfGrammar, crossProtein=0):
-    '''This crossover operates at phenotype level, so no further mapping is necessary.
-    The crossover will swap the entire set of epitopes from 1 protein with the same protein set of the other parent.
-    - parents: Individuals to be crossed
-    - bnf_grammar: RepGrammar
-    - crossProtein: individual possibility per protein to be swapped
-    # todo: maybe a lower level crossover for epitope subsets
-    '''
-    child0, child1 = copy.deepcopy(parent0), copy.deepcopy(parent1)
-    if crossProtein > 0:
-        protNames = getProteinNames(bnfGrammar)
-        proteinCrosses = {pName: np.random.choice([True, False], 1, p=[crossProtein, 1-crossProtein])[0]
-                          for pName in protNames}
-        child0, child1 = performCrossProtein(child0, child1, proteinCrosses)
-        del child0.fitness.values, child1.fitness.values
-    return child0, child1
 
 def getProteinEpitopes(bnfGrammar):
     '''Returns a dictionary of the form:
@@ -435,88 +419,121 @@ def getProteinLinkers(bnfGrammar):
                 break
     return protLinkDic
 
-def performReplaceEpitope(ind, pName, nEps, mutProb):
-    '''Performs the epitope mutation
+def performReplaceEpitope(ind, pName, nEps):
+    '''Performs the epitope mutation by replacement with another available epitope
     '''
-    mutated_ = False
     epIdxs = re.findall(fr'{pName}\[(\d+)\]', ind.phenotype)
+    if len(epIdxs) == 0:
+      return ind, True
     phen = getProteinPhenotype(ind, pName)
-    for i in range(len(epIdxs)):
-        if mutProb > random.random():
-            mutated_ = True
-            posibleIdx = list(set(range(nEps)) - set(epIdxs))
-            newIdx = random.choice(posibleIdx)
-            phen = phen.replace(f'{pName}[{epIdxs[i]}]', f'{pName}[{newIdx}]')
-            epIdxs[i] = newIdx
+    mutIdx = random.choice(epIdxs)
+    posibleIdx = list(set(range(nEps)) - set(epIdxs))
+    if len(posibleIdx) == 0:
+      return ind, True
 
+    newIdx = random.choice(posibleIdx)
+    phen = phen.replace(f'{pName}[{mutIdx}]', f'{pName}[{newIdx}]')
     ind.phenotype = ind.phenotype.replace(getProteinPhenotype(ind, pName), phen)
-    return ind, mutated_
+    return ind, False
 
-def performSwapEpitopes(ind, pName, mutProb):
-    '''Performs the epitope mutation
+def performSwapEpitopes(ind, pName):
+    '''Performs the epitope mutation by swapping the order of the epitopes of a protein
     '''
     tmpEp, mutated_ = 'tmpEpXxXxX', False
     eps = re.findall(fr'{pName}C?\[\d+\]', ind.phenotype)
+    if len(eps) < 2:
+      return ind, True
+
     phen = getProteinPhenotype(ind, pName)
-    for ep in eps:
-        if mutProb > random.random():
-            posEps = list(set(eps) - {ep})
-            if posEps:
-                mutated_ = True
-                otherEp = random.choice(posEps)
-                phen = phen.replace(ep, tmpEp)
-                phen = phen.replace(otherEp, ep)
-                phen = phen.replace(tmpEp, otherEp)
+    ep1, ep2 = np.random.choice(eps, 2, replace=False)
+    phen = phen.replace(ep1, tmpEp)
+    phen = phen.replace(ep2, ep1)
+    phen = phen.replace(tmpEp, ep2)
 
     ind.phenotype = ind.phenotype.replace(getProteinPhenotype(ind, pName), phen)
-    return ind, mutated_
+    return ind, False
 
-def performReplaceLinker(ind, pName, nLinks, mutProb):
-    '''Performs the epitope mutation
+def performReplaceLinker(ind, pName, nLinks):
+    '''Performs the linker epitope mutation by replacement with another epitope linker from a protein
     '''
-    mutated_ = False
     linkIdxs = re.findall(fr'{pName}L\[(\d+)\]', ind.phenotype)
     phen = getProteinPhenotype(ind, pName)
-    for lIdx in range(len(linkIdxs)):
-        if mutProb < random.random():
-            mutated_ = True
-            newIdx = random.choice(range(nLinks))
-            phen = phen.replace(f'{pName}L[{lIdx}]', f'{pName}L[{newIdx}]')
+    if len(linkIdxs) == 0:
+      return ind, True
+    mutIdx = random.choice(linkIdxs)
+    newIdx = random.choice(range(nLinks))
+    phen = phen.replace(f'{pName}L[{mutIdx}]', f'{pName}L[{newIdx}]')
 
     ind.phenotype = ind.phenotype.replace(getProteinPhenotype(ind, pName), phen)
-    return ind, mutated_
+    return ind, False
 
-def mutationEpitope(ind, bnfGrammar, mutProb, mutSwapProb, mutLProb=None):
+def mutationEpitope(ind, bnfGrammar, mutEProb=0.3, mutSwapProb=None, mutLProb=None):
     """This mutation operates at phenotype level, so no further mapping is necessary.
     The mutation will swap an epitope from 1 protein with another epitope from the same protein.
     The mutation will ensure that no repeated epitopes are generated
     - ind: Individual to be mutated
     - bnfGrammar: RepGrammar
-    - mutProb: individual possibility per epitope to be mutated by replacement
-    - mutSwapProb: individual possibility per epitope to be mutated by swapping
+    - mutProb: possibility of the individual to be mutated by epitope replacement
+    - mutSwapProb: possibility of the individual to be mutated by epitope cluster swapping
+    - mutLProb: possibility of the individual to be mutated by linker replacement
     """
-    mutLProb = mutProb if mutLProb is None else mutLProb
+    mutEProb = 0.3 if mutEProb is None else mutEProb
+    mutSwapProb = mutEProb if mutSwapProb is None else mutSwapProb
+    mutLProb = mutEProb if mutLProb is None else mutLProb
+    
     mutated_ = False
     newInd = copy.deepcopy(ind)
     protEpDic = getProteinEpitopes(bnfGrammar)
-    for pName, nEps in protEpDic.items():
-        newInd, mutated_ = performReplaceEpitope(newInd, pName, nEps, mutProb)
+    
+    # Determining which mutation(s) to be performed. At least, one must be done
+    mutRandoms = [random.random() for i in range(3)]
+    doMuts = [mutR < mProb for mutR, mProb in zip(mutRandoms, [mutSwapProb, mutEProb, mutLProb])]
+    if not any(doMuts):
+      doMuts[random.randint(0, 2)] = True
 
-    for pName, nEps in protEpDic.items():
-        newInd, mutated_ = performSwapEpitopes(newInd, pName, mutSwapProb)
+    failMut = False
+    if doMuts[0]:
+      mutated_ = True
+      pName = random.choice(list(protEpDic.keys()))
+      newInd, failMut = performSwapEpitopes(newInd, pName)
 
-    protLinkDic = getProteinLinkers(bnfGrammar)
-    for pName, nLinks in protLinkDic.items():
-        newInd, mutated_ = performReplaceLinker(newInd, pName, nLinks, mutLProb)
+    if doMuts[1] or failMut:
+      mutated_ = True
+      pName = random.choice(list(protEpDic.keys()))
+      newInd, failMut = performReplaceEpitope(newInd, pName, protEpDic[pName])
+
+    if doMuts[2] or failMut:
+      mutated_ = True
+      protLinkDic = getProteinLinkers(bnfGrammar)
+      pName = random.choice(list(protEpDic.keys()))
+      newInd, failMut = performReplaceLinker(newInd, pName, protLinkDic[pName])
 
     if mutated_:
         del newInd.fitness.values
     return newInd,
 
+def crossover_multiepitope(parent0, parent1, bnfGrammar):
+  '''This crossover operates at phenotype level, so no further mapping is necessary.
+  The crossover will swap the entire set of epitopes from 1 protein with the same protein set of the other parent.
+  - parents: Individuals to be crossed
+  - bnfGrammar: RepGrammar
+  # todo: maybe a lower level crossover for epitope subsets
+  '''
+  child0, child1 = copy.deepcopy(parent0), copy.deepcopy(parent1)
+  protNames = getProteinNames(bnfGrammar)
+  proteinCrosses = {pName: False for pName in protNames}
+
+  proteinCrosses[random.choice(protNames)] = True  # Crossing only one random protein
+  # proteinCrosses = {pName: np.random.choice([True, False], 1, p=[crossProtein, 1-crossProtein])[0]
+  #                   for pName in protNames}
+  child0, child1 = performCrossProtein(child0, child1, proteinCrosses)
+  del child0.fitness.values, child1.fitness.values
+  return child0, child1
+
 ######### ALGORITMS ##############
 
 
-def phenVarAnd(population, toolbox, bnfGrammar, cxpb, mutpb, mutSpb, mutLpb):
+def phenVarAnd(population, toolbox, bnfGrammar, cxpb, mutpb, mutProbs):
   """Part of an evolutionary algorithm applying only the variation part
   (crossover **and** mutation). The modified individuals have their
   fitness invalidated. The individuals are cloned so returned population is
@@ -535,17 +552,66 @@ def phenVarAnd(population, toolbox, bnfGrammar, cxpb, mutpb, mutSpb, mutLpb):
 
   # Apply crossover and mutation on the offspring
   for i in range(1, len(offspring), 2):
-    offspring[i - 1], offspring[i] = toolbox.mate(offspring[i - 1], offspring[i],
-                                                  bnfGrammar, cxpb)
+    if random.random() < cxpb:
+      offspring[i - 1], offspring[i] = toolbox.mate(offspring[i - 1], offspring[i], bnfGrammar)
 
   for i in range(len(offspring)):
-    offspring[i], = toolbox.mutate(offspring[i], bnfGrammar, mutpb, mutSpb, mutLpb)
+    if random.random() < mutpb:
+      offspring[i], = toolbox.mutate(offspring[i], bnfGrammar, *mutProbs)
 
   return offspring
 
+def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
+  """Part of an evolutionary algorithm applying only the variation part
+  (crossover **and** mutation). The modified individuals have their
+  fitness invalidated. The individuals are cloned so returned population is
+  independent of the input population.
+
+  :param population: A list of individuals to vary.
+  :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                  operators.
+  :param cxpb: The probability of mating two individuals.
+  :param mutpb: The probability of mutating an individual.
+  :returns: A list of varied individuals that are independent of their
+            parents.
+
+  """
+
+  offspring = []
+  for _ in range(lambda_):
+    op_choice = random.random()
+    if op_choice < cxpb:  # Apply crossover
+      ind1, ind2 = [toolbox.clone(i) for i in random.sample(population, 2)]
+      ind1, ind2 = toolbox.mate(ind1, ind2, bnfGrammar)
+      del ind1.fitness.values
+      offspring.append(ind1)
+    elif op_choice < cxpb + mutpb:  # Apply mutation
+      ind = toolbox.clone(random.choice(population))
+      ind, = toolbox.mutate(ind, bnfGrammar, *mutProbs)
+      del ind.fitness.values
+      offspring.append(ind)
+    else:  # Apply reproduction
+      offspring.append(random.choice(population))
+
+  return offspring
+
+def performEvaluation(p, fitDic, toolbox):
+  invalid_ind = [ind for ind in p if not ind.fitness.valid]
+  newInds = [ind for ind in invalid_ind if ind.phenotype not in fitDic]
+  oldInds = [ind for ind in invalid_ind if ind.phenotype in fitDic]
+
+  fitnesses = toolbox.evaluate(newInds)
+  for i, ind in enumerate(newInds):
+    fitDic[ind.phenotype] = fitnesses[i]
+    ind.fitness.values = fitnesses[i]
+
+  for ind in oldInds:
+    ind.fitness.values = fitDic[ind.phenotype]
+  return p, fitDic
+
 
 def ge_eaSimpleWithElitismNoTrain(population, toolbox, cxpb, mutpb, mutSpb, ngen, elite_size,
-                                  bnf_grammar, mutLpb=None,
+                                  bnfGrammar, mutLpb=None,
                                   report_items=None, stats=None, halloffame=None, verbose=__debug__):
   """This algorithm reproduce the simplest evolutionary algorithm as
   presented in chapter 7 of [Back2000]_, with some adaptations to run GE
@@ -558,7 +624,7 @@ def ge_eaSimpleWithElitismNoTrain(population, toolbox, cxpb, mutpb, mutSpb, ngen
   :param ngen: The number of generation.
   :param elite_size: The number of best individuals to be copied to the
                   next generation.
-  :params bnf_grammar, codon_size, max_tree_depth: Parameters
+  :params bnfGrammar, codon_size, max_tree_depth: Parameters
                   used to mapper the individuals after crossover and
                   mutation in order to check if they are valid.
   :param stats: A :class:`~deap.tools.Statistics` object that is updated
@@ -689,7 +755,7 @@ def ge_eaSimpleWithElitismNoTrain(population, toolbox, cxpb, mutpb, mutSpb, ngen
     end = time.time()
     selection_time = end - start
     # Vary the pool of individuals
-    offspring = phenVarAnd(offspring, toolbox, bnf_grammar, cxpb, mutpb, mutSpb, mutLpb)
+    offspring = phenVarAnd(offspring, toolbox, bnfGrammar, cxpb, mutpb, mutProbs)
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
@@ -779,5 +845,236 @@ def ge_eaSimpleWithElitismNoTrain(population, toolbox, cxpb, mutpb, mutSpb, ngen
 
   return population, logbook
 
+def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
+                    cxpb, mutpb,
+                    mutEpb=None, mutSpb=None, mutLpb=None,
+                    stats=None, halloffame=None, verbose=__debug__):
+  """This algorithm reproduce the simplest evolutionary algorithm as
+  presented in chapter 7 of [Back2000]_, with some adaptations to run GE
+  on GRAPE.
+  :param population: A list of individuals.
+  :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                  operators.
+  :param cxpb: The probability of mating two individuals.
+  :param mutpb: The probability of mutating an individual.
+  :param ngen: The number of generation.
+  :param elite_size: The number of best individuals to be copied to the
+                  next generation.
+  :params bnfGrammar, codon_size, max_tree_depth: Parameters
+                  used to mapper the individuals after crossover and
+                  mutation in order to check if they are valid.
+  :param stats: A :class:`~deap.tools.Statistics` object that is updated
+                inplace, optional.
+  :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+                     contain the best individuals, optional.
+  :param verbose: Whether or not to log the statistics.
+  :returns: The final population
+  :returns: A class:`~deap.tools.Logbook` with the statistics of the
+            evolution
+  """
+  logbook = tools.Logbook()
+  logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+  fitnessDic = {}
+
+  # Evaluate the individuals with an invalid fitness
+  invalid_ind = [ind for ind in population if not ind.fitness.valid]
+  population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
+
+  valid0 = [ind for ind in population if not ind.invalid]
+  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+  if len(valid0) != len(valid):
+    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+
+  # Update the hall of fame with the generated individuals
+  if halloffame is not None:
+    halloffame.update(valid)
+
+  record = stats.compile(population) if stats is not None else {}
+  logbook.record(gen=0, nevals=len(invalid_ind), **record)
+  if verbose:
+    print(logbook.stream)
+
+  # Begin the generational process
+  for gen in range(1, ngen + 1):
+    # Select the next generation individuals
+    offspring = toolbox.select(valid, len(population))
+    # Vary the pool of individuals
+    mutProbs = [mutEpb, mutSpb, mutLpb]
+    offspring = phenVarAnd(offspring, toolbox, bnfGrammar, cxpb, mutpb, mutProbs)
+
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    offspring, fitnessDic = performEvaluation(offspring, fitnessDic, toolbox)
+
+    # Update population for next generation
+    population[:] = offspring
+    # Include in the population the elitist individuals
+
+    valid0 = [ind for ind in population if not ind.invalid]
+    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+    if len(valid0) != len(valid):
+      warnings.warn(
+        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
+    # Update the hall of fame with the generated individuals
+    if halloffame is not None:
+      halloffame.update(valid)
+
+    record = stats.compile(population) if stats is not None else {}
+    logbook.record(gen=0, nevals=len(invalid_ind), **record)
+    if verbose:
+      print(logbook.stream)
+
+  return population, logbook
+
+def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar, 
+                          ngen, mu, lambda_, 
+                          cxpb, mutpb, 
+                          mutEpb=None, mutSpb=None, mutLpb=None,
+                          stats=None, halloffame=None, verbose=__debug__):
+  """This algorithm reproduce the Mu plu Lambda evolutionary algorithm from DEAP
+  :param population: A list of individuals.
+  :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                  operators.
+  :param cxpb: The probability of mating two individuals.
+  :param mutpb: The probability of mutating an individual.
+  :param ngen: The number of generation.
+  :params bnfGrammar, codon_size, max_tree_depth: Parameters
+                  used to mapper the individuals after crossover and
+                  mutation in order to check if they are valid.
+  :param stats: A :class:`~deap.tools.Statistics` object that is updated
+                inplace, optional.
+  :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+                     contain the best individuals, optional.
+  :param verbose: Whether or not to log the statistics.
+  :returns: The final population
+  :returns: A class:`~deap.tools.Logbook` with the statistics of the
+            evolution
+  """
+
+  logbook = tools.Logbook()
+  logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+  fitnessDic = {}
+
+  # Evaluate the individuals with an invalid fitness
+  invalid_ind = [ind for ind in population if not ind.fitness.valid]
+  population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
+
+  valid0 = [ind for ind in population if not ind.invalid]
+  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+  if len(valid0) != len(valid):
+    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+
+  # Update the hall of fame with the generated individuals
+  if halloffame is not None:
+    halloffame.update(valid)
+
+  record = stats.compile(population) if stats is not None else {}
+  logbook.record(gen=0, nevals=len(invalid_ind), **record)
+  if verbose:
+    print(logbook.stream)
+
+  # Begin the generational process
+  for gen in range(1, ngen + 1):
+    # Select the next generation individuals
+    mutProbs = [mutEpb, mutSpb, mutLpb]
+    offspring = phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs)
+
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    offspring, fitnessDic = performEvaluation(offspring, fitnessDic, toolbox)
+
+    # Update population for next generation
+    population[:] = toolbox.select(population + offspring, mu)
+
+    valid0 = [ind for ind in population if not ind.invalid]
+    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+    if len(valid0) != len(valid):
+      warnings.warn(
+        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
+    # Update the hall of fame with the generated individuals
+    if halloffame is not None:
+      halloffame.update(valid)
+
+    record = stats.compile(population) if stats is not None else {}
+    logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+    if verbose:
+      print(logbook.stream)
+
+  return population, logbook
 
 
+def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
+                          ngen, mu, lambda_,
+                          cxpb, mutpb,
+                          mutEpb=None, mutSpb=None, mutLpb=None,
+                          stats=None, halloffame=None, verbose=__debug__):
+  """This algorithm reproduce the Mu plu Lambda evolutionary algorithm from DEAP
+  :param population: A list of individuals.
+  :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
+                  operators.
+  :param cxpb: The probability of mating two individuals.
+  :param mutpb: The probability of mutating an individual.
+  :param ngen: The number of generation.
+  :params bnfGrammar, codon_size, max_tree_depth: Parameters
+                  used to mapper the individuals after crossover and
+                  mutation in order to check if they are valid.
+  :param stats: A :class:`~deap.tools.Statistics` object that is updated
+                inplace, optional.
+  :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
+                     contain the best individuals, optional.
+  :param verbose: Whether or not to log the statistics.
+  :returns: The final population
+  :returns: A class:`~deap.tools.Logbook` with the statistics of the
+            evolution
+  """
+
+  logbook = tools.Logbook()
+  logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+  fitnessDic = {}
+
+  # Evaluate the individuals with an invalid fitness
+  invalid_ind = [ind for ind in p if not ind.fitness.valid]
+  population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
+
+  valid0 = [ind for ind in population if not ind.invalid]
+  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+  if len(valid0) != len(valid):
+    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+
+  # Update the hall of fame with the generated individuals
+  if halloffame is not None:
+    halloffame.update(valid)
+
+  record = stats.compile(population) if stats is not None else {}
+  logbook.record(gen=0, nevals=len(invalid_ind), **record)
+  if verbose:
+    print(logbook.stream)
+
+  # Begin the generational process
+  for gen in range(1, ngen + 1):
+    # Select the next generation individuals
+    mutProbs = [mutEpb, mutSpb, mutLpb]
+    offspring = phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs)
+
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    offspring, fitnessDic = performEvaluation(offspring, fitnessDic, toolbox)
+
+    # Update population for next generation
+    population[:] = toolbox.select(offspring, mu)
+
+    valid0 = [ind for ind in population if not ind.invalid]
+    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+    if len(valid0) != len(valid):
+      warnings.warn(
+        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
+    # Update the hall of fame with the generated individuals
+    if halloffame is not None:
+      halloffame.update(valid)
+
+    record = stats.compile(population) if stats is not None else {}
+    logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+    if verbose:
+      print(logbook.stream)
+
+  return population, logbook

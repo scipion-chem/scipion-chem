@@ -379,8 +379,13 @@ class ProtOptimizeMultiEpitope(EMProtocol):
         if len(self.inputROIs.get()) < self.maxEp.get():
           errors.append('The maximum number of epitopes cannot be higher than the number of input epitopes')
         evalDics = self.getEvalDics()
-        if not hasattr(self.inputROIs.get().getFirstItem(), '_alleles') and IEDB in evalDics:
-          errors.append(f'{IEDB} analysis cannot be performed because no information about the MHC alleles is found')
+        if IEDB in evalDics:
+          mhcs = [self.getEnumText('mhc')]
+          mhcs = ['I', 'II'] if mhcs == 'combined' else mhcs
+          for mhc in mhcs:
+            if not hasattr(self.inputROIs.get().getFirstItem(), f'_allelesMHC{mhc}'):
+              errors.append(f'{IEDB} analysis cannot be performed because no information about the MHC{mhc} alleles '
+                            f'is found')
 
         if self.gaType.get() == MUCOMMA and self.varProp.get() < 1:
           errors.append(f'The Proportion of varied individuals {self.varProp.get()} must be >= 1 '
@@ -409,7 +414,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
       toolbox = self.registerMate(toolbox)
-      # todo: ensure min size in multiepitopes
       toolbox.decorate("mate", ensureDifferentIds(indOptions))
       toolbox.register("mutate", mutDifferentIdx, low=1, high=indOptions, indpb=self.mutIndProb.get())
       toolbox.decorate("mutate", ensureDifferentIds(indOptions))
@@ -492,7 +496,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       '''
       jobs = self.numberOfThreads.get()
       evalDics = self.getEvalDics()
-      # todo: get a register of already evaluated individuals
       sequences = self.getMultiEpitopeSeqs(individuals)
 
       resultsDic = {}
