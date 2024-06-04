@@ -133,22 +133,6 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('addROI', params.LabelParam, label='Add defined ROI: ',
                        help='Use this wizard to store the defined ROI in the list')
 
-        group.addParam('addCoordinate', params.LabelParam, label='Add defined coordinate: ',
-                       condition='origin=={}'.format(COORDS),
-                       help='Here you can define a coordinate ROI which will be added to the list of ROIs below.')
-        group.addParam('addResidue', params.LabelParam, label='Add defined residues: ',
-                       condition='origin=={}'.format(RESIDUES),
-                       help='Here you can define a residue ROI which will be added to the list of ROIs below.')
-        group.addParam('addLigand', params.LabelParam, label='Add defined ligand: ',
-                       condition='origin=={}'.format(LIGANDS),
-                       help='Here you can define a ligand ROI which will be added to the list of ROIs below.')
-        group.addParam('addPPI', params.LabelParam, label='Add defined PPI: ',
-                       condition='origin=={}'.format(PPI),
-                       help='Here you can define a PPI ROI which will be added to the list of ROIs below.')
-        group.addParam('addNRes', params.LabelParam, label='Add defined Near Residues: ',
-                       condition='origin=={}'.format(NRES),
-                       help='Here you can define a Near Residues ROI which will be added to the list of ROIs below.')
-
 
         group.addParam('inROIs', params.TextParam, width=70, default='',
                        label='List of input ROIs: ',
@@ -216,12 +200,13 @@ class ProtDefineStructROIs(EMProtocol):
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
         pdbFile = self.getProteinFileName()
-        pdbFile = self.checkLigands(pdbFile)
+        newPDBFile = self._getPath(os.path.basename(pdbFile))
+        newPDBFile = self.checkLigands(pdbFile, newPDBFile)
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
             pocketFile = createPocketFile(clust, i, outDir=self._getExtraPath())
-            pocket = StructROI(pocketFile, pdbFile)
+            pocket = StructROI(pocketFile, newPDBFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
             pocket.calculateContacts()
@@ -262,18 +247,21 @@ class ProtDefineStructROIs(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
-    def checkLigands(self, pdbFile):
+    def checkLigands(self, pdbFile, newPDBFile):
       ligToRem = []
       for roiStr in self.inROIs.get().split('\n'):
         if roiStr.strip():
           jSonStr = ':'.join(roiStr.split(':')[1:]).strip()
           jDic = json.loads(jSonStr)
           roiKey = roiStr.split()[1].strip()
-          if roiKey == 'Ligand:':
+          if roiKey == 'Ligand:' and jDic['remove'] == 'True':
             ligToRem.append(jDic['molName'])
+
       if ligToRem:
-        pdbFile = cleanPDB(pdbFile, pdbFile, het2rem=ligToRem)
-      return pdbFile
+        newPDBFile = cleanPDB(pdbFile, newPDBFile, het2rem=ligToRem)
+      else:
+        shutil.copy(pdbFile, newPDBFile)
+      return newPDBFile
 
     def getProteinFileName(self, inProtocol=True):
         inpStruct = self.inputAtomStruct.get()
