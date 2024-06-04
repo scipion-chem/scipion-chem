@@ -33,6 +33,8 @@ information such as name and number of residues.
 """
 
 # Imports
+import json
+
 from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
 from pwchem.utils import createMSJDic
@@ -284,3 +286,23 @@ DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])
+
+class AddResidueWizard(AddElementWizard):
+  """Adds a selected resiude(s) in a chain+residues congifuration parameters to a list of residues
+  """
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+
+    prevList, newLine = self.curePrevList(getattr(protocol, outputParam[0]).get()), ''
+    if len(inputParam) > 0:
+      inChain, inResidues = getattr(protocol, inputParam[0]).get(), getattr(protocol, inputParam[1]).get()
+      chainDic, resDic = json.loads(inChain), json.loads(inResidues)
+      newLine = f'{{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
+               f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
+    elif hasattr(protocol, 'createElementLine'):
+      newLine = protocol.createElementLine()
+
+    form.setVar(outputParam[0], prevList + newLine)
