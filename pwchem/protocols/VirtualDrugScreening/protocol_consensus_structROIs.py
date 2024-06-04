@@ -78,7 +78,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimun number of overlapping structural regions: ',
                       help="Min number of structural regions to be considered consensus StructROIs")
-        form.addParam('sameClust', params.BooleanParam, default=True,
+        form.addParam('sameClust', params.BooleanParam, default=False,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping structural ROIs from the same input set when calculating the '
                            'cluster size')
