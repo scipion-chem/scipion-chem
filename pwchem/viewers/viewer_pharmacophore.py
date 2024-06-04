@@ -107,7 +107,7 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
 
               spheresStr += SPHERE_LIST.format(feature_type, featSpheres, feature_type, feature_type)
 
-      protFile = self.getPharmacophoreObject().getProteinFile()
+      protFile = os.path.abspath(self.getPharmacophoreObject().getProteinFile())
       if not protFile:
           protStr = ''
       else:
