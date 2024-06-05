@@ -218,7 +218,7 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
   """ Protocol viewer to visualize different type of sequence objects
   """
   _label = 'Sequence viewer'
-  _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+  _targets = [SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   def __init__(self, **kwargs):
@@ -262,10 +262,10 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
     else:
       return False
   
-class SequenceChemViewer(pwviewer.ProtocolViewer):
+class SequenceChemViewer(SequenceGeneralViewer):
     """ Protocol viewer to visualize different type of sequence objects
     """
-    _label = 'Sequence viewer'
+    _label = 'Sequence chem viewer'
     _targets = [SetOfSequencesChem]
     _environments = [pwviewer.DESKTOP_TKINTER]
 
@@ -273,11 +273,8 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
         pwviewer.ProtocolViewer.__init__(self, **kwargs)
 
     def _defineParams(self, form):
-        form.addSection(label='Sequence viewer')
-        aGroup = form.addGroup('AliView viewer')
-        aGroup.addParam('aliLabel', params.LabelParam, label='Display sequences with AliView: ',
-                        help='Display the output sequences using AliView')
-
+        super()._defineParams(form)
+        print('IM here: ', self.checkIfInteractions())
         if self.checkIfInteractions():
             self._defineInteractionParams(form)
 
@@ -310,19 +307,14 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
         return form
 
     def _getVisualizeDict(self):
-        return {
-            'aliLabel': self._aliView,
-
+        vDic = super()._getVisualizeDict()
+        vDic.update({
             # Interaction views
             'displayHeatMap': self._viewHeatMap,
             'genProts': self._generateProts,
             'genMols': self._generateMols,
-        }
-
-    def _aliView(self, paramName=None):
-        outSeqs = self.getOutSequences()
-        aliV = SequenceAliViewer(project=self.getProject())
-        return aliV._visualize(outSeqs)
+        })
+        return vDic
 
     def _viewHeatMap(self, paramName=None):
         outSeqs = self.getOutSequences()
