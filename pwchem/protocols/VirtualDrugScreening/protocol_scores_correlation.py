@@ -47,6 +47,9 @@ class ProtScoreCorrelation(EMProtocol):
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineInput(self, form, label, allowRatio=False, ratioCondition='True'):
+      form.addParam(f'inputName_{label}', params.StringParam, label="Select name for score: ", default='',
+                     condition=f'{ratioCondition} and {allowRatio}', expertLevel=params.LEVEL_ADVANCED,
+                     help='Select the name of the score to be plotted in the output graph')
       group = form.addGroup(f'Input Set {label}')
       group.addParam(f'inputFromFile_{label}', params.BooleanParam, default=False,
                      label='Get input scores from file: ', expertLevel=params.LEVEL_ADVANCED,
@@ -67,9 +70,6 @@ class ProtScoreCorrelation(EMProtocol):
       group.addParam(f'inputScore_{label}', params.StringParam, label="Select score: ", default='',
                      condition=f'{ratioCondition} and not inputFromFile_{label}',
                      help='Select a score for the selected input to be used')
-      group.addParam(f'inputName_{label}', params.StringParam, label="Select name for score: ", default='',
-                     condition=f'{ratioCondition} and {allowRatio}', expertLevel=params.LEVEL_ADVANCED,
-                     help='Select the name of the score to be plotted in the output graph')
 
       group.addParam(f'extraAction_{label}', params.EnumParam, choices=['None', 'Log'],
                      default=0, condition=f'{ratioCondition}',
