@@ -67,6 +67,9 @@ class ProtScoreCorrelation(EMProtocol):
       group.addParam(f'inputScore_{label}', params.StringParam, label="Select score: ", default='',
                      condition=f'{ratioCondition} and not inputFromFile_{label}',
                      help='Select a score for the selected input to be used')
+      group.addParam(f'inputName_{label}', params.StringParam, label="Select name for score: ", default='',
+                     condition=f'{ratioCondition} and {allowRatio}', expertLevel=params.LEVEL_ADVANCED,
+                     help='Select the name of the score to be plotted in the output graph')
 
       group.addParam(f'extraAction_{label}', params.EnumParam, choices=['None', 'Log'],
                      default=0, condition=f'{ratioCondition}',
@@ -186,8 +189,10 @@ class ProtScoreCorrelation(EMProtocol):
         poly1dFn = np.poly1d(coef)
 
         plt.title(f'Scores correlation ({self.getEnumText("corrType")}): {round(corr[0], 4)}')
-        plt.xlabel("Input 1")
-        plt.ylabel("Input 2")
+        xlabel = self.inputName_1.get().strip() if self.inputName_1.get().strip() else "Input 1"
+        ylabel = self.inputName_2.get().strip() if self.inputName_2.get().strip() else "Input 2"
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
         plt.plot(x, y, 'yo', x, poly1dFn(x), 'r')
         plt.grid()
 
