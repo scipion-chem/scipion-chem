@@ -34,13 +34,13 @@ import numpy, json, random, time, os, re, sys
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
+from pwem.objects.data import SetOfSequences, Sequence
 
 from pwchem.utils import runInParallel
 from pwchem.utils.utilsDEAP import *
+from pwchem.objects import MultiEpitope
 
-from grape.grape import random_initialisation
 from deap import base, creator, tools, algorithms
-
 
 
 REM, ADD, MOD = 0, 1, 2
@@ -326,10 +326,10 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     group.addParam('gaType', params.EnumParam, label='GA type: ', default=SIMP, choices=self._agTypes,
                    help='Choose a strategy for the linkers to be chosen. For more information: '
                         'https://deap.readthedocs.io/en/master/api/algo.html#complete-algorithms')
-    group.addParam('varProp', params.FloatParam, label='Proportion of varied individuals: ', default=0.25,
-                   condition='gaType!=0',
-                   help='Defines the number of varied individuals as the proportion with the number of individuals '
-                        'in the population.')
+    # group.addParam('varProp', params.FloatParam, label='Proportion of varied individuals: ', default=0.25,
+    #                condition='gaType!=0',
+    #                help='Defines the number of varied individuals as the proportion with the number of individuals '
+    #                     'in the population.')
 
     group = form.addGroup('Mutation')
     # group.addParam('mutType', params.EnumParam, label='Mutation type: ', default=0, choices=self._mutTypes,
@@ -395,36 +395,40 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     bnfGrammar = RepGrammar(grammarFile, nonRepNTs, self.convertWDic(wDic))
 
     deapToolbox = self.defineDeapToolbox(bnfGrammar)
-    # todo: fix: when cleaning phenotypes, ensureall prots in: probably better to discard and redo the ind
     population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
                                                min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
                                                codon_size=255, codon_consumption='weighted',
                                                genome_representation='list')
-    print('Initial pop: ', [ind.phenotype for ind in population])
+    # print('Initial pop: ', [ind.phenotype for ind in population])
 
-    hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
+    self.hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
     kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen,
               'mutEpb': self.mutEProb.get(), 'mutSpb': self.mutSProb.get(), 'mutLpb': self.mutLProb.get(),
-              'halloffame': hof, 'verbose': True}
+              'halloffame': self.hof, 'verbose': True}
     if self.gaType.get() != SIMP:
-      lamb = round(nPop * self.varProp.get())
-      kwargs.update({'mu': nPop, 'lambda_': int(lamb)})
+      kwargs.update({'mu': nPop, 'lambda_': nPop})
 
     gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
-    print('gaAlgorithm: ', gaAlgorithm)
     population, logbook = gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
 
-    print('Final pop: ', [ind.phenotype for ind in population])
-    print('Scores: ', [ind.fitness.values for ind in population])
-    print('Fame: ', [ind.phenotype for ind in hof.items])
-    print('Scores: ', [ind.fitness.values for ind in hof.items])
+    # print('Final pop: ', [ind.phenotype for ind in population])
+    # print('Scores: ', [ind.fitness.values for ind in population])
+    # print('Fame: ', [ind.phenotype for ind in self.hof.items])
+    # print('Scores: ', [ind.fitness.values for ind in self.hof.items])
 
-    best = hof.items[0]
-    print("Best individual: \n", best.phenotype, best.fitness.values)
+    # best = self.hof.items[0]
+    # print("Best individual: \n", best.phenotype, best.fitness.values)
 
   def defineOutputStep(self):
-    # todo: make functional: evaluations should be callable to extract the scores from another protocol
-    pass
+    sequenceSet = SetOfSequences().create(outputPath=self._getPath())
+    for i, ind in enumerate(self.hof):
+      seq = self.getMultiEpitopeSeqs([ind])[0]
+      seqObj = Sequence(sequence=seq, name=f'MultiEpitope_{i}', id=f'MultiEpitope_{i}')
+      seqObj._multiepitopeScore = params.Float(ind.fitness.values[0])
+      sequenceSet.append(seqObj)
+
+    self._defineOutputs(outputMultiepitopes=sequenceSet)
+
 
   # --------------------------- INFO functions -----------------------------------
   def _summary(self):
@@ -494,7 +498,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
       protName = roiSet.getSequenceObj().getId()
       mapDic[protName] = []
       for roi in roiSet:
-        mapDic[protName].append(roi)
+        mapDic[protName].append(roi.clone())
     return mapDic
 
   def getEpitopesPerProt(self, multiPointer):
@@ -610,16 +614,10 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     Returns a list of individual fitnesses: [(f1,), ...]
     '''
     resultsDic = self.performEvaluations(individuals)
-    print('ResultDic. ', resultsDic, len(resultsDic))
     weigths = self.getEvalWeights()
-    print('ws: ', weigths, len(weigths))
     fitnesses = numpy.zeros(len(individuals))
-    print('fitnesses: ', fitnesses, len(fitnesses))
     for (evalKey, softName), res in resultsDic.items():
-      print('res: ', res, len(res))
-      # todo: toxinpred returning only 4 scores
       scores = numpy.array(list(map(float, res)))
-      print('Scores: ', scores)
       fitnesses += scores * weigths[evalKey]
 
     return [(f,) for f in fitnesses]
@@ -633,9 +631,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     '''
     jobs = self.numberOfThreads.get()
     evalDics = self.getEvalDics()
-    print('Individuals: ', individuals, len(individuals))
     sequences = self.getMultiEpitopeSeqs(individuals)
-    print('Sequences: ', sequences, len(sequences))
 
     resultsDic = {}
     disJobs = self.getDistributedJobs(evalDics, jobs)

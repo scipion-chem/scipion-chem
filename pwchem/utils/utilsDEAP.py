@@ -218,14 +218,12 @@ def random_initialisation(ind_class, pop_size, bnf_grammar,
 
     """
     population = []
-
     for i in range(pop_size):
-      genome = []
       init_genome_length = random.randint(min_init_genome_length, max_init_genome_length)
-      for j in range(init_genome_length):
-        genome.append(random.randint(0, codon_size))
+      genome = [random.randint(0, codon_size) for i in range(init_genome_length)]
       ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption)
-      while not ind:
+      while not ind.phenotype:
+        genome = [random.randint(0, codon_size) for i in range(init_genome_length)]
         ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption)
       population.append(ind)
 
@@ -332,18 +330,17 @@ def mapper_noRepeated(genome, grammar, max_depth):
 
     return phenotype, nodes, depth, used_codons, invalid, 0, structure
 
-def cleanPhenotype(phen):
-    '''Remove the unmatched production rules from the phenotype that have not been transformed to terminals'''
+def checkPhenotype(phen):
+    '''Check for unmatched production rules from the phenotype that have not been transformed to terminals'''
     unPhenots = re.findall(r" ?\<\w+\> ?", phen)
-    for up in unPhenots:
-      phen = phen.replace(up, '')
+    if len(unPhenots) > 0:
+      return None
     return phen
 
 def mapper_weighted(genome, grammar, max_depth):
     """
     This mapper uses the genome as random seeds to generate the phenotype, having the epitopes weights that are
     used to randomly choose them"""
-    # todo: return None if invalid
     idx_genome = 0
     phenotype = grammar.start_rule
     next_NT = re.search(r"\<(\w+)\>", phenotype).group()
@@ -363,7 +360,7 @@ def mapper_weighted(genome, grammar, max_depth):
         index_production_chosen = getWeightedIndex(genome[idx_genome], repIdxs, grammar.n_rules[NT_index], weights)
         if next_NT in repDic:
             if index_production_chosen == None:
-              return None
+              return [None] * 7
             repDic[next_NT].append(index_production_chosen)
 
         structure.append(index_production_chosen)
@@ -399,7 +396,7 @@ def mapper_weighted(genome, grammar, max_depth):
         used_codons = idx_genome
 
     depth = max(list_depth)
-    phenotype = cleanPhenotype(phenotype)
+    phenotype = checkPhenotype(phenotype)
     return phenotype, nodes, depth, used_codons, invalid, 0, structure
 
 def getProteinNames(bnfGrammar):
@@ -409,7 +406,6 @@ def getProteinPhenotype(ind, pName):
     '''Return the substring containing the epitopes and linkers of the given protein name from the phenotype
     '''
     eps = re.findall(fr'{pName}C?\[\d+\]', ind.phenotype)
-    print('Eps: ', eps, ind.phenotype)
     if len(eps) > 1:
         epStr = re.findall(fr'{pName}C?\[\d+\].*{pName}C?\[\d+\]', ind.phenotype)[0]
     else:
@@ -614,18 +610,22 @@ def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
   """
 
   offspring = []
-  for _ in range(lambda_):
+  while len(offspring) < lambda_:
     op_choice = random.random()
     if op_choice < cxpb:  # Apply crossover
       ind1, ind2 = [toolbox.clone(i) for i in random.sample(population, 2)]
       ind1, ind2 = toolbox.mate(ind1, ind2, bnfGrammar)
       del ind1.fitness.values
-      offspring.append(ind1)
+      if not ind1.invalid:
+        offspring.append(ind1)
+      elif not ind2.invalid:
+        offspring.append(ind2)
     elif op_choice < cxpb + mutpb:  # Apply mutation
       ind = toolbox.clone(random.choice(population))
       ind, = toolbox.mutate(ind, bnfGrammar, *mutProbs)
       del ind.fitness.values
-      offspring.append(ind)
+      if not ind.invalid:
+        offspring.append(ind)
     else:  # Apply reproduction
       offspring.append(random.choice(population))
 
@@ -636,13 +636,15 @@ def performEvaluation(p, fitDic, toolbox):
   newInds = [ind for ind in invalid_ind if ind.phenotype not in fitDic]
   oldInds = [ind for ind in invalid_ind if ind.phenotype in fitDic]
 
-  fitnesses = toolbox.evaluate(newInds)
-  for i, ind in enumerate(newInds):
-    fitDic[ind.phenotype] = fitnesses[i]
-    ind.fitness.values = fitnesses[i]
+  if len(newInds) > 0:
+    fitnesses = toolbox.evaluate(newInds)
+    for i, ind in enumerate(newInds):
+      fitDic[ind.phenotype] = fitnesses[i]
+      ind.fitness.values = fitnesses[i]
 
   for ind in oldInds:
     ind.fitness.values = fitDic[ind.phenotype]
+
   return p, fitDic
 
 
@@ -1035,7 +1037,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     logbook.record(gen=gen, nevals=len(invalid_ind), **record)
     if verbose:
       print(logbook.stream)
-      print('Scores: ', fitnessDic)
+      # print('Scores: ', fitnessDic)
 
   return population, logbook
 
@@ -1066,11 +1068,11 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
   """
 
   logbook = tools.Logbook()
-  logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+  logbook.header = ['gen', 'nevals', 'meanScore', 'minScore', 'maxScore', 'hofScores'] + (stats.fields if stats else [])
   fitnessDic = {}
 
   # Evaluate the individuals with an invalid fitness
-  invalid_ind = [ind for ind in p if not ind.fitness.valid]
+  invalid_ind = [ind for ind in population if not ind.fitness.valid]
   population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
 
   valid0 = [ind for ind in population if not ind.invalid]
@@ -1110,7 +1112,12 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
       halloffame.update(valid)
 
     record = stats.compile(population) if stats is not None else {}
-    logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+    scores = [ind.fitness.values[0] for ind in population]
+    hofScores = [ind.fitness.values[0] for ind in halloffame]
+    logbook.record(gen=gen, nevals=len(invalid_ind),
+                   meanScore=sum(scores)/len(scores), minScore=min(scores), maxScore=max(scores),
+                   hofScores=hofScores,
+                   **record)
     if verbose:
       print(logbook.stream)
 
