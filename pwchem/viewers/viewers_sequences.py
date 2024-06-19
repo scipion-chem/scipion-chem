@@ -162,9 +162,9 @@ class SequenceAliView(pwviewer.CommandView):
     """ View for calling an external command. """
 
     def __init__(self, seqFiles, cwd, **kwargs):
-        pwviewer.CommandView.__init__(self,
-                                      f'pwchem_plugin.getProgramHome(ALIVIEW_DIC)/aliview/aliview {" ".join(seqFiles)}',
-                                      cwd=cwd, **kwargs)
+      pwviewer.CommandView.__init__(self, f'{pwchem_plugin.getProgramHome(ALIVIEW_DIC)}/aliview/aliview '
+                                          f'{" ".join(seqFiles)}',
+                                    cwd=cwd, **kwargs)
 
     def show(self):
         Popen(self._cmd, cwd=self._cwd, shell=True)
