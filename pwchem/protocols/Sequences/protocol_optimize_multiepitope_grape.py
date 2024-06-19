@@ -169,7 +169,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
                      DDG: ['chooseDDGEvaluator'],
                      }
 
-  _gaAlgorithms = {SIMP: ge_eaSimpleChem, MUPLUS: ge_eaMuPlusLambdaChem, 
+  _gaAlgorithms = {SIMP: ge_eaSimpleChem, MUPLUS: ge_eaMuPlusLambdaChem,
                    MUCOMMA: ge_eaMuCommaLambdaChem}
   _cxAlgorithms = {P1: tools.cxOnePoint, P2: tools.cxTwoPoint, UNI: tools.cxUniform}
   _selAlgorithms = {TOUR: tools.selTournament, ROUL: tools.selRoulette, BEST: tools.selBest}
@@ -186,7 +186,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
       pass
 
     try:
-      from iiitd.protocols import ProtIIITDEvaluations
+      from immuno.protocols import ProtIIITDEvaluations
       origins[IIITD] = ProtIIITDEvaluations
     except:
       pass
@@ -641,7 +641,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
         epiDic = self.performCoverageAnalysis(individuals, sDics, nt)
 
       elif source == IIITD:
-        from iiitd import Plugin as iiitdPlugin
+        from immuno import Plugin as iiitdPlugin
         epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData(), verbose=False)
 
       elif source == DDG:
@@ -730,7 +730,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
           evalKey = f'{source}-{softName}_{i + 1}'
           sDic.update({'software': softName})
           if not source in mapFuncs:
-            from iiitd.utils import mapEvalParamNames as iiitdMap
+            from immuno.utils import mapEvalParamNames as iiitdMap
             mapFuncs[source] = iiitdMap
 
         elif source == DDG:
@@ -786,7 +786,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     params = [p for p in self._evalParameters[evalOrigin]]
     if evalOrigin == IIITD:
       try:
-        from iiitd.protocols import ProtIIITDEvaluations
+        from immuno.protocols import ProtIIITDEvaluations
         params += ProtIIITDEvaluations._softParams[self.getEnumText('chooseIIITDEvaluator')]
       except:
         pass
