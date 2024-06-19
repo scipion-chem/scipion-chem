@@ -251,7 +251,7 @@ class SelectEvaluationOrigin(VariableWizard):
   def importIIITDProtocols(self):
     iedbProts = []
     try:
-      from iiitd.protocols import ProtIIITDEvaluations
+      from immuno.protocols import ProtIIITDEvaluations
       iedbProts = ['IIITD']
     except:
       print('No IIITD protocols detected')

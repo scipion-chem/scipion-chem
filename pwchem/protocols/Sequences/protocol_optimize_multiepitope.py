@@ -162,7 +162,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
         pass
 
       try:
-        from iiitd.protocols import ProtIIITDEvaluations
+        from immuno.protocols import ProtIIITDEvaluations
         origins['IIITD'] = ProtIIITDEvaluations
       except:
         pass
@@ -506,7 +506,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
           epiDic = self.performCoverageAnalysis(individuals, sDics, nt)
 
         elif source == IIITD:
-          from iiitd import Plugin as iiitdPlugin
+          from immuno import Plugin as iiitdPlugin
           epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData(), verbose=False)
 
         elif source == DDG:
@@ -564,7 +564,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
             evalKey = f'{source}-{softName}_{i + 1}'
             sDic.update({'software': softName})
             if not source in mapFuncs:
-              from iiitd.utils import mapEvalParamNames as iiitdMap
+              from immuno.utils import mapEvalParamNames as iiitdMap
               mapFuncs[source] = iiitdMap
 
           elif source == DDG:
@@ -616,7 +616,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       params = [p for p in self._evalParameters[evalOrigin]]
       if evalOrigin == IIITD:
         try:
-          from iiitd.protocols import ProtIIITDEvaluations
+          from immuno.protocols import ProtIIITDEvaluations
           params += ProtIIITDEvaluations._softParams[self.getEnumText('chooseIIITDEvaluator')]
         except:
           pass
