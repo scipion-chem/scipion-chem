@@ -51,6 +51,9 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
+def checkNormalResidues(sequence):
+  return all([res in RESIDUES1TO3 for res in sequence])
+
 ################# Generic function utils #####################
 def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
   """

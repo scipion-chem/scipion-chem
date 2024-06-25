@@ -29,7 +29,7 @@
 """
 This protocol is used to optimize a multiepitope object based on some predictor scores using genetic algorithms
 """
-import numpy, json, random, time, os, re, sys
+import numpy, json, os, shutil
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -38,9 +38,8 @@ from pwem.objects.data import SetOfSequences, Sequence
 
 from pwchem.utils import runInParallel
 from pwchem.utils.utilsDEAP import *
-from pwchem.objects import MultiEpitope
 
-from deap import base, creator, tools, algorithms
+from deap import base, creator, tools
 
 
 REM, ADD, MOD = 0, 1, 2
@@ -150,7 +149,7 @@ SIMP, MUPLUS, MUCOMMA = 0, 1, 2
 P1, P2, UNI = 0, 1, 2
 TOUR, ROUL, BEST = 0, 1, 2
 
-IEDB, IIITD, DDG = 'IEDB', 'IIITD', 'DDG'
+IEDB, IIITD, DDG, VAXIGN = 'IEDB', 'IIITD', 'DDG', 'VAXIGN'
 
 
 class ProtOptimizeMultiEpitopeGrape(EMProtocol):
@@ -167,14 +166,13 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
   _evalParameters = {IEDB: ['mhc', 'pop'],
                      IIITD: ['chooseIIITDEvaluator'],
                      DDG: ['chooseDDGEvaluator'],
+                     VAXIGN: ['organ']
                      }
 
   _gaAlgorithms = {SIMP: ge_eaSimpleChem, MUPLUS: ge_eaMuPlusLambdaChem,
                    MUCOMMA: ge_eaMuCommaLambdaChem}
   _cxAlgorithms = {P1: tools.cxOnePoint, P2: tools.cxTwoPoint, UNI: tools.cxUniform}
   _selAlgorithms = {TOUR: tools.selTournament, ROUL: tools.selRoulette, BEST: tools.selBest}
-
-  _indMemory = {}
 
   # -------------------------- DEFINE param functions ----------------------
   def getEvaluationProtocols(self):
@@ -188,6 +186,12 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     try:
       from immuno.protocols import ProtIIITDEvaluations
       origins[IIITD] = ProtIIITDEvaluations
+    except:
+      pass
+
+    try:
+      from immuno.protocols import ProtVaxignMLEpitopeEvaluation
+      origins[VAXIGN] = ProtVaxignMLEpitopeEvaluation
     except:
       pass
 
@@ -648,6 +652,9 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
         from ddg import Plugin as ddgPlugin
         epiDic = ddgPlugin.performEvaluations(sequences, sDics, nt, ddgPlugin.getBrowserData(), verbose=False)
 
+      elif source == VAXIGN:
+        epiDic = self.performVaxignML(sequences, sDics, nt)
+
       else:
         continue
       resultsDic.update(epiDic)
@@ -673,6 +680,12 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
     return nRois
 
   def performCoverageAnalysis(self, individuals, sDics, nt):
+    '''Run the Coverage analysis on a set of sequences
+    - inSeqs: dict like {seqId: sequence}
+    - sDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - nt: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
     from iedb import Plugin as iedbPlugin
     from iedb.utils import translateArea, buildMHCCoverageArgs, parseCoverageResults
     resDic = {}
@@ -710,6 +723,53 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
       resDic[(evalKey, IEDB)] = coverages
     return resDic
 
+  def addNullScores(self, vaxDic, inSeqs):
+    nVaxDic = {}
+    for seqId in inSeqs:
+      if str(seqId) not in vaxDic:
+        nVaxDic[seqId] = 0.0
+      else:
+        nVaxDic[seqId] = float(vaxDic[str(seqId)])
+    return nVaxDic
+
+  def performVaxignML(self, inSeqs, sDics, nt):
+    '''Run Vaxign-ML on a set of sequences
+    - inSeqs: dict like {seqId: sequence}
+    - sDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - nt: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+    from immuno import Plugin as immunoPlugin
+    from immuno.protocols.protocol_vaxignML_prediction import filterSequences, writeFasta, parseResults
+
+    resDic = {}
+    keyName = 'inputSequencesVax'
+    filtSeqs = filterSequences(inSeqs)
+    if len(filtSeqs) > 0:
+      oDir = os.path.abspath(self._getExtraPath('vaxResults'))
+      if not os.path.exists(oDir):
+        os.mkdir(oDir)
+      inFasta = writeFasta(filtSeqs, self._getExtraPath(f'{keyName}.fa'))
+
+      for evalKey, evalDic in sDics.items():
+        curDir = os.path.join(oDir, evalKey)
+        if os.path.exists(curDir):
+          shutil.rmtree(curDir)
+
+        kwargs = {'i': inFasta, 'o': curDir, 't': evalDic['organ'], 'p': nt}
+        immunoPlugin.runVaxignML(self, kwargs, cwd=oDir)
+
+        oFile = os.path.join(curDir, f'{keyName}.result.tsv')
+        vaxDic = parseResults(oFile)
+        vaxDic = self.addNullScores(vaxDic, inSeqs)
+        resDic[(evalKey, VAXIGN)] = list(vaxDic.values())
+    else:
+      for evalKey, evalDic in sDics.items():
+        resDic[(evalKey, VAXIGN)] = [0.0] * len(inSeqs)
+
+    return resDic
+
+
   def getEvalDics(self):
     '''Returns a dictionary for each of the sources chosen in the evaluations (IEDB, IIITD, DDG)
     This dictionary are of the form: {source: {(evalKey, softwareName): {parameterName: parameterValue}}}
@@ -722,7 +782,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
         if not source in evalDics:
           evalDics[source] = {}
 
-        if source == IEDB:
+        if source in [IEDB, VAXIGN]:
           evalKey, softName = f'{source}_{i + 1}', source
 
         elif source == IIITD:
@@ -747,7 +807,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
         evalDics[source].update({evalKey: sDic})
 
     for source, evalDic in evalDics.items():
-      if source != IEDB:
+      if source not in [IEDB, VAXIGN]:
         evalDics[source] = mapFuncs[source](evalDic)
 
     return evalDics
@@ -832,7 +892,7 @@ class ProtOptimizeMultiEpitopeGrape(EMProtocol):
       if sline.strip():
         sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
         source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
-        if source == IEDB:
+        if source in [IEDB, VAXIGN]:
           evalKey = f'{source}_{i + 1}'
         elif source == IIITD:
           evalKey = f'{source}-{sDic.pop("chooseIIITDEvaluator")}_{i + 1}'
