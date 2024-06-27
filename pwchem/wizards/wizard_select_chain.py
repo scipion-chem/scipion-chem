@@ -512,11 +512,6 @@ class SelectElementWizard(VariableWizard):
     form.setVar(outputParam[0], dlg.values[0].get())
 
 
-SelectElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                 targets=['inROI'],
-                                 inputs=['inputROIs'],
-                                 outputs=['inROI'])
-
 class SelectElementMultiPointWizard(SelectElementWizard):
   """Lists the items in a SetOfX selected from a multipointer"""
   _targets, _inputs, _outputs = [], {}, {}
@@ -607,7 +602,7 @@ class SelectMultiElementWizard(SelectElementWizard):
     values = [val.get().strip() for val in dlg.values]
     form.setVar(outputParam[0], ', '.join(values))
 
-SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                      targets=['seleLinker'],
                                      inputs=['inLinkerSet'],
                                      outputs=['seleLinker'])
@@ -691,11 +686,11 @@ SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRankDocking,
                                         inputs=['inputMoleculesSets'],
                                         outputs=['defineInput'])
 
-SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                         targets=['inSet'],
                                         inputs=['inputROISets'],
                                         outputs=['inSet'])
-SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                         targets=['linkProtSet'],
                                         inputs=['inputROISets'],
                                         outputs=['linkProtSet'])

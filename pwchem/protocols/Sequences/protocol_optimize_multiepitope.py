@@ -152,7 +152,7 @@ TOUR, ROUL, BEST = 0, 1, 2
 IEDB, IIITD, DDG, VAXIGN = 'IEDB', 'IIITD', 'DDG', 'VAXIGN'
 
 
-class ProtOptimizeMultiEpitopeGrape(EMProtocol):
+class ProtOptimizeMultiEpitope(EMProtocol):
   """
   Optimize a MultiEpitope object based on some scores using Genetic Algorithms
   """

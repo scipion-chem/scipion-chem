@@ -92,7 +92,7 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       targets=['defineScore'],
                                       inputs=['inputMoleculesSets', 'defineInput'],
                                       outputs=['defineScore'])
-SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitopeGrape,
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
                                       targets=['inScore'],
                                       inputs=['inputROISets', 'inSet'],
                                       outputs=['inScore'])
@@ -282,8 +282,3 @@ class SelectEvaluationOrigin(VariableWizard):
                             "Select one of the protocols")
     form.setVar(outputParam[0], dlg.values[0].get())
 
-
-# SelectEvaluationOrigin().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
-#                                     targets=['multiEval'],
-#                                     inputs=[],
-#                                     outputs=['multiEval'])

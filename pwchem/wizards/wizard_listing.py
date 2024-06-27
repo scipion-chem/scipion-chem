@@ -132,24 +132,16 @@ AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
                                       inputs=['buildCondSumLine'],
                                       outputs=['condSummary'])
 
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                       targets=['addScore'],
                                       inputs=['buildScoreSumLine'],
                                       outputs=['scoreSummary'])
 
 AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                      targets=['addEval'],
-                                      inputs=['buildEvalSumLine'],
-                                      outputs=['evalSummary'])
-# AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-#                                       targets=['addManual'],
-#                                       inputs=['buildManualSumLine'],
-#                                       outputs=['manualSummary'])
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
                                       targets=['addLinker'],
                                       inputs=['buildLinkerSumLine'],
                                       outputs=['linkerSummary'])
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitopeGrape,
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                       targets=['addEval'],
                                       inputs=['buildEvalSumLine'],
                                       outputs=['evalSummary'])
