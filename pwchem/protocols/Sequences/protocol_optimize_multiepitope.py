@@ -29,89 +29,109 @@
 """
 This protocol is used to optimize a multiepitope object based on some predictor scores using genetic algorithms
 """
-import numpy, json, random, time, os
+import numpy, json, os, shutil
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
+from pwem.objects.data import SetOfSequences, Sequence
 
 from pwchem.utils import runInParallel
 from pwchem.utils.utilsDEAP import *
 
-from deap import base, creator, tools, algorithms
+from deap import base, creator, tools
+
 
 REM, ADD, MOD = 0, 1, 2
 
-def ensureMinSize(mEpList, minSize):
-  zerosIdxs = numpy.where(mEpList == -1)
-  if minSize > len(mEpList) - len(zerosIdxs):
-    nActive = len(mEpList) - len(zerosIdxs)
-    nActivate = minSize - nActive
-    activateIdxs = numpy.random.choice(zerosIdxs, nActivate, False)
-    mEpList[activateIdxs] = 1
-  return mEpList
+REPORT_ITEMS = ['gen', 'invalid', 'avg', 'std', 'min', 'max',
+                'fitness_test',
+                'best_ind_length', 'avg_length',
+                'best_ind_nodes', 'avg_nodes',
+                'best_ind_depth', 'avg_depth',
+                'avg_used_codons', 'best_ind_used_codons',
+                'structural_diversity', 'fitness_diversity',
+                'selection_time', 'generation_time']
 
-def buildMultiEpitopeZeros(epScores, pZero, maxSize, minSize):
-  '''Build a list of epitope indexes representing a multiepitope.
-  - epScores: weight for each of the scores to sample from randomly
-  - pZero: probability of zero epitope (-1) (this way, we get different number of epitopes)
-  - maxSize: maximum number of epitopes (including zeroEpitope) to form the multiEpitope
-  '''
-  # Populate multiepitope with -1 (no epitopes)
-  multiEpList = numpy.random.choice([-1, 1], maxSize, True, [pZero, 1 - pZero])
-  multiEpList = ensureMinSize(multiEpList, minSize)
 
-  # Randomly choose the necessary number of epitopes, weighting them by the scores
-  epIdxs, epScores = list(epScores.keys()), list(epScores.values())
-  epScores = numpy.array(epScores) / sum(epScores)
-  nEps = numpy.count_nonzero(multiEpList == 1)
-  epitopes = numpy.random.choice(epIdxs, nEps, False, epScores)
+def buildGrammarFile(gFile, protDic, linkDic, compDic):
+  '''Build the multiepitope grammar file with information about the number of proteins and epitopes'''
+  with open(gFile, 'w') as f:
+    # <multiEp> ::= <prot> <linkRoot> <prot> <linkRoot> <prot>
+    prod1 = ' <linkRoot> '.join(["<prot>"] * len(protDic))
+    f.write(f'<multiEp> ::= {prod1}\n\n')
 
-  # Populate multiepitope with chosen epitopes
-  i = 0
-  for j in range(len(multiEpList)):
-    if multiEpList[j] == 1:
-      multiEpList[j] = epitopes[i]
-      i += 1
-  return multiEpList
+    # <prot> ::= <p1Init> | <p2Init> | <p3Init>
+    protNames = [f'<{protName}Init>' for protName in protDic]
+    prod2 = ' | '.join(protNames)
+    f.write(f'<prot> ::= {prod2}\n')
 
-def mutDifferentIdx(ind, low, high, indpb):
-  '''Mutates an individual by chaging on of the non-zero ints in their sequence
-  by another in range(low, high+1) which is not already present in the sequence'''
-  for i in range(len(ind)):
-    if random.random() < indpb:
-      possibleIdxs = set(range(low, high + 1)) - set(ind)
-      if len(possibleIdxs) == 0:
-        raise IndexError("Individual cannot be mutated because there are no index options left")
-      ind[i] = random.sample(sorted(possibleIdxs) + [-1], 1)[0]
-  return ind,
+    # <linkRoot> ::= <p1Link> | <p2Link> | <p3Link>
+    linkNames = [f'<{protName}Link>' for protName in protDic]
+    prod3 = ' | '.join(linkNames)
+    f.write(f'<linkRoot> ::= {prod3}\n\n')
 
-def ensureDifferentIds(nEpitopes):
+    # <p1Init> ::= <p1EpComp> | <p1EpComp> <p1Link> <p1> | <p1> <p1Link> <p1EpComp>
+    for protName, nComp in compDic.items():
+      if nComp > 0:
+        prod4 = f'<{protName}Comp> | <{protName}Comp> <{protName}Link> <{protName}> | <{protName}> <{protName}Link> <{protName}Comp>'
+      else:
+        prod4 = f'<{protName}>'
+      f.write(f'<{protName}Init> ::= {prod4}\n')
+    f.write('\n')
+
+    # <p1> ::= <p1Ep> | <p1Ep> <p1Link> <p1>
+    for protName in protDic:
+      prod4 = f'<{protName}Ep> | <{protName}Ep> <{protName}Link> <{protName}>'
+      f.write(f'<{protName}> ::= {prod4}\n')
+    f.write('\n')
+
+    # <p1EpComp> ::= p1C[0] <p1Link> p1C[1]
+    for protName, nComp in compDic.items():
+      if nComp > 0:
+        prod5 = f' <{protName}Link> '.join([f'{protName}C[{i}]' for i in range(nComp)])
+        f.write(f'<{protName}Comp> ::= {prod5}\n')
+    f.write('\n')
+
+    # <p1Ep> ::= p1[0]|p1[1]|p1[2]|p1[3]|p1[4]
+    for protName, nProts in protDic.items():
+      prod5 = '|'.join([f'{protName}[{i}]' for i in range(nProts)])
+      f.write(f'<{protName}Ep> ::= {prod5}\n')
+    f.write('\n')
+
+    # <p1Link> ::= p1L[0]|p1L[1]|p1L[2]
+    for protName, nLinks in linkDic.items():
+      prod6 = '|'.join([f'{protName}L[{i}]' for i in range(nLinks)])
+      f.write(f'<{protName}Link> ::= {prod6}\n')
+
+
+def countEpitopes(ind, protNames):
+  n = 0
+  for pName in protNames:
+    n += len(re.findall(fr'{pName}C?\[\d+\]', ind.phenotype))
+  return n
+
+
+def ensureEpitopeNumber(epMin, epMax, bnfGrammar):
   def decorator(func):
     def wrapper(*args, **kargs):
       offspring = func(*args, **kargs)
+      protNames = getProteinNames(bnfGrammar)
       for child in offspring:
-        idxs = []
-        for i in range(len(child)):
-          idx = child[i]
-          if idx != -1:
-            if idx in idxs:
-              possibleIdxs = set(range(nEpitopes)) - set(idxs)
-              child[i] = random.sample(sorted(possibleIdxs), 1)[0]
-              idxs.append(child[i])
-            else:
-              idxs.append(idx)
+        nEps = countEpitopes(child, protNames)
+        if nEps < epMin or nEps > epMax:
+          child.invalid = True
       return offspring
 
     return wrapper
 
   return decorator
 
+
 def checkSameInd(ind1, ind2):
   '''Check that two multiEpitopes are not formed by the same epitopes'''
-  cInd1, cInd2 = ind1.copy(), ind2.copy()
-  cInd1.sort(), cInd2.sort()
-  return cInd1 == cInd2
+  return ind1.phenotype == ind2.phenotype
+
 
 def reportPoolStatus(poolDic):
   '''Check the status of the AsynPool objects stored as values of the dictionary and reports when they finish
@@ -124,570 +144,767 @@ def reportPoolStatus(poolDic):
         ready.append(evalSoft)
         print(f'{evalSoft} execution finished ({len(ready)} / {len(poolDic)})')
 
+
 SIMP, MUPLUS, MUCOMMA = 0, 1, 2
 P1, P2, UNI = 0, 1, 2
 TOUR, ROUL, BEST = 0, 1, 2
 
-IEDB, IIITD, DDG = 'IEDB-Coverage', 'IIITD', 'DDG'
-
-class ProtOptimizeMultiEpitope(EMProtocol):
-    """
-    Optimize a MultiEpitope object based on some scores using Genetic Algorithms
-    """
-    _label = 'Optimize multiepitope'
-
-    _agTypes = ['eaSimple', 'eaMuPlusLambda', 'eaMuCommaLambda']
-    # _mutTypes = ['Random', 'Shuffle']
-    _crossTypes = ['One point', 'Two points', 'Uniform']
-    _selectionTypes = ['Tournament', 'Roulette', 'Best']
-
-    _evalParameters = {IEDB: ['mhc', 'pop'],
-                       IIITD: ['chooseIIITDEvaluator'],
-                       DDG: ['chooseDDGEvaluator'],
-                      }
-
-    _gaAlgorithms = {SIMP: myEaSimple, MUPLUS: myEaMuPlusLambda, MUCOMMA: myEaMuCommaLambda}
-    _cxAlgorithms = {P1: tools.cxOnePoint, P2: tools.cxTwoPoint, UNI: tools.cxUniform}
-    _selAlgorithms = {TOUR: tools.selTournament, ROUL: tools.selRoulette, BEST: tools.selBest}
-
-    _indMemory = {}
-
-    # -------------------------- DEFINE param functions ----------------------
-    def getEvaluationProtocols(self):
-      origins = {}
-      try:
-        from iedb.protocols import ProtMHCIIPopulationCoverage
-        origins['IEDB - Coverage'] = ProtMHCIIPopulationCoverage
-      except:
-        pass
-
-      try:
-        from immuno.protocols import ProtIIITDEvaluations
-        origins['IIITD'] = ProtIIITDEvaluations
-      except:
-        pass
-
-      try:
-        from ddg.protocols import ProtDDGEvaluations
-        origins['DDG'] = ProtDDGEvaluations
-      except:
-        pass
-
-      return origins
-
-    def getEvaluationOrigins(self):
-      oriDic = self.getEvaluationProtocols()
-      return list(oriDic.keys())
-
-    def _defineMHCEvalParams(self, evalGroup, allCond):
-      evalGroup.addParam('mhc', params.EnumParam, label='MHC type: ', display=params.EnumParam.DISPLAY_HLIST,
-                         default=2, choices=['I', 'II', 'combined'], condition=allCond,
-                         help="Type of MHC fpor the prediction.")
-
-      evalGroup.addParam('pop', params.StringParam, label='Population: ', default='Area', condition=allCond,
-                         help="Select population by geographic area or ethnicity. If several, comma-separated. "
-                              "For all the geographic areas, use 'Area', for ethnicities use 'Ethnicity'."
-                              "For the complete list of populations, you can check http://tools.iedb.org/population/")
-      return evalGroup
-
-    def _defineEvalParams(self, evalGroup, originParam):
-      evalProtDic = self.getEvaluationProtocols()
-      for i, (evalLabel, evalProtocol) in enumerate(evalProtDic.items()):
-        allCond = f'{originParam}=={i}'
-        if evalLabel == 'IEDB - Coverage':
-          self._defineMHCEvalParams(evalGroup, allCond)
-        elif hasattr(evalProtocol, '_defineEvalParams'):
-          evalProtocol()._defineEvalParams(evalGroup, allCond=allCond)
-      return evalGroup
+IEDB, IIITD, DDG, VAXIGN = 'IEDB', 'IIITD', 'DDG', 'VAXIGN'
 
 
-    def _defineParams(self, form):
-        """ """
-        form.addSection(label=Message.LABEL_INPUT)
-        group = form.addGroup('Input')
-        group.addParam('inputROIs', params.PointerParam, pointerClass='SetOfSequenceROIs',
-                       label="Input sequence ROIs: ",
-                       help='Select the Set of sequence ROIs where to sample the epitopes')
+class ProtOptimizeMultiEpitopeGrape(EMProtocol):
+  """
+  Optimize a MultiEpitope object based on some scores using Genetic Algorithms
+  """
+  _label = 'Optimize multiepitope grape'
 
-        group = form.addGroup('Multiepitope definition')
-        line = group.addLine('Number of epitopes: ', important=True, help='Range of possible number of epitopes')
-        line.addParam('minEp', params.IntParam, label='Min: ', default=3)
-        line.addParam('maxEp', params.IntParam, label='Max: ', default=10)
-        group.addParam('pZero', params.FloatParam, label='Zero probability: ', default=0.3,
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help='Probability of empty epitope when building a multiepitope. The higher the probability,'
-                            'newly created multiepitopes will more likely have smaller number of epitopes')
+  _agTypes = ['Simple', 'MuPlusLambda', 'MuCommaLambda']
+  # _mutTypes = ['Random', 'Shuffle']
+  _crossTypes = ['Epitope cluster swap']
+  _selectionTypes = ['Tournament', 'Roulette', 'Best']
 
-        # line = group.addLine('Number of residues: ', help='Range of possible total number of residues')
-        # line.addParam('minRes', params.IntParam, label='Min: ', default=10)
-        # line.addParam('maxRes', params.IntParam, label='Max: ', default=1000)
+  _evalParameters = {IEDB: ['mhc', 'pop'],
+                     IIITD: ['chooseIIITDEvaluator'],
+                     DDG: ['chooseDDGEvaluator'],
+                     VAXIGN: ['organ']
+                     }
 
+  _gaAlgorithms = {SIMP: ge_eaSimpleChem, MUPLUS: ge_eaMuPlusLambdaChem,
+                   MUCOMMA: ge_eaMuCommaLambdaChem}
+  _cxAlgorithms = {P1: tools.cxOnePoint, P2: tools.cxTwoPoint, UNI: tools.cxUniform}
+  _selAlgorithms = {TOUR: tools.selTournament, ROUL: tools.selRoulette, BEST: tools.selBest}
 
-        form.addSection(label='Epitope sampling')
-        group = form.addGroup('Epitope sampling scores')
-        group.addParam('inScore', params.StringParam, label='Select a score: ', default='', important=True,
-                       help='Choose a score to define the epitope sampling probability')
-        group.addParam('scoreWeight', params.FloatParam, label='Score weight: ', default=1, important=True,
-                       help='Define a weight for the score. The bigger the absolute value of the weight, the more '
-                            'important it will be. If negative, the filter will look for smaller values.')
-        group.addParam('addScore', params.LabelParam, label='Add score: ',
-                       help='Add defined score')
-
-        group.addParam('scoreSummary', params.TextParam, width=100, label='Score summary:', default='',
-                       help='Summary of the epitope sampling scores')
-
-        group.addParam('normScores', params.BooleanParam, label='Normalize scores: ', default=True,
-                       expertLevel=params.LEVEL_ADVANCED,
-                       help='Normalize defined scores in range [0, 1]')
-
-        group = form.addGroup('Manual sampling')
-        group.addParam('inROI', params.StringParam, label='Select a ROI: ', default='',
-                       help='Choose a ROI to be included manually as epitope')
-        group.addParam('manualProb', params.FloatParam, label='Manual weight: ', default=1,
-                       help='Define the probability of including the selected epitope in the multiepitope.'
-                            'If 1, the epitope will always be included')
-        group.addParam('addManual', params.LabelParam, label='Add score: ',
-                       help='Add defined epitope manual sampling')
-        group.addParam('manualSummary', params.TextParam, width=100, label='Manual summary:', default='',
-                       help='Summary of the manual sampling epitopes. They will be added randomly independently of '
-                            'the sampling epitopes based on scores')
-
-        form.addSection(label='Linkers')
-        group = form.addGroup('Multiepitope linkers')
-        # group.addParam('linkerAction', params.EnumParam, label='Linker strategy: ', default=0,
-        #                choices=['Random', 'Per input Set'],
-        #                help='Choose a strategy for the linkers to be chosen')
-        group.addParam('inLinker', params.StringParam, label='Define linker sequence: ', default='',
-                       help='Define the sequence of the linker to be used')
-        # group.addParam('linkerWeight', params.FloatParam, label='Linker weight: ', default=1,
-        #                help='Weight for the defined linker')
-        # group.addParam('addLinker', params.LabelParam, label='Add linker: ',
-        #                help='Add defined linker')
-        # group.addParam('linkerSummary', params.TextParam, width=100, label='Linker summary:', default='',
-        #                help='Summary of the defined linkers.')
-
-        form.addSection(label='Multiepitope evaluations')
-        group = form.addGroup('Multiepitope evaluations')
-        group.addParam('multiEval', params.EnumParam, label='Select evaluation origin: ', default=0,
-                       choices=self.getEvaluationOrigins(), important=True,
-                       help='Select the multiepitope evaluation to add')
-        self._defineEvalParams(group, originParam='multiEval')
-
-        group.addParam('evalWeight', params.FloatParam, label='Evaluation weight: ', default=1,
-                       help='Define a weight for the evaluation. The bigger the absolute value of the weight, the more '
-                            'important it will be.')
-        group.addParam('addEval', params.LabelParam, label='Add conditional filter: ',
-                       help='Add defined conditional filter')
-
-        group = form.addGroup('Evaluations summary')
-        group.addParam('evalSummary', params.TextParam, width=100, label='Evaluations summary:', default='',
-                       help='Summary of the selected conditional filters')
-
-        form.addSection(label='Genetic Algorithm')
-        group = form.addGroup('General parameters')
-        group.addParam('nGen', params.IntParam, label='Number of generations: ', default=10, important=True,
-                       help='Number of generations for the GA')
-        group.addParam('nPop', params.IntParam, label='Population size: ', default=20, important=True,
-                       help='Number of individuals in the population (per generation)')
-
-        group.addParam('gaType', params.EnumParam, label='GA type: ', default=SIMP, choices=self._agTypes,
-                       help='Choose a strategy for the linkers to be chosen. For more information: '
-                            'https://deap.readthedocs.io/en/master/api/algo.html#complete-algorithms')
-        group.addParam('varProp', params.FloatParam, label='Proportion of varied individuals: ', default=0.25,
-                       condition='gaType!=0',
-                       help='Defines the number of varied individuals as the proportion with the number of individuals '
-                            'in the population.')
-
-        group = form.addGroup('Mutation')
-        # group.addParam('mutType', params.EnumParam, label='Mutation type: ', default=0, choices=self._mutTypes,
-        #                help='Choose a strategy for the mutation:'
-        #                     '\n- Random will replace an epitope for a random sampled from the input.'
-        #                     '\n- Shuffle will exchange the position of an epitope with another present in the '
-        #                     'individual')
-        group.addParam('mutProb', params.FloatParam, label='Mutate probability: ', default=0.4,
-                       help='Probability for a individual to be mutated for the next generation.')
-        group.addParam('mutIndProb', params.FloatParam, label='Epitope mutation probability: ', default=0.25,
-                      help='Probability for each epitope in the individual to be mutated independently')
-
-        group = form.addGroup('Crossover')
-        group.addParam('crossType', params.EnumParam, label='Crossover type: ', default=0, choices=self._crossTypes,
-                       help='Choose a strategy for the crossover. For more information: '
-                            'https://deap.readthedocs.io/en/master/api/tools.html#crossover')
-        group.addParam('crossProb', params.FloatParam, label='Crossover probability: ', default=0.4,
-                       help='Probability for a pair of individuals to be crossed for the next generation.')
-        group.addParam('crossIndProb', params.FloatParam, label='Epitope crossover probability: ', default=0.25,
-                       condition='crossType==2',
-                       help='Probability for each epitope in the individual to be crossed independently')
-
-        group = form.addGroup('Selection')
-        group.addParam('selType', params.EnumParam, label='Selection type: ', default=0, choices=self._selectionTypes,
-                       help='Choose a strategy for the selection. For more information: '
-                            'https://deap.readthedocs.io/en/master/api/tools.html#selection')
-        group.addParam('tournSize', params.IntParam, label='Tournament size: ', default=3, condition='selType==0',
-                       help='The number of individuals participating in each tournament')
-
-        group = form.addGroup('Hall of Fame')
-        group.addParam('hallSize', params.IntParam, label='Hall of fame size: ', default=5, important=True,
-                       help='The number of best scored individuals that will be saved outside of the population')
-
-        form.addParallelSection(threads=4, mpi=1)
-
-    # --------------------------- STEPS functions ------------------------------
-    def _insertAllSteps(self):
-      self._insertFunctionStep(self.optimizeMultiepitopeStep)
-      self._insertFunctionStep(self.defineOutputStep)
-
-    def optimizeMultiepitopeStep(self):
-      self.inputROISeqs = {roi.getObjId(): roi.getROISequence() for roi in self.inputROIs.get()}
-      deapToolbox = self.defineDeapToolbox()
-
-      nPop, nGen = self.nPop.get(), self.nGen.get()
-      mutProb, crossProb = self.mutProb.get(), self.crossProb.get()
-
-      pop = deapToolbox.population(n=nPop)
-      hallOfFame = tools.HallOfFame(self.hallSize.get(), checkSameInd)
-
-      kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen, 'halloffame': hallOfFame, 'verbose': False}
-      if self.gaType.get() != SIMP:
-        lamb = round(nPop * self.varProp.get())
-        kwargs.update({'mu': nPop, 'lambda_': int(lamb)})
-
-      gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
-      pop, info = gaAlgorithm(pop, deapToolbox, **kwargs)
-      print('Final pop: ', pop)
-      print('Scores: ', [ind.fitness.values for ind in pop])
-      print('Fame: ', hallOfFame.items)
-      print('Scores: ', [ind.fitness.values for ind in hallOfFame.items])
-
-
-
-    def defineOutputStep(self):
-      # todo: make functional: evaluations should be callable to extract the scores from another protocol
+  # -------------------------- DEFINE param functions ----------------------
+  def getEvaluationProtocols(self):
+    origins = {}
+    try:
+      from iedb.protocols import ProtMHCIIPopulationCoverage
+      origins[IEDB] = ProtMHCIIPopulationCoverage
+    except:
       pass
 
-    # --------------------------- INFO functions -----------------------------------
-    def _summary(self):
-        summary = []
-        return summary
+    try:
+      from immuno.protocols import ProtIIITDEvaluations
+      origins[IIITD] = ProtIIITDEvaluations
+    except:
+      pass
 
-    def _methods(self):
-        methods = []
-        return methods
+    try:
+      from immuno.protocols import ProtVaxignMLEpitopeEvaluation
+      origins[VAXIGN] = ProtVaxignMLEpitopeEvaluation
+    except:
+      pass
 
-    def _validate(self):
-        errors = []
-        if len(self.inputROIs.get()) < self.maxEp.get():
-          errors.append('The maximum number of epitopes cannot be higher than the number of input epitopes')
-        evalDics = self.getEvalDics()
-        if IEDB in evalDics:
-          mhcs = [self.getEnumText('mhc')]
-          mhcs = ['I', 'II'] if mhcs == 'combined' else mhcs
-          for mhc in mhcs:
-            if not hasattr(self.inputROIs.get().getFirstItem(), f'_allelesMHC{mhc}'):
-              errors.append(f'{IEDB} analysis cannot be performed because no information about the MHC{mhc} alleles '
-                            f'is found')
+    # DDG websites closed to programmatic access
+    # try:
+    #   from ddg.protocols import ProtDDGEvaluations
+    #   origins[DDG] = ProtDDGEvaluations
+    # except:
+    #   pass
 
-        if self.gaType.get() == MUCOMMA and self.varProp.get() < 1:
-          errors.append(f'The Proportion of varied individuals {self.varProp.get()} must be >= 1 '
-                        f'for the {MUCOMMA} GA type')
-        return errors
+    return origins
 
-    def _warnings(self):
-        ws = []
-        return ws
+  def getEvaluationOrigins(self):
+    oriDic = self.getEvaluationProtocols()
+    return list(oriDic.keys())
 
-    # --------------------------- DEAP functions -----------------------------------
-    def defineDeapToolbox(self):
-      epScores = self.getEpitopeScores()
-      indOptions = len(self.inputROIs.get())
+  def _defineMHCEvalParams(self, evalGroup, allCond):
+    evalGroup.addParam('mhc', params.EnumParam, label='MHC type: ', display=params.EnumParam.DISPLAY_HLIST,
+                       default=2, choices=['I', 'II', 'combined'], condition=allCond,
+                       help="Type of MHC fpor the prediction.")
 
-      toolbox = base.Toolbox()
+    evalGroup.addParam('pop', params.StringParam, label='Population: ', default='Area', condition=allCond,
+                       help="Select population by geographic area or ethnicity. If several, comma-separated. "
+                            "For all the geographic areas, use 'Area', for ethnicities use 'Ethnicity'."
+                            "For the complete list of populations, you can check http://tools.iedb.org/population/")
+    return evalGroup
 
-      creator.create("FitnessMin", base.Fitness, weights=(1.0,))
-      creator.create("Individual", list, fitness=creator.FitnessMin)
+  def _defineEvalParams(self, evalGroup, originParam):
+    evalProtDic = self.getEvaluationProtocols()
+    for i, (evalLabel, evalProtocol) in enumerate(evalProtDic.items()):
+      allCond = f'{originParam}=={i}'
+      if evalLabel == IEDB:
+        self._defineMHCEvalParams(evalGroup, allCond)
+      elif hasattr(evalProtocol, '_defineEvalParams'):
+        evalProtocol()._defineEvalParams(evalGroup, allCond=allCond)
+    return evalGroup
 
-      toolbox.register("indices", buildMultiEpitopeZeros, epScores, self.pZero.get(),
-                       self.maxEp.get(), self.minEp.get())
-      toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.indices)
-      toolbox.register("evaluate", self.multiEpitopeEval)
+  def _defineParams(self, form):
+    """ """
+    form.addSection(label=Message.LABEL_INPUT)
+    group = form.addGroup('Input')
+    group.addParam('inputROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
+                   label="Input epitope sets: ",
+                   help='Select the Sets of sequence ROIs where to sample the epitopes')
 
-      toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    group = form.addGroup('Multiepitope definition')
+    line = group.addLine('Number of epitopes: ',  help='Range of possible number of epitopes')
+    line.addParam('minEp', params.IntParam, label='Min: ', default=3)
+    line.addParam('maxEp', params.IntParam, label='Max: ', default=10)
 
-      toolbox = self.registerMate(toolbox)
-      toolbox.decorate("mate", ensureDifferentIds(indOptions))
-      toolbox.register("mutate", mutDifferentIdx, low=1, high=indOptions, indpb=self.mutIndProb.get())
-      toolbox.decorate("mutate", ensureDifferentIds(indOptions))
-      toolbox = self.registerSelection(toolbox)
-      return toolbox
+    form.addParam('randomSeed', params.IntParam, label='Random seed: ', default=0,
+                  expertLevel=params.LEVEL_ADVANCED,
+                  help='Choose a random seed to ensure reproducibility')
 
-    def registerMate(self, toolbox):
-      if self.crossType.get() == P1:
-        toolbox.register("mate", tools.cxOnePoint)
-      elif self.crossType.get() == P2:
-        toolbox.register("mate", tools.cxTwoPoint)
-      elif self.crossType.get() == UNI:
-        toolbox.register("mate", tools.cxUniform, indpb=self.crossIndProb.get())
-      return toolbox
+    form.addSection(label='Epitope sampling')
+    group = form.addGroup('Epitope sampling scores')
+    group.addParam('inSet', params.StringParam, label='Select a input set: ', default='',
+                   help='Choose a score to define the epitope sampling probability')
+    group.addParam('inScore', params.StringParam, label='Select a score: ', default='',
+                   help='Choose a score to define the epitope sampling probability')
+    group.addParam('scoreWeight', params.FloatParam, label='Score weight: ', default=1,
+                   help='Define a weight for the score. The bigger the absolute value of the weight, the more '
+                        'important it will be. If negative, the filter will look for smaller values.')
+    group.addParam('addScore', params.LabelParam, label='Add score: ',
+                   help='Add defined score')
 
-    def registerSelection(self, toolbox):
-      if self.selType.get() == TOUR:
-        toolbox.register("select", tools.selTournament, tournsize=self.tournSize.get())
-      elif self.selType.get() == TOUR:
-        toolbox.register("select", tools.selRoulette)
-      elif self.selType.get() == BEST:
-        toolbox.register("select", tools.selBest)
-      return toolbox
+    group.addParam('scoreSummary', params.TextParam, width=100, label='Score summary:', default='',
+                   help='Summary of the epitope sampling scores')
 
-    def getMultiEpitopeSeqs(self, individuals):
-      '''Returns the set of multiepitope sequences codified into a set of DEAP individuals'''
-      seqs = {}
+    group.addParam('normScores', params.BooleanParam, label='Normalize scores: ', default=True,
+                   expertLevel=params.LEVEL_ADVANCED,
+                   help='Normalize defined scores in range [0, 1]')
+
+    group = form.addGroup('Manual sampling')
+    group.addParam('inputCompROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
+                   label="Input compulsory epitope sets: ", allowsNull=True,
+                   help='Select the Sets of sequence ROIs with compulsory epitopes')
+    # group.addParam('manualProb', params.FloatParam, label='Manual weight: ', default=1,
+    #                help='Define the probability of including the selected epitope in the multiepitope.'
+    #                     'If 1, the epitope will always be included')
+    # group.addParam('addManual', params.LabelParam, label='Add score: ',
+    #                help='Add defined epitope manual sampling')
+    # group.addParam('manualSummary', params.TextParam, width=100, label='Manual summary:', default='',
+    #                help='Summary of the manual sampling epitopes. They will be added randomly independently of '
+    #                     'the sampling epitopes based on scores')
+
+    form.addSection(label='Linkers')
+    group = form.addGroup('Multiepitope linkers')
+    group.addParam('linkerAction', params.EnumParam, label='Linker strategy: ', default=0,
+                   choices=['Single', 'Random', 'Per input Set'],
+                   help='Choose a strategy for the linkers to be chosen')
+    group.addParam('inLinker', params.StringParam, label='Define linker sequence: ', default='',
+                   condition='linkerAction==0',
+                   help='Define the sequence of the linker to be used')
+
+    group.addParam('inLinkerSet', params.PointerParam, pointerClass='SetOfSequences',
+                   condition='linkerAction in [1, 2]', label='Define linker set: ', allowsNull=True,
+                   help='Define the set of sequences of the linker to be chosen randomly or per protein')
+    group.addParam('seleLinker', params.StringParam, label='Selected linker(s): ', default='',
+                   condition='linkerAction==2',
+                   help='Select the linker(s) to associate with the selected input protein')
+
+    group.addParam('linkProtSet', params.StringParam, label='Select a input protein set: ', default='',
+                   condition='linkerAction==2',
+                   help='Choose a input protein set to associate with the linkers')
+    group.addParam('addLinker', params.LabelParam, label='Add linker: ', condition='linkerAction==2',
+                   help='Add defined linker(s) for protein')
+    group.addParam('linkerSummary', params.TextParam, width=100, label='Linker summary:', default='',
+                   condition='linkerAction==2',
+                   help='Summary of the defined linkers.')
+
+    form.addSection(label='Multiepitope evaluations')
+    group = form.addGroup('Multiepitope evaluations')
+    group.addParam('multiEval', params.EnumParam, label='Select evaluation origin: ', default=0,
+                   choices=self.getEvaluationOrigins(),
+                   help='Select the multiepitope evaluation to add')
+    self._defineEvalParams(group, originParam='multiEval')
+
+    group.addParam('evalWeight', params.FloatParam, label='Evaluation weight: ', default=1,
+                   help='Define a weight for the evaluation. The bigger the absolute value of the weight, the more '
+                        'important it will be.')
+    group.addParam('addEval', params.LabelParam, label='Add conditional filter: ',
+                   help='Add defined conditional filter')
+
+    group = form.addGroup('Evaluations summary')
+    group.addParam('evalSummary', params.TextParam, width=100, label='Evaluations summary:', default='',
+                   help='Summary of the selected conditional filters')
+
+    form.addSection(label='Genetic Algorithm')
+    group = form.addGroup('General parameters')
+    group.addParam('gaType', params.EnumParam, label='GA type: ', default=SIMP, choices=self._agTypes,
+                   help='Choose a strategy for the linkers to be chosen. For more information: '
+                        'https://deap.readthedocs.io/en/master/api/algo.html#complete-algorithms')
+
+    group.addParam('nGen', params.IntParam, label='Number of generations: ', default=10,
+                   help='Number of generations for the GA')
+    group.addParam('nPop', params.IntParam, label='Population size: ', default=20,
+                   help='Number of individuals in the population (per generation)')
+
+    group.addParam('nOffs', params.IntParam, label='Offspring size: ', default=20, condition='gaType!=0',
+                   help='Number of individuals to generate for the offspring')
+    group.addParam('nMigr', params.IntParam, label='Migrants size: ', default=0, condition='gaType!=0',
+                   help='Number of individuals to generate from zero that will compete in the selection with the '
+                        'normal population')
+
+    # group.addParam('varProp', params.FloatParam, label='Proportion of varied individuals: ', default=0.25,
+    #                condition='gaType!=0',
+    #                help='Defines the number of varied individuals as the proportion with the number of individuals '
+    #                     'in the population.')
+
+    group = form.addGroup('Mutation')
+    # group.addParam('mutType', params.EnumParam, label='Mutation type: ', default=0, choices=self._mutTypes,
+    #                help='Choose a strategy for the mutation:'
+    #                     '\n- Random will replace an epitope for a random sampled from the input.'
+    #                     '\n- Shuffle will exchange the position of an epitope with another present in the '
+    #                     'individual')
+    group.addParam('mutProb', params.FloatParam, label='Mutate probability: ', default=0.4,
+                   help='Probability for a individual to be mutated for the next generation.')
+    line = group.addLine('Mutation probabilities: ', help='Probabilities for the different types of mutation')
+    line.addParam('mutEProb', params.FloatParam, label='Epitope replacement: ', default=0.33)
+    line.addParam('mutSProb', params.FloatParam, label='Epitope cluster reorder: ', default=0.33)
+    line.addParam('mutLProb', params.FloatParam, label='Linker replacement: ', default=0.33)
+
+    group = form.addGroup('Crossover')
+    group.addParam('crossType', params.EnumParam, label='Crossover type: ', default=0, choices=self._crossTypes,
+                   help='Choose a strategy for the crossover. For more information: '
+                        'https://deap.readthedocs.io/en/master/api/tools.html#crossover')
+    group.addParam('crossProb', params.FloatParam, label='Crossover probability: ', default=0.4,
+                   help='Probability for a pair of individuals to be crossed for the next generation.')
+    group.addParam('crossIndProb', params.FloatParam, label='Epitope crossover probability: ', default=0.25,
+                   condition='crossType==2',
+                   help='Probability for each epitope in the individual to be crossed independently')
+
+    group = form.addGroup('Selection')
+    group.addParam('selType', params.EnumParam, label='Selection type: ', default=0, choices=self._selectionTypes,
+                   help='Choose a strategy for the selection. For more information: '
+                        'https://deap.readthedocs.io/en/master/api/tools.html#selection')
+    group.addParam('tournSize', params.IntParam, label='Tournament size: ', default=3, condition='selType==0',
+                   help='The number of individuals participating in each tournament')
+
+    group = form.addGroup('Hall of Fame')
+    group.addParam('hallSize', params.IntParam, label='Hall of fame size: ', default=5,
+                   help='The number of best scored individuals that will be saved outside of the population')
+
+
+
+    form.addParallelSection(threads=4, mpi=1)
+
+  # --------------------------- STEPS functions ------------------------------
+  def _insertAllSteps(self):
+    self._insertFunctionStep(self.optimizeMultiepitopeStep)
+    self._insertFunctionStep(self.defineOutputStep)
+
+  def optimizeMultiepitopeStep(self):
+    if self.randomSeed.get() != 0:
+      random.seed(self.randomSeed.get())
+      np.random.seed(self.randomSeed.get())
+
+    epiDic = self.getEpitopesPerProt(self.inputROISets)
+    linkDic = self.getLinkersPerProt()
+    compDic = self.getCompEpitopesPerProt()
+    nEpiDic, nLinkDic, nCompDic = self.makeCountDic(epiDic), self.makeCountDic(linkDic), self.makeCountDic(compDic)
+    wDic = self.getEpitopeScores()
+    self.seqsMapper = self.getROIsMapper(epiDic, linkDic, compDic)
+
+    nPop, nGen = self.nPop.get(), self.nGen.get()
+    nOffs, nMigr = self.nOffs.get(), self.nMigr.get()
+    mutProb, crossProb = self.mutProb.get(), self.crossProb.get()
+
+    grammarFile = os.path.abspath(self._getPath('grammar.txt'))
+    buildGrammarFile(grammarFile, nEpiDic, nLinkDic, nCompDic)
+    nonRepNTs = ['<prot>'] + [f'<{pName}Ep>' for pName in nEpiDic]
+    bnfGrammar = RepGrammar(grammarFile, nonRepNTs, self.convertWDic(wDic))
+
+    deapToolbox = self.defineDeapToolbox(bnfGrammar)
+    population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
+                                               min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
+                                               codon_size=255, codon_consumption='weighted',
+                                               genome_representation='list')
+    # print('Initial pop: ', [ind.phenotype for ind in population])
+
+    self.hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
+    kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen,
+              'mutEpb': self.mutEProb.get(), 'mutSpb': self.mutSProb.get(), 'mutLpb': self.mutLProb.get(),
+              'halloffame': self.hof, 'verbose': True}
+    if self.gaType.get() != SIMP:
+      kwargs.update({'mu': nPop, 'lambda_': nOffs, 'nMigr': nMigr})
+
+    gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
+    population, logbook = gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
+
+    # print('Final pop: ', [ind.phenotype for ind in population])
+    # print('Scores: ', [ind.fitness.values for ind in population])
+    # print('Fame: ', [ind.phenotype for ind in self.hof.items])
+    # print('Scores: ', [ind.fitness.values for ind in self.hof.items])
+
+    # best = self.hof.items[0]
+    # print("Best individual: \n", best.phenotype, best.fitness.values)
+
+  def defineOutputStep(self):
+    sequenceSet = SetOfSequences().create(outputPath=self._getPath())
+    for i, ind in enumerate(self.hof):
+      seq = self.getMultiEpitopeSeqs([ind])[0]
+      seqObj = Sequence(sequence=seq, name=f'MultiEpitope_{i}', id=f'MultiEpitope_{i}')
+      seqObj._multiepitopeScore = params.Float(ind.fitness.values[0])
+      sequenceSet.append(seqObj)
+
+    self._defineOutputs(outputMultiepitopes=sequenceSet)
+
+
+  # --------------------------- INFO functions -----------------------------------
+  def _summary(self):
+    summary = []
+    return summary
+
+  def _methods(self):
+    methods = []
+    return methods
+
+  def _validate(self):
+    errors = []
+    return errors
+
+  def _warnings(self):
+    ws = []
+    return ws
+
+  # --------------------------- DEAP functions -----------------------------------
+  def defineDeapToolbox(self, bnfGrammar):
+    toolbox = base.Toolbox()
+
+    # define a single objective, minimising fitness strategy:
+    creator.create("FitnessMin", base.Fitness, weights=(1.0,))
+    creator.create('Individual', RepIndividual, fitness=creator.FitnessMin)
+    toolbox.register("populationCreator", random_initialisation, creator.Individual)
+
+    toolbox.register("evaluate", self.multiEpitopeEval)
+
+    # Tournament selection:
+    toolbox.register("select", tools.selTournament, tournsize=self.tournSize.get())
+
+    # Single-point crossover:
+    toolbox.register("mate", crossover_multiepitope)
+    toolbox.decorate("mate", ensureEpitopeNumber(self.minEp.get(), self.maxEp.get(), bnfGrammar))
+
+    # Flip-int mutation:
+    toolbox.register("mutate", mutationEpitope)
+    return toolbox
+
+  def idxsFromCode(self, code):
+    pName = code.split('[')[0]
+    roiIdx = int(code.split('[')[1].split(']')[0])
+    return pName, roiIdx
+
+  def getMultiEpitopeSeqs(self, individuals):
+    '''Returns the set of multiepitope sequences codified into a set of DEAP individuals'''
+    seqs = {}
+    for i, ind in enumerate(individuals):
+      curSeqs = []
+      for roiCode in ind.phenotype.split():
+        pName, roiIdx = self.idxsFromCode(roiCode)
+        curSeqs += [self.seqsMapper[pName][roiIdx]]
+      seqs[i] = ''.join(curSeqs)
+
+    return seqs
+
+  def getInputProteinNames(self):
+    return list(self.getInputROIsMapper().keys())
+
+  def getROIsPerProt(self, multiPointer):
+    '''Return mapper with the input ROI sequences as:
+        {protName: [rois]}'''
+    mapDic = {}
+    for roiPointer in multiPointer:
+      roiSet = roiPointer.get()
+      protName = roiSet.getSequenceObj().getId()
+      mapDic[protName] = []
+      for roi in roiSet:
+        mapDic[protName].append(roi.clone())
+    return mapDic
+
+  def getEpitopesPerProt(self, multiPointer):
+    '''Return mapper with the input ROI sequences as:
+    {protName: [roiSequences]}'''
+    mapDic = {}
+    for roiPointer in multiPointer:
+      roiSet = roiPointer.get()
+      protName = roiSet.getSequenceObj().getId()
+      mapDic[protName] = []
+      for roi in roiSet:
+        mapDic[protName].append(roi.getROISequence())
+    return mapDic
+
+  def getLinkersPerProt(self):
+    '''Return a dictionary with the available linkers per protein
+    {pNameL: [linkers]}'''
+    linkDic = {}
+    protNames = self.getInputProteinNames()
+    if self.linkerAction.get() == 0:
+      linkDic = {pName: [self.inLinker.get()] for pName in protNames}
+    elif self.linkerAction.get() == 1:
+      for pName in protNames:
+        linkDic[pName] = [roi.getROISequence() for roi in self.inLinkerSet.get()]
+    elif self.linkerAction.get() == 2:
+      linkDic = self.parseLinkerSummary()
+
+    return linkDic
+
+  def getCompEpitopesPerProt(self):
+    '''Return a dictionary with the compulsory epitopes per protein
+    {pNameC: [comp epis]}'''
+    inDic = self.getEpitopesPerProt(self.inputCompROISets)
+
+    cEpiDic = {}
+    protNames = self.getInputProteinNames()
+    for pName in protNames:
+      if pName in inDic:
+        cEpiDic[pName] = inDic[pName]
+      else:
+        cEpiDic[pName] = []
+
+    return cEpiDic
+
+  def getInputROIsMapper(self):
+    '''Returns a dict as {pName: roiSet}'''
+    return {roiPointer.get().getSequenceObj().getId(): roiPointer.get() for roiPointer in self.inputROISets}
+
+  def getEpitopeScores(self):
+    '''Return a dictionary of the form {roiSetIdx: {ROIId: SamplingScore}} for all the input ROIs working as epitopes
+    with the defined sampling scores'''
+    wDic = self.parseSamplingScores()
+    sampDic = {protName: {} for protName in wDic}
+    inputROIsMapper = self.getInputROIsMapper()
+    for protName in wDic:
+      for roi in inputROIsMapper[protName]:
+        roiId, roiScore = roi.getObjId(), 0
+        for scoreKey, scoreW in wDic[protName].items():
+          roiScore += scoreW * getattr(roi, scoreKey).get()
+        sampDic[protName][roiId] = roiScore
+    return sampDic
+
+  def convertWDic(self, wDic):
+    d = {}
+    for pName in wDic:
+      pKey = f'<{pName}Ep>'
+      d[pKey] = [score for score in wDic[pName].values()]
+    return d
+
+  def makeCountDic(self, d):
+    return {key: len(d[key]) for key in d}
+
+  def getROIsMapper(self, epsD, linkD, compD):
+    mapper = epsD
+    mapper.update({f'{pName}L': linkD[pName] for pName in linkD})
+    mapper.update({f'{pName}C': compD[pName] for pName in compD})
+    return mapper
+
+  # --------------------------- WIZARD functions -----------------------------------
+  def buildScoreSumLine(self):
+    sLine = f'{{"Set": "{self.inSet.get().split("//")[0]}", "Score": "{self.inScore.get()}", ' \
+            f'"Weight": {self.scoreWeight.get()}}}'
+    return sLine
+
+  def buildManualSumLine(self):
+    sLine = f'{{"Epitope": "{self.inROI.get()}", "Prob": {self.manualProb.get()}}}'
+    return sLine
+
+  def getLinkerSeq(self, linkerStr):
+    seq = ''
+    for linkSeq in self.inLinkerSet.get():
+      if linkSeq.__str__().strip() == linkerStr.strip():
+        seq = linkSeq.getSequence()
+    return seq
+
+  def buildLinkerSumLine(self):
+    linkSeqs = [self.getLinkerSeq(linkerStr) for linkerStr in self.seleLinker.get().split(', ')]
+    linkers = ' // '.join(linkSeqs)
+    sLine = f'{{"Set": "{self.linkProtSet.get().split("//")[0]}", "Linker(s)": "{linkers}" }}'
+    return sLine
+
+  def buildEvalSumLine(self):
+    evalParams = self.getEvalParams()
+    sLine = f'{{"Evaluation": "{self.getEnumText("multiEval")}", "Weight": {self.evalWeight.get()}'
+    for parName in evalParams:
+      sLine += f', "{parName}": "{self.getParamValue(parName)}"'
+    return sLine + '}'
+
+  # --------------------------- EVALUATION functions -----------------------------------
+  def multiEpitopeEval(self, individuals):
+    '''Performs the evaluations of a set of DEAP individuals.
+    To be used in batch with a modified GA algoritms that allows so.
+    Returns a list of individual fitnesses: [(f1,), ...]
+    '''
+    resultsDic = self.performEvaluations(individuals)
+    weigths = self.getEvalWeights()
+    fitnesses = numpy.zeros(len(individuals))
+    for (evalKey, softName), res in resultsDic.items():
+      scores = numpy.array(list(map(float, res)))
+      fitnesses += scores * weigths[evalKey]
+
+    return [(f,) for f in fitnesses]
+
+  def performEvaluations(self, individuals):
+    '''Generalize caller to the evaluation functions.
+    - individuals: list of DEAP individuals -> list of ROI indexes
+    - evalDics: dictionary as {(evalKey, softwareName): {parameterName: parameterValue}}
+    - jobs: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+    jobs = self.numberOfThreads.get()
+    evalDics = self.getEvalDics()
+    sequences = self.getMultiEpitopeSeqs(individuals)
+
+    resultsDic = {}
+    disJobs = self.getDistributedJobs(evalDics, jobs)
+    for source, sDics in evalDics.items():
+      nt = disJobs[source]
+      if source == IEDB:
+        epiDic = self.performCoverageAnalysis(individuals, sDics, nt)
+
+      elif source == IIITD:
+        from immuno import Plugin as iiitdPlugin
+        epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData(), verbose=False)
+
+      elif source == DDG:
+        from ddg import Plugin as ddgPlugin
+        epiDic = ddgPlugin.performEvaluations(sequences, sDics, nt, ddgPlugin.getBrowserData(), verbose=False)
+
+      elif source == VAXIGN:
+        epiDic = self.performVaxignML(sequences, sDics, nt)
+
+      else:
+        continue
+      resultsDic.update(epiDic)
+    return resultsDic
+
+  def getROIsFromInd(self, ind, prot2ROIsDic):
+    '''Return the ROIs present in a ind'''
+    curEps = []
+    pNames = self.getInputProteinNames()
+    for roiCode in ind.phenotype.split():
+      pName, roiIdx = self.idxsFromCode(roiCode)
+      if pName in pNames:
+        curEps += [prot2ROIsDic[pName][roiIdx]]
+    return curEps
+
+  def removeEmptyAlleleROIs(self, rois, mhc):
+    from iedb.utils import getMHCAlleles
+    nRois = []
+    for roi in rois:
+      alleles = getMHCAlleles(roi, mhc)
+      if alleles:
+        nRois.append(roi)
+    return nRois
+
+  def performCoverageAnalysis(self, individuals, sDics, nt, norm=True):
+    '''Run the Coverage analysis on a set of sequences
+    - inSeqs: dict like {seqId: sequence}
+    - sDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - nt: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+    from iedb import Plugin as iedbPlugin
+    from iedb.utils import translateArea, buildMHCCoverageArgs, parseCoverageResults
+    resDic = {}
+    roisMapDic = self.getROIsPerProt(self.inputROISets)
+    for evalKey, evalDic in sDics.items():
+      oDir = os.path.abspath(self._getExtraPath())
+
+      selPops = [p.strip() for p in evalDic['pop'].split(',')]
+      selPops = translateArea(selPops)
+
+      coveArgs = []
       for i, ind in enumerate(individuals):
-        curSeqs = []
-        for roiIdx in ind:
-          if roiIdx != -1:
-            curSeqs += [self.inputROISeqs[roiIdx]]
+        epFile = self._getExtraPath(f'inputEpitopes_{evalKey}_{i}.tsv')
+        inROIs = self.getROIsFromInd(ind, roisMapDic)
+        inROIs = self.removeEmptyAlleleROIs(inROIs, evalDic['mhc'])
+        if inROIs:
+          coveArgs += buildMHCCoverageArgs(inROIs, epFile, selPops, evalDic['mhc'], oDir, separated=False)
+        else:
+          oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_{i}_All_results.tsv')
+          if os.path.exists(oFile):
+            os.remove(oFile)
 
-        links = self.getLinkers(len(curSeqs))
-        seqs[i] = self.mergeEpsLinks(curSeqs, links)
-      return seqs
+      if coveArgs:
+        runInParallel(iedbPlugin.runPopulationCoverage, None,
+                      paramList=[coveArg for coveArg in coveArgs], jobs=nt)
+
+      coverages = []
+      for i in range(len(individuals)):
+        oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_{i}_All_results.tsv')
+        if os.path.exists(oFile):
+          coverage = parseCoverageResults(oFile, norm)['average']['coverage']
+        else:
+          coverage = 0
+        coverages.append(coverage)
+      resDic[(evalKey, IEDB)] = coverages
+    return resDic
+
+  def addNullScores(self, vaxDic, inSeqs):
+    nVaxDic = {}
+    for seqId in inSeqs:
+      if str(seqId) not in vaxDic:
+        nVaxDic[seqId] = 0.0
+      else:
+        nVaxDic[seqId] = float(vaxDic[str(seqId)])
+    return nVaxDic
+
+  def performVaxignML(self, inSeqs, sDics, nt, norm=True):
+    '''Run Vaxign-ML on a set of sequences
+    - inSeqs: dict like {seqId: sequence}
+    - sDics: dictionary as {evalKey: {parameterName: parameterValue}}
+    - nt: int, number of jobs for parallelization
+    Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
+    '''
+    from immuno import Plugin as immunoPlugin
+    from immuno.protocols.protocol_vaxignML_prediction import filterSequences, writeFasta, parseResults
+
+    resDic = {}
+    keyName = 'inputSequencesVax'
+    filtSeqs = filterSequences(inSeqs)
+    if len(filtSeqs) > 0:
+      oDir = os.path.abspath(self._getExtraPath('vaxResults'))
+      if not os.path.exists(oDir):
+        os.mkdir(oDir)
+      inFasta = writeFasta(filtSeqs, self._getExtraPath(f'{keyName}.fa'))
+
+      for evalKey, evalDic in sDics.items():
+        curDir = os.path.join(oDir, evalKey)
+        if os.path.exists(curDir):
+          shutil.rmtree(curDir)
+
+        kwargs = {'i': inFasta, 'o': curDir, 't': evalDic['organ'], 'p': nt}
+        immunoPlugin.runVaxignML(self, kwargs, cwd=oDir)
+
+        oFile = os.path.join(curDir, f'{keyName}.result.tsv')
+        vaxDic = parseResults(oFile)
+        vaxDic = self.addNullScores(vaxDic, inSeqs)
+        resDic[(evalKey, VAXIGN)] = list(vaxDic.values())
+    else:
+      for evalKey, evalDic in sDics.items():
+        resDic[(evalKey, VAXIGN)] = [0.0] * len(inSeqs)
+
+    return resDic
 
 
-    # --------------------------- WIZARD functions -----------------------------------
-    def buildScoreSumLine(self):
-      sLine = f'{{"Score": "{self.inScore.get()}", "Weight": {self.scoreWeight.get()}}}'
-      return sLine
+  def getEvalDics(self):
+    '''Returns a dictionary for each of the sources chosen in the evaluations (IEDB, IIITD, DDG)
+    This dictionary are of the form: {source: {(evalKey, softwareName): {parameterName: parameterValue}}}
+    '''
+    mapFuncs, evalDics = {}, {}
+    for i, sline in enumerate(self.evalSummary.get().split('\n')):
+      if sline.strip():
+        sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
+        source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
+        if not source in evalDics:
+          evalDics[source] = {}
 
-    def buildManualSumLine(self):
-      sLine = f'{{"Epitope": "{self.inROI.get()}", "Prob": {self.manualProb.get()}}}'
-      return sLine
-
-    def buildLinkerSumLine(self):
-      sLine = f'{{"Linker": "{self.inLinker.get()}", "Weight": {self.linkerWeight.get()}}}'
-      return sLine
-
-    def buildEvalSumLine(self):
-      evalParams = self.getEvalParams()
-      sLine = f'{{"Evaluation": "{self.getEnumText("multiEval")}", "Weight": {self.evalWeight.get()}'
-      for parName in evalParams:
-        sLine += f', "{parName}": "{self.getParamValue(parName)}"'
-      return sLine + '}'
-
-    # --------------------------- EVALUATION functions -----------------------------------
-    def multiEpitopeEval(self, individuals):
-      '''Performs the evaluations of a set of DEAP individuals.
-      To be used in batch with a modified GA algoritms that allows so.
-      Returns a list of individual fitnesses: [(f1,), ...]
-      '''
-      resultsDic = self.performEvaluations(individuals)
-      weigths = self.getEvalWeights()
-      fitnesses = numpy.zeros(len(individuals))
-      for (evalKey, softName), res in resultsDic.items():
-        scores = numpy.array(list(map(float, res)))
-        fitnesses += scores * weigths[evalKey]
-
-      return [(f,) for f in fitnesses]
-
-    def performEvaluations(self, individuals):
-      '''Generalize caller to the evaluation functions.
-      - individuals: list of DEAP individuals -> list of ROI indexes
-      - evalDics: dictionary as {(evalKey, softwareName): {parameterName: parameterValue}}
-      - jobs: int, number of jobs for parallelization
-      Returns a dictionary of the form: {(evalKey, softwareName): [scores]}
-      '''
-      jobs = self.numberOfThreads.get()
-      evalDics = self.getEvalDics()
-      sequences = self.getMultiEpitopeSeqs(individuals)
-
-      resultsDic = {}
-      disJobs = self.getDistributedJobs(evalDics, jobs)
-      for source, sDics in evalDics.items():
-        nt = disJobs[source]
-        if source == IEDB:
-          epiDic = self.performCoverageAnalysis(individuals, sDics, nt)
+        if source in [IEDB, VAXIGN]:
+          evalKey, softName = f'{source}_{i + 1}', source
 
         elif source == IIITD:
-          from immuno import Plugin as iiitdPlugin
-          epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData(), verbose=False)
+          softName = sDic.pop("chooseIIITDEvaluator")
+          evalKey = f'{source}-{softName}_{i + 1}'
+          sDic.update({'software': softName})
+          if not source in mapFuncs:
+            from immuno.utils import mapEvalParamNames as iiitdMap
+            mapFuncs[source] = iiitdMap
 
         elif source == DDG:
-          from ddg import Plugin as ddgPlugin
-          epiDic = ddgPlugin.performEvaluations(sequences, sDics, nt, ddgPlugin.getBrowserData(), verbose=False)
+          softName = sDic.pop("chooseDDGEvaluator")
+          evalKey = f'{source}-{softName}_{i + 1}'
+          sDic.update({'software': softName})
+          if not source in mapFuncs:
+            from ddg.utils import mapEvalParamNames as ddgMap
+            mapFuncs[source] = ddgMap
 
         else:
           continue
 
-        resultsDic.update(epiDic)
-      return resultsDic
+        evalDics[source].update({evalKey: sDic})
 
-    def performCoverageAnalysis(self, individuals, sDics, nt):
-      from iedb import Plugin as iedbPlugin
-      from iedb.utils import translateArea, buildMHCCoverageArgs, parseCoverageResults
-
-      resDic = {}
-      # todo: make functional
-      inROIs = self.inputROIs.get()
-      for (evalKey, soft), argDic in sDics.items():
-        epFile = self._getExtraPath(f'inputEpitopes_{evalKey}.tsv')
-        oDir = os.path.abspath(self._getExtraPath())
-
-        selPops = [p.strip() for p in argDic['pop'].split(',')]
-        selPops = translateArea(selPops)
-
-        coveArgs = buildMHCCoverageArgs(inROIs, epFile, selPops, argDic['mhc'], oDir, separated=False)
-        runInParallel(iedbPlugin.runPopulationCoverage, None,
-                      paramList=[coveArg for coveArg in coveArgs], jobs=nt)
-
-        oFile = os.path.join(oDir, f'inputEpitopes_{evalKey}_All_results.tsv')
-        coveDic = parseCoverageResults(oFile)['average']
-        resDic[(evalKey, soft)] = {'Score': coveDic['coverage'], 'outFile': oFile}
-      return resDic
-
-    def getEvalDics(self):
-      '''Returns a dictionary for each of the sources chosen in the evaluations (IEDB, IIITD, DDG)
-      This dictionary are of the form: {source: {(evalKey, softwareName): {parameterName: parameterValue}}}
-      '''
-      mapFuncs = {}
-
-      evalDics = {}
-      for i, sline in enumerate(self.evalSummary.get().split('\n')):
-        if sline.strip():
-          sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
-          source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
-          if not source in evalDics:
-            evalDics[source] = {}
-
-          if source == IEDB:
-            evalKey, softName = f'{source}_{i+1}', source
-
-          elif source == IIITD:
-            softName = sDic.pop("chooseIIITDEvaluator")
-            evalKey = f'{source}-{softName}_{i + 1}'
-            sDic.update({'software': softName})
-            if not source in mapFuncs:
-              from immuno.utils import mapEvalParamNames as iiitdMap
-              mapFuncs[source] = iiitdMap
-
-          elif source == DDG:
-            softName = sDic.pop("chooseDDGEvaluator")
-            evalKey = f'{source}-{softName}_{i + 1}'
-            sDic.update({'software': softName})
-            if not source in mapFuncs:
-              from ddg.utils import mapEvalParamNames as ddgMap
-              mapFuncs[source] = ddgMap
-
-          else:
-            continue
-
-          evalDics[source].update({evalKey: sDic})
-
-      for source, evalDic in evalDics.items():
+    for source, evalDic in evalDics.items():
+      if source not in [IEDB, VAXIGN]:
         evalDics[source] = mapFuncs[source](evalDic)
 
-      return evalDics
+    return evalDics
 
-    # --------------------------- PARAMETERS functions -----------------------------------
-    def getParamValue(self, paramName):
-      if isinstance(self.getParam(paramName), params.EnumParam):
-        value = self.getEnumText(paramName)
-      else:
-        value = getattr(self, paramName).get()
-      return value
+  # --------------------------- PARAMETERS functions -----------------------------------
+  def getParamValue(self, paramName):
+    if isinstance(self.getParam(paramName), params.EnumParam):
+      value = self.getEnumText(paramName)
+    else:
+      value = getattr(self, paramName).get()
+    return value
 
-    def getDistributedJobs(self, evalDics, totalJobs):
-      jobs = {source: 0 for source in evalDics}
-      for source, sDics in evalDics.items():
-        if source == IEDB:
-          # not parallelized
-          jobs[source] = 1
-        else:
-          jobs[source] = len(sDics)
+  def getDistributedJobs(self, evalDics, totalJobs):
+    jobs = {source: 0 for source in evalDics}
+    for source, sDics in evalDics.items():
+      jobs[source] = len(sDics)
 
-      i=0
-      sources = list(jobs.keys())
-      # Decrease the number of threads per source until the totaljobs is met or all 1
-      while sum(jobs.values()) > totalJobs and not all(jobs.values()) == 1:
-        if jobs[sources[i % len(sources)]] > 1:
-          jobs[sources[i % len(sources)]] -= 1
-      return jobs
+    i = 0
+    sources = list(jobs.keys())
+    # Decrease the number of threads per source until the totaljobs is met or all 1
+    while sum(jobs.values()) > totalJobs and not all(jobs.values()) == 1:
+      if jobs[sources[i % len(sources)]] > 1:
+        jobs[sources[i % len(sources)]] -= 1
+      i += 1
 
-    def getEvalParams(self):
-      '''Return the parameters involved in a defined evaluation'''
-      evalOrigin = self.getEnumText("multiEval")
-      params = [p for p in self._evalParameters[evalOrigin]]
-      if evalOrigin == IIITD:
-        try:
-          from immuno.protocols import ProtIIITDEvaluations
-          params += ProtIIITDEvaluations._softParams[self.getEnumText('chooseIIITDEvaluator')]
-        except:
-          pass
+    i = 0
+    while sum(jobs.values()) < totalJobs:
+      jobs[sources[i % len(sources)]] += 1
+      i += 1
 
-      elif evalOrigin == DDG:
-        try:
-          from ddg.protocols import ProtDDGEvaluations
-          params += ProtDDGEvaluations._softParams[self.getEnumText('chooseDDGEvaluator')]
-        except:
-          pass
-      return params
+    return jobs
 
-    def mergeEpsLinks(self, eps, links):
-      '''Concatenates the epitopes and liners into a single string'''
-      res = [0] * (len(eps) + len(links))
-      res[::2], res[1::2] = eps, links
-      return ''.join(res)
+  def getEvalParams(self):
+    '''Return the parameters involved in a defined evaluation'''
+    evalOrigin = self.getEnumText("multiEval")
+    params = [p for p in self._evalParameters[evalOrigin]]
+    if evalOrigin == IIITD:
+      try:
+        from immuno.protocols import ProtIIITDEvaluations
+        params += ProtIIITDEvaluations._softParams[self.getEnumText('chooseIIITDEvaluator')]
+      except:
+        pass
 
-    def getLinkers(self, nEps):
-      '''Returns an iterable with the linkers given the selected strategy and number of epitopes'''
-      nLinkers = nEps - 1
-      outLinks = [self.inLinker.get().strip()] * nLinkers
+    elif evalOrigin == DDG:
+      try:
+        from ddg.protocols import ProtDDGEvaluations
+        params += ProtDDGEvaluations._softParams[self.getEnumText('chooseDDGEvaluator')]
+      except:
+        pass
+    return params
 
-      # todo: linkers other than random
-      # todo: linkers condified in individual so no different every evaluation, for now 1 linker
-      # linkDic = self.parseLinkers()
-      # linkers, linkWs = list(linkDic.keys()), list(linkDic.values())
-      # outLinks = numpy.random.choice(linkers, nLinkers, True, linkWs)
-      return outLinks
+  def parseSamplingScores(self):
+    '''Return {protName: {scoreName: weight}}'''
+    weights = {}
+    protNames = self.getInputProteinNames()
+    for sline in self.scoreSummary.get().split('\n'):
+      if sline.strip():
+        sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
+        pName = protNames[int(sDic['Set'])]
+        if not pName in weights:
+          weights[pName] = {}
+        weights[pName].update({sDic['Score']: sDic['Weight']})
+    return weights
 
-    def parseLinkers(self):
-      '''Parse the linkers summary and
-      returns a dictionary: {LinkerSeq: LinkerWeight}'''
-      linkDic = {}
-      for linkLine in self.linkerSummary.get().split('\n'):
-        if linkLine.strip():
-          sDic = json.loads(')'.join(linkLine.split(')')[1:]).strip())
-          linkDic.update({sDic['Linker']: sDic['Weight']})
-      return linkDic
+  def parseLinkerSummary(self):
+    '''Return a dictionary {setId: [linkers]}'''
+    linkDic = {}
+    protNames = self.getInputProteinNames()
+    for sline in self.linkerSummary.get().split('\n'):
+      if sline.strip():
+        sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
+        pName = protNames[int(sDic['Set'])]
+        if pName not in linkDic:
+          linkDic[pName] = []
+        linkers = sDic['Linker(s)'].split(' // ')
+        linkDic[pName] += linkers
+    return linkDic
 
-    def getEpitopeScores(self):
-      '''Return a dictionary of the form {ROIId: SamplingScore} for all the input ROIs working as epitopes
-      with the defined sampling scores'''
-      sampDic = {}
-      wDic = self.getSamplingScores()
-      for roi in self.inputROIs.get():
-        roiId, roiScore = roi.getObjId(), 0
-        for scoreKey, scoreW in wDic.items():
-          roiScore += scoreW * getattr(roi, scoreKey).get()
-        sampDic[roiId] = roiScore
-      return sampDic
-
-    def getSamplingScores(self):
-      weights = {}
-      for sline in self.scoreSummary.get().split('\n'):
-        if sline.strip():
-          sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
-          weights.update({sDic['Score']: sDic['Weight']})
-      return weights
-
-    def getEvalWeights(self):
-      evalWs = {}
-      for i, sline in enumerate(self.evalSummary.get().split('\n')):
-        if sline.strip():
-          sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
-          source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
-          if source == IEDB:
-            evalKey = f'{source}_{i+1}'
-          elif source == IIITD:
-            evalKey = f'{source}-{sDic.pop("chooseIIITDEvaluator")}_{i + 1}'
-          elif source == DDG:
-            evalKey = f'{source}-{sDic.pop("chooseDDGEvaluator")}_{i + 1}'
-          evalWs[evalKey] = weight
-      return evalWs
+  def getEvalWeights(self):
+    evalWs = {}
+    for i, sline in enumerate(self.evalSummary.get().split('\n')):
+      if sline.strip():
+        sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
+        source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
+        if source in [IEDB, VAXIGN]:
+          evalKey = f'{source}_{i + 1}'
+        elif source == IIITD:
+          evalKey = f'{source}-{sDic.pop("chooseIIITDEvaluator")}_{i + 1}'
+        elif source == DDG:
+          evalKey = f'{source}-{sDic.pop("chooseDDGEvaluator")}_{i + 1}'
+        evalWs[evalKey] = weight
+    return evalWs
