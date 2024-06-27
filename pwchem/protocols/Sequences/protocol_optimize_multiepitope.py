@@ -323,6 +323,10 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
     group.addParam('nGen', params.IntParam, label='Number of generations: ', default=10,
                    help='Number of generations for the GA')
+    group.addParam('nReRun', params.IntParam, label='Run search n times: ', default=1,
+                   expertLevel=params.LEVEL_ADVANCED,
+                   help='Run the GA search n times and store the best individuals coming from each of them')
+    
     group.addParam('nPop', params.IntParam, label='Population size: ', default=20,
                    help='Number of individuals selected each generation')
 
@@ -368,10 +372,12 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     self._insertFunctionStep(self.defineOutputStep)
 
   def optimizeMultiepitopeStep(self):
+    #  Setting random seed
     if self.randomSeed.get() != 0:
       random.seed(self.randomSeed.get())
       np.random.seed(self.randomSeed.get())
 
+    # Preparing utils and mappers
     epiDic = self.getEpitopesPerProt(self.inputROISets)
     linkDic = self.getLinkersPerProt()
     compDic = self.getCompEpitopesPerProt()
@@ -379,31 +385,34 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     wDic = self.getEpitopeScores()
     self.seqsMapper = self.getROIsMapper(epiDic, linkDic, compDic)
 
+    # Parameters
     nPop, nGen = self.nPop.get(), self.nGen.get()
     nOffs, nMigr = self.nOffs.get(), self.nMigr.get()
     mutProb, crossProb = self.mutProb.get(), self.crossProb.get()
 
+    # Generate grammar
     grammarFile = os.path.abspath(self._getPath('grammar.txt'))
     buildGrammarFile(grammarFile, nEpiDic, nLinkDic, nCompDic)
     nonRepNTs = ['<prot>'] + [f'<{pName}Ep>' for pName in nEpiDic]
     bnfGrammar = RepGrammar(grammarFile, nonRepNTs, self.convertWDic(wDic))
 
+    # Define arguments
     deapToolbox = self.defineDeapToolbox(bnfGrammar)
-    population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
-                                               min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
-                                               codon_size=255, codon_consumption='weighted',
-                                               genome_representation='list')
-    # print('Initial pop: ', [ind.phenotype for ind in population])
-
     self.hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
     kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen,
               'mutEpb': self.mutEProb.get(), 'mutSpb': self.mutSProb.get(), 'mutLpb': self.mutLProb.get(),
               'halloffame': self.hof, 'verbose': True}
     if self.gaType.get() != SIMP:
       kwargs.update({'mu': nPop, 'lambda_': nOffs, 'nMigr': nMigr})
-
     gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
-    population, logbook = gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
+    
+    for i in range(self.nReRun.get()):
+      population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
+                                                 min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
+                                                 codon_size=255, codon_consumption='weighted',
+                                                 genome_representation='list')
+
+      gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
 
 
   def defineOutputStep(self):
