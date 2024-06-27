@@ -159,7 +159,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   _label = 'Optimize multiepitope'
 
   _agTypes = ['Simple', 'MuPlusLambda', 'MuCommaLambda']
-  # _mutTypes = ['Random', 'Shuffle']
   _crossTypes = ['Epitope cluster swap']
   _selectionTypes = ['Tournament', 'Roulette', 'Best']
 
@@ -269,14 +268,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     group.addParam('inputCompROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
                    label="Input compulsory epitope sets: ", allowsNull=True,
                    help='Select the Sets of sequence ROIs with compulsory epitopes')
-    # group.addParam('manualProb', params.FloatParam, label='Manual weight: ', default=1,
-    #                help='Define the probability of including the selected epitope in the multiepitope.'
-    #                     'If 1, the epitope will always be included')
-    # group.addParam('addManual', params.LabelParam, label='Add score: ',
-    #                help='Add defined epitope manual sampling')
-    # group.addParam('manualSummary', params.TextParam, width=100, label='Manual summary:', default='',
-    #                help='Summary of the manual sampling epitopes. They will be added randomly independently of '
-    #                     'the sampling epitopes based on scores')
 
     form.addSection(label='Linkers')
     group = form.addGroup('Multiepitope linkers')
@@ -338,18 +329,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     line.addParam('nOffs', params.IntParam, label='Offspring: ', default=20)
     line.addParam('nMigr', params.IntParam, label='Migrants: ', default=10)
 
-
-    # group.addParam('varProp', params.FloatParam, label='Proportion of varied individuals: ', default=0.25,
-    #                condition='gaType!=0',
-    #                help='Defines the number of varied individuals as the proportion with the number of individuals '
-    #                     'in the population.')
-
     group = form.addGroup('Mutation')
-    # group.addParam('mutType', params.EnumParam, label='Mutation type: ', default=0, choices=self._mutTypes,
-    #                help='Choose a strategy for the mutation:'
-    #                     '\n- Random will replace an epitope for a random sampled from the input.'
-    #                     '\n- Shuffle will exchange the position of an epitope with another present in the '
-    #                     'individual')
     group.addParam('mutProb', params.FloatParam, label='Mutate probability: ', default=0.4,
                    help='Probability for a individual to be mutated for the next generation.')
     line = group.addLine('Mutation probabilities: ', help='Probabilities for the different types of mutation')
@@ -425,13 +405,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
     population, logbook = gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
 
-    # print('Final pop: ', [ind.phenotype for ind in population])
-    # print('Scores: ', [ind.fitness.values for ind in population])
-    # print('Fame: ', [ind.phenotype for ind in self.hof.items])
-    # print('Scores: ', [ind.fitness.values for ind in self.hof.items])
-
-    # best = self.hof.items[0]
-    # print("Best individual: \n", best.phenotype, best.fitness.values)
 
   def defineOutputStep(self):
     sequenceSet = SetOfSequences().create(outputPath=self._getPath())
@@ -789,7 +762,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       if sline.strip():
         sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
         source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
-        if not source in evalDics:
+        if source not in evalDics:
           evalDics[source] = {}
 
         if source in [IEDB, VAXIGN]:
@@ -799,7 +772,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
           softName = sDic.pop("chooseIIITDEvaluator")
           evalKey = f'{source}-{softName}_{i + 1}'
           sDic.update({'software': softName})
-          if not source in mapFuncs:
+          if source not in mapFuncs:
             from immuno.utils import mapEvalParamNames as iiitdMap
             mapFuncs[source] = iiitdMap
 
@@ -807,7 +780,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
           softName = sDic.pop("chooseDDGEvaluator")
           evalKey = f'{source}-{softName}_{i + 1}'
           sDic.update({'software': softName})
-          if not source in mapFuncs:
+          if source not in mapFuncs:
             from ddg.utils import mapEvalParamNames as ddgMap
             mapFuncs[source] = ddgMap
 
@@ -838,7 +811,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     i = 0
     sources = list(jobs.keys())
     # Decrease the number of threads per source until the totaljobs is met or all 1
-    while sum(jobs.values()) > totalJobs and not all(jobs.values()) == 1:
+    while sum(jobs.values()) > totalJobs and all(jobs.values()) != 1:
       if jobs[sources[i % len(sources)]] > 1:
         jobs[sources[i % len(sources)]] -= 1
       i += 1
@@ -877,7 +850,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       if sline.strip():
         sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
         pName = protNames[int(sDic['Set'])]
-        if not pName in weights:
+        if pName not in weights:
           weights[pName] = {}
         weights[pName].update({sDic['Score']: sDic['Weight']})
     return weights

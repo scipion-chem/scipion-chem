@@ -108,7 +108,7 @@ def getWeightedIndex(genomeSeed, repIdxs, nRules, weights):
         return None
     pIdxs, pWs = [], []
     for i in range(nRules):
-        if not i in repIdxs:
+        if i not in repIdxs:
             pIdxs.append(i)
             if weights:
                 pWs.append(weights[i])
@@ -407,8 +407,6 @@ def crossover_multiepitope(parent0, parent1, bnfGrammar):
   proteinCrosses = {pName: False for pName in protNames}
 
   proteinCrosses[random.choice(protNames)] = True  # Crossing only one random protein
-  # proteinCrosses = {pName: np.random.choice([True, False], 1, p=[crossProtein, 1-crossProtein])[0]
-  #                   for pName in protNames}
   child0, child1 = performCrossProtein(child0, child1, proteinCrosses)
   del child0.fitness.values, child1.fitness.values
   return child0, child1

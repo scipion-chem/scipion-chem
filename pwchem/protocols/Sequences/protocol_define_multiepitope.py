@@ -98,19 +98,19 @@ class ProtDefineMultiEpitope(EMProtocol):
         roiName = ''
       return roiName
 
-    def buildSumLine(self, type=None):
+    def buildSumLine(self):
       '''Returns the information line to be written in the summary'''
-      type = self.getEnumText('roiType')
+      roiType = self.getEnumText('roiType')
       roiName = self.getNewROIName()
 
       if self.origin.get() == SROI:
         inSet, inROI = self.getInputSet(), self.getInputROI()
-        sumLine = f'{type}: {inROI.__str__()} (Set {inSet.getObjId()}, Item {inROI.getObjId()})'
+        sumLine = f'{roiType}: {inROI.__str__()} (Set {inSet.getObjId()}, Item {inROI.getObjId()})'
         if roiName:
           sumLine = sumLine[:-1] + f', Name {roiName})'
 
       else:
-        sumLine = f'{type}: {self.manualROI.get().strip()}'
+        sumLine = f'{roiType}: {self.manualROI.get().strip()}'
         if roiName:
           sumLine = sumLine + f' (Name {roiName})'
 
@@ -194,8 +194,8 @@ class ProtDefineMultiEpitope(EMProtocol):
       for sumLine in self.multiSummary.get().split('\n'):
         sumLine = sumLine.strip()
         if sumLine:
-          type = sumLine.split(') ')[1].split(':')[0]
-          curCount = lkCount if type == 'Linker' else epCount
+          roiType = sumLine.split(') ')[1].split(':')[0]
+          curCount = lkCount if roiType == 'Linker' else epCount
           curCount += 1
 
           if 'SequenceROI' in sumLine:
@@ -206,19 +206,19 @@ class ProtDefineMultiEpitope(EMProtocol):
             roiSequence = seqROI.getROISequence()
 
             idxs = [len(mSeq) + 1, len(mSeq) + len(roiSequence) + 1]
-            seqROI.setType(type)
+            seqROI.setType(roiType)
             seqROI.setROIIdxs(idxs)
             if roiName:
               seqROI.setROIId(roiName), seqROI.setROIName(roiName)
 
           else:
             # Manual definition
-            roiSequence = sumLine.split(f'{type}:')[-1].split('(')[0].strip()
+            roiSequence = sumLine.split(f'{roiType}:')[-1].split('(')[0].strip()
             idxs = [len(mSeq)+1, len(mSeq) + len(roiSequence)+1]
-            roiName = self.getElementName(sumLine) if self.getElementName(sumLine) else f'{type}_{curCount}'
+            roiName = self.getElementName(sumLine) if self.getElementName(sumLine) else f'{roiType}_{curCount}'
             roiSeq = Sequence(sequence=roiSequence, name=roiName, id=roiName,
                               description='Manually added')
-            seqROI = SequenceROI(seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1], type=type)
+            seqROI = SequenceROI(seqROI=roiSeq, roiIdx=idxs[0], roiIdx2=idxs[1], type=roiType)
 
           mSeq += roiSequence
           outROIs.append(seqROI)
