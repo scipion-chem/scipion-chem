@@ -33,6 +33,8 @@ from grape.grape import Individual, Grammar, mapper_eager, mapper_lazy
 
 # GRAPE UTILS
 
+NOREP, WEIGHT = 'noRepeated', 'weighted'
+
 class RepIndividual(Individual):
     '''Individual including the option to not repeated nodes'''
     def __init__(self, genome, grammar, max_depth, codon_consumption):
@@ -45,14 +47,14 @@ class RepIndividual(Individual):
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
             self.structure = mapper_eager(genome, grammar, max_depth)
-        elif codon_consumption == 'noRepeated':
+        elif codon_consumption == NOREP:
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = mapperNoRepeated(genome, grammar, max_depth)
-        elif codon_consumption == 'weighted':
+            self.structure = generalMapper(genome, grammar, max_depth, mapType=NOREP)
+        elif codon_consumption == WEIGHT:
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = mapperWeighted(genome, grammar, max_depth)
+            self.structure = generalMapper(genome, grammar, max_depth, mapType=WEIGHT)
         else:
             raise ValueError("Unknown mapper")
 
@@ -119,137 +121,78 @@ def getWeightedIndex(genomeSeed, repIdxs, nRules, weights):
     np.random.seed(genomeSeed)
     return np.random.choice(pIdxs, 1, p=pWs)[0]
 
-def mapperNoRepeated(genome, grammar, max_depth):
-    """
-    This mapper is similar to the previous one, but it does not consume codons
-    when mapping a production rule with a single option."""
-
-    idxGenome = 0
-    phenotype = grammar.start_rule
-    next_NT = re.search(r"\<(\w+)\>", phenotype).group()
-    n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
-    list_depth = [1] * n_starting_NTs  # it keeps the depth of each branch
-    idx_depth = 0
-    nodes = 0
-    structure = []
-
-    # Used indexes are stored to not be repeated for non-repeatable elements
-    noRepNTs = grammar.noRepNTs
-    repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
-    while next_NT and idxGenome < len(genome):
-        NT_index = grammar.non_terminals.index(next_NT)
-        # todo: switch from genome->indexProduction to weighted productions (use genes as random seeds?)
-        index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
-        if next_NT in repDic:
-            index_production_chosen = getNonRepeatedIndex(index_production_chosen, repDic[next_NT], grammar.n_rules[NT_index])
-            if index_production_chosen == None:
-                break
-            repDic[next_NT].append(index_production_chosen)
-
-        structure.append(index_production_chosen)
-        idxGenome += 1
-
-        phenotype = phenotype.replace(next_NT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
-        list_depth[idx_depth] += 1
-        if list_depth[idx_depth] > max_depth:
-            break
-        if grammar.production_rules[NT_index][index_production_chosen][2] == 0:  # arity 0 (T)
-            idx_depth += 1
-            nodes += 1
-        elif grammar.production_rules[NT_index][index_production_chosen][2] == 1:  # arity 1 (PR with one NT)
-            pass
-        else:  # it is a PR with more than one NT
-            arity = grammar.production_rules[NT_index][index_production_chosen][2]
-            if idx_depth == 0:
-                list_depth = [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
-            else:
-                list_depth = list_depth[0:idx_depth] + [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
-
-        next_ = re.search(r"\<(\w+)\>", phenotype)
-        if next_:
-            next_NT = next_.group()
-        else:
-            next_NT = None
-
-    if next_NT:
-        invalid = True
-        used_codons = 0
-    else:
-        invalid = False
-        used_codons = idxGenome
-
-    depth = max(list_depth)
-
-    return phenotype, nodes, depth, used_codons, invalid, 0, structure
 
 def checkPhenotype(phen):
-    '''Check for unmatched production rules from the phenotype that have not been transformed to terminals'''
-    unPhenots = re.findall(r" ?\<\w+\> ?", phen)
-    if len(unPhenots) > 0:
-      return None
-    return phen
+  '''Check for unmatched production rules from the phenotype that have not been transformed to terminals'''
+  unPhenots = re.findall(r" ?\<\w+\> ?", phen)
+  if len(unPhenots) > 0:
+    return None
+  return phen
 
-def mapperWeighted(genome, grammar, max_depth):
-    """
-    This mapper uses the genome as random seeds to generate the phenotype, having the epitopes weights that are
-    used to randomly choose them"""
-    idxGenome = 0
-    phenotype = grammar.start_rule
-    next_NT = re.search(r"\<(\w+)\>", phenotype).group()
-    n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
-    list_depth = [1] * n_starting_NTs  # it keeps the depth of each branch
-    idx_depth = 0
-    nodes = 0
-    structure = []
 
-    # Used indexes are stored to not be repeated for non-repeatable elements
-    noRepNTs = grammar.noRepNTs
-    repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
-    while next_NT and idxGenome < len(genome):
-        NT_index = grammar.non_terminals.index(next_NT)
-        repIdxs = repDic[next_NT] if next_NT in repDic else []
-        weights = grammar.weightDic[next_NT] if next_NT in grammar.weightDic else {}
-        index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
-        if next_NT in repDic:
-            if index_production_chosen == None:
-              return [None] * 7
-            repDic[next_NT].append(index_production_chosen)
+def generalMapper(genome, grammar, max_depth, mapType=WEIGHT):
+  idxGenome, idx_depth, nodes, structure = 0, 0, 0, []
+  phenotype = grammar.start_rule
+  next_NT = re.search(r"\<(\w+)\>", phenotype).group()
+  n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
+  list_depth = [1] * n_starting_NTs  # it keeps the depth of each branch
 
-        structure.append(index_production_chosen)
-        idxGenome += 1
+  # Used indexes are stored to not be repeated for non-repeatable elements
+  noRepNTs = grammar.noRepNTs
+  repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
+  while next_NT and idxGenome < len(genome):
+    NT_index = grammar.non_terminals.index(next_NT)
+    repIdxs = repDic[next_NT] if next_NT in repDic else []
 
-        phenotype = phenotype.replace(next_NT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
-        list_depth[idx_depth] += 1
-        if list_depth[idx_depth] > max_depth:
-            break
-        if grammar.production_rules[NT_index][index_production_chosen][2] == 0:  # arity 0 (T)
-            idx_depth += 1
-            nodes += 1
-        elif grammar.production_rules[NT_index][index_production_chosen][2] == 1:  # arity 1 (PR with one NT)
-            pass
-        else:  # it is a PR with more than one NT
-            arity = grammar.production_rules[NT_index][index_production_chosen][2]
-            if idx_depth == 0:
-                list_depth = [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
-            else:
-                list_depth = list_depth[0:idx_depth] + [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
+    index_production_chosen = None
+    if mapType == WEIGHT:
+      weights = grammar.weightDic[next_NT] if next_NT in grammar.weightDic else {}
+      index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
+    elif mapType == NOREP:
+      index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
+      index_production_chosen = getNonRepeatedIndex(index_production_chosen, repIdxs, grammar.n_rules[NT_index])
 
-        next_ = re.search(r"\<(\w+)\>", phenotype)
-        if next_:
-            next_NT = next_.group()
+    if next_NT in repDic:
+        if index_production_chosen == None:
+          return [None] * 7
+        repDic[next_NT].append(index_production_chosen)
+
+    structure.append(index_production_chosen)
+    idxGenome += 1
+
+    phenotype = phenotype.replace(next_NT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
+    list_depth[idx_depth] += 1
+    if list_depth[idx_depth] > max_depth:
+        break
+    if grammar.production_rules[NT_index][index_production_chosen][2] == 0:  # arity 0 (T)
+        idx_depth += 1
+        nodes += 1
+    elif grammar.production_rules[NT_index][index_production_chosen][2] == 1:  # arity 1 (PR with one NT)
+        pass
+    else:  # it is a PR with more than one NT
+        arity = grammar.production_rules[NT_index][index_production_chosen][2]
+        if idx_depth == 0:
+            list_depth = [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
         else:
-            next_NT = None
+            list_depth = list_depth[0:idx_depth] + [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
 
-    if next_NT:
-        invalid = True
-        used_codons = 0
+    next_ = re.search(r"\<(\w+)\>", phenotype)
+    if next_:
+        next_NT = next_.group()
     else:
-        invalid = False
-        used_codons = idxGenome
+        next_NT = None
 
-    depth = max(list_depth)
-    phenotype = checkPhenotype(phenotype)
-    return phenotype, nodes, depth, used_codons, invalid, 0, structure
+  if next_NT:
+      invalid = True
+      used_codons = 0
+  else:
+      invalid = False
+      used_codons = idxGenome
+
+  depth = max(list_depth)
+  phenotype = checkPhenotype(phenotype)
+  return phenotype, nodes, depth, used_codons, invalid, 0, structure
+
 
 def getProteinNames(bnfGrammar):
     return [pName[0][1:-5] for pName in bnfGrammar.production_rules[1]]
