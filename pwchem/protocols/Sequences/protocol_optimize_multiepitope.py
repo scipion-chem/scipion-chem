@@ -156,7 +156,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   """
   Optimize a MultiEpitope object based on some scores using Genetic Algorithms
   """
-  _label = 'Optimize multiepitope grape'
+  _label = 'Optimize multiepitope'
 
   _agTypes = ['Simple', 'MuPlusLambda', 'MuCommaLambda']
   # _mutTypes = ['Random', 'Shuffle']
