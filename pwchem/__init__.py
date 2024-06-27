@@ -204,7 +204,7 @@ class Plugin(pwem.Plugin):
 		# Instantiating install helper
 		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib'], channel='conda-forge')\
+		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################
@@ -223,6 +223,18 @@ class Plugin(pwem.Plugin):
 				subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
+	def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True):
+		""" General function to run conda commands """
+		full_program = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
+		if not popen:
+			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+		else:
+			kwargs = {}
+			if silent:
+				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+
+	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):
 		""" Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
 		progDir = cls.getProgramHome(SHAPEIT_DIC)
@@ -239,13 +251,12 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False, silent=True):
 		""" Run openbabel command from a given protocol. """
-		full_program = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
-		if not popen:
-			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
-		else:
-			if silent:
-				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+		cls.runCondaCommand(protocol, args, OPENBABEL_DIC, program, cwd, popen, silent)
+
+	@classmethod
+	def runACPYPE(cls, protocol, program='acpype', args=None, cwd=None, popen=False, silent=True):
+		""" Run ACPYPE command from a given protocol. """
+		cls.runCondaCommand(protocol, args, MDTRAJ_DIC, program, cwd, popen, silent)
 
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
