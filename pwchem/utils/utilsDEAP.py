@@ -48,11 +48,11 @@ class RepIndividual(Individual):
         elif codon_consumption == 'noRepeated':
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = mapper_noRepeated(genome, grammar, max_depth)
+            self.structure = mapperNoRepeated(genome, grammar, max_depth)
         elif codon_consumption == 'weighted':
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = mapper_weighted(genome, grammar, max_depth)
+            self.structure = mapperWeighted(genome, grammar, max_depth)
         else:
             raise ValueError("Unknown mapper")
 
@@ -119,12 +119,12 @@ def getWeightedIndex(genomeSeed, repIdxs, nRules, weights):
     np.random.seed(genomeSeed)
     return np.random.choice(pIdxs, 1, p=pWs)[0]
 
-def mapper_noRepeated(genome, grammar, max_depth):
+def mapperNoRepeated(genome, grammar, max_depth):
     """
     This mapper is similar to the previous one, but it does not consume codons
     when mapping a production rule with a single option."""
 
-    idx_genome = 0
+    idxGenome = 0
     phenotype = grammar.start_rule
     next_NT = re.search(r"\<(\w+)\>", phenotype).group()
     n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
@@ -136,10 +136,10 @@ def mapper_noRepeated(genome, grammar, max_depth):
     # Used indexes are stored to not be repeated for non-repeatable elements
     noRepNTs = grammar.noRepNTs
     repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
-    while next_NT and idx_genome < len(genome):
+    while next_NT and idxGenome < len(genome):
         NT_index = grammar.non_terminals.index(next_NT)
         # todo: switch from genome->indexProduction to weighted productions (use genes as random seeds?)
-        index_production_chosen = genome[idx_genome] % grammar.n_rules[NT_index]
+        index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
         if next_NT in repDic:
             index_production_chosen = getNonRepeatedIndex(index_production_chosen, repDic[next_NT], grammar.n_rules[NT_index])
             if index_production_chosen == None:
@@ -147,7 +147,7 @@ def mapper_noRepeated(genome, grammar, max_depth):
             repDic[next_NT].append(index_production_chosen)
 
         structure.append(index_production_chosen)
-        idx_genome += 1
+        idxGenome += 1
 
         phenotype = phenotype.replace(next_NT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
         list_depth[idx_depth] += 1
@@ -176,7 +176,7 @@ def mapper_noRepeated(genome, grammar, max_depth):
         used_codons = 0
     else:
         invalid = False
-        used_codons = idx_genome
+        used_codons = idxGenome
 
     depth = max(list_depth)
 
@@ -189,11 +189,11 @@ def checkPhenotype(phen):
       return None
     return phen
 
-def mapper_weighted(genome, grammar, max_depth):
+def mapperWeighted(genome, grammar, max_depth):
     """
     This mapper uses the genome as random seeds to generate the phenotype, having the epitopes weights that are
     used to randomly choose them"""
-    idx_genome = 0
+    idxGenome = 0
     phenotype = grammar.start_rule
     next_NT = re.search(r"\<(\w+)\>", phenotype).group()
     n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
@@ -205,18 +205,18 @@ def mapper_weighted(genome, grammar, max_depth):
     # Used indexes are stored to not be repeated for non-repeatable elements
     noRepNTs = grammar.noRepNTs
     repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
-    while next_NT and idx_genome < len(genome):
+    while next_NT and idxGenome < len(genome):
         NT_index = grammar.non_terminals.index(next_NT)
         repIdxs = repDic[next_NT] if next_NT in repDic else []
         weights = grammar.weightDic[next_NT] if next_NT in grammar.weightDic else {}
-        index_production_chosen = getWeightedIndex(genome[idx_genome], repIdxs, grammar.n_rules[NT_index], weights)
+        index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
         if next_NT in repDic:
             if index_production_chosen == None:
               return [None] * 7
             repDic[next_NT].append(index_production_chosen)
 
         structure.append(index_production_chosen)
-        idx_genome += 1
+        idxGenome += 1
 
         phenotype = phenotype.replace(next_NT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
         list_depth[idx_depth] += 1
@@ -245,7 +245,7 @@ def mapper_weighted(genome, grammar, max_depth):
         used_codons = 0
     else:
         invalid = False
-        used_codons = idx_genome
+        used_codons = idxGenome
 
     depth = max(list_depth)
     phenotype = checkPhenotype(phenotype)
@@ -482,9 +482,9 @@ def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
   return offspring
 
 def performEvaluation(p, fitDic, toolbox):
-  invalid_ind = [ind for ind in p if not ind.fitness.valid]
-  newInds = [ind for ind in invalid_ind if ind.phenotype not in fitDic]
-  oldInds = [ind for ind in invalid_ind if ind.phenotype in fitDic]
+  invalidInd = [ind for ind in p if not ind.fitness.valid]
+  newInds = [ind for ind in invalidInd if ind.phenotype not in fitDic]
+  oldInds = [ind for ind in invalidInd if ind.phenotype in fitDic]
 
   if len(newInds) > 0:
     fitnesses = toolbox.evaluate(newInds)
@@ -578,7 +578,7 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
     offspring = phenVarAnd(offspring, toolbox, bnfGrammar, cxpb, mutpb, mutProbs)
 
     # Evaluate the individuals with an invalid fitness
-    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    invalidInd = [ind for ind in offspring if not ind.fitness.valid]
     offspring, fitnessDic = performEvaluation(offspring, fitnessDic, toolbox)
 
     # Update population for next generation
@@ -590,15 +590,15 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
     halloffame = updateHOF(halloffame, valid)
 
     record = stats.compile(population) if stats is not None else {}
-    logbook.record(gen=0, nevals=len(invalid_ind), **record)
+    logbook.record(gen=0, nevals=len(invalidInd), **record)
     if verbose:
       print(logbook.stream)
 
   return population, logbook
 
-def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar, 
+def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
                           ngen, mu, lambda_, nMigr,
-                          cxpb, mutpb, 
+                          cxpb, mutpb,
                           mutEpb=None, mutSpb=None, mutLpb=None,
                           stats=None, halloffame=None, verbose=__debug__):
   """This algorithm reproduce the Mu plu Lambda evolutionary algorithm from DEAP
@@ -642,7 +642,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     migrants = initPop(toolbox, bnfGrammar, nMigr) if nMigr > 0 else []
 
     # Evaluate the individuals with an invalid fitness
-    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    invalidInd = [ind for ind in offspring if not ind.fitness.valid]
     offspring, fitnessDic = performEvaluation(offspring + migrants, fitnessDic, toolbox)
 
     # Update population for next generation
@@ -653,7 +653,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     halloffame = updateHOF(halloffame, valid)
 
     # Display statistics
-    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalid_ind), verbose)
+    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalidInd), verbose)
 
   return population, logbook
 
@@ -703,7 +703,7 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
     migrants = initPop(toolbox, bnfGrammar, nMigr) if nMigr > 0 else []
 
     # Evaluate the individuals with an invalid fitness
-    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+    invalidInd = [ind for ind in offspring if not ind.fitness.valid]
     offspring, fitnessDic = performEvaluation(offspring + migrants, fitnessDic, toolbox)
 
     # Update population for next generation
@@ -713,6 +713,6 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
     # Update the hall of fame with the generated individuals
     halloffame = updateHOF(halloffame, valid)
 
-    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalid_ind), verbose)
+    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalidInd), verbose)
 
   return population, logbook
