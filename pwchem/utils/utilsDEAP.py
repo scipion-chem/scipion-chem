@@ -595,7 +595,7 @@ def phenVarAnd(population, toolbox, bnfGrammar, cxpb, mutpb, mutProbs):
 
 def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
   """Part of an evolutionary algorithm applying only the variation part
-  (crossover **and** mutation). The modified individuals have their
+  (crossover **or** mutation). The modified individuals have their
   fitness invalidated. The individuals are cloned so returned population is
   independent of the input population.
 
@@ -616,6 +616,7 @@ def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
       ind1, ind2 = [toolbox.clone(i) for i in random.sample(population, 2)]
       ind1, ind2 = toolbox.mate(ind1, ind2, bnfGrammar)
       del ind1.fitness.values
+      del ind2.fitness.values
       if not ind1.invalid:
         offspring.append(ind1)
       elif not ind2.invalid:
@@ -647,241 +648,12 @@ def performEvaluation(p, fitDic, toolbox):
 
   return p, fitDic
 
+def initPop(toolbox, bnfGrammar, nPop):
+  return toolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
+                                  min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
+                                  codon_size=255, codon_consumption='weighted',
+                                  genome_representation='list')
 
-def ge_eaSimpleWithElitismNoTrain(population, toolbox, cxpb, mutpb, mutSpb, ngen, elite_size,
-                                  bnfGrammar, mutLpb=None,
-                                  report_items=None, stats=None, halloffame=None, verbose=__debug__):
-  """This algorithm reproduce the simplest evolutionary algorithm as
-  presented in chapter 7 of [Back2000]_, with some adaptations to run GE
-  on GRAPE.
-  :param population: A list of individuals.
-  :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
-                  operators.
-  :param cxpb: The probability of mating two individuals.
-  :param mutpb: The probability of mutating an individual.
-  :param ngen: The number of generation.
-  :param elite_size: The number of best individuals to be copied to the
-                  next generation.
-  :params bnfGrammar, codon_size, max_tree_depth: Parameters
-                  used to mapper the individuals after crossover and
-                  mutation in order to check if they are valid.
-  :param stats: A :class:`~deap.tools.Statistics` object that is updated
-                inplace, optional.
-  :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
-                     contain the best individuals, optional.
-  :param verbose: Whether or not to log the statistics.
-  :returns: The final population
-  :returns: A class:`~deap.tools.Logbook` with the statistics of the
-            evolution
-  """
-
-  logbook = tools.Logbook()
-
-  if halloffame is None:
-    if elite_size != 0:
-      raise ValueError("You should add a hof object to use elitism.")
-    else:
-      warnings.warn('You will not register results of the best individual while not using a hof object.', UserWarning)
-      logbook.header = ['gen', 'invalid'] + (stats.fields if stats else []) + ['avg_length', 'avg_nodes', 'avg_depth',
-                                                                               'avg_used_codons',
-                                                                               'behavioural_diversity',
-                                                                               'structural_diversity',
-                                                                               'fitness_diversity', 'selection_time',
-                                                                               'generation_time']
-  else:
-    if halloffame.maxsize < 1:
-      raise ValueError("HALLOFFAME_SIZE should be greater or equal to 1")
-    if elite_size > halloffame.maxsize:
-      raise ValueError("HALLOFFAME_SIZE should be greater or equal to ELITE_SIZE")
-    logbook.header = ['gen', 'invalid'] + (stats.fields if stats else []) + ['best_ind_length', 'avg_length',
-                                                                               'best_ind_nodes', 'avg_nodes',
-                                                                               'best_ind_depth', 'avg_depth',
-                                                                               'avg_used_codons',
-                                                                               'best_ind_used_codons',
-                                                                               'behavioural_diversity',
-                                                                               'structural_diversity',
-                                                                               'fitness_diversity', 'selection_time',
-                                                                               'generation_time']
-
-  start_gen = time.time()
-  # Evaluate the individuals with an invalid fitness
-  invalid_ind = [ind for ind in population if not ind.fitness.valid]
-  fitnesses = toolbox.evaluate(invalid_ind)
-  for i, ind in enumerate(invalid_ind):
-    ind.fitness.values = fitnesses[i]
-
-  valid0 = [ind for ind in population if not ind.invalid]
-  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-  if len(valid0) != len(valid):
-    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
-  invalid = len(population) - len(
-    valid0)  # We use the original number of invalids in this case, because we just want to count the completely mapped individuals
-
-  list_structures = []
-  if 'fitness_diversity' in report_items:
-    list_fitnesses = []
-  if 'behavioural_diversity' in report_items:
-    behaviours = np.zeros([len(valid), len(valid[0].fitness_each_sample)], dtype=float)
-
-  # for ind in offspring:
-  for idx, ind in enumerate(valid):
-    list_structures.append(str(ind.structure))
-    if 'fitness_diversity' in report_items:
-      list_fitnesses.append(str(ind.fitness.values[0]))
-    if 'behavioural_diversity' in report_items:
-      behaviours[idx, :] = ind.fitness_each_sample
-
-  unique_structures = np.unique(list_structures, return_counts=False)
-  if 'fitness_diversity' in report_items:
-    unique_fitnesses = np.unique(list_fitnesses, return_counts=False)
-  if 'behavioural_diversity' in report_items:
-    unique_behaviours = np.unique(behaviours, axis=0)
-
-  structural_diversity = len(unique_structures) / len(population)
-  behavioural_diversity = len(unique_behaviours) / len(population) if 'behavioural_diversity' in report_items else 0
-
-  # Update the hall of fame with the generated individuals
-  if halloffame is not None:
-    halloffame.update(valid)
-    best_ind_length = len(halloffame.items[0].genome)
-    best_ind_nodes = halloffame.items[0].nodes
-    best_ind_depth = halloffame.items[0].depth
-    best_ind_used_codons = halloffame.items[0].used_codons
-    if not verbose:
-      print("gen =", 0, ", Best fitness =", halloffame.items[0].fitness.values)
-
-  length = [len(ind.genome) for ind in valid]
-  avg_length = sum(length) / len(length)
-
-  nodes = [ind.nodes for ind in valid]
-  avg_nodes = sum(nodes) / len(nodes)
-
-  depth = [ind.depth for ind in valid]
-  avg_depth = sum(depth) / len(depth)
-
-  used_codons = [ind.used_codons for ind in valid]
-  avg_used_codons = sum(used_codons) / len(used_codons)
-
-  end_gen = time.time()
-  generation_time = end_gen - start_gen
-
-  selection_time = 0
-
-  record = stats.compile(population) if stats else {}
-  logbook.record(gen=0, invalid=invalid, **record,
-                   best_ind_length=best_ind_length, avg_length=avg_length,
-                   best_ind_nodes=best_ind_nodes,
-                   avg_nodes=avg_nodes,
-                   best_ind_depth=best_ind_depth,
-                   avg_depth=avg_depth,
-                   avg_used_codons=avg_used_codons,
-                   best_ind_used_codons=best_ind_used_codons,
-                   behavioural_diversity=behavioural_diversity,
-                   structural_diversity=structural_diversity,
-                   selection_time=selection_time,
-                   generation_time=generation_time)
-  if verbose:
-    print(logbook.stream)
-
-  # Begin the generational process
-  for gen in range(logbook.select("gen")[-1] + 1, ngen + 1):
-    start_gen = time.time()
-
-    # Select the next generation individuals
-    start = time.time()
-    offspring = toolbox.select(valid, len(population) - elite_size)
-    end = time.time()
-    selection_time = end - start
-    # Vary the pool of individuals
-    offspring = phenVarAnd(offspring, toolbox, bnfGrammar, cxpb, mutpb, mutProbs)
-
-    # Evaluate the individuals with an invalid fitness
-    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-    fitnesses = toolbox.evaluate(invalid_ind)
-    print('Fitnesses: ', fitnesses)
-    for i, ind in enumerate(invalid_ind):
-      ind.fitness.values = fitnesses[i]
-
-    # Update population for next generation
-    population[:] = offspring
-    # Include in the population the elitist individuals
-    for i in range(elite_size):
-      population.append(halloffame.items[i])
-
-    valid0 = [ind for ind in population if not ind.invalid]
-    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-    if len(valid0) != len(valid):
-      warnings.warn(
-        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
-    invalid = len(population) - len(
-      valid0)  # We use the original number of invalids in this case, because we just want to count the completely mapped individuals
-
-    list_structures = []
-    if 'fitness_diversity' in report_items:
-      list_fitnesses = []
-    if 'behavioural_diversity' in report_items:
-      behaviours = np.zeros([len(valid), len(valid[0].fitness_each_sample)], dtype=float)
-
-    for idx, ind in enumerate(valid):
-      list_structures.append(str(ind.structure))
-      if 'fitness_diversity' in report_items:
-        list_fitnesses.append(str(ind.fitness.values[0]))
-      if 'behavioural_diversity' in report_items:
-        behaviours[idx, :] = ind.fitness_each_sample
-
-    unique_structures = np.unique(list_structures, return_counts=False)
-    if 'fitness_diversity' in report_items:
-      unique_fitnesses = np.unique(list_fitnesses, return_counts=False)
-    if 'behavioural_diversity' in report_items:
-      unique_behaviours = np.unique(behaviours, axis=0)
-
-    structural_diversity = len(unique_structures) / len(population)
-    behavioural_diversity = len(unique_behaviours) / len(population) if 'behavioural_diversity' in report_items else 0
-
-    # Update the hall of fame with the generated individuals
-    if halloffame is not None:
-      halloffame.update(valid)
-      best_ind_length = len(halloffame.items[0].genome)
-      best_ind_nodes = halloffame.items[0].nodes
-      best_ind_depth = halloffame.items[0].depth
-      best_ind_used_codons = halloffame.items[0].used_codons
-      if not verbose:
-        print("gen =", gen, ", Best fitness =", halloffame.items[0].fitness.values, ", Number of invalids =", invalid)
-
-    length = [len(ind.genome) for ind in valid]
-    avg_length = sum(length) / len(length)
-
-    nodes = [ind.nodes for ind in valid]
-    avg_nodes = sum(nodes) / len(nodes)
-
-    depth = [ind.depth for ind in valid]
-    avg_depth = sum(depth) / len(depth)
-
-    used_codons = [ind.used_codons for ind in valid]
-    avg_used_codons = sum(used_codons) / len(used_codons)
-
-    end_gen = time.time()
-    generation_time = end_gen - start_gen
-
-    # Append the current generation statistics to the logbook
-    record = stats.compile(population) if stats else {}
-    logbook.record(gen=gen, invalid=invalid, **record,
-                   best_ind_length=best_ind_length, avg_length=avg_length,
-                   best_ind_nodes=best_ind_nodes,
-                   avg_nodes=avg_nodes,
-                   best_ind_depth=best_ind_depth,
-                   avg_depth=avg_depth,
-                   avg_used_codons=avg_used_codons,
-                   best_ind_used_codons=best_ind_used_codons,
-                   behavioural_diversity=behavioural_diversity,
-                   structural_diversity=structural_diversity,
-                   selection_time=selection_time,
-                   generation_time=generation_time)
-
-    if verbose:
-      print(logbook.stream)
-
-  return population, logbook
 
 def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
                     cxpb, mutpb,
@@ -965,7 +737,7 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
   return population, logbook
 
 def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar, 
-                          ngen, mu, lambda_, 
+                          ngen, mu, lambda_, nMigr,
                           cxpb, mutpb, 
                           mutEpb=None, mutSpb=None, mutLpb=None,
                           stats=None, halloffame=None, verbose=__debug__):
@@ -990,7 +762,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
   """
 
   logbook = tools.Logbook()
-  logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+  logbook.header = ['gen', 'nevals', 'maxScore', 'minScore', 'meanScore', 'hofScores'] + (stats.fields if stats else [])
   fitnessDic = {}
 
   # Evaluate the individuals with an invalid fitness
@@ -1016,10 +788,11 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     # Select the next generation individuals
     mutProbs = [mutEpb, mutSpb, mutLpb]
     offspring = phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs)
+    migrants = initPop(toolbox, bnfGrammar, nMigr) if nMigr > 0 else []
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-    offspring, fitnessDic = performEvaluation(offspring, fitnessDic, toolbox)
+    offspring, fitnessDic = performEvaluation(offspring + migrants, fitnessDic, toolbox)
 
     # Update population for next generation
     population[:] = toolbox.select(population + offspring, mu)
@@ -1034,7 +807,12 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
       halloffame.update(valid)
 
     record = stats.compile(population) if stats is not None else {}
-    logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+    scores = [ind.fitness.values[0] for ind in valid]
+    hofScores = [ind.fitness.values[0] for ind in halloffame]
+    logbook.record(gen=gen, nevals=len(invalid_ind),
+                   maxScore=max(scores), minScore=min(scores), meanScore=sum(scores) / len(scores),
+                   hofScores=hofScores,
+                   **record)
     if verbose:
       print(logbook.stream)
       # print('Scores: ', fitnessDic)
@@ -1043,7 +821,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
 
 
 def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
-                          ngen, mu, lambda_,
+                          ngen, mu, lambda_, nMigr,
                           cxpb, mutpb,
                           mutEpb=None, mutSpb=None, mutLpb=None,
                           stats=None, halloffame=None, verbose=__debug__):
@@ -1068,7 +846,7 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
   """
 
   logbook = tools.Logbook()
-  logbook.header = ['gen', 'nevals', 'meanScore', 'minScore', 'maxScore', 'hofScores'] + (stats.fields if stats else [])
+  logbook.header = ['gen', 'nevals', 'maxScore', 'minScore', 'meanScore', 'hofScores'] + (stats.fields if stats else [])
   fitnessDic = {}
 
   # Evaluate the individuals with an invalid fitness
@@ -1094,10 +872,11 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
     # Select the next generation individuals
     mutProbs = [mutEpb, mutSpb, mutLpb]
     offspring = phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs)
+    migrants = initPop(toolbox, bnfGrammar, nMigr) if nMigr > 0 else []
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-    offspring, fitnessDic = performEvaluation(offspring, fitnessDic, toolbox)
+    offspring, fitnessDic = performEvaluation(offspring + migrants, fitnessDic, toolbox)
 
     # Update population for next generation
     population[:] = toolbox.select(offspring, mu)
@@ -1112,10 +891,10 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
       halloffame.update(valid)
 
     record = stats.compile(population) if stats is not None else {}
-    scores = [ind.fitness.values[0] for ind in population]
+    scores = [ind.fitness.values[0] for ind in valid]
     hofScores = [ind.fitness.values[0] for ind in halloffame]
     logbook.record(gen=gen, nevals=len(invalid_ind),
-                   meanScore=sum(scores)/len(scores), minScore=min(scores), maxScore=max(scores),
+                   maxScore=max(scores), minScore=min(scores), meanScore=sum(scores)/len(scores),
                    hofScores=hofScores,
                    **record)
     if verbose:
