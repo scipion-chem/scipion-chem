@@ -549,7 +549,6 @@ def crossover_multiepitope(parent0, parent1, bnfGrammar):
   The crossover will swap the entire set of epitopes from 1 protein with the same protein set of the other parent.
   - parents: Individuals to be crossed
   - bnfGrammar: RepGrammar
-  # todo: maybe a lower level crossover for epitope subsets
   '''
   child0, child1 = copy.deepcopy(parent0), copy.deepcopy(parent1)
   protNames = getProteinNames(bnfGrammar)
@@ -562,7 +561,7 @@ def crossover_multiepitope(parent0, parent1, bnfGrammar):
   del child0.fitness.values, child1.fitness.values
   return child0, child1
 
-######### ALGORITMS ##############
+######### ALGORITM UTILS ##############
 
 
 def phenVarAnd(population, toolbox, bnfGrammar, cxpb, mutpb, mutProbs):
@@ -655,6 +654,33 @@ def initPop(toolbox, bnfGrammar, nPop):
                                   genome_representation='list')
 
 
+def getValids(population):
+  valid0 = [ind for ind in population if not ind.invalid]
+  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
+  if len(valid0) != len(valid):
+    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+  return valid
+
+def updateHOF(halloffame, population):
+  if halloffame is not None:
+    halloffame.update(population)
+  return halloffame
+
+def generateRecord(logbook, stats, population, valid, halloffame, ngen, nevals, verbose):
+  if verbose:
+    record = stats.compile(population) if stats is not None else {}
+    scores = [ind.fitness.values[0] for ind in valid]
+    hofScores = [ind.fitness.values[0] for ind in halloffame]
+    logKwargs = {"gen": ngen, "nevals": nevals,
+                 "maxScore": max(scores), "minScore": min(scores), "meanScore": sum(scores) / len(scores),
+                 "hofScores": hofScores}
+
+    logbook.record(**logKwargs, **record)
+    print(logbook.stream)
+  return logbook
+
+######### ALGORITMS ##############
+
 def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
                     cxpb, mutpb,
                     mutEpb=None, mutSpb=None, mutLpb=None,
@@ -687,22 +713,11 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
   fitnessDic = {}
 
   # Evaluate the individuals with an invalid fitness
-  invalid_ind = [ind for ind in population if not ind.fitness.valid]
   population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
-
-  valid0 = [ind for ind in population if not ind.invalid]
-  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-  if len(valid0) != len(valid):
-    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+  valid = getValids(population)
 
   # Update the hall of fame with the generated individuals
-  if halloffame is not None:
-    halloffame.update(valid)
-
-  record = stats.compile(population) if stats is not None else {}
-  logbook.record(gen=0, nevals=len(invalid_ind), **record)
-  if verbose:
-    print(logbook.stream)
+  halloffame = updateHOF(halloffame, valid)
 
   # Begin the generational process
   for gen in range(1, ngen + 1):
@@ -719,15 +734,10 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
     # Update population for next generation
     population[:] = offspring
     # Include in the population the elitist individuals
+    valid = getValids(population)
 
-    valid0 = [ind for ind in population if not ind.invalid]
-    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-    if len(valid0) != len(valid):
-      warnings.warn(
-        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
     # Update the hall of fame with the generated individuals
-    if halloffame is not None:
-      halloffame.update(valid)
+    halloffame = updateHOF(halloffame, valid)
 
     record = stats.compile(population) if stats is not None else {}
     logbook.record(gen=0, nevals=len(invalid_ind), **record)
@@ -766,22 +776,13 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
   fitnessDic = {}
 
   # Evaluate the individuals with an invalid fitness
-  invalid_ind = [ind for ind in population if not ind.fitness.valid]
   population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
-
-  valid0 = [ind for ind in population if not ind.invalid]
-  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-  if len(valid0) != len(valid):
-    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+  valid = getValids(population)
 
   # Update the hall of fame with the generated individuals
-  if halloffame is not None:
-    halloffame.update(valid)
+  halloffame = updateHOF(halloffame, valid)
 
-  record = stats.compile(population) if stats is not None else {}
-  logbook.record(gen=0, nevals=len(invalid_ind), **record)
-  if verbose:
-    print(logbook.stream)
+  logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(population), verbose)
 
   # Begin the generational process
   for gen in range(1, ngen + 1):
@@ -796,29 +797,15 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
 
     # Update population for next generation
     population[:] = toolbox.select(population + offspring, mu)
+    valid = getValids(population)
 
-    valid0 = [ind for ind in population if not ind.invalid]
-    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-    if len(valid0) != len(valid):
-      warnings.warn(
-        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
     # Update the hall of fame with the generated individuals
-    if halloffame is not None:
-      halloffame.update(valid)
+    halloffame = updateHOF(halloffame, valid)
 
-    record = stats.compile(population) if stats is not None else {}
-    scores = [ind.fitness.values[0] for ind in valid]
-    hofScores = [ind.fitness.values[0] for ind in halloffame]
-    logbook.record(gen=gen, nevals=len(invalid_ind),
-                   maxScore=max(scores), minScore=min(scores), meanScore=sum(scores) / len(scores),
-                   hofScores=hofScores,
-                   **record)
-    if verbose:
-      print(logbook.stream)
-      # print('Scores: ', fitnessDic)
+    # Display statistics
+    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalid_ind), verbose)
 
   return population, logbook
-
 
 def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
                           ngen, mu, lambda_, nMigr,
@@ -850,22 +837,13 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
   fitnessDic = {}
 
   # Evaluate the individuals with an invalid fitness
-  invalid_ind = [ind for ind in population if not ind.fitness.valid]
   population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
-
-  valid0 = [ind for ind in population if not ind.invalid]
-  valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-  if len(valid0) != len(valid):
-    warnings.warn("Warning: There are valid individuals with fitness = NaN in the population. We will avoid them.")
+  valid = getValids(population)
 
   # Update the hall of fame with the generated individuals
-  if halloffame is not None:
-    halloffame.update(valid)
+  halloffame = updateHOF(halloffame, valid)
 
-  record = stats.compile(population) if stats is not None else {}
-  logbook.record(gen=0, nevals=len(invalid_ind), **record)
-  if verbose:
-    print(logbook.stream)
+  logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(population), verbose)
 
   # Begin the generational process
   for gen in range(1, ngen + 1):
@@ -880,24 +858,11 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
 
     # Update population for next generation
     population[:] = toolbox.select(offspring, mu)
+    valid = getValids(population)
 
-    valid0 = [ind for ind in population if not ind.invalid]
-    valid = [ind for ind in valid0 if not math.isnan(ind.fitness.values[0])]
-    if len(valid0) != len(valid):
-      warnings.warn(
-        "Warning: There are valid individuals with fitness = NaN in the population. We will avoid in the statistics.")
     # Update the hall of fame with the generated individuals
-    if halloffame is not None:
-      halloffame.update(valid)
+    halloffame = updateHOF(halloffame, valid)
 
-    record = stats.compile(population) if stats is not None else {}
-    scores = [ind.fitness.values[0] for ind in valid]
-    hofScores = [ind.fitness.values[0] for ind in halloffame]
-    logbook.record(gen=gen, nevals=len(invalid_ind),
-                   maxScore=max(scores), minScore=min(scores), meanScore=sum(scores)/len(scores),
-                   hofScores=hofScores,
-                   **record)
-    if verbose:
-      print(logbook.stream)
+    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalid_ind), verbose)
 
   return population, logbook

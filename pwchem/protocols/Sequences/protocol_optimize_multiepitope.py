@@ -322,20 +322,22 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
     form.addSection(label='Genetic Algorithm')
     group = form.addGroup('General parameters')
-    group.addParam('gaType', params.EnumParam, label='GA type: ', default=SIMP, choices=self._agTypes,
+    group.addParam('gaType', params.EnumParam, label='GA type: ', default=MUPLUS, choices=self._agTypes,
                    help='Choose a strategy for the linkers to be chosen. For more information: '
                         'https://deap.readthedocs.io/en/master/api/algo.html#complete-algorithms')
 
     group.addParam('nGen', params.IntParam, label='Number of generations: ', default=10,
                    help='Number of generations for the GA')
     group.addParam('nPop', params.IntParam, label='Population size: ', default=20,
-                   help='Number of individuals in the population (per generation)')
+                   help='Number of individuals selected each generation')
 
-    group.addParam('nOffs', params.IntParam, label='Offspring size: ', default=20, condition='gaType!=0',
-                   help='Number of individuals to generate for the offspring')
-    group.addParam('nMigr', params.IntParam, label='Migrants size: ', default=0, condition='gaType!=0',
-                   help='Number of individuals to generate from zero that will compete in the selection with the '
-                        'normal population')
+    line = group.addLine('Groups size: ', condition='gaType!=0',
+                         help='Number of individuals for each population group.\n'
+                         'Offspring: number of individuals generated from parents prior to selection\n'
+                         'Migrants: number of individuals randomly generated prior to selection')
+    line.addParam('nOffs', params.IntParam, label='Offspring: ', default=20)
+    line.addParam('nMigr', params.IntParam, label='Migrants: ', default=10)
+
 
     # group.addParam('varProp', params.FloatParam, label='Proportion of varied individuals: ', default=0.25,
     #                condition='gaType!=0',
