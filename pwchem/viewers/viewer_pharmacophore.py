@@ -107,7 +107,7 @@ class PharmacophoreViewer(pwviewer.ProtocolViewer):
 
               spheresStr += SPHERE_LIST.format(feature_type, featSpheres, feature_type, feature_type)
 
-      protFile = self.getPharmacophoreObject().getProteinFile()
+      protFile = os.path.abspath(self.getPharmacophoreObject().getProteinFile())
       if not protFile:
           protStr = ''
       else:
@@ -165,7 +165,7 @@ class FilterPharmacophoreViewer(PharmacophoreViewer):
   def getLigandsFiles(self):
     files = []
     for mol in self.protocol.outputSmallMolecules:
-        files.append(mol.getPoseFile())
+        files.append(os.path.abspath(mol.getPoseFile()))
     return files
 
   def getLigandsStr(self, disabled=True):
