@@ -253,7 +253,7 @@ class ProtDefineSeqROI(EMProtocol):
         newId = newSet.getObjId()
 
         prevPointers = self.inputPointers
-        if not newId in prevIds:
+        if newId not in prevIds:
           newIndex = len(prevPointers)
           prevPointers.append(Pointer(newSet))
         else:
