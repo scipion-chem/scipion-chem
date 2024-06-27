@@ -533,7 +533,7 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
     halloffame = updateHOF(halloffame, valid)
 
     record = stats.compile(population) if stats is not None else {}
-    logbook.record(gen=0, nevals=len(invalidInd), **record)
+    logbook.record(gen=gen, nevals=len(invalidInd), **record)
     if verbose:
       print(logbook.stream)
 
@@ -596,7 +596,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     halloffame = updateHOF(halloffame, valid)
 
     # Display statistics
-    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalidInd), verbose)
+    logbook = generateRecord(logbook, stats, population, valid, halloffame, gen, len(invalidInd), verbose)
 
   return population, logbook
 
@@ -656,6 +656,6 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
     # Update the hall of fame with the generated individuals
     halloffame = updateHOF(halloffame, valid)
 
-    logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(invalidInd), verbose)
+    logbook = generateRecord(logbook, stats, population, valid, halloffame, gen, len(invalidInd), verbose)
 
   return population, logbook
