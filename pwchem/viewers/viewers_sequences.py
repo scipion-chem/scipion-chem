@@ -35,6 +35,8 @@ from pyworkflow.protocol import params, Protocol
 from pwem.objects import SetOfSequences, Sequence
 from pwem.protocols import ProtSubSet
 from pwem.viewers.mdviewer.viewer import MDViewer
+from pwem.viewers import EmPlotter
+
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem, MultiEpitope
@@ -274,10 +276,10 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
     else:
       return False
   
-class SequenceChemViewer(pwviewer.ProtocolViewer):
+class SequenceChemViewer(SequenceGeneralViewer):
     """ Protocol viewer to visualize different type of sequence objects
     """
-    _label = 'Sequence viewer'
+    _label = 'Sequence chem viewer'
     _targets = [SetOfSequencesChem]
     _environments = [pwviewer.DESKTOP_TKINTER]
 
@@ -285,11 +287,8 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
         pwviewer.ProtocolViewer.__init__(self, **kwargs)
 
     def _defineParams(self, form):
-        form.addSection(label='Sequence viewer')
-        aGroup = form.addGroup('AliView viewer')
-        aGroup.addParam('aliLabel', params.LabelParam, label='Display sequences with AliView: ',
-                        help='Display the output sequences using AliView')
-
+        super()._defineParams(form)
+        print('IM here: ', self.checkIfInteractions())
         if self.checkIfInteractions():
             self._defineInteractionParams(form)
 
@@ -308,9 +307,14 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
         sGroup.addParam('scThres', params.FloatParam, label='Score threshold: ', default=0,
                         help='Display the interaction results over the selected score threshold')
 
-        hGroup = form.addGroup('HeatMap View')
+        hGroup = form.addGroup('Scores View')
         hGroup.addParam('displayHeatMap', params.LabelParam, label='Display DTI heatmap: ',
                         help='Display a heatmap showing the scores for each protein-molecule pair')
+        hGroup.addParam('displayHistogram', params.LabelParam, label='Display scores histogram: ',
+                        help='Display a histogram showing the score distribution for the selected proteins '
+                             'and molecules')
+        hGroup.addParam('intervals', params.IntParam, default=11, label="Intervals",
+                        help="Number of labels of the scale", expertLevel=params.LEVEL_ADVANCED)
 
         oGroup = form.addGroup('Generate output')
         oGroup.addParam('genProts', params.LabelParam, label='Generate protein sequences: ',
@@ -322,19 +326,15 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
         return form
 
     def _getVisualizeDict(self):
-        return {
-            'aliLabel': self._aliView,
-
+        vDic = super()._getVisualizeDict()
+        vDic.update({
             # Interaction views
             'displayHeatMap': self._viewHeatMap,
+            'displayHistogram': self._viewHistogram,
             'genProts': self._generateProts,
             'genMols': self._generateMols,
-        }
-
-    def _aliView(self, paramName=None):
-        outSeqs = self.getOutSequences()
-        aliV = SequenceAliViewer(project=self.getProject())
-        return aliV._visualize(outSeqs)
+        })
+        return vDic
 
     def _viewHeatMap(self, paramName=None):
         outSeqs = self.getOutSequences()
@@ -360,6 +360,28 @@ class SequenceChemViewer(pwviewer.ProtocolViewer):
             annotateHeatmap(im, valfmt="{x:.2f}")
             fig.tight_layout()
             plt.show()
+
+    def _viewHistogram(self, paramName=None):
+      outSeqs = self.getOutSequences()
+      filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
+      if filtMolNames == 'All':
+        intAr, seqNames, molNames = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
+        scoreList = intAr.flatten()
+
+        self.plotter = EmPlotter(x=1, y=1, windowTitle='Score distribution')
+        outName = f'{filtSeqNames}'
+        a = self.plotter.createSubPlot(f"{outName} distribution", f'{outName} scores', f"Score counts")
+        low, high = min(scoreList), max(scoreList)
+        a.set_xlim([low, high])
+
+        n = 5
+        mult = 10 ** n
+        stepSize = int(round((high - low) / self.intervals.get(), n) * mult)
+        bins = [i / mult for i in range(int(low * mult), int(high * mult), stepSize)]
+        _, _, bars = a.hist(scoreList, bins=bins, linewidth=1, label="Map", rwidth=0.9)
+
+        a.grid(True)
+        return [self.plotter]
 
     def _generateProts(self, paramName=None):
         project = self.getProject()
