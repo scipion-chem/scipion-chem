@@ -34,8 +34,8 @@ from pyworkflow.protocol import params, Protocol
 
 from pwem.objects import SetOfSequences, Sequence
 from pwem.protocols import ProtSubSet
-from pwem.viewers.mdviewer.viewer import MDViewer
 from pwem.viewers import EmPlotter
+from pwem.viewers.mdviewer.viewer import MDViewer
 
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem, MultiEpitope
