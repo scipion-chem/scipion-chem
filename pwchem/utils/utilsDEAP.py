@@ -34,6 +34,7 @@ from grape.grape import Individual, Grammar, mapper_eager, mapper_lazy
 # GRAPE UTILS
 
 NOREP, WEIGHT = 'noRepeated', 'weighted'
+PLUS, COMMA = 'plus', 'comma'
 
 class RepIndividual(Individual):
     '''Individual including the option to not repeated nodes'''
@@ -539,12 +540,13 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
 
   return population, logbook
 
-def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
-                          ngen, mu, lambda_, nMigr,
-                          cxpb, mutpb,
-                          mutEpb=None, mutSpb=None, mutLpb=None,
-                          stats=None, halloffame=None, verbose=__debug__):
-  """This algorithm reproduce the Mu plu Lambda evolutionary algorithm from DEAP
+
+def ge_eaMuLambdaChem(gaType, population, toolbox, bnfGrammar,
+                      ngen, mu, lambda_, nMigr,
+                      cxpb, mutpb,
+                      mutEpb=None, mutSpb=None, mutLpb=None,
+                      stats=None, halloffame=None, verbose=__debug__):
+  """This algorithm reproduce the Mu Lambda evolutionary algorithms from DEAP (both muPlusLambda nd MuCommaLambda)
   :param population: A list of individuals.
   :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
                   operators.
@@ -575,7 +577,7 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
   # Update the hall of fame with the generated individuals
   halloffame = updateHOF(halloffame, valid)
 
-  logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(population), verbose)
+  logbook = generateRecord(logbook, stats, population, valid, halloffame, 0, len(population), verbose)
 
   # Begin the generational process
   for gen in range(1, ngen + 1):
@@ -589,68 +591,8 @@ def ge_eaMuPlusLambdaChem(population, toolbox, bnfGrammar,
     offspring, fitnessDic = performEvaluation(offspring + migrants, fitnessDic, toolbox)
 
     # Update population for next generation
-    population[:] = toolbox.select(population + offspring, mu)
-    valid = getValids(population)
-
-    # Update the hall of fame with the generated individuals
-    halloffame = updateHOF(halloffame, valid)
-
-    # Display statistics
-    logbook = generateRecord(logbook, stats, population, valid, halloffame, gen, len(invalidInd), verbose)
-
-  return population, logbook
-
-def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
-                          ngen, mu, lambda_, nMigr,
-                          cxpb, mutpb,
-                          mutEpb=None, mutSpb=None, mutLpb=None,
-                          stats=None, halloffame=None, verbose=__debug__):
-  """This algorithm reproduce the Mu plu Lambda evolutionary algorithm from DEAP
-  :param population: A list of individuals.
-  :param toolbox: A :class:`~deap.base.Toolbox` that contains the evolution
-                  operators.
-  :param cxpb: The probability of mating two individuals.
-  :param mutpb: The probability of mutating an individual.
-  :param ngen: The number of generation.
-  :params bnfGrammar, codon_size, max_tree_depth: Parameters
-                  used to mapper the individuals after crossover and
-                  mutation in order to check if they are valid.
-  :param stats: A :class:`~deap.tools.Statistics` object that is updated
-                inplace, optional.
-  :param halloffame: A :class:`~deap.tools.HallOfFame` object that will
-                     contain the best individuals, optional.
-  :param verbose: Whether or not to log the statistics.
-  :returns: The final population
-  :returns: A class:`~deap.tools.Logbook` with the statistics of the
-            evolution
-  """
-
-  logbook = tools.Logbook()
-  logbook.header = ['gen', 'nevals', 'maxScore', 'minScore', 'meanScore', 'hofScores'] + (stats.fields if stats else [])
-  fitnessDic = {}
-
-  # Evaluate the individuals with an invalid fitness
-  population, fitnessDic = performEvaluation(population, fitnessDic, toolbox)
-  valid = getValids(population)
-
-  # Update the hall of fame with the generated individuals
-  halloffame = updateHOF(halloffame, valid)
-
-  logbook = generateRecord(logbook, stats, population, valid, halloffame, ngen, len(population), verbose)
-
-  # Begin the generational process
-  for gen in range(1, ngen + 1):
-    # Select the next generation individuals
-    mutProbs = [mutEpb, mutSpb, mutLpb]
-    offspring = phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs)
-    migrants = initPop(toolbox, bnfGrammar, nMigr) if nMigr > 0 else []
-
-    # Evaluate the individuals with an invalid fitness
-    invalidInd = [ind for ind in offspring if not ind.fitness.valid]
-    offspring, fitnessDic = performEvaluation(offspring + migrants, fitnessDic, toolbox)
-
-    # Update population for next generation
-    population[:] = toolbox.select(offspring, mu)
+    toSelect = offspring if gaType == COMMA else population + offspring
+    population[:] = toolbox.select(toSelect, mu)
     valid = getValids(population)
 
     # Update the hall of fame with the generated individuals
@@ -659,3 +601,9 @@ def ge_eaMuCommaLambdaChem(population, toolbox, bnfGrammar,
     logbook = generateRecord(logbook, stats, population, valid, halloffame, gen, len(invalidInd), verbose)
 
   return population, logbook
+
+def ge_eaMuPlusLambdaChem(*args, **kwargs):
+  return ge_eaMuLambdaChem(PLUS, *args, **kwargs)
+
+def ge_eaMuCommaLambdaChem(*args, **kwargs):
+  return ge_eaMuLambdaChem(COMMA, *args, **kwargs)

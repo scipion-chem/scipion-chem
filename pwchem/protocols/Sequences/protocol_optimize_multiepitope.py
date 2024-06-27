@@ -245,6 +245,10 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                   expertLevel=params.LEVEL_ADVANCED,
                   help='Choose a random seed to ensure reproducibility')
 
+    group = form.addGroup('Output')
+    group.addParam('hallSize', params.IntParam, label='Number of output multiepitopes: ', default=5,
+                   help='The number of best scored individuals that will be saved outside of the population')
+
     form.addSection(label='Epitope sampling')
     group = form.addGroup('Epitope sampling scores')
     group.addParam('inSet', params.StringParam, label='Select a input set: ', default='',
@@ -353,10 +357,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                         'https://deap.readthedocs.io/en/master/api/tools.html#selection')
     group.addParam('tournSize', params.IntParam, label='Tournament size: ', default=3, condition='selType==0',
                    help='The number of individuals participating in each tournament')
-
-    group = form.addGroup('Hall of Fame')
-    group.addParam('hallSize', params.IntParam, label='Hall of fame size: ', default=5,
-                   help='The number of best scored individuals that will be saved outside of the population')
 
 
 
