@@ -29,7 +29,7 @@ from pyworkflow.protocol import params
 
 # pwchem imports
 from .. import Plugin
-from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR
+from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, TCL_MD_LIG_STR
 from ..viewers import PyMolViewer, PyMolView, VmdViewPopen
 from ..objects import MDSystem
 
@@ -125,16 +125,24 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       system = self.getMDSystem()
       return MDSystemViewer(project=self.getProject())._visualize(system)
 
+    def writeTCL(self, outTcl, sysFile, sysExt, sysTrj, trjExt, isLig=False):
+      vmdStr = TCL_MD_STR % (sysFile, sysExt, sysTrj, trjExt)
+      if isLig:
+        vmdStr += TCL_MD_LIG_STR
+      with open(outTcl, 'w') as f:
+        f.write(vmdStr)
+
+
     def _showMdVMD(self, paramName=None):
       system = self.getMDSystem()
 
       outTcl = os.path.join(os.path.dirname(system.getTrajectoryFile()), 'vmdSimulation.tcl')
-      systExt = os.path.splitext(system.getOriStructFile())[1][1:]
+      sysExt = os.path.splitext(system.getOriStructFile())[1][1:]
       trjExt = os.path.splitext(system.getTrajectoryFile())[1][1:]
-      with open(outTcl, 'w') as f:
-        f.write(TCL_MD_STR % (system.getOriStructFile(), systExt, system.getTrajectoryFile(), trjExt))
-      args = '-e {}'.format(outTcl)
+      self.writeTCL(system.getOriStructFile(), sysExt, system.getTrajectoryFile(), trjExt,
+                    system.getLigandTopologyFile())
 
+      args = '-e {}'.format(outTcl)
       return [VmdViewPopen(args)]
 
     def _showMDTrajAnalysis(self, paramName=None):

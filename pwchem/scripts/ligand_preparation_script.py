@@ -90,7 +90,6 @@ if __name__ == "__main__":
     paramsDic = parseParams(sys.argv[1])
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
-    ffMethod = paramsDic['ffMethod']
 
     failedMols = []
     mols_dict, _ = getMolFilesDic(molFiles)
@@ -117,7 +116,7 @@ if __name__ == "__main__":
                 AllChem.ComputeGasteigerCharges(mol)
 
             if 'numConf' in paramsDic:
-                mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
+                mol = conformer_generation(mol, outBasef, paramsDic['ffMethod'], paramsDic['restrainMethod'],
                                                  paramsDic['numConf'], paramsDic['rmsThres'])
                 if mol:
                     setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')

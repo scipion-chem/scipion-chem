@@ -496,6 +496,12 @@ mol material Opaque
 mol modrep 1 0
 '''
 
+TCL_MD_LIG_STR = '''
+mol addrep 0
+mol modstyle 2 0 Licorice 0.300000 12.000000 12.000000
+mol modselect 2 0 resname LIG
+'''
+
 PML_MD_STR = '''load {}
 load_traj {}
 hide everything, not br. all within 3 of (byres polymer & name CA)
