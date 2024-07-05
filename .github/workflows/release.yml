@@ -43,7 +43,7 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
         python setup.py sdist bdist_wheel
-        twine upload dist/* -c "{{ secrets.PYPI_COMMENT }}"
+        twine upload dist/* -c "${{ secrets.PYPI_COMMENT }}"
     
     # Get package version and tag
     - name: Get version and tag
