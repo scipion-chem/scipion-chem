@@ -225,14 +225,14 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True):
 		""" General function to run conda commands """
-		full_program = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
+		fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
 		if not popen:
-			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
 		else:
 			kwargs = {}
 			if silent:
 				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+			run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
 
 	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):
@@ -261,8 +261,8 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
-		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
+		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
+		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
 ##################### UTILS ###########################
 	@classmethod
