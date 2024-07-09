@@ -510,6 +510,11 @@ class SelectElementWizard(VariableWizard):
     inputParam, outputParam = self.getInputOutput(form)
     dlg = self.displayDialog(form, inputParam)
     form.setVar(outputParam[0], dlg.values[0].get())
+    
+SelectElementWizard().addTarget(protocol=ProtocolLiganParametrization,
+                               targets=['inputLigand'],
+                               inputs=['inputSmallMolecules'],
+                               outputs=['inputLigand'])
 
 
 class SelectElementMultiPointWizard(SelectElementWizard):
