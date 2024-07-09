@@ -260,7 +260,7 @@ class SelectEvaluationOrigin(VariableWizard):
   def importIEDBProtocols(self):
     iedbProts = []
     try:
-      from iedb.protocols import ProtMHCIIPopulationCoverage
+      from iedb.protocols import ProtMHCPopulationCoverage
       iedbProts = ['IEDB']
     except:
       print('No IEDB protocols detected')

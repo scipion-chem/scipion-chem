@@ -177,8 +177,8 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   def getEvaluationProtocols(self):
     origins = {}
     try:
-      from iedb.protocols import ProtMHCIIPopulationCoverage
-      origins[IEDB] = ProtMHCIIPopulationCoverage
+      from iedb.protocols import ProtMHCPopulationCoverage
+      origins[IEDB] = ProtMHCPopulationCoverage
     except:
       pass
 
