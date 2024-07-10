@@ -237,7 +237,7 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
     tGroup = form.addGroup('Table viewer')
     tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
                     help='Display the output sequences using table format')
-      
+
   def _getVisualizeDict(self):
     return {
       # AliView
@@ -247,21 +247,23 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
       'tableLabel': self._viewTable,
     }
 
-  def getOutputObject(self):
-    seqSet = self.protocol
+  def getOutSequences(self):
     if self.checkIfProtocol():
-      # todo: grab output from the protocol independent of the type or name
-      seqSet = seqSet.outputROIs
-    return seqSet
+      for oAttr in self.protocol.iterOutputAttributes():
+        for oType in self._targets:
+          if isinstance(getattr(self.protocol, oAttr[0]), oType):
+            return getattr(self.protocol, oAttr[0])
+    else:
+      return self.protocol
 
   def _viewSeqSet(self, e=None):
-    seqSet = self.getOutputObject()
+    seqSet = self.getOutSequences()
     setV = SequenceAliViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
 
   def _viewTable(self, e=None):
-    seqSet = self.getOutputObject()
+    seqSet = self.getOutSequences()
     try:
       setV = MDViewer(project=self.getProject())
     except:
@@ -287,7 +289,6 @@ class SequenceChemViewer(SequenceGeneralViewer):
 
     def _defineParams(self, form):
         super()._defineParams(form)
-        print('IM here: ', self.checkIfInteractions())
         if self.checkIfInteractions():
             self._defineInteractionParams(form)
 
@@ -431,19 +432,6 @@ class SequenceChemViewer(SequenceGeneralViewer):
             project.launchProtocol(protFilter, wait=True)
 
     ############ UTILS ##############
-    def getOutSequences(self):
-        if self.checkIfProtocol():
-            for oAttr in self.protocol.iterOutputAttributes():
-                if isinstance(getattr(self.protocol, oAttr[0]), SetOfSequencesChem):
-                    return getattr(self.protocol, oAttr[0])
-        else:
-            return self.protocol
-
-    def checkIfProtocol(self):
-        if isinstance(self.protocol, Protocol):
-            return True
-        else:
-            return False
 
     def checkIfInteractions(self):
         if not self.checkIfProtocol():
