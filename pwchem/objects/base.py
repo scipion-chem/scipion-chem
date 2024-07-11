@@ -802,7 +802,7 @@ class SetOfSequenceROIs(data.EMSet):
     def getSequence(self):
         return self.getSequenceObj().getSequence()
 
-    def exportToFile(self, outPath, mainSeq=True):
+    def exportToFile(self, outPath, mainSeq=True, minLen=None, maxLen=None):
         '''Export the whole set of sequence ROIs to a fasta file.
         If mainSeq, the whole sequence of the ROIs will first be written and the ROIs will be aligned to it.
         Else, only the ROIs, unaligned, will be written'''
@@ -814,15 +814,16 @@ class SetOfSequenceROIs(data.EMSet):
             wholeSeqObj.exportToFile(outPath)
         for roi in self:
             roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
-            if mainSeq:
-                tmpSeq = ['-'] * len(wholeSeq)
-                r1, r2 = roiIdx-1, roiIdx - 1 + len(roiSeq)
-                tmpSeq[r1:r2] = roiSeq
-            else:
-                tmpSeq = roiSeq
+            if (not minLen or len(roiSeq) >= minLen) and (not maxLen or len(roiSeq) <= maxLen):
+                if mainSeq:
+                    tmpSeq = ['-'] * len(wholeSeq)
+                    r1, r2 = roiIdx-1, roiIdx - 1 + len(roiSeq)
+                    tmpSeq[r1:r2] = roiSeq
+                else:
+                    tmpSeq = roiSeq
 
-            tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
-            tmpSeqObj.appendToFile(outPath, doClean=False)
+                tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
+                tmpSeqObj.appendToFile(outPath, doClean=False)
 
 class MultiEpitope(SetOfSequenceROIs):
     ITEM_TYPE = SequenceROI
