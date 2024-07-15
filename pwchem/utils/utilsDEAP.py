@@ -118,6 +118,9 @@ def getWeightedIndex(genomeSeed, repIdxs, nRules, weights):
             else:
                 pWs.append(1)
 
+    # Case when all weights are zero
+    if sum(pWs) == 0:
+      pWs = [1] * len(pWs)
     pWs = np.array(pWs) / sum(pWs)
     np.random.seed(genomeSeed)
     return np.random.choice(pIdxs, 1, p=pWs)[0]
