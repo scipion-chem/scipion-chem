@@ -32,7 +32,7 @@ from tkinter.messagebox import askokcancel
 import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params, Protocol
 
-from pwem.objects import SetOfSequences, Sequence
+from pwem.objects import SetOfSequences, Sequence, EMSet
 from pwem.protocols import ProtSubSet
 from pwem.viewers import EmPlotter
 from pwem.viewers.mdviewer.viewer import MDViewer
@@ -44,6 +44,8 @@ from pwchem.constants import *
 from pwchem.utils import getFilteredOutput
 from pwchem.viewers import BioinformaticsDataViewer
 
+seqTargets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
+              SequenceVariants, SetOfSequenceROIs, MultiEpitope]
 
 def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kwargs):
   """
@@ -221,8 +223,7 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
   """ Protocol viewer to visualize different type of sequence objects
   """
   _label = 'Sequence viewer'
-  _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
-              SequenceVariants, SetOfSequenceROIs, MultiEpitope]
+  _targets = seqTargets
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   def __init__(self, **kwargs):
@@ -233,10 +234,11 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
     aGroup = form.addGroup('AliView viewer')
     aGroup.addParam('aliLabel', params.LabelParam, label='Display sequences with AliView: ',
                     help='Display the output sequences using AliView')
-    
-    tGroup = form.addGroup('Table viewer')
-    tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
-                    help='Display the output sequences using table format')
+
+    if isinstance(self.getOutSequences(), EMSet):
+      tGroup = form.addGroup('Table viewer')
+      tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
+                      help='Display the output sequences using table format')
 
   def _getVisualizeDict(self):
     return {
@@ -250,7 +252,7 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
   def getOutSequences(self):
     if self.checkIfProtocol():
       for oAttr in self.protocol.iterOutputAttributes():
-        for oType in self._targets:
+        for oType in seqTargets:
           if isinstance(getattr(self.protocol, oAttr[0]), oType):
             return getattr(self.protocol, oAttr[0])
     else:
