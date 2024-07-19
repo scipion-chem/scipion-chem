@@ -399,7 +399,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     # Define arguments
     deapToolbox = self.defineDeapToolbox(bnfGrammar)
     self.hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
-    kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen,
+    kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen, 'minEps': self.minEp.get(), 'maxEps': self.maxEp.get(),
               'mutEpb': self.mutEProb.get(), 'mutSpb': self.mutSProb.get(), 'mutLpb': self.mutLProb.get(),
               'halloffame': self.hof, 'verbose': True}
     if self.gaType.get() != SIMP:
@@ -408,6 +408,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     
     for i in range(self.nReRun.get()):
       population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
+                                                 minEps=self.minEp.get(), maxEps=self.maxEp.get(),
                                                  min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
                                                  codon_size=255, codon_consumption='weighted',
                                                  genome_representation='list')
@@ -483,7 +484,16 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     return seqs
 
   def getInputProteinNames(self):
-    return list(self.getInputROIsMapper().keys())
+    return list(self.getROIsPerProt(self.inputROISets).keys())
+
+  def getSet2ProtName(self, multiPointer=None):
+    '''Return a dic that maps the input sets to their respective protName'''
+    if not multiPointer:
+      multiPointer = self.inputROISets
+    mapDic = {}
+    for i, roiPointer in enumerate(multiPointer):
+      mapDic[str(i)] = roiPointer.get().getSequenceObj().getId()
+    return mapDic
 
   def getROIsPerProt(self, multiPointer):
     '''Return mapper with the input ROI sequences as:
@@ -492,7 +502,8 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     for roiPointer in multiPointer:
       roiSet = roiPointer.get()
       protName = roiSet.getSequenceObj().getId()
-      mapDic[protName] = []
+      if not protName in mapDic:
+        mapDic[protName] = []
       for roi in roiSet:
         mapDic[protName].append(roi.clone())
     return mapDic
@@ -500,14 +511,15 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   def getEpitopesPerProt(self, multiPointer):
     '''Return mapper with the input ROI sequences as:
     {protName: [roiSequences]}'''
-    mapDic = {}
-    for roiPointer in multiPointer:
-      roiSet = roiPointer.get()
-      protName = roiSet.getSequenceObj().getId()
-      mapDic[protName] = []
-      for roi in roiSet:
-        mapDic[protName].append(roi.getROISequence())
-    return mapDic
+    epDic = {}
+    mapDic = self.getROIsPerProt(multiPointer)
+    for protName in mapDic:
+      if not protName in epDic:
+        epDic[protName] = []
+      for roi in mapDic[protName]:
+        epDic[protName].append(roi.getROISequence())
+
+    return epDic
 
   def getLinkersPerProt(self):
     '''Return a dictionary with the available linkers per protein
@@ -539,22 +551,19 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
     return cEpiDic
 
-  def getInputROIsMapper(self):
-    '''Returns a dict as {pName: roiSet}'''
-    return {roiPointer.get().getSequenceObj().getId(): roiPointer.get() for roiPointer in self.inputROISets}
-
   def getEpitopeScores(self):
     '''Return a dictionary of the form {roiSetIdx: {ROIId: SamplingScore}} for all the input ROIs working as epitopes
     with the defined sampling scores'''
-    wDic = self.parseSamplingScores()
-    sampDic = {protName: {} for protName in wDic}
-    inputROIsMapper = self.getInputROIsMapper()
-    for protName in wDic:
-      for roi in inputROIsMapper[protName]:
-        roiId, roiScore = roi.getObjId(), 0
-        for scoreKey, scoreW in wDic[protName].items():
-          roiScore += scoreW * getattr(roi, scoreKey).get()
-        sampDic[protName][roiId] = roiScore
+    sDic = self.parseSamplingScores()
+    sampDic = {protName: {} for protName in sDic}
+    inputROIsMapper = self.getROIsPerProt(self.inputROISets)
+    for protName in sDic:
+      for i, roi in enumerate(inputROIsMapper[protName]):
+        roiScore = 0
+        for scoreKey, scoreW in sDic[protName].items():
+          if hasattr(roi, scoreKey):
+            roiScore += scoreW * getattr(roi, scoreKey).get()
+        sampDic[protName][i] = roiScore
     return sampDic
 
   def convertWDic(self, wDic):
@@ -854,11 +863,11 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   def parseSamplingScores(self):
     '''Return {protName: {scoreName: weight}}'''
     weights = {}
-    protNames = self.getInputProteinNames()
+    protNamesDic = self.getSet2ProtName()
     for sline in self.scoreSummary.get().split('\n'):
       if sline.strip():
         sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
-        pName = protNames[int(sDic['Set'])]
+        pName = protNamesDic[sDic['Set']]
         if pName not in weights:
           weights[pName] = {}
         weights[pName].update({sDic['Score']: sDic['Weight']})

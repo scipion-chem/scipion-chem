@@ -38,7 +38,7 @@ PLUS, COMMA = 'plus', 'comma'
 
 class RepIndividual(Individual):
     '''Individual including the option to not repeated nodes'''
-    def __init__(self, genome, grammar, max_depth, codon_consumption):
+    def __init__(self, genome, grammar, max_depth, codon_consumption, minEps=None, maxEps=None):
         self.genome = genome
         if codon_consumption == 'lazy':
             self.phenotype, self.nodes, self.depth, \
@@ -51,11 +51,11 @@ class RepIndividual(Individual):
         elif codon_consumption == NOREP:
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = generalMapper(genome, grammar, max_depth, mapType=NOREP)
+            self.structure = generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=NOREP)
         elif codon_consumption == WEIGHT:
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = generalMapper(genome, grammar, max_depth, mapType=WEIGHT)
+            self.structure = generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=WEIGHT)
         else:
             raise ValueError("Unknown mapper")
 
@@ -65,7 +65,7 @@ class RepGrammar(Grammar):
         self.noRepNTs = noRepNTs
         self.weightDic = weightDic
 
-def random_initialisation(ind_class, pop_size, bnf_grammar,
+def random_initialisation(ind_class, pop_size, bnf_grammar, minEps, maxEps,
                           min_init_genome_length, max_init_genome_length,
                           max_init_depth, codon_size, codon_consumption,
                           genome_representation):
@@ -76,10 +76,10 @@ def random_initialisation(ind_class, pop_size, bnf_grammar,
     for i in range(pop_size):
       init_genome_length = random.randint(min_init_genome_length, max_init_genome_length)
       genome = [random.randint(0, codon_size) for i in range(init_genome_length)]
-      ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption)
+      ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption, minEps, maxEps)
       while not ind.phenotype:
         genome = [random.randint(0, codon_size) for i in range(init_genome_length)]
-        ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption)
+        ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption, minEps, maxEps)
       population.append(ind)
 
     if genome_representation == 'list':
@@ -106,6 +106,16 @@ def getNonRepeatedIndex(curIdx, repIdxs, nRules):
             curIdx = 0
     return curIdx
 
+def normalizeWeights(pWs):
+  '''Return weights from 0 to 1 summing 1 in total'''
+  if sum(pWs) == 0:
+    pWs = [1] * len(pWs)
+  else:
+    if min(pWs) < 0:
+      pWs = [w - min(pWs) + 0.1 for w in pWs]
+  pWs = np.array(pWs) / sum(pWs)
+  return pWs
+
 def getWeightedIndex(genomeSeed, repIdxs, nRules, weights):
     if len(repIdxs) >= nRules: #if not enough rules, invalid individual
         return None
@@ -118,10 +128,7 @@ def getWeightedIndex(genomeSeed, repIdxs, nRules, weights):
             else:
                 pWs.append(1)
 
-    # Case when all weights are zero
-    if sum(pWs) == 0:
-      pWs = [1] * len(pWs)
-    pWs = np.array(pWs) / sum(pWs)
+    pWs = normalizeWeights(pWs)
     np.random.seed(genomeSeed)
     return np.random.choice(pIdxs, 1, p=pWs)[0]
 
@@ -133,9 +140,40 @@ def checkPhenotype(phen):
     return None
   return phen
 
+def getNEpisPerProt(nMin, nMax, protsDic):
+  '''Return the number of epitopes that each protein will contribute to the multiepitope so the epitope number limits
+  (nMin, nMax) are fulfilled. The contribution for each protein is chosen randomly.
+  - protsDic: {protName: possibleEpitopeNumber} contains the info for the number of epitopes each protein have
+  :return: {protName: nEps} with the number of epitopes to contribute
+  '''
+  protNames = list(protsDic.keys())
+  curNEps, nEps = len(protsDic), random.randint(nMin, nMax)
+  epsDic = {protName: 1 for protName in protNames}
+  while curNEps < nEps:
+    curPName = random.choice(protNames)
+    epsDic[curPName] += 1
+    curNEps += 1
+  return epsDic
 
-def generalMapper(genome, grammar, max_depth, mapType=WEIGHT):
+def getProtsDic(grammar):
+  '''Returns a dictionary with the number of possible epitopes per protein described in a grammar
+  :param grammar: grammar object
+  :return: {pName: nEpitopes}
+  '''
+  protDic = {}
+  noRepNTs = grammar.noRepNTs
+  for protNT in noRepNTs:
+    if protNT != '<prot>':
+      pName, nEps = protNT[1:-3], grammar.n_rules[grammar.non_terminals.index(protNT)]
+      protDic[pName] = nEps
+  return protDic
+
+
+def generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=WEIGHT):
   idxGenome, idx_depth, nodes, structure = 0, 0, 0, []
+  epsPerProt = getNEpisPerProt(minEps, maxEps, getProtsDic(grammar))
+  curEpsPerProt = {pName: 1 for pName in epsPerProt}
+
   phenotype = grammar.start_rule
   next_NT = re.search(r"\<(\w+)\>", phenotype).group()
   n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
@@ -149,12 +187,17 @@ def generalMapper(genome, grammar, max_depth, mapType=WEIGHT):
     repIdxs = repDic[next_NT] if next_NT in repDic else []
 
     index_production_chosen = None
-    if mapType == WEIGHT:
-      weights = grammar.weightDic[next_NT] if next_NT in grammar.weightDic else {}
-      index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
-    elif mapType == NOREP:
-      index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
-      index_production_chosen = getNonRepeatedIndex(index_production_chosen, repIdxs, grammar.n_rules[NT_index])
+    if next_NT[1:-1] in epsPerProt:
+      # Grow eps tree until the decided number of eps per prot is met
+      index_production_chosen = 1 if curEpsPerProt[next_NT[1:-1]] < epsPerProt[next_NT[1:-1]] else 0
+      curEpsPerProt[next_NT[1:-1]] += 1
+    else:
+      if mapType == WEIGHT:
+        weights = grammar.weightDic[next_NT] if next_NT in grammar.weightDic else {}
+        index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
+      elif mapType == NOREP:
+        index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
+        index_production_chosen = getNonRepeatedIndex(index_production_chosen, repIdxs, grammar.n_rules[NT_index])
 
     if next_NT in repDic:
         if index_production_chosen == None:
@@ -444,8 +487,8 @@ def performEvaluation(p, fitDic, toolbox):
 
   return p, fitDic
 
-def initPop(toolbox, bnfGrammar, nPop):
-  return toolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
+def initPop(toolbox, bnfGrammar, nPop, minEps, maxEps):
+  return toolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar, minEps=minEps, maxEps=maxEps,
                                   min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
                                   codon_size=255, codon_consumption='weighted',
                                   genome_representation='list')
@@ -544,7 +587,7 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
   return population, logbook
 
 
-def ge_eaMuLambdaChem(gaType, population, toolbox, bnfGrammar,
+def ge_eaMuLambdaChem(gaType, population, toolbox, bnfGrammar, minEps, maxEps,
                       ngen, mu, lambda_, nMigr,
                       cxpb, mutpb,
                       mutEpb=None, mutSpb=None, mutLpb=None,
@@ -587,7 +630,7 @@ def ge_eaMuLambdaChem(gaType, population, toolbox, bnfGrammar,
     # Select the next generation individuals
     mutProbs = [mutEpb, mutSpb, mutLpb]
     offspring = phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs)
-    migrants = initPop(toolbox, bnfGrammar, nMigr) if nMigr > 0 else []
+    migrants = initPop(toolbox, bnfGrammar, nMigr, minEps, maxEps) if nMigr > 0 else []
 
     # Evaluate the individuals with an invalid fitness
     invalidInd = [ind for ind in offspring if not ind.fitness.valid]
