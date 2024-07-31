@@ -34,7 +34,7 @@ from pwem.viewers.viewer_chimera import Chimera, ChimeraView
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
-from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB, natural_sort
+from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
@@ -238,21 +238,10 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         return []
     return mols
 
-  def writeMolsPML(self, mols, addTarget=True, disable=True, pose=True):
-    pmlStr, molFiles = '', []
-    for mol in mols:
-        molFile = mol.getPoseFile() if pose else mol.getFileName()
-        if not molFile in molFiles:
-            pmlStr += buildPMLDockingSingleStr(self, molFile, mol.getUniqueName(),
-                                               addTarget=addTarget, disable=disable)
-            molFiles.append(molFile)
-            addTarget = False
-    return pmlStr
-  
   def viewPymolMols(self, mols, ligandLabel, addTarget=True, disable=True, pose=True, e=None):
     pmlsDir = self.getPmlsDir()
     pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
-    writePmlFile(pmlFile, self.writeMolsPML(mols, addTarget=addTarget, disable=disable, pose=pose))
+    writePmlFile(pmlFile, buildPMLDockingGroupsStr(self, mols, addTarget=addTarget, disable=disable, pose=pose))
 
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
@@ -480,7 +469,20 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       receptorFile = outFile
 
     mergePDBs(receptorFile, molFile, auxPath, hetatm2=True)
-    clean_PDB(auxPath, outPath, waters=True, HETATM=False)
+    cleanPDB(auxPath, outPath, waters=True, hetatm=False)
     return outPath
 
+class CorrelationViewer(pwviewer.Viewer):
+    from pwchem.protocols.VirtualDrugScreening.protocol_scores_correlation import ProtScoreCorrelation
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [
+      ProtScoreCorrelation,
+    ]
 
+    def __init__(self, **kwargs):
+      pwviewer.Viewer.__init__(self, **kwargs)
+
+    def _visualize(self, protocol, **kwargs):
+      from PIL import Image
+      image = Image.open(protocol.getOuputImgPath())
+      image.show()

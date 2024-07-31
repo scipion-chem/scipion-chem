@@ -33,8 +33,11 @@ information such as name and number of residues.
 """
 
 # Imports
+import json
+
 from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
+from pwchem.utils import createMSJDic
 
 class AddElementWizard(VariableWizard):
     """Add the content of a parameter to another"""
@@ -51,10 +54,21 @@ class AddElementWizard(VariableWizard):
         inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
 
-        inParam = getattr(protocol, inputParam[0]).get()
-        if inParam and inParam.strip() != '':
-            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
-            form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
+        prevList, newLine = self.curePrevList(getattr(protocol, outputParam[0]).get()), ''
+        if len(inputParam) > 0:
+            inParam = getattr(protocol, inputParam[0]).get()
+            if inParam and inParam.strip() != '':
+                newLine = f'{inParam.strip()}\n'
+        elif hasattr(protocol, 'createElementLine'):
+            newLine = protocol.createElementLine()
+
+        form.setVar(outputParam[0], prevList + newLine)
+
+AddElementWizard().addTarget(protocol=ProtocolRankDocking,
+                             targets=['defineSummary'],
+                             inputs=[],
+                             outputs=['defineSummary'])
+
 
 class Add_FilterExpression(AddElementWizard):
     """Add ID or keyword in NCBI fetch protocol to the list"""
@@ -117,7 +131,7 @@ class AddElementSummaryWizard(VariableWizard):
             index = int(getattr(protocol, inputParam[0]).get())
         else:
             index = numSteps + 1
-        msjDic = protocol.createMSJDic()
+        msjDic = createMSJDic(protocol)
         if index > numSteps:
             prevStr = getattr(protocol, outputParam[0]).get() \
                 if getattr(protocol, outputParam[0]).get() is not None else ''
@@ -170,7 +184,8 @@ class WatchElementWizard(VariableWizard):
                 msjDic = eval(workSteps[index - 1])
                 for pName in msjDic:
                     if pName in protocol.getStageParamsDic(type='Normal').keys():
-                        form.setVar(pName, msjDic[pName])
+                        val = eval(msjDic[pName]) if msjDic[pName] in ['True', 'False'] else msjDic[pName]
+                        form.setVar(pName, val)
                     elif pName in protocol.getStageParamsDic(type='Enum').keys():
                         enumParam = protocol.getParam(pName)
                         idx = enumParam.choices.index(msjDic[pName])
@@ -183,8 +198,27 @@ AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])
-
 DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])
+
+class AddResidueWizard(AddElementWizard):
+  """Adds a selected resiude(s) in a chain+residues congifuration parameters to a list of residues
+  """
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+
+    prevList, newLine = self.curePrevList(getattr(protocol, outputParam[0]).get()), ''
+    if len(inputParam) > 0:
+      inChain, inResidues = getattr(protocol, inputParam[0]).get(), getattr(protocol, inputParam[1]).get()
+      chainDic, resDic = json.loads(inChain), json.loads(inResidues)
+      newLine = f'{{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
+               f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
+    elif hasattr(protocol, 'createElementLine'):
+      newLine = protocol.createElementLine()
+
+    form.setVar(outputParam[0], prevList + newLine)

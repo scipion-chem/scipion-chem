@@ -116,10 +116,10 @@ class ProtocolConsensusDocking(EMProtocol):
         outDir = self.getInputMolsDir()
         os.mkdir(outDir)
 
-        maeMols, _ = self.getMAEMoleculeFiles(allMols)
+        maeMols, _ = getMAEMoleculeFiles(allMols)
         if len(maeMols) > 0:
             try:
-                from schrodingerScipion.utils.utils import convertMAEMolSet
+                from pwchemSchrodinger.utils.utils import convertMAEMolSet
                 convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
             except ImportError:
                 print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
@@ -205,16 +205,6 @@ class ProtocolConsensusDocking(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
-
-    def getMAEMoleculeFiles(self, molList):
-        maeMols, otherMols = [], []
-        for mol in molList:
-            molFile = os.path.abspath(mol.getPoseFile())
-            if '.mae' in molFile:
-                maeMols.append(mol)
-            else:
-                otherMols.append(mol)
-        return maeMols, otherMols
 
     def buildMolDic(self):
         dic = {}
@@ -456,23 +446,6 @@ class ProtocolConsensusDocking(EMProtocol):
             idsDic[i+1] = item.getObjId()
             item.setObjId(i+1)
         return inSet, idsDic
-
-    def createOutPDB(self, idsDic):
-        outStr = self.getTemplateOutPDB()
-        for pocket in self.consensusPockets:
-            outFile = pocket.getProteinFile()
-            newId, oldId = pocket.getObjId(), idsDic[pocket.getObjId()]
-            outStr += self.parseHETATM(outFile, oldId, newId)
-
-        outPDBFile = self._getExtraPath(self.getPDBName()) + '_out.pdb'
-        with open(outPDBFile, 'w') as f:
-            f.write(outStr)
-            f.write('\nTER\n')
-
-        pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
-        with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outPDBFile.split('/')[-1]))
-        return os.path.abspath(outPDBFile), os.path.abspath(pmlFile)
 
     def getTemplateOutPDB(self):
         templatePocket = None

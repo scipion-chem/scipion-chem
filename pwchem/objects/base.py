@@ -25,8 +25,10 @@
 # **************************************************************************
 
 import enum, io, subprocess, pickle
+
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
+
 from scipy import spatial
 from pwchem.utils import *
 from pwchem.constants import *
@@ -67,7 +69,11 @@ class SetOfDatabaseID(data.EMSet):
 class SequenceChem(data.Sequence):
     def __init__(self, **kwargs):
         data.Sequence.__init__(self, **kwargs)
-        self._attrFile = pwobj.String(kwargs.get('attributesFile', False))
+        self._attrFile = pwobj.String(kwargs.get('attributesFile', None))
+
+        # Dictionary that contains the interacting score of each SequenceChem with each SmallMolecule,
+        # so there is no need to create 1 SetOfSmallMolecules per SequenceChem {molId: score}
+        self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
 
     def __str__(self):
         return "SequenceChem (name = {})\n".format(self.getSeqName())
@@ -92,12 +98,44 @@ class SequenceChem(data.Sequence):
                 attrDic[key.strip()] = eval(values.strip())
         return attrDic
 
+    def getInteractScoresDic(self):
+        '''Returns a dictionary of the form {molName: score}, from the file where the interaction scores are stored.
+        '''
+        with open(self.getInteractScoresFile(), 'rb') as f:
+            intDic = pickle.load(f)
+        return intDic
+
+    def setInteractScoresDic(self, intDic, outFile):
+        '''From a dictionary of the form {molName: score}, writes a file in outFile
+        containing that information to be stored in the object'''
+        with open(outFile, 'wb') as f:
+            pickle.dump(intDic, f)
+        self.setInteractScoresFile(outFile)
+
+    def getInteractScoresFile(self):
+        return self._interactScoresFile.get()
+
+    def setInteractScoresFile(self, intFile):
+        self._interactScoresFile.set(intFile)
 
 class SetOfSequencesChem(data.SetOfSequences):
     def __init__(self, **kwargs):
         data.SetOfSequences.__init__(self, **kwargs)
         self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
         self._alignFile = pwobj.String(kwargs.get('alignFile', None))
+
+        self._interactMols = pwobj.Pointer()
+        self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
+
+    def copyInfo(self, other):
+        """ Copy basic information from other set of classes to current one"""
+        self.copyAttributes(other, '_aligned', '_alignFile', '_interactMols', '_interactScoresFile')
+
+    def getSetPath(self):
+        return os.path.abspath(self._mapperPath[0])
+
+    def getSetDir(self):
+        return os.path.dirname(self.getSetPath())
 
     def getAligned(self):
         return self._aligned.get()
@@ -124,6 +162,57 @@ class SetOfSequencesChem(data.SetOfSequences):
         alignStr = super().__str__()
         alignStr += ', aligned={}'.format(self._aligned.get())
         return alignStr
+
+    def getInteractMols(self):
+        return self._interactMols.get()
+
+    def getInteractMolsPointer(self):
+        return self._interactMols
+
+    def setInteractMols(self, mols=None):
+        if mols.isPointer():
+            self._interactMols.copy(mols)
+        else:
+            self._interactMols.set(mols)
+
+    def getInteractScoresDic(self, calculate=False):
+        '''Returns a dictionary of the form {seqName: {molName: score}},
+        from the files where the interaction scores are stored.
+        '''
+        if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
+            with open(self.getInteractScoresFile(), 'rb') as f:
+                intDic = pickle.load(f)
+        else:
+            intDic = {}
+            for seq in self:
+                with open(seq.getInteractScoresFile(), 'rb') as f:
+                    intDic[seq.getSeqName()] = pickle.load(f)
+        return intDic
+
+    def setInteractScoresDic(self, intDic=None, outFile=None):
+        '''From a dictionary of the form {seqName: {molName: score}}, writes a file in outFile
+        containing that information to be stored in the object.
+        If intDic=None, it is build from the elements of the set
+        If outFile=None, the file is saved in the same directory as the set mapper'''
+        if not intDic:
+            intDic = self.getInteractScoresDic()
+        if not outFile:
+            outFile = os.path.join(self.getSetDir(), f'{super().__str__()}_interactions.pickle')
+        with open(outFile, 'wb') as f:
+            pickle.dump(intDic, f)
+        self.setInteractScoresFile(outFile)
+
+    def getInteractScoresFile(self):
+        return self._interactScoresFile.get()
+
+    def setInteractScoresFile(self, intFile):
+        self._interactScoresFile.set(intFile)
+
+    def getSequenceNames(self):
+        return [seq.getSeqName() for seq in self]
+
+    def getInteractMolNames(self):
+        return [mol.getMolName() for mol in self.getInteractMols()]
 
 
 class SequenceVariants(data.EMFile):
@@ -236,6 +325,8 @@ class SmallMolecule(data.EMObject):
         self.dockId = pwobj.Integer(kwargs.get('dockId', None))  # dockProtocol ID
         self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
+        self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))   # to be used when each mol has diff receptor
+
     def __str__(self):
         s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
         return s
@@ -325,6 +416,12 @@ class SmallMolecule(data.EMObject):
     def getPDBFileName(self):
         if hasattr(self, '_PDBFile'):
             return self._PDBFile.get()
+
+    def setProteinFile(self, value):
+        self.proteinFile.set(value)
+
+    def getProteinFile(self):
+        return self.proteinFile.get()
 
     def getMolClass(self):
         return self._type
@@ -655,6 +752,9 @@ class SequenceROI(data.EMObject):
     def setROIIdx2(self, idx):
         self._roiIdx2.set(idx)
 
+    def getROILength(self):
+        return len(self.getROISequence())
+
 
 class SetOfSequenceROIs(data.EMSet):
     ITEM_TYPE = SequenceROI
@@ -687,8 +787,9 @@ class SetOfSequenceROIs(data.EMSet):
         wholeSeqObj.exportToFile(outPath)
         for roi in self:
             roiSeq, roiIdx = roi.getROISequence(), roi.getROIIdx()
-            tmpSeq = ['-'] * (len(wholeSeq) - len(roiSeq) + 1)
-            tmpSeq[roiIdx-1] = roiSeq
+            tmpSeq = ['-'] * len(wholeSeq)
+            r1, r2 = roiIdx-1, roiIdx - 1 + len(roiSeq)
+            tmpSeq[r1:r2] = roiSeq
 
             tmpSeqObj = Sequence(sequence=''.join(tmpSeq), id=roi._ROISequence.getId())
             tmpSeqObj.appendToFile(outPath, doClean=False)
@@ -1207,6 +1308,7 @@ class SetOfStructROIs(data.EMSet):
         pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
         # Creates the pml for pymol visualization
+        idList = [pock.getObjId() for pock in self]
         with open(pmlFile, 'w') as f:
             if bBox:
                 toWrite = FUNCTION_BOUNDING_BOX
@@ -1215,9 +1317,9 @@ class SetOfStructROIs(data.EMSet):
                     toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
                                                         [pDia * bBox] * 3,
                                                         'BoundingBox_' + str(pocket.getObjId()))
-                f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, toWrite))
+                f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, idList, toWrite))
             else:
-                f.write(PML_STR.format(outHETMFile))
+                f.write(PML_STR.format(outHETMFile, idList))
 
         return pmlFile
 
@@ -1379,10 +1481,14 @@ class MDSystem(data.EMFile):
 
     def __init__(self, filename=None, **kwargs):
         super().__init__(filename=filename, **kwargs)
+        self._oriStructFile = pwobj.String(kwargs.get('oriStructFile', None))
         self._topoFile = pwobj.String(kwargs.get('topoFile', None))
         self._trjFile = pwobj.String(kwargs.get('trjFile', None))
         self._ff = pwobj.String(kwargs.get('ff', None))
         self._wff = pwobj.String(kwargs.get('wff', None))
+
+        self._ligName = pwobj.String(kwargs.get('ligName', None))
+        self._topoLigFile = pwobj.String(kwargs.get('topoLigFile', None))
 
     def __str__(self):
         return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
@@ -1399,6 +1505,18 @@ class MDSystem(data.EMFile):
 
     def setTopologyFile(self, value):
         self._topoFile.set(value)
+
+    def getLigandName(self):
+        return self._ligName.get()
+
+    def setLigandName(self, value):
+        self._ligName.set(value)
+
+    def getLigandTopologyFile(self):
+        return self._topoLigFile.get()
+
+    def setLigandTopologyFile(self, value):
+        self._topoLigFile.set(value)
 
     def hasTopology(self):
         if self.getTopologyFile():
@@ -1418,6 +1536,12 @@ class MDSystem(data.EMFile):
     def setTrajectoryFile(self, value):
         self._trjFile.set(value)
 
+    def getOriStructFile(self):
+        return self._oriStructFile.get()
+
+    def setOriStructFile(self, value):
+        self._oriStructFile.set(value)
+
     def getForceField(self):
         return self._ff.get()
 
@@ -1429,6 +1553,9 @@ class MDSystem(data.EMFile):
 
     def setWaterForceField(self, value):
         self._wff.set(value)
+
+    def getSystemName(self):
+        return getBaseName(self.getSystemFile())
 
 
 class PharmFeature(data.EMObject):

@@ -69,19 +69,19 @@ load {}
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
 
-aux = list(map(int, stored.list))
+aux = {}
 aux.sort()
-stored.list = list(map(str, aux))
-#print(stored.list)
-lastSTP=stored.list[-1]	#get the index of the last residu
+
+lastSTP=max(list(map(int, stored.list)))	#get the index of the last residu
+stored.list = list(map(str, stored.list))
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))'''
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
 load {}, protein
@@ -368,19 +368,20 @@ load {}
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
 
-aux = list(map(int, stored.list))
+aux = {}
 aux.sort()
-stored.list = list(map(str, aux))
+
+stored.list = list(map(str, stored.list))
 #print(stored.list)
 lastSTP=stored.list[-1]	#get the index of the last residu
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
 
 python
 {}
@@ -493,6 +494,12 @@ mol representation Points 1.000000
 mol selection hetero within 3 of protein
 mol material Opaque
 mol modrep 1 0
+'''
+
+TCL_MD_LIG_STR = '''
+mol addrep 0
+mol modstyle 2 0 Licorice 0.300000 12.000000 12.000000
+mol modselect 2 0 resname LIG
 '''
 
 PML_MD_STR = '''load {}

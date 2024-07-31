@@ -223,6 +223,6 @@ class TestImportSeqROIs(BaseTest):
 		cls.launchProtocol(protImportSeqROIs)
 		return protImportSeqROIs
 
-	def testImportSeqROIs(self):
+	def test(self):
 		protImportSeqROIs = self._runImportSeqROIs()
 		assertHandle(self.assertIsNotNone, getattr(protImportSeqROIs, 'outputROIs_P0DTC2', None), cwd=protImportSeqROIs.getWorkingDir())

@@ -27,12 +27,12 @@ import os
 import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params
 
-from pwchem.viewers import PyMolViewer, PyMolView, VmdViewPopen
-from pwchem.objects import MDSystem
-from pwchem.constants import *
+# pwchem imports
+from .. import Plugin
+from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, TCL_MD_LIG_STR
+from ..viewers import PyMolViewer, PyMolView, VmdViewPopen
+from ..objects import MDSystem
 
-
-from pwchem.viewers import PyMolViewer, PyMolView
 
 class MDSystemViewer(pwviewer.Viewer):
   _label = 'Viewer Molecular Dynamics system'
@@ -77,6 +77,20 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        help='Display trajectory with VMD. \n'
                             'Protein represented as NewCartoon and waters as dots')
 
+    def _defineMDTrajParams(self, form):
+      group = form.addGroup('MDTraj analysis')
+      group.addParam('mdAnalChoices', params.EnumParam, label='Display trajectory analysis: ',
+                     choices=['RMSD', 'RMSF'], default=0,
+                     help='Uses MDTraj to display this analysis of the trajectory')
+      group.addParam('selAtoms', params.EnumParam, label='Selection of atoms: ', default=0,
+                     choices=['Protein', 'Backbone', 'CA', 'Sidechain'],
+                     help='Selection of atoms to use in the analysis')
+      group.addParam('heavyAtoms', params.BooleanParam, label='Use only heavy atoms: ', default=True,
+                     help='Uses only heavy atoms in the analysis of the trajectory')
+
+      group.addParam('displayMDTrajAnalysis', params.LabelParam,
+                     label='Display MDTraj analysis: ', help='Display MDTraj defined analysis')
+
     def _defineParams(self, form):
       form.addSection(label='Visualization of MD System')
       group = form.addGroup('Open MD system')
@@ -86,6 +100,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
       if self.getMDSystem().hasTrajectory():
           self._defineSimParams(form)
+          self._defineMDTrajParams(form)
 
     def getMDSystem(self, objType=MDSystem):
         if isinstance(self.protocol, objType):
@@ -98,6 +113,8 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         'displayPymol': self._showPymol,
         'displayMdPymol': self._showMdPymol,
         'displayMdVMD': self._showMdVMD,
+
+        'displayMDTrajAnalysis': self._showMDTrajAnalysis,
       }
 
     def _showPymol(self, paramName=None):
@@ -108,14 +125,31 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       system = self.getMDSystem()
       return MDSystemViewer(project=self.getProject())._visualize(system)
 
+    def writeTCL(self, outTcl, sysFile, sysExt, sysTrj, trjExt, isLig=False):
+      vmdStr = TCL_MD_STR % (sysFile, sysExt, sysTrj, trjExt)
+      if isLig:
+        vmdStr += TCL_MD_LIG_STR
+      with open(outTcl, 'w') as f:
+        f.write(vmdStr)
+
+
     def _showMdVMD(self, paramName=None):
       system = self.getMDSystem()
 
       outTcl = os.path.join(os.path.dirname(system.getTrajectoryFile()), 'vmdSimulation.tcl')
-      systExt = os.path.splitext(system.getSystemFile())[1][1:]
+      sysExt = os.path.splitext(system.getOriStructFile())[1][1:]
       trjExt = os.path.splitext(system.getTrajectoryFile())[1][1:]
-      with open(outTcl, 'w') as f:
-        f.write(TCL_MD_STR % (system.getSystemFile(), systExt, system.getTrajectoryFile(), trjExt))
-      args = '-e {}'.format(outTcl)
+      self.writeTCL(system.getOriStructFile(), sysExt, system.getTrajectoryFile(), trjExt,
+                    system.getLigandTopologyFile())
 
+      args = '-e {}'.format(outTcl)
       return [VmdViewPopen(args)]
+
+    def _showMDTrajAnalysis(self, paramName=None):
+      system = self.getMDSystem()
+
+      args = f'-i {system.getOriStructFile()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
+             f'-{self.getEnumText("mdAnalChoices").lower()} -sa {self.getEnumText("selAtoms")} '
+      if self.heavyAtoms.get():
+        args += '-ha '
+      Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)

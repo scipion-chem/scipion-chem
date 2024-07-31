@@ -159,7 +159,7 @@ class Plugin(pwem.Plugin):
 
 		# Generating installation commands
 		openbabel_installer.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer'], channel='conda-forge') \
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
 		
 		# Instantiating shape it install helper
@@ -204,12 +204,12 @@ class Plugin(pwem.Plugin):
 		# Instantiating install helper
 		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-		installer.getCondaEnvCommand().addCondaPackages(['mdtraj'], channel='conda-forge')\
+		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, scriptDir=None):
+	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None):
 		""" Run a script from a given protocol using a specific environment """
 		scriptName = cls.getScriptsDir(scriptName) if not scriptDir else os.path.join(scriptDir, scriptName)
 		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
@@ -217,7 +217,22 @@ class Plugin(pwem.Plugin):
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			if wait:
+				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			else:
+				subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
+
+	@classmethod
+	def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True):
+		""" General function to run conda commands """
+		fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+		else:
+			kwargs = {}
+			if silent:
+				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+			run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
 
 	@classmethod
 	def runShapeIt(cls, protocol, program, args, cwd=None):
@@ -236,21 +251,20 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False, silent=True):
 		""" Run openbabel command from a given protocol. """
-		full_program = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
-		if not popen:
-			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
-		else:
-			if silent:
-				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+		cls.runCondaCommand(protocol, args, OPENBABEL_DIC, program, cwd, popen, silent)
+
+	@classmethod
+	def runACPYPE(cls, protocol, program='acpype', args=None, cwd=None, popen=False, silent=True):
+		""" Run ACPYPE command from a given protocol. """
+		cls.runCondaCommand(protocol, args, MDTRAJ_DIC, program, cwd, popen, silent)
 
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
-		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
+		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
+		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
-  ##################### UTILS ###########################
+##################### UTILS ###########################
 	@classmethod
 	def getPluginHome(cls, path=""):
 		import pwchem

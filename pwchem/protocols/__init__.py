@@ -46,12 +46,16 @@ from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import Pro
 from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import ProtocolScoreDocking
 # from pwchem.protocols.VirtualDrugScreening.protocol_oddt_descriptors import ProtocolODDTDescriptors
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
+from pwchem.protocols.VirtualDrugScreening.protocol_define_contact_structROIs import ProtDefineContactStructROIs
+from pwchem.protocols.VirtualDrugScreening.protocol_rank_docking_score import ProtocolRankDocking
+from pwchem.protocols.VirtualDrugScreening.protocol_scores_correlation import ProtScoreCorrelation
 
 from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCalculateSASA
 
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import ProtocolPharmacophoreGeneration
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_modification import ProtocolPharmacophoreModification
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_filtering import ProtocolPharmacophoreFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_extract_interactingMols import ProtExtractInteractingMols
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
@@ -84,4 +88,7 @@ from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_pymol import ProtPymolOperate
 
+
+# Molecular dynamics
+from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLiganParametrization
 

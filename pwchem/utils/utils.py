@@ -26,23 +26,20 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, json, requests, time, subprocess, sys, multiprocessing
-# import glob
+import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
 import random as rd
 import numpy as np
 from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
 from Bio.PDB.SASA import ShrakeRupley
-#from sklearn.cluster import DBSCAN
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.convert.atom_struct import cifToPdb
 from pwem.objects.data import Sequence, Object, String, Integer, Float
 
 # Plugin imports
-from pwchem.constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
-from pwchem import Plugin as pwchemPlugin
-from pwchem.utils.scriptUtils import makeSubsets, performBatchThreading
+from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
+from .. import Plugin as pwchemPlugin
+from ..utils.scriptUtils import makeSubsets, performBatchThreading
 
 confFirstLine = {'.pdb': 'REMARK', '.pdbqt': 'REMARK',
                  '.mol2': '@<TRIPOS>MOLECULE'}
@@ -103,6 +100,15 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
+def organizeThreads(nTasks, nThreads):
+  if nTasks > nThreads:
+    return [1] * nTasks
+  else:
+    subsets = [0 for _ in range(nTasks)]
+    for i in range(nThreads):
+      subsets[i % nTasks] += 1
+  return subsets
+
 def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
@@ -124,27 +130,34 @@ def getVarName(var):
 def getBaseName(file):
   return os.path.splitext(os.path.basename(file.strip()))[0]
 
-def getLigCoords(ASFile, ligName):
-  """ Return the coordinates of the ligand specified in the atomic structure file. """
-  if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
-    pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-    parser = PDBParser().get_structure(pdb_code, ASFile)
-  elif ASFile.endswith('.cif'):
-    pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-    parser = MMCIFParser().get_structure(pdb_code, ASFile)
+def parseAtomStruct(asFile):
+  '''Parse an atom struct using biopython'''
+  if asFile.endswith('.pdb') or asFile.endswith('.ent'):
+    pdbCode = os.path.basename(os.path.splitext(asFile)[0])
+    parser = PDBParser().get_structure(pdbCode, asFile)
+  elif asFile.endswith('.cif'):
+    pdbCode = os.path.basename(os.path.splitext(asFile)[0])
+    parser = MMCIFParser().get_structure(pdbCode, asFile)
   else:
     print('Unknown AtomStruct file format')
-    return
+    parser = None
+  return parser
 
-  coords = []
-  for model in parser:
-    for chain in model:
-      for residue in chain:
+def isHet(residue):
+  res = residue.id[0]
+  return res != " " and res != "W"
+
+def getLigCoords(asFile, ligName):
+  """ Return the coordinates of the ligand specified in the atomic structure file. """
+  parser = parseAtomStruct(asFile)
+  if parser:
+    coords = []
+    for model in parser:
+      for residue in model.get_residues():
         if residue.resname == ligName:
           for atom in residue:
             coords.append(list(atom.get_coord()))
   return coords
-
 
 def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   if not structureHandler:
@@ -160,24 +173,19 @@ def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   fileName = structureHandler.readFromPDBDatabase(os.path.basename(pdbID), dir=outDir)
   return fileName
 
-
 def getRawPDBStr(pdbFile, ter=True):
   outStr = ''
   with open(pdbFile) as fIn:
     for line in fIn:
-      if line.startswith('ATOM') or line.startswith('HETATM'):
-        outStr += line
-      elif ter and line.startswith('TER'):
+      if line.startswith('ATOM') or line.startswith('HETATM') or (ter and line.startswith('TER')):
         outStr += line
   return outStr
-
 
 def writeRawPDB(pdbFile, outFile, ter=True):
   '''Creates a new pdb with only the ATOM and HETATM lines'''
   with open(outFile, 'w') as f:
     f.write(getRawPDBStr(pdbFile, ter))
   return outFile
-
 
 def writePDBLine(j):
   '''j: elements to write in the pdb'''
@@ -231,7 +239,6 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-
 def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
@@ -246,7 +253,6 @@ def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
           sLine[0] = 'HETATM'
           line = writePDBLine(sLine)
         f.write(line)
-
 
 def getScipionObj(value):
   if isinstance(value, Object):
@@ -276,10 +282,9 @@ def createColorVectors(nColors):
   colors = []
   while len(colors) < nColors:
     newColor = rd.sample(sampling, 3)
-    if not newColor in colors:
+    if newColor not in colors:
       colors += [newColor]
   return colors
-
 
 def createSurfacePml(pockets):
   pdbFile = pockets.getProteinFile()
@@ -297,17 +302,15 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
-
 def pdbqt2other(protocol, pdbqtFile, otherFile):
   '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
-  inName, inExt = os.path.splitext(os.path.basename(otherFile))
-  if not inExt in ['.pdb', '.mol2', '.sdf', '.mol']:
+  inExt = os.path.splitext(os.path.basename(otherFile))[1]
+  if inExt not in ['.pdb', '.mol2', '.sdf', '.mol']:
     inExt, otherFile = 'pdb', otherFile.replace(inExt, '.pdb')
 
   args = ' -ipdbqt {} -o{} -O {}'.format(os.path.abspath(pdbqtFile), inExt[1:], otherFile)
   runOpenBabel(protocol=protocol, args=args, popen=True)
   return os.path.abspath(otherFile)
-
 
 def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   '''Convert molecule files to sdf using openbabel'''
@@ -321,15 +324,24 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
     baseName = os.path.splitext(os.path.basename(sdfFile))[0]
     outDir = os.path.abspath(os.path.dirname(sdfFile))
   if not os.path.exists(sdfFile) or overWrite:
-    args = ' -i "{}" -of sdf --outputDir "{}" --outputName {} --overWrite'.format(os.path.abspath(molFile),
-                                                                                  os.path.abspath(outDir), baseName)
+    args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
+           f'--outputName {baseName} --overWrite'
     pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
   return sdfFile
 
+def getMAEMoleculeFiles(molList):
+  '''Return in different lists the mae and non-mae files'''
+  maeMols, otherMols = [], []
+  for mol in molList:
+    molFile = os.path.abspath(mol.getPoseFile())
+    if '.mae' in molFile:
+      maeMols.append(mol.clone())
+    else:
+      otherMols.append(mol.clone())
+  return maeMols, otherMols
 
 def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
   pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
-
 
 def splitConformerFile(confFile, outDir):
   fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
@@ -355,12 +367,11 @@ def splitConformerFile(confFile, outDir):
   writeFile(towrite, newFile)
   return outDir
 
-
 def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
   '''Appends a molecule to a conformers file.
     If outConfFile == None, the output conformers file path is the same as as the start'''
   if outConfFile == None:
-    iName, iExt = os.path.splitext(confFile)
+    iExt = os.path.splitext(confFile)[1]
     outConfFile = confFile.replace(iExt, '_aux' + iExt)
     rename = True
 
@@ -383,17 +394,14 @@ def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
 
   return outConfFile
 
-
 def writeFile(towrite, file):
   with open(file, 'w') as f:
     f.write(towrite)
-
 
 def getProteinMaxDiameter(protFile):
   protCoords = np.array(getPDBCoords(protFile))
   minCoords, maxCoords = protCoords.min(axis=0), protCoords.max(axis=0)
   return max(maxCoords - minCoords)
-
 
 def getPDBCoords(pdbFile):
   coords = []
@@ -404,16 +412,14 @@ def getPDBCoords(pdbFile):
         coords.append((float(line[6]), float(line[7]), float(line[8])))
   return coords
 
-
 ##################################################
 # ADT grids
-
 def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
-  protName, protExt = os.path.splitext(os.path.basename(protFile))
-  gpf_file = os.path.join(outDir, protName + '.gpf')
+  protName = os.path.splitext(os.path.basename(protFile))[0]
+  gpfFile = os.path.join(outDir, protName + '.gpf')
   npts = int(round(npts))
 
   protAtomTypes = parseAtomTypes(protFile)
@@ -430,7 +436,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
 
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
-  with open(os.path.abspath(gpf_file), "w") as file:
+  with open(os.path.abspath(gpfFile), "w") as file:
     file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
     if znFFfile:
         file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
@@ -449,7 +455,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     if znFFfile:
         file.write('''nbp_r_eps 0.25 23.2135 12 6 NA TZ\nnbp_r_eps 2.1   3.8453 12 6 OA Zn\nnbp_r_eps 2.25  7.5914 12 6 SA Zn\nnbp_r_eps 1.0   0.0    12 6 HD Zn\nnbp_r_eps 2.0   0.0060 12 6 NA Zn\nnbp_r_eps 2.0   0.2966 12 6  N Zn''')
 
-  return os.path.abspath(gpf_file)
+  return os.path.abspath(gpfFile)
 
 
 def calculate_centerMass(atomStructFile):
@@ -461,15 +467,14 @@ def calculate_centerMass(atomStructFile):
   try:
     structureHandler = AtomicStructHandler()
     structureHandler.read(atomStructFile)
-    center_coord = structureHandler.centerOfMass(geometric=True)
+    centerCoord = structureHandler.centerOfMass(geometric=True)
     structure = structureHandler.getStructure()
 
-    return structure, center_coord[0], center_coord[1], center_coord[2]  # structure, x,y,z
+    return structure, centerCoord[0], centerCoord[1], centerCoord[2]  # structure, x,y,z
 
   except Exception as e:
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
     return
-
 
 def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
@@ -479,14 +484,14 @@ def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1'
         if line.startswith('ATOM') or line.startswith('HETATM'):
           pLine = line.split()
           at = pLine[-1]
-          if (allowed is None or at in allowed) and not at in ignore:
+          if (allowed is None or at in allowed) and at not in ignore:
               atomTypes.add(at)
   else:
       struct = PDBParser().get_structure("SASAstruct", pdbqtFile)
 
       for atom in struct.get_atoms():
         atomId = atom.get_id()
-        if not removeNumberFromStr(atomId) in ignore:
+        if removeNumberFromStr(atomId) not in ignore:
           atomTypes.add(removeNumberFromStr(atomId))
 
   return atomTypes
@@ -496,16 +501,11 @@ def sortSet(seti):
   seti.sort()
   return seti
 
-
 class CleanStructureSelect(Select):
-  def __init__(self, chain_ids, rem_HETATM, rem_WATER, het2keep=[]):
-    self.chain_ids = chain_ids
-    self.HETATM, self.het2keep= rem_HETATM, het2keep
-    self.waters = rem_WATER
-
-  def is_het(self, residue):
-    res = residue.id[0]
-    return res != " " and res != "W"
+  def __init__(self, chainIds, remHETATM, remWATER, het2keep=[], het2rem=[]):
+    self.chain_ids = chainIds
+    self.remHETATM, self.remWATER = remHETATM, remWATER
+    self.het2keep, self.het2rem = het2keep, het2rem
 
   def accept_chain(self, chain):
     return not self.chain_ids or chain.id in self.chain_ids
@@ -513,40 +513,42 @@ class CleanStructureSelect(Select):
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
     accept = True
-    if self.HETATM and self.is_het(residue) and not residue.resname in self.het2keep:
+    if self.remWATER and residue.id[0] == 'W':
       accept = False
-    elif self.waters and residue.id[0] == 'W':
-      accept = False
+    elif isHet(residue):
+      if (self.remHETATM and residue.resname not in self.het2keep) or \
+              (not self.remHETATM and residue.resname in self.het2rem):
+        accept = False
     return accept
 
-
-def clean_PDB(struct_file, outFn, waters=False, HETATM=False, chain_ids=None, het2keep=[]):
+def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
   """ Extraction of the heteroatoms of .pdb files """
-  struct_name = getBaseFileName(struct_file)
-  if struct_file.endswith('.pdb') or struct_file.endswith('.ent'):
-    struct = PDBParser().get_structure(struct_name, struct_file)
-  elif struct_file.endswith('.cif'):
-    struct = MMCIFParser().get_structure(struct_name, struct_file)
+  structName = getBaseFileName(structFile)
+  if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
+    struct = PDBParser().get_structure(structName, structFile)
+  elif structFile.endswith('.cif'):
+    struct = MMCIFParser().get_structure(structName, structFile)
   else:
-    print('Unknown format for file ', struct_file)
+    print('Unknown format for file ', structFile)
     exit()
 
   io = PDBIO()
   io.set_structure(struct)
-  io.save(outFn, CleanStructureSelect(chain_ids, HETATM, waters, het2keep))
+  io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
   return outFn
 
-def obabelMolConversion(mol, outFormat, outDir):
+def obabelMolConversion(mol, outFormat, outDir, pose=False):
   '''Converts a molecule into the specified format using OBabel binary'''
   outFormat = outFormat[1:] if outFormat.startswith('.') else outFormat
-  molFile = os.path.abspath(mol.getFileName())
+  molFile = os.path.abspath(mol.getFileName()) if not pose else os.path.abspath(mol.getPoseFile())
   inName, inExt = os.path.splitext(os.path.basename(molFile))
   oFile = os.path.abspath(os.path.join(outDir, f'{inName}.{outFormat}'))
 
   if not molFile.endswith(f'.{outFormat}'):
     args = f' -i{inExt[1:]} {os.path.abspath(molFile)} -o{outFormat} -O {oFile}'
     runOpenBabel(protocol=None, args=args, cwd=outDir, popen=True)
-    relabelMapAtomsMol2(oFile)
+    if outFormat == 'mol2':
+      relabelMapAtomsMol2(oFile)
   else:
     os.link(molFile, oFile)
   return oFile
@@ -569,7 +571,6 @@ def relabelAtomsMol2(atomFile, i=''):
             atomCount[atom] += 1
           else:
             atomCount[atom] = 1
-          numSize = len(str(atomCount[atom]))
           line = line[:8] + ' ' * (2 - len(atom)) + atom + str(atomCount[atom]).ljust(8) + line[18:]
 
         if line.startswith('@<TRIPOS>ATOM'):
@@ -601,10 +602,9 @@ def relabelMapAtomsMol2(atomFile, i=''):
             atomName = line.split()[1]
             atomType = removeNumberFromStr(atomName)
 
-            atomCount[atomType] = 1 if not atomType in atomCount else atomCount[atomType] + 1
+            atomCount[atomType] = 1 if atomType not in atomCount else atomCount[atomType] + 1
             atomName = atomName if atomType != atomName else atomName + str(atomCount[atomType])
 
-            numSize = len(str(atomCount[atomType]))
             line = line[:8] + ' ' * (2 - len(atomType)) + atomName.ljust(8 + len(atomType)) + line[18:]
 
         if line.startswith('@<TRIPOS>ATOM'):
@@ -615,26 +615,19 @@ def relabelMapAtomsMol2(atomFile, i=''):
   shutil.move(auxFile, atomFile)
   return atomFile
 
-
 def removeNumberFromStr(s):
   newS = ''
   for i in s:
     if not i.isdigit():
       newS += i
-    else:
-      pass
   return newS
-
 
 def getNumberFromStr(s):
   num = ''
   for i in s:
-    if not i.isdigit():
-      pass
-    else:
+    if i.isdigit():
       num += i
   return num
-
 
 def calculateDistance(coord1, coord2):
   dist = 0
@@ -645,7 +638,6 @@ def calculateDistance(coord1, coord2):
     dist += (c1 - c2) ** 2
   return dist ** (1 / 2)
 
-
 def calculateRMSD(coords1, coords2):
   rmsd = 0
   for c1, c2 in zip(coords1, coords2):
@@ -655,7 +647,6 @@ def calculateRMSD(coords1, coords2):
     for x1, x2 in zip(c1, c2):
       rmsd += (x1 - x2) ** 2
   return (rmsd / len(coords2)) ** (1 / 2)
-
 
 def calculateRMSDKeys(coordDic1, coordDic2):
   '''Calculate the RMSD from two dic containing coordinates, using the keys of the
@@ -673,14 +664,11 @@ def calculateRMSDKeys(coordDic1, coordDic2):
       count += 1
   return (rmsd / count) ** (1 / 2)
 
-
 ################# UTILS Sequence Object ################
-
 def getSequenceFastaName(sequence):
   '''Return a fasta name for the sequence.
     Priorizes the Id; if None, just "sequence"'''
   return cleanPipeIds(sequence.getId()) if sequence.getId() is not None else 'sequence'
-
 
 def cleanPipeIds(idStr):
   '''Return a guessed ID when they contain "|"'''
@@ -703,11 +691,27 @@ def groupConsecutiveIdxs(idxs):
     return groups
 
 def natural_sort(listi, rev=False):
-  import re
+  '''Sort a list of strs containing numbers, taking into account that number real value
+  [A3, A1, B2, B4] -> [A1, A3, B2, B4]
+  '''
   convert = lambda text: int(text) if text.isdigit() else text.lower()
-  alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
-  return sorted(listi, key=alphanum_key, reverse=rev)
+  alphanumKey = lambda key: [convert(c) for c in re.split('(\d+)', key)]
+  return sorted(listi, key=alphanumKey, reverse=rev)
 
+def numberSort(strings, rev=False):
+  '''Sort a list of strs containing numbers, taking into account only that number real value,
+  ignoring the letter part
+  [A3, A1, B2, B4] -> [A1, B2, A3, B4]
+  '''
+  def keyFunct(string):
+    # Use regular expression to extract the numeric part of the string
+    match = re.search(r'\d+', string)
+    if match:
+      return int(match.group())
+    else:
+      return float('inf')  # If there are no numbers, put at the end
+
+  return sorted(strings, key=keyFunct, reverse=rev)
 
 def fillEmptyAttributes(inputSets):
   '''Fill all items with empty attributes'''
@@ -719,7 +723,6 @@ def fillEmptyAttributes(inputSets):
           item.__setattr__(attr, attributes[attr])
   return inputSets
 
-
 def getAllAttributes(inputSets):
   '''Return a dic with {attrName: ScipionObj=None}'''
   attributes = {}
@@ -727,29 +730,62 @@ def getAllAttributes(inputSets):
     item = inpSet.get().getFirstItem()
     attrKeys = item.getObjDict().keys()
     for attrK in attrKeys:
-      if not attrK in attributes:
+      if attrK not in attributes:
         value = item.__getattribute__(attrK)
         attributes[attrK] = value.clone()
         attributes[attrK].set(None)
   return attributes
 
-
 def getBaseFileName(filename):
   return os.path.splitext(os.path.basename(filename))[0]
 
+def addToDic(dic, key, item):
+  '''Add an element to a dic list creting it if the key was not there'''
+  if key in dic:
+    dic[key].append(item)
+  else:
+    dic[key] = [item]
+  return dic
+
+def clusterSurfaceCoords(surfCoords, intraDist):
+  clusters = []
+  for coord in surfCoords:
+    newClusters = []
+    newClust = [coord]
+    for clust in clusters:
+      merge = False
+      for cCoord in clust:
+        dist = calculateDistance(coord, cCoord)
+        if dist < intraDist:
+          merge = True
+          break
+
+      if merge:
+        newClust += clust
+      else:
+        newClusters.append(clust)
+
+    newClusters.append(newClust)
+    clusters = newClusters.copy()
+  return clusters
+
+def createPocketFile(clust, i, outDir):
+  outFile = os.path.join(outDir, f'pocketFile_{i}.pdb')
+  with open(outFile, 'w') as f:
+    for j, coord in enumerate(clust):
+      f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
+  return outFile
 
 ################# Wizard utils #####################
-
 def getChainIds(chainStr):
   '''Parses a line of json with the description of a chain or chains and returns the ids'''
   chainJson = json.loads(chainStr)
   if 'chain' in chainJson:
-    chain_ids = [chainJson["chain"].upper().strip()]
+    chainIds = [chainJson["chain"].upper().strip()]
   elif 'model-chain' in chainJson:
     modelChains = chainJson["model-chain"].upper().strip()
-    chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
-  return chain_ids
-
+    chainIds = [x.split('-')[1] for x in modelChains.split(',')]
+  return chainIds
 
 def calculate_SASA(structFile, outFile):
   if structFile.endswith('.pdb') or structFile.endswith('.ent'):
@@ -836,3 +872,80 @@ def assertHandle(func, *args, cwd='', message=''):
       if message:
         errorMessage += f"\n{message}"
     raise AssertionError(f"Assertion {func.__name__} failed for the following reasons:\n\n{errorMessage}")
+
+################# File management utils #####################
+def removeElements(elements):
+  """ This function removes all given files and directories. """
+  # Removing selected elements
+  for item in elements:
+    if os.path.exists(item):
+      if os.path.isdir(item):
+        shutil.rmtree(item)
+      else:
+        os.remove(item)
+
+def createMSJDic(protocol):
+  msjDic = {}
+  for pName in protocol.getStageParamsDic(type='Normal').keys():
+    if hasattr(protocol, pName):
+      msjDic[pName] = getattr(protocol, pName).get()
+    else:
+      print('Something is wrong with parameter ', pName)
+
+  for pName in protocol.getStageParamsDic(type='Enum').keys():
+    if hasattr(protocol, pName):
+      msjDic[pName] = protocol.getEnumText(pName)
+    else:
+      print('Something is wrong with parameter ', pName)
+  return msjDic
+
+########### SEQUENCE INTERACTING MOL UTILS ########
+def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres):
+  '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
+  The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
+  intDic = inSeqs.getInteractScoresDic()
+
+  seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
+  seqNames, molNames = filterNames(seqNames, molNames, filtSeqNames, filtMolNames)
+
+  intAr = formatInteractionsArray(intDic, seqNames, molNames)
+  intAr, seqNames, molNames = filterScores(intAr, seqNames, molNames, scThres)
+  return intAr, seqNames, molNames
+
+def filterNames(seqNames, molNames, filtSeqNames, filtMolNames):
+  if 'All' not in filtSeqNames:
+    seqNames = [seqName for seqName in seqNames if seqName in filtSeqNames]
+
+  if 'All' not in filtMolNames:
+    molNames = [molName for molName in molNames if molName in filtMolNames]
+
+  return seqNames, molNames
+
+def filterScores(intAr, seqNames, molNames, scThres):
+  ips, ims = [], []
+
+  for ip, seqName in enumerate(seqNames):
+    if any(intAr[ip, :] >= scThres):
+      ips.append(ip)
+
+  for im, molName in enumerate(molNames):
+    if any(intAr[:, im] >= scThres):
+      ims.append(im)
+
+  if len(seqNames) != len(ips):
+    seqNames = list(np.array(seqNames)[ips])
+    intAr = intAr[ips, :]
+
+  if len(molNames) != len(ims):
+    molNames = list(np.array(molNames)[ims])
+    intAr = intAr[:, ims]
+
+  return intAr, seqNames, molNames
+
+def formatInteractionsArray(intDic, seqNames, molNames):
+  intAr = np.zeros((len(seqNames), len(molNames)))
+  for i, seqName in enumerate(seqNames):
+    for j, molName in enumerate(molNames):
+      intAr[i, j] = intDic[seqName][molName]
+  return intAr
+  

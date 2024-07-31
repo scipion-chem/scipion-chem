@@ -21,15 +21,15 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
+import os
+
 # Scipion em imports
 from pyworkflow.tests import BaseTest, DataSet
 import pyworkflow.tests as tests
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
-from pwchem.protocols import ProtExtractLigands, ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands
-from pwchem.protocols import ProtDefineStructROIs, ProtocolScoreDocking, ProtocolConsensusDocking
-from pwchem.protocols import ProtChemPrepareReceptor, ProtocolRMSDDocking
+from pwchem.protocols import *
 from pwchem.tests import TestDefineStructROIs
 from pwchem.utils import assertHandle
 
@@ -210,10 +210,7 @@ class TestScoreDocking(TestDefineStructROIs):
 		self.proj.launchProtocol(protScoreDocks, wait=True)
 		return protScoreDocks
 
-	def test(self):
-		protPockets = self._runDefStructROIs(defRoiStr)
-		self._waitOutput(protPockets, 'outputStructROIs', sleepTime=5)
-
+	def _runDockings(self, protPockets):
 		inputDockProts = []
 		doVina, doLe = False, False
 
@@ -245,6 +242,13 @@ class TestScoreDocking(TestDefineStructROIs):
 		for p in inputDockProts:
 			self._waitOutput(p, 'outputSmallMolecules')
 
+		return inputDockProts
+
+	def test(self):
+		protPockets = self._runDefStructROIs(defRoiStr)
+		self._waitOutput(protPockets, 'outputStructROIs', sleepTime=5)
+
+		inputDockProts = self._runDockings(protPockets)
 		if len(inputDockProts) >= 1:
 			pScore = self._runScoreDocking(inputDockProts)
 			assertHandle(self.assertIsNotNone, getattr(pScore, 'outputSmallMolecules', None), cwd=pScore.getWorkingDir())
@@ -268,37 +272,7 @@ class TestConsensusDocking(TestScoreDocking):
 		protPockets = self._runDefStructROIs(defRoiStr)
 		self._waitOutput(protPockets, 'outputStructROIs')
 
-		inputDockProts = []
-		doVina, doLe = False, False
-
-		try:
-			from autodock.protocols import ProtChemVinaDocking
-			doVina = True
-		except:
-			pass
-		try:
-			from lephar.protocols import ProtChemLeDock
-			doLe = True
-		except:
-			pass
-
-		if doVina:
-			protVina1 = self._runVina(prot=ProtChemVinaDocking)
-			inputDockProts.append(protVina1)
-			if not doLe:
-				protVina2 = self._runVina(prot=ProtChemVinaDocking, pocketsProt=protPockets)
-				inputDockProts.append(protVina2)
-
-		if doLe:
-			protLe1 = self._runLeDock(prot=ProtChemLeDock, pocketsProt=protPockets)
-			inputDockProts.append(protLe1)
-			if not doVina:
-				protLe2 = self._runLeDock(prot=ProtChemLeDock)
-				inputDockProts.append(protLe2)
-
-		for p in inputDockProts:
-			self._waitOutput(p, 'outputSmallMolecules')
-
+		inputDockProts = self._runDockings(protPockets)
 		if len(inputDockProts) >= 2:
 			pCons = self._runConsensusDocking(inputDockProts)
 			assertHandle(self.assertIsNotNone, getattr(pCons, 'outputSmallMolecules', None), cwd=pCons.getWorkingDir())
@@ -392,31 +366,7 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 		self._waitOutput(protPockets, 'outputStructROIs')
 		self._waitOutput(self.protOBabel, 'outputSmallMolecules')
 
-		inputDockProts = []
-		doVina, doLe = False, False
-
-		try:
-			from autodock.protocols import ProtChemVinaDocking
-			doVina = True
-		except:
-			pass
-		try:
-			from lephar.protocols import ProtChemLeDock
-			doLe = True
-		except:
-			pass
-
-		if doVina:
-			protVina1 = self._runVina(prot=ProtChemVinaDocking, pocketsProt=protPockets)
-			inputDockProts.append(protVina1)
-
-		if doLe and not doVina:
-			protLe1 = self._runLeDock(prot=ProtChemLeDock, pocketsProt=protPockets)
-			inputDockProts.append(protLe1)
-
-		for p in inputDockProts:
-			self._waitOutput(p, 'outputSmallMolecules')
-
+		inputDockProts = self._runDockings(protPockets)
 		if len(inputDockProts) >= 1:
 			pRMSDs = []
 			pInputs = [protPrep, protExtLig]
@@ -428,3 +378,48 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 				assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 		else:
 			print('No docking plugins found installed. Try installing AutoDock')
+
+class TestRankDockingScore(TestScoreDocking):
+	def _runCombineScores(self, inputDockProts):
+		protRankScores = self.newProtocol(ProtocolRankDocking)
+
+		for i in range(len(inputDockProts)):
+			protRankScores.inputMoleculesSets.append(inputDockProts[i])
+			protRankScores.inputMoleculesSets[i].setExtended('outputSmallMolecules')
+
+		self.launchProtocol(protRankScores, wait=True)
+		return protRankScores
+
+	def test(self):
+		protPockets = self._runDefStructROIs(defRoiStr)
+		self._waitOutput(protPockets, 'outputStructROIs')
+
+		inputDockProts = self._runDockings(protPockets)
+		if len(inputDockProts) >= 2:
+			pRank = self._runCombineScores(inputDockProts)
+			assertHandle(os.path.exists, pRank.getResultsFile(), cwd=pRank.getWorkingDir(), message='No results found')
+			assertHandle(self.assertIsNotNone, getattr(pRank, 'outputSmallMolecules', None))
+		else:
+			print('No docking plugins found installed. Try installing AutoDock')
+
+class TestMapLigandContacts(TestExtractLigand):
+	@classmethod
+	def _runDefineContacts(cls, inputProt):
+		protDefContacts = cls.newProtocol(
+			ProtDefineContactStructROIs
+		)
+
+		protDefContacts.inputSmallMols.set(inputProt)
+		protDefContacts.inputSmallMols.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(protDefContacts)
+		return protDefContacts
+
+	def test(self):
+		protExtract = self._runExtractLigand(self.protImportPDB)
+		self._waitOutput(protExtract, 'outputSmallMolecules')
+
+		protContacts = self._runDefineContacts(protExtract)
+		self._waitOutput(protContacts, 'outputStructROIs')
+		assertHandle(self.assertIsNotNone, getattr(protContacts, 'outputStructROIs', None),
+								 cwd=protContacts.getWorkingDir())

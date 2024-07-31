@@ -74,8 +74,11 @@ def embedAndOptimize(mol):
             return False
     return mol
 
-def writeMol(mol, outFile, cid=-1):
+def writeMol(mol, outFile, cid=-1, setName=False):
     w = Chem.SDWriter(outFile)
+    molName = os.path.split(os.path.splitext(outFile)[0])[-1]
+    if setName:
+        mol.SetProp('_Name', molName)
     w.write(mol, cid)
     w.close()
 
@@ -87,7 +90,6 @@ if __name__ == "__main__":
     paramsDic = parseParams(sys.argv[1])
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
-    ffMethod = paramsDic['ffMethod']
 
     failedMols = []
     mols_dict, _ = getMolFilesDic(molFiles)
@@ -114,19 +116,21 @@ if __name__ == "__main__":
                 AllChem.ComputeGasteigerCharges(mol)
 
             if 'numConf' in paramsDic:
-                mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
+                mol = conformer_generation(mol, outBasef, paramsDic['ffMethod'], paramsDic['restrainMethod'],
                                                  paramsDic['numConf'], paramsDic['rmsThres'])
                 if mol:
+                    setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
                     for cid, cMol in enumerate(mol.GetConformers()):
                         outFile = outBasef + '-{}.sdf'.format(cid+1)
-                        writeMol(mol, outFile, cid=cid)
+                        writeMol(mol, outFile, cid=cid, setName=setMolName)
                 else:
                     failedMols.append(outBase)
             else:
                 mol = embedAndOptimize(mol)
+                setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
                 if mol:
                     outFile = outBasef + '.sdf'
-                    writeMol(mol, outFile)
+                    writeMol(mol, outFile, setName=setMolName)
                 else:
                     failedMols.append(outBase)
 

@@ -78,7 +78,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimun number of overlapping structural regions: ',
                       help="Min number of structural regions to be considered consensus StructROIs")
-        form.addParam('sameClust', params.BooleanParam, default=True,
+        form.addParam('sameClust', params.BooleanParam, default=False,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping structural ROIs from the same input set when calculating the '
                            'cluster size')
@@ -362,23 +362,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
             idsDic[i+1] = item.getObjId()
             item.setObjId(i+1)
         return inSet, idsDic
-
-    def createOutPDB(self, idsDic):
-        outStr = self.getTemplateOutPDB()
-        for pocket in self.consensusPockets:
-            outFile = pocket.getProteinFile()
-            newId, oldId = pocket.getObjId(), idsDic[pocket.getObjId()]
-            outStr += self.parseHETATM(outFile, oldId, newId)
-
-        outPDBFile = self._getExtraPath(self.getPDBName()) + '_out.pdb'
-        with open(outPDBFile, 'w') as f:
-            f.write(outStr)
-            f.write('\nTER\n')
-
-        pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
-        with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outPDBFile.split('/')[-1]))
-        return os.path.abspath(outPDBFile), os.path.abspath(pmlFile)
 
     def getTemplateOutPDB(self):
         templatePocket = None

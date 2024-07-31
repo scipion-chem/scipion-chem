@@ -46,9 +46,31 @@ import pwchem.protocols as chemprot
 
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
+
+    def getInputPointer(self, multiPointer, pointerStr):
+      for i, pointer in enumerate(multiPointer):
+        if str(i).strip() == pointerStr.split('//')[0]:
+          break
+      return pointer
+
+    def getInputSet(self, form, inputParam, inputStr=None):
+      inputPointer = getattr(form.protocol, inputParam)
+      if issubclass(inputPointer.__class__, pwobj.PointerList):
+        inputPointer = inputPointer[0] if not inputStr else self.getInputPointer(inputPointer, inputStr)
+      return inputPointer.get()
+
+    def getFirstItem(self, form, inputParam, inputStr=None):
+        inputSet = self.getInputSet(form, inputParam, inputStr)
+        if issubclass(inputSet.__class__, pwobj.Set):
+            item = inputSet.getFirstItem()
+        elif issubclass(inputSet.__class__, pwobj.Object):
+            item = inputSet
+        return item
+
     def getInputAttributes(self, form, inputParam):
       attrNames = ['_objId']
-      item = self.getFirstItem(form, inputParam[0])
+      inputStr = getattr(form.protocol, inputParam[1]).get() if len(inputParam) > 1 else None
+      item = self.getFirstItem(form, inputParam[0], inputStr)
       for key, attr in item.getAttributesToStore():
         attrNames.append(key)
       return attrNames
@@ -65,6 +87,21 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                       targets=['corrAttribute'],
                                       inputs=['inputMoleculesSets'],
                                       outputs=['corrAttribute'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
+                                      targets=['defineScore'],
+                                      inputs=['inputMoleculesSets', 'defineInput'],
+                                      outputs=['defineScore'])
+
+for label in ['1', '2', '1_ratio', '2_ratio']:
+  SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
+                                        targets=[f'inputID_{label}'],
+                                        inputs=[f'inputSet_{label}'],
+                                        outputs=[f'inputID_{label}'])
+
+  SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
+                                        targets=[f'inputScore_{label}'],
+                                        inputs=[f'inputSet_{label}'],
+                                        outputs=[f'inputScore_{label}'])
 
 
 class SelectMultiAttributeWizardChem(SelectAttributeWizard):
@@ -115,6 +152,10 @@ SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtChemOperateSe
                                       targets=['filterColumn'],
                                       inputs=['operation', 'inputSet', 'inputMultiSet'],
                                       outputs=['filterColumn'])
+SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtOperateSeqROI,
+                                      targets=['bestAttribute'],
+                                      inputs=['operation', 'inputROIsSets', 'inputMultiSet'],
+                                      outputs=['bestAttribute'])
 
 
 ########################## Sequence Attributes ####################################
@@ -160,3 +201,31 @@ CheckSequencesAttribute().addTarget(protocol=chemprot.ProtExtractSeqsROI,
                                     targets=['thres'],
                                     inputs=['thres', 'inputAttribute'],
                                     outputs=[])
+
+class SelectMoleculesSubGroup(VariableWizard):
+  """Select a molecules subgroup label """
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    molSet = getattr(protocol, inputParam[0]).get()
+    vType = protocol.getEnumText(inputParam[1])
+    vType = protocol.typeLabels[vType]
+
+    ligDic = molSet.getGroupIndexes()[vType]
+    outputLabels = list(ligDic.keys())
+
+    finalOutputLabels = []
+    for i in outputLabels:
+      finalOutputLabels.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalOutputLabels)
+    dlg = dialog.ListDialog(form.root, "Select molecule subgroup", provider,
+                            "Select one of the subgroups")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+
+SelectMoleculesSubGroup().addTarget(protocol=chemprot.ProtDefineContactStructROIs,
+                                    targets=['ligandSelection'],
+                                    inputs=['inputSmallMols', 'selectionType'],
+                                    outputs=['ligandSelection'])
