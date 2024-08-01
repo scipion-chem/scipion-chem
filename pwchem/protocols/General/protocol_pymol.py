@@ -26,6 +26,7 @@
 # *
 # **************************************************************************
 
+import inspect
 import os
 
 from pyworkflow import VERSION_3_0
@@ -40,6 +41,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import (MultiPointerParam,
                                         StringParam)
 from pyworkflow.utils.properties import Message
+from pyworkflow.utils import process
 
 from pwchem import Plugin
 from pwchem.constants import PYMOL_DIC
@@ -95,11 +97,16 @@ class ProtPymolOperate(EMProtocol):
 
         f.close()
 
-        self._log.info('Launching: ' + self._getPymol() + ' ' + args)
-
         # run in the background
         cwd = os.path.abspath(self._getExtraPath())
-        self.runJob(self._getPymol(), args, cwd=cwd)
+
+        if 'allowFault' in inspect.getfullargspec(process.runJob)[0]:
+            self._log.info('Launching: ' + self._getPymol() + ' ' + args + ' with allowFault')
+            self.runJob(self._getPymol(), args, cwd=cwd, allowFault=True)
+        else:
+            self._log.info('Launching: ' + self._getPymol() + ' ' + args)
+            # may have problems for WSL
+            self.runJob(self._getPymol(), args, cwd=cwd)
 
     def createOutput(self):
         """ Copy the PDB structure and register the output object.
