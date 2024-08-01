@@ -80,20 +80,18 @@ class ProtPymolOperate(EMProtocol):
         f = open(self._getTmpPath(pymolScriptFileName), "w")
         #f.write('from pymol import cmd\n')
 
-        pdbModelCounter = 1
         if hasattr(self, 'inputPdbFiles'):
             for pdb in self.inputPdbFiles:
-                pdbModelCounter += 1
                 f.write("load %s\n" % os.path.abspath(pdb.get(
                 ).getFileName()))
 
         # run the text:
-        _pymolScriptFileName = os.path.abspath(
+        pymolScriptFileName = os.path.abspath(
             self._getTmpPath(pymolScriptFileName))
         if len(self.extraCommands.get()) > 2:
             f.write(self.extraCommands.get())
         else:
-            args = " " + _pymolScriptFileName
+            args = " " + pymolScriptFileName
 
         f.close()
 
