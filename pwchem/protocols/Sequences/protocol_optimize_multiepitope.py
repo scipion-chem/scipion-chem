@@ -417,6 +417,8 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
 
   def defineOutputStep(self):
+    self.writeOutputCodes()
+
     sequenceSet = SetOfSequences().create(outputPath=self._getPath())
     for i, ind in enumerate(self.hof):
       seq = self.getMultiEpitopeSeqs([ind])[0]
@@ -812,6 +814,11 @@ class ProtOptimizeMultiEpitope(EMProtocol):
         evalDics[source] = mapFuncs[source](evalDic)
 
     return evalDics
+
+  def writeOutputCodes(self):
+    with open(self._getPath('outputMultiepitopeCodes.txt'), 'w') as f:
+      for mep in self.hof:
+        f.write(f'{mep.phenotype}\t: {mep.fitness.values[0]}\n')
 
   # --------------------------- PARAMETERS functions -----------------------------------
   def getParamValue(self, paramName):
