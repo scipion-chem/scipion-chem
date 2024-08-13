@@ -231,10 +231,17 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   def _defineParams(self, form):
     """ """
     form.addSection(label=Message.LABEL_INPUT)
-    group = form.addGroup('Input')
+    group = form.addGroup('Fixed input')
+    group.addParam('inputCompROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
+                   label="Input compulsory epitope sets: ", allowsNull=True,
+                   help='Select the Sets of sequence ROIs with compulsory epitopes that'
+                        ' will always be included in the multiepitope')
+
+    group = form.addGroup('Sampling input')
     group.addParam('inputROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
                    label="Input epitope sets: ",
-                   help='Select the Sets of sequence ROIs where to sample the epitopes')
+                   help='Select the Sets of sequence ROIs where to sample the epitopes thta will be variable '
+                        'in the multiepitopes')
 
     group = form.addGroup('Multiepitope definition')
     line = group.addLine('Number of epitopes: ',  help='Range of possible number of epitopes')
@@ -267,11 +274,6 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     group.addParam('normScores', params.BooleanParam, label='Normalize scores: ', default=True,
                    expertLevel=params.LEVEL_ADVANCED,
                    help='Normalize defined scores in range [0, 1]')
-
-    group = form.addGroup('Manual sampling')
-    group.addParam('inputCompROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
-                   label="Input compulsory epitope sets: ", allowsNull=True,
-                   help='Select the Sets of sequence ROIs with compulsory epitopes')
 
     form.addSection(label='Linkers')
     group = form.addGroup('Multiepitope linkers')
@@ -321,45 +323,49 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                    help='Choose a strategy for the linkers to be chosen. For more information: '
                         'https://deap.readthedocs.io/en/master/api/algo.html#complete-algorithms')
 
+    group.addParam('nReRun', params.IntParam, label='Number of runs: ', default=2,
+                   help='Run the GA search n times and store the best individuals coming from each of them')
     group.addParam('nGen', params.IntParam, label='Number of generations: ', default=10,
                    help='Number of generations for the GA')
-    group.addParam('nReRun', params.IntParam, label='Run search n times: ', default=1,
-                   expertLevel=params.LEVEL_ADVANCED,
-                   help='Run the GA search n times and store the best individuals coming from each of them')
-    
-    group.addParam('nPop', params.IntParam, label='Population size: ', default=20,
-                   help='Number of individuals selected each generation')
 
-    line = group.addLine('Groups size: ', condition='gaType!=0',
+    line = group.addLine('Population size: ',
                          help='Number of individuals for each population group.\n'
+                         'Parents: number of individuals selected each generation\n'
                          'Offspring: number of individuals generated from parents prior to selection\n'
                          'Migrants: number of individuals randomly generated prior to selection')
-    line.addParam('nOffs', params.IntParam, label='Offspring: ', default=20)
-    line.addParam('nMigr', params.IntParam, label='Migrants: ', default=10)
+    line.addParam('nPop', params.IntParam, label='Parents: ', default=20)
+    line.addParam('nOffs', params.IntParam, label='Offspring: ', default=20, condition='gaType!=0')
+    line.addParam('nMigr', params.IntParam, label='Migrants: ', default=10, condition='gaType!=0')
 
-    group = form.addGroup('Mutation')
+    group = form.addGroup('Mutation', expertLevel=params.LEVEL_ADVANCED,)
     group.addParam('mutProb', params.FloatParam, label='Mutate probability: ', default=0.4,
+                   expertLevel=params.LEVEL_ADVANCED,
                    help='Probability for a individual to be mutated for the next generation.')
-    line = group.addLine('Mutation probabilities: ', help='Probabilities for the different types of mutation')
+    line = group.addLine('Mutation probabilities: ', expertLevel=params.LEVEL_ADVANCED,
+                         help='Probabilities for the different types of mutation')
     line.addParam('mutEProb', params.FloatParam, label='Epitope replacement: ', default=0.33)
     line.addParam('mutSProb', params.FloatParam, label='Epitope cluster reorder: ', default=0.33)
     line.addParam('mutLProb', params.FloatParam, label='Linker replacement: ', default=0.33)
 
-    group = form.addGroup('Crossover')
+    group = form.addGroup('Crossover', expertLevel=params.LEVEL_ADVANCED,)
     group.addParam('crossType', params.EnumParam, label='Crossover type: ', default=0, choices=self._crossTypes,
+                   expertLevel=params.LEVEL_ADVANCED,
                    help='Choose a strategy for the crossover. For more information: '
                         'https://deap.readthedocs.io/en/master/api/tools.html#crossover')
     group.addParam('crossProb', params.FloatParam, label='Crossover probability: ', default=0.4,
+                   expertLevel=params.LEVEL_ADVANCED,
                    help='Probability for a pair of individuals to be crossed for the next generation.')
     group.addParam('crossIndProb', params.FloatParam, label='Epitope crossover probability: ', default=0.25,
-                   condition='crossType==2',
+                   condition='crossType==2', expertLevel=params.LEVEL_ADVANCED,
                    help='Probability for each epitope in the individual to be crossed independently')
 
-    group = form.addGroup('Selection')
+    group = form.addGroup('Selection', expertLevel=params.LEVEL_ADVANCED,)
     group.addParam('selType', params.EnumParam, label='Selection type: ', default=0, choices=self._selectionTypes,
+                   expertLevel=params.LEVEL_ADVANCED,
                    help='Choose a strategy for the selection. For more information: '
                         'https://deap.readthedocs.io/en/master/api/tools.html#selection')
     group.addParam('tournSize', params.IntParam, label='Tournament size: ', default=3, condition='selType==0',
+                   expertLevel=params.LEVEL_ADVANCED,
                    help='The number of individuals participating in each tournament')
 
 
