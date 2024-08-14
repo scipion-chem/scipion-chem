@@ -288,6 +288,60 @@ class SelectResidueWizardQT(SelectResidueWizard):
         inputObj = self.checkNoPDBQT(form, inputObj)
 
     return super().getResidues(form, inputObj, chainStr)
+  
+class SelectAtomWizardQT(SelectResidueWizardQT):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getAtoms(self, form, inputObj, chainStr, resStr):
+    protocol = form.protocol
+    try:
+      modelsLength, modelsFirstResidue = self.getModelsChainsStep(protocol, inputObj)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    chainJson, residueJson = json.loads(chainStr), json.loads(resStr)  # From wizard dictionary
+    chain, model = chainJson["chain"].upper().strip(), int(chainJson["model"])
+    residueIdx = residueJson['index']
+
+    atomList = self.editionListOfAtoms(modelsFirstResidue, model, chain, residueIdx)
+    finalAtomList = []
+    for i in atomList:
+      finalAtomList.append(String(i))
+
+  def editionListOfAtoms(self, modelsFirstResidue, model, chain, residueIdx):
+    atomList = []
+    for modelID, chainDic in modelsFirstResidue.items():
+      if int(model) == modelID:
+        for chainID, resDic in chainDic.items():
+          if chain == chainID:
+            for resID, atomDic in resDic.items():
+              # todo: make this work
+              if residueIdx == resID:
+                for atomID in atomDic:
+                  atomList.append(f'{"index": %d, "atom": "%s"}' % (atomID[0], str(atomID[1])))
+    return atomList
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    inputObj = getattr(protocol, inputParams[0]).get()
+    chainStr = getattr(protocol, inputParams[1]).get()
+    residueStr = getattr(protocol, inputParams[2]).get()
+
+    finalAtomsList = self.getAtoms(form, inputObj, chainStr, residueStr)
+
+    provider = ListTreeProviderString(finalAtomsList)
+    dlg = dialog.ListDialog(form.root, "Residue atoms", provider,
+                            "Select one atom (atom number, "
+                            "atom name)")
+
+    # todo: select several atoms, not in sequence like residues
+    print('Values: ', [val.get() for val in dlg.values])
+    idx = json.loads(dlg.values[0].get())['index']
+
+    intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, idx)
+    form.setVar(outputParam[0], intervalStr)
 
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
