@@ -49,7 +49,7 @@ from pwchem.objects import SetOfSequenceROIs, Sequence, SequenceChem
 from pwchem.constants import BIOCONDA_DIC
 
 SHANNON, SIMPSON, KABAT, PROP = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient', \
-                                'Maximum Proportion Variability'
+                                'Maximum Proportion Conservation'
 
 def simpson(counts):
   sumi = 0
