@@ -92,7 +92,7 @@ class ProtSeqCalculateConservation(EMProtocol):
         group.addParam('outSeq', params.StringParam, default='', condition='mapCons==0 and not useCons',
                        label='Output sequence: ',
                        help='Input sequence to use for the output sequence ROIs')
-        
+
         group.addParam('inputAS', params.PointerParam, pointerClass='AtomStruct', condition='mapCons==1',
                        allowsNull=True, label="Input protein structure: ",
                        help='Input protein structure. If included, the conservation values will be drawed over'
@@ -170,7 +170,7 @@ class ProtSeqCalculateConservation(EMProtocol):
             newROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
             for roi in self.inputROIs.get():
                 idx0, idx1 = roi.getROIIdxs()
-                consVal = self.getMeanConservation(consDic, alignDic[idx0], alignDic[idx1])
+                consVal = self.getMeanConservation(consDic, alignDic[idx0], alignDic[idx1-1])
                 setattr(roi, self.getEnumText('method'), params.Float(consVal))
                 newROIs.append(roi)
 
@@ -230,9 +230,9 @@ class ProtSeqCalculateConservation(EMProtocol):
             for i in range(2):
                 fIn.readline()
             for line in fIn:
-                oriPos, alignPos = int(line.split(',')[1].strip()), int(line.split(',')[2].strip())
+                oriPos, alignPos = line.split(',')[1].strip(), line.split(',')[2].strip()
                 if alignPos != '-':
-                    alignDic[oriPos] = alignPos
+                    alignDic[int(oriPos)] = int(alignPos)
         return alignDic
 
     def mapStructConservation(self):
