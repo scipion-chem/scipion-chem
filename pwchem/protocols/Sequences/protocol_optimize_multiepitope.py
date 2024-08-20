@@ -265,7 +265,19 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                    help='The number of best scored individuals that will be saved outside of the population')
 
     form.addSection(label='Epitope sampling')
-    group = form.addGroup('Epitope sampling scores')
+    group = form.addGroup('Default epitope sampling scores')
+    group.addParam('inScoreDef', params.StringParam, label='Select a default score: ', default='',
+                   help='Choose a score to define the epitope sampling probability')
+    group.addParam('scoreWeightDef', params.FloatParam, label='Default score weight: ', default=1,
+                   help='Define a default weight for the score. The bigger the absolute value of the weight, the more '
+                        'important it will be. If negative, the filter will look for smaller values.')
+    group.addParam('addScoreDef', params.LabelParam, label='Add default score: ',
+                   help='Add defined default score')
+
+    group.addParam('scoreSummaryDef', params.TextParam, width=100, label='Default score summary:', default='',
+                   help='Summary of the epitope sampling scores')
+
+    group = form.addGroup('Specific epitope sampling scores')
     group.addParam('inSet', params.StringParam, label='Select a input set: ', default='',
                    help='Choose a score to define the epitope sampling probability')
     group.addParam('inScore', params.StringParam, label='Select a score: ', default='',
@@ -571,14 +583,26 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     '''Return a dictionary of the form {roiSetIdx: {ROIId: SamplingScore}} for all the input ROIs working as epitopes
     with the defined sampling scores'''
     sDic = self.parseSamplingScores()
-    sampDic = {protName: {} for protName in sDic}
+    defScores = self.parseDefSamplingScores()
+
     inputROIsMapper = self.getROIsPerProt(self.inputROISets)
-    for protName in sDic:
+    sampDic = {protName: {} for protName in inputROIsMapper}
+    for protName in inputROIsMapper:
+      spScores = []
       for i, roi in enumerate(inputROIsMapper[protName]):
         roiScore = 0
-        for scoreKey, scoreW in sDic[protName].items():
-          if hasattr(roi, scoreKey):
+        # Adding specific sampling scores
+        if protName in sDic:
+          for scoreKey, scoreW in sDic[protName].items():
+            if hasattr(roi, scoreKey):
+              roiScore += scoreW * getattr(roi, scoreKey).get()
+              spScores.append(scoreKey)
+
+        # Adding default sampling scores (excluding specific score attributes used)
+        for scoreKey, scoreW in defScores.items():
+          if hasattr(roi, scoreKey) and scoreKey not in spScores:
             roiScore += scoreW * getattr(roi, scoreKey).get()
+
         sampDic[protName][i] = roiScore
     return sampDic
 
@@ -600,8 +624,16 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
   # --------------------------- WIZARD functions -----------------------------------
   def buildScoreSumLine(self):
-    sLine = f'{{"Set": "{self.inSet.get().split("//")[0]}", "Score": "{self.inScore.get()}", ' \
-            f'"Weight": {self.scoreWeight.get()}}}'
+    sLine = None
+    if self.inSet.get() and self.inScoreDef.get().strip() and str(self.scoreWeightDef.get()).strip():
+      sLine = f'{{"Set": "{self.inSet.get().split("//")[0]}", "Score": "{self.inScore.get()}", ' \
+              f'"Weight": {self.scoreWeight.get()}}}'
+    return sLine
+
+  def buildScoreSumLineDef(self):
+    sLine = None
+    if self.inScoreDef.get().strip() and str(self.scoreWeightDef.get()).strip():
+      sLine = f'{{"Score": "{self.inScoreDef.get()}", "Weight": {self.scoreWeightDef.get()}}}'
     return sLine
 
   def buildManualSumLine(self):
@@ -627,6 +659,17 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     for parName in evalParams:
       sLine += f', "{parName}": "{self.getParamValue(parName)}"'
     return sLine + '}'
+
+  def getAllInputScores(self):
+    scoresAttrs = []
+    for inPoint in self.inputROISets:
+      inSet = inPoint.get()
+      item = inSet.getFirstItem()
+      for key, attr in item.getAttributesToStore():
+        scoresAttrs.append(key)
+    scoresAttrs = list(set(scoresAttrs))
+    scoresAttrs.sort()
+    return scoresAttrs
 
   # --------------------------- EVALUATION functions -----------------------------------
   def multiEpitopeEval(self, individuals):
@@ -893,6 +936,15 @@ class ProtOptimizeMultiEpitope(EMProtocol):
           weights[pName] = {}
         weights[pName].update({sDic['Score']: sDic['Weight']})
     return weights
+
+  def parseDefSamplingScores(self):
+    '''Return {scoreName: weight}'''
+    defScores = {}
+    for sline in self.scoreSummaryDef.get().split('\n'):
+      if sline.strip():
+        sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
+        defScores.update({sDic['Score']: sDic['Weight']})
+    return defScores
 
   def parseLinkerSummary(self):
     '''Return a dictionary {setId: [linkers]}'''

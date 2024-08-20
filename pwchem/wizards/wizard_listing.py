@@ -136,6 +136,10 @@ AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                       targets=['addScore'],
                                       inputs=['buildScoreSumLine'],
                                       outputs=['scoreSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addScoreDef'],
+                                      inputs=['buildScoreSumLineDef'],
+                                      outputs=['scoreSummaryDef'])
 
 AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                       targets=['addLinker'],

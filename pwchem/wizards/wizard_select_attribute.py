@@ -97,6 +97,29 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope
                                       inputs=['inputROISets', 'inSet'],
                                       outputs=['inScore'])
 
+class SelectMultiPointerAttributeWizard(VariableWizard):
+  # todo: generalize in  SelectAttributeWizardChem
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+
+    attrsList = protocol.getAllInputScores()
+    finalAttrsList = []
+    for i in attrsList:
+      finalAttrsList.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalAttrsList)
+    dlg = dialog.ListDialog(form.root, "Attribute selection", provider,
+                            "Select one of the attributes")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectMultiPointerAttributeWizard().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
+                                              targets=['inScoreDef'],
+                                              inputs=['inputROISets'],
+                                              outputs=['inScoreDef'])
+
+
 for label in ['1', '2', '1_ratio', '2_ratio']:
   SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
                                         targets=[f'inputID_{label}'],
