@@ -71,10 +71,10 @@ def buildGrammarFile(gFile, protDic, linkDic, compDic):
     prod3 = ' | '.join(linkNames)
     f.write(f'<linkRoot> ::= {prod3}\n\n')
 
-    # <p1Init> ::= <p1EpComp> | <p1EpComp> <p1Link> <p1> | <p1> <p1Link> <p1EpComp>
+    # <p1Init> ::= <p1C> | <p1C> <p1Link> <p1> | <p1> <p1Link> <p1C>
     for protName, nComp in compDic.items():
       if nComp > 0:
-        prod4 = f'<{protName}Comp> | <{protName}Comp> <{protName}Link> <{protName}> | <{protName}> <{protName}Link> <{protName}Comp>'
+        prod4 = f'<{protName}C> | <{protName}C> <{protName}Link> <{protName}> | <{protName}> <{protName}Link> <{protName}C>'
       else:
         prod4 = f'<{protName}>'
       f.write(f'<{protName}Init> ::= {prod4}\n')
@@ -86,23 +86,29 @@ def buildGrammarFile(gFile, protDic, linkDic, compDic):
       f.write(f'<{protName}> ::= {prod4}\n')
     f.write('\n')
 
-    # <p1EpComp> ::= p1C[0] <p1Link> p1C[1]
+    # <p1C> ::= <p1EpComp> | <p1EpComp> <p1Link> <p1C>
+    for protName in protDic:
+      prod4 = f'<{protName}EpComp> | <{protName}EpComp> <{protName}Link> <{protName}C>'
+      f.write(f'<{protName}C> ::= {prod4}\n')
+    f.write('\n')
+
+    # <p1EpComp> ::= p1C[0] | p1C[1]
     for protName, nComp in compDic.items():
       if nComp > 0:
-        prod5 = f' <{protName}Link> '.join([f'{protName}C[{i}]' for i in range(nComp)])
-        f.write(f'<{protName}Comp> ::= {prod5}\n')
+        prod5 = '|'.join([f'{protName}C[{i}]' for i in range(nComp)])
+        f.write(f'<{protName}EpComp> ::= {prod5}\n')
     f.write('\n')
 
     # <p1Ep> ::= p1[0]|p1[1]|p1[2]|p1[3]|p1[4]
     for protName, nProts in protDic.items():
-      prod5 = '|'.join([f'{protName}[{i}]' for i in range(nProts)])
-      f.write(f'<{protName}Ep> ::= {prod5}\n')
+      prod6 = '|'.join([f'{protName}[{i}]' for i in range(nProts)])
+      f.write(f'<{protName}Ep> ::= {prod6}\n')
     f.write('\n')
 
     # <p1Link> ::= p1L[0]|p1L[1]|p1L[2]
     for protName, nLinks in linkDic.items():
-      prod6 = '|'.join([f'{protName}L[{i}]' for i in range(nLinks)])
-      f.write(f'<{protName}Link> ::= {prod6}\n')
+      prod7 = '|'.join([f'{protName}L[{i}]' for i in range(nLinks)])
+      f.write(f'<{protName}Link> ::= {prod7}\n')
 
 
 def countEpitopes(ind, protNames):
@@ -236,11 +242,13 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                    label="Input compulsory epitope sets: ", allowsNull=True,
                    help='Select the Sets of sequence ROIs with compulsory epitopes that'
                         ' will always be included in the multiepitope')
+    group.addParam('cProb', params.FloatParam, label='Compulsory probability: ', default=0.9,
+                   help='Probability of compulsory epitopes to appear in the created individuals.')
 
     group = form.addGroup('Sampling input')
     group.addParam('inputROISets', params.MultiPointerParam, pointerClass='SetOfSequenceROIs',
                    label="Input epitope sets: ",
-                   help='Select the Sets of sequence ROIs where to sample the epitopes thta will be variable '
+                   help='Select the Sets of sequence ROIs where to sample the epitopes that will be variable '
                         'in the multiepitopes')
 
     group = form.addGroup('Multiepitope definition')
@@ -399,13 +407,13 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     # Generate grammar
     grammarFile = os.path.abspath(self._getPath('grammar.txt'))
     buildGrammarFile(grammarFile, nEpiDic, nLinkDic, nCompDic)
-    nonRepNTs = ['<prot>'] + [f'<{pName}Ep>' for pName in nEpiDic]
-    bnfGrammar = RepGrammar(grammarFile, nonRepNTs, self.convertWDic(wDic))
+    noRepNTs = ['<prot>'] + [f'<{pName}Ep>' for pName in nEpiDic] + [f'<{pName}EpComp>' for pName in nEpiDic]
+    bnfGrammar = RepGrammar(grammarFile, noRepNTs, self.convertWDic(wDic))
 
     # Define arguments
     deapToolbox = self.defineDeapToolbox(bnfGrammar)
     self.hof = tools.HallOfFame(self.hallSize.get(), checkSameInd)
-    kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen, 'minEps': self.minEp.get(), 'maxEps': self.maxEp.get(),
+    kwargs = {'cxpb': crossProb, 'mutpb': mutProb, 'ngen': nGen, 'minEps': self.minEp.get(), 'maxEps': self.maxEp.get(), 'cProb': self.cProb.get(),
               'mutEpb': self.mutEProb.get(), 'mutSpb': self.mutSProb.get(), 'mutLpb': self.mutLProb.get(),
               'halloffame': self.hof, 'verbose': True}
     if self.gaType.get() != SIMP:
@@ -414,7 +422,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     
     for i in range(self.nReRun.get()):
       population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
-                                                 minEps=self.minEp.get(), maxEps=self.maxEp.get(),
+                                                 minEps=self.minEp.get(), maxEps=self.maxEp.get(), cProb=self.cProb.get(),
                                                  min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
                                                  codon_size=255, codon_consumption='weighted',
                                                  genome_representation='list')
