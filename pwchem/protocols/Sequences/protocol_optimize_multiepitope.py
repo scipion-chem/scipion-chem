@@ -409,7 +409,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     compDic = self.getCompEpitopesPerProt()
     nEpiDic, nLinkDic, nCompDic = self.makeCountDic(epiDic), self.makeCountDic(linkDic), self.makeCountDic(compDic)
     wDic = self.getEpitopeScores()
-    self.seqsMapper = self.getROIsMapper(epiDic, linkDic, compDic)
+    self.createROIsMapper(epiDic, linkDic, compDic)
 
     # Parameters
     nPop, nGen = self.nPop.get(), self.nGen.get()
@@ -441,15 +441,18 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
       gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
 
+    self.saveHOF()
+
 
   def defineOutputStep(self):
     self.writeOutputCodes()
+    hof = self.parseHOF()
 
     sequenceSet = SetOfSequences().create(outputPath=self._getPath())
-    for i, ind in enumerate(self.hof):
-      seq = self.getMultiEpitopeSeqs([ind])[0]
+    for i, phenotype in enumerate(hof):
+      seq = self.getMultiEpitopeSeqs([phenotype], phen=True)[0]
       seqObj = Sequence(sequence=seq, name=f'MultiEpitope_{i}', id=f'MultiEpitope_{i}')
-      seqObj._multiepitopeScore = params.Float(ind.fitness.values[0])
+      seqObj._multiepitopeScore = params.Float(hof[phenotype])
       sequenceSet.append(seqObj)
 
     self._defineOutputs(outputMultiepitopes=sequenceSet)
@@ -499,14 +502,16 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     roiIdx = int(code.split('[')[1].split(']')[0])
     return pName, roiIdx
 
-  def getMultiEpitopeSeqs(self, individuals):
+  def getMultiEpitopeSeqs(self, individuals, phen=False):
     '''Returns the set of multiepitope sequences codified into a set of DEAP individuals'''
     seqs = {}
+    seqMapper = self.loadROIsMapper()
     for i, ind in enumerate(individuals):
       curSeqs = []
-      for roiCode in ind.phenotype.split():
+      phenotype = ind.phenotype if not phen else ind
+      for roiCode in phenotype.split():
         pName, roiIdx = self.idxsFromCode(roiCode)
-        curSeqs += [self.seqsMapper[pName][roiIdx]]
+        curSeqs += [seqMapper[pName][roiIdx]]
       seqs[i] = ''.join(curSeqs)
 
     return seqs
@@ -616,11 +621,33 @@ class ProtOptimizeMultiEpitope(EMProtocol):
   def makeCountDic(self, d):
     return {key: len(d[key]) for key in d}
 
-  def getROIsMapper(self, epsD, linkD, compD):
+  def getROIsMapperPath(self):
+    return self._getExtraPath('codeMapper.json')
+
+  def createROIsMapper(self, epsD, linkD, compD):
     mapper = epsD
     mapper.update({f'{pName}L': linkD[pName] for pName in linkD})
     mapper.update({f'{pName}C': compD[pName] for pName in compD})
+
+    with open(self.getROIsMapperPath(), "w") as outfile:
+      json.dump(mapper, outfile)
     return mapper
+
+  def getHOFPath(self):
+    return self._getPath('outputMultiepitopeCodes.txt')
+
+  def saveHOF(self):
+    with open(self.getHOFPath(), 'w') as f:
+      for mep in self.hof:
+        f.write(f'{mep.phenotype}\t: {mep.fitness.values[0]}\n')
+
+  def parseHOF(self):
+    hof = {}
+    with open(self.getHOFPath()) as f:
+      for line in f:
+        sline = line.split(':')
+        hof[sline[0].strip()] = float(sline[1].strip())
+    return hof
 
   # --------------------------- WIZARD functions -----------------------------------
   def buildScoreSumLine(self):
@@ -871,11 +898,19 @@ class ProtOptimizeMultiEpitope(EMProtocol):
         evalDics[source] = mapFuncs[source](evalDic)
 
     return evalDics
-
+  
+  def loadROIsMapper(self):
+    with open(self.getROIsMapperPath()) as fIn:
+      seqMapper = json.loads(fIn.read())
+    return seqMapper
+  
   def writeOutputCodes(self):
-    with open(self._getPath('outputMultiepitopeCodes.txt'), 'w') as f:
-      for mep in self.hof:
-        f.write(f'{mep.phenotype}\t: {mep.fitness.values[0]}\n')
+    seqMapper = self.loadROIsMapper()
+    with open(self._getPath('codes2Seq.txt'), 'w') as f:
+      for pName in seqMapper:
+        for roiIdx, seq in enumerate(seqMapper[pName]):
+          f.write(f'{pName}[{roiIdx}]\t{seq}\n')
+        f.write('\n')
 
   # --------------------------- PARAMETERS functions -----------------------------------
   def getParamValue(self, paramName):
