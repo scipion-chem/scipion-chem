@@ -1,60 +1,53 @@
-# Name of the GitHub Action
-name: Build plugin on Pull Request
+name: Build plugin
 
-# Specify when the Action should be triggered: when a pull request is opened against the 'devel' or 'master' branch
 on:
   pull_request:
     branches: [devel, master]
 
-# Define the job that should be run
 jobs:
   build:
-    # Specify the machine to run the job on
     runs-on: ubuntu-latest
 
-    # Define the steps to be taken in the job
     steps:
-    # Freeing up space
     - name: Free Disk Space (Ubuntu only)
       uses: jlumbroso/free-disk-space@main
         
-    # Installing scipion and miniconda dependencies
+    - name: Set up MPI
+      uses: mpi4py/setup-mpi@master
+      with:
+        mpi: 'openmpi'
+      
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget gcc g++ libopenmpi-dev make
+        sudo apt-get install -y wget gcc g++ make
     
-    # Installing Miniconda
     - name: Install Miniconda
-      working-directory: ${{ github.workspace }}/../
-      run: |
-        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-        bash Miniconda3-latest-Linux-x86_64.sh -b -p miniconda/
-        source miniconda/etc/profile.d/conda.sh
-        conda update -n base -c defaults conda -y
+      uses: conda-incubator/setup-miniconda@main
+      with:
+        miniconda-version: "latest"
+        auto-update-conda: true
+        auto-activate-base: true
+        activate-environment: scipion3
+        python-version: "3.8"
     
-    # Installing Scipion
     - name: Install Scipion
       working-directory: ${{ github.workspace }}/../
       run: |
-        eval "$(miniconda/bin/conda shell.bash hook)"
         pip3 install --user scipion-installer
         python3 -m scipioninstaller -conda -noXmipp -noAsk scipion
     
-    # Check out the repository in the pull request
     - name: Checkout repository
       uses: actions/checkout@main
       with:
         ref: ${{ github.head_ref }}
 
-    # Install plugin from the pull request using the Scipion3 installp command
     - name: Install plugin from pull request
       working-directory: ${{ github.workspace }}
       run: ../scipion/scipion3 installp -p . --devel
     
-    # Run all tests
     - name: Run tests
       working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
-        eval "$(${{ github.workspace }}/../miniconda/bin/conda shell.bash hook)"
-        python runTests.py ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} -noGPU -testData=testData.json
+        pip install scipion-testrunner
+        scipion-testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
