@@ -50,4 +50,4 @@ jobs:
       working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
         pip install scipion-testrunner
-        scipion-testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
+        scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
