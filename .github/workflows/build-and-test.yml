@@ -34,7 +34,7 @@ jobs:
     - name: Install Scipion
       working-directory: ${{ github.workspace }}/../
       run: |
-        pip3 install --user scipion-installer
+        pip install --user scipion-installer
         python3 -m scipioninstaller -conda -noXmipp -noAsk scipion
     
     - name: Checkout repository
@@ -49,5 +49,5 @@ jobs:
     - name: Run tests
       working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
-        pip install scipion-testrunner
+        pip install --user scipion-testrunner
         scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
