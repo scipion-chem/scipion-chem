@@ -9,45 +9,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Free Disk Space (Ubuntu only)
-      uses: jlumbroso/free-disk-space@main
-        
-    - name: Set up MPI
-      uses: mpi4py/setup-mpi@master
-      with:
-        mpi: 'openmpi'
+      - name: Setup enviroment
+        uses: scipion-chem/.github/.github/composites/install-scipion@main
       
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y wget gcc g++ make
-    
-    - name: Install Miniconda
-      uses: conda-incubator/setup-miniconda@main
-      with:
-        miniconda-version: "latest"
-        auto-update-conda: true
-        auto-activate-base: true
-        activate-environment: scipion3
-        python-version: "3.8"
-    
-    - name: Install Scipion
-      working-directory: ${{ github.workspace }}/../
-      run: |
-        pip install --user scipion-installer
-        python3 -m scipioninstaller -conda -noAsk scipion
-    
-    - name: Checkout repository
-      uses: actions/checkout@main
-      with:
-        ref: ${{ github.head_ref }}
-
-    - name: Install plugin from pull request
-      working-directory: ${{ github.workspace }}
-      run: ../scipion/scipion3 installp -p . --devel
-    
-    - name: Run tests
-      working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
-      run: |
-        pip install --user scipion-testrunner
-        scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
+      - name: Checkout repository
+        uses: actions/checkout@main
+        with:
+          ref: ${{ github.head_ref }}
+  
+      - name: Install plugin from pull request
+        working-directory: ${{ github.workspace }}
+        run: ../scipion/scipion3 installp -p . --devel
+      
+      - name: Run tests
+        working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
+        run: |
+          pip install --user scipion-testrunner
+          scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
