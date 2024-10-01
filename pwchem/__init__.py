@@ -58,6 +58,7 @@ class Plugin(pwem.Plugin):
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
+		cls.addDEAPPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
@@ -207,12 +208,24 @@ class Plugin(pwem.Plugin):
 		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
+	@classmethod
+	def addDEAPPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
+															packageVersion=DEAP_DIC['version'])
+
+		scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
+		installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate scipion3 && conda install conda-forge::deap -y')\
+			.addCommand('git clone https://github.com/bdsul/grape.git') \
+			.addCommand(f'mv grape {scipionEnvPath}') \
+			.addPackage(env, dependencies=['conda', 'git'], default=default)
+
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None):
+	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None, pyStr='python'):
 		""" Run a script from a given protocol using a specific environment """
-		scriptName = cls.getScriptsDir(scriptName) if not scriptDir else os.path.join(scriptDir, scriptName)
-		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
+		scriptName = cls.getScriptsDir(scriptName) if scriptDir == None else os.path.join(scriptDir, scriptName)
+		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), pyStr, scriptName)
 
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)

@@ -94,7 +94,7 @@ class ProtDefineSeqROI(EMProtocol):
                             "You can do multiple selection. Each mutation will be a different ROI")
 
         # Common for ROIs independent of the origin
-        group.addParam('descrip', params.StringParam,
+        group.addParam('descrip', params.StringParam, default='',
                        label='ROI description: ', condition='whichToAdd in [0]',
                        help='Specify some description for this region of interest')
 
@@ -137,7 +137,7 @@ class ProtDefineSeqROI(EMProtocol):
                 resDic = json.loads(roiInfo)
                 roiList, resIdxs = [resDic['residues']], resDic['index']
                 idxsList = [[int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]]
-                descList = [resDic['desc']]
+                descList = [resDic['desc']] if 'desc' in resDic else ['']
 
             elif '{}:'.format(self._originOptions[1]) in rStr:
                 setIdx = json.loads(':'.join(rStr.split(':')[1:]))['PointerIdx']
@@ -224,6 +224,49 @@ class ProtDefineSeqROI(EMProtocol):
             for i in range(len(roiStrList)):
                 roiList.append(roiStrList[i]), idxsList.append(roiIdxsList[i]), descList.append(subseqName)
         return roiList, idxsList, descList
+
+
+    # ADD WIZARD UTILS
+    def getOriginLabel(self):
+      if self.whichToAdd.get() == 0:
+        inputLabel, sumLabel = 'resPosition', 'Residues'
+      elif self.whichToAdd.get() == 2:
+        inputLabel, sumLabel = 'selectVariant', 'Variant'
+      elif self.whichToAdd.get() == 3:
+        inputLabel, sumLabel = 'selectMutation', 'Mutations'
+      elif self.whichToAdd.get() == 1:
+        inputLabel, sumLabel = 'inputSubsequences', 'SubSequences'
+      return inputLabel, sumLabel
+
+    def getPrevPointersIds(self):
+      ids = []
+      for p in self.inputPointers:
+        ids.append(p.get().getObjId())
+      return ids
+
+    def buildSumLine(self, type=None):
+      inputLabel, sumLabel = self.getOriginLabel()
+
+      if sumLabel == 'SubSequences':
+        prevIds = self.getPrevPointersIds()
+        newSet = self.inputSubsequences.get()
+        newId = newSet.getObjId()
+
+        prevPointers = self.inputPointers
+        if newId not in prevIds:
+          newIndex = len(prevPointers)
+          prevPointers.append(Pointer(newSet))
+        else:
+          newIndex = prevIds.index(newId)
+        setattr(self, 'inputPointers', prevPointers)
+
+      roiInfo = getattr(self, inputLabel).get()
+      if sumLabel == 'SubSequences':
+        roiInfo = '{"PointerIdx": "%s", "Name": "%s"}' % (newIndex, roiInfo.__str__())
+      elif self.descrip.get().strip():
+        roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (self.descrip.get().strip()))
+      return f'{sumLabel}: {roiInfo}'
+
 
 
 

@@ -100,4 +100,18 @@ class ProtChemGenerateVariants(EMProtocol):
         errors=[]
         return errors
 
+    # ADD WIZARD UTILS
+    def getOriginLabel(self):
+      if self.fromVariant.get() == 0:
+        inputLabel, sumLabel = 'selectVariant', 'Variant'
+      elif self.fromVariant.get() == 1:
+        inputLabel, sumLabel = 'selectMutation', 'Mutations'
+      return inputLabel, sumLabel
+
+    def buildSumLine(self, type=None):
+      inputLabel, sumLabel = self.getOriginLabel()
+      roiInfo = getattr(self, inputLabel).get()
+      return f'{sumLabel}: {roiInfo}'
+
+
 

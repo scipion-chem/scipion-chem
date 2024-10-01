@@ -44,6 +44,29 @@ from pwchem.wizards import VariableWizard
 import pwchem.protocols as chemprot
 
 
+class SelectFromListWizard(VariableWizard):
+    '''This wizard let the user select from a list that comes from a function i the target protocol,
+    which is set in the input param'''
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        protocol = form.protocol
+        inputParam, outputParam = self.getInputOutput(form)
+
+        attrsList = getattr(protocol, inputParam[0])()
+        finalAttrsList = []
+        for i in attrsList:
+          finalAttrsList.append(pwobj.String(i))
+        provider = ListTreeProviderString(finalAttrsList)
+        dlg = dialog.ListDialog(form.root, "Attribute selection", provider,
+                                "Select one of the attributes")
+        form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectFromListWizard().addTarget(protocol=chemprot.ProtMapAttributeToSeqROIs,
+                                 targets=['attrName'],
+                                 inputs=['getInputAttributes'],
+                                 outputs=['attrName'])
+
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
@@ -87,10 +110,38 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolScoreDocking,
                                       targets=['corrAttribute'],
                                       inputs=['inputMoleculesSets'],
                                       outputs=['corrAttribute'])
+
 SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       targets=['defineScore'],
                                       inputs=['inputMoleculesSets', 'defineInput'],
                                       outputs=['defineScore'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
+                                      targets=['inScore'],
+                                      inputs=['inputROISets', 'inSet'],
+                                      outputs=['inScore'])
+
+class SelectMultiPointerAttributeWizard(VariableWizard):
+  # todo: generalize in  SelectAttributeWizardChem
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    protocol = form.protocol
+    inputParam, outputParam = self.getInputOutput(form)
+
+    attrsList = protocol.getAllInputScores()
+    finalAttrsList = []
+    for i in attrsList:
+      finalAttrsList.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalAttrsList)
+    dlg = dialog.ListDialog(form.root, "Attribute selection", provider,
+                            "Select one of the attributes")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectMultiPointerAttributeWizard().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
+                                              targets=['inScoreDef'],
+                                              inputs=['inputROISets'],
+                                              outputs=['inScoreDef'])
+
 
 for label in ['1', '2', '1_ratio', '2_ratio']:
   SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
@@ -229,3 +280,51 @@ SelectMoleculesSubGroup().addTarget(protocol=chemprot.ProtDefineContactStructROI
                                     targets=['ligandSelection'],
                                     inputs=['inputSmallMols', 'selectionType'],
                                     outputs=['ligandSelection'])
+
+class SelectEvaluationOrigin(VariableWizard):
+  """Select a molecules subgroup label """
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def importDDGProtocols(self):
+    iedbProts = []
+    try:
+      from ddg.protocols import ProtDDGEvaluations
+      iedbProts = ['DDG']
+    except:
+      print('No DDG protocols detected')
+    return iedbProts
+
+  def importIIITDProtocols(self):
+    iedbProts = []
+    try:
+      from immuno.protocols import ProtIIITDEvaluations
+      iedbProts = ['IIITD']
+    except:
+      print('No IIITD protocols detected')
+    return iedbProts
+
+  def importIEDBProtocols(self):
+    iedbProts = []
+    try:
+      from iedb.protocols import ProtMHCPopulationCoverage
+      iedbProts = ['IEDB']
+    except:
+      print('No IEDB protocols detected')
+    return iedbProts
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+
+    evalProts = []
+    evalProts += self.importIEDBProtocols()
+    evalProts += self.importIIITDProtocols()
+    evalProts += self.importDDGProtocols()
+
+    finalOutputLabels = []
+    for i in evalProts:
+      finalOutputLabels.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalOutputLabels)
+    dlg = dialog.ListDialog(form.root, "Select evaluation origin", provider,
+                            "Select one of the protocols")
+    form.setVar(outputParam[0], dlg.values[0].get())
+

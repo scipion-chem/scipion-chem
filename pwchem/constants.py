@@ -39,6 +39,7 @@ VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD
 RDKIT_DIC =     {'name': 'rdkit',       'version': DEFAULT_VERSION, 'home': 'RDKIT_HOME'}
 BIOCONDA_DIC =  {'name': 'bioconda',    'version': DEFAULT_VERSION}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
+DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
