@@ -44,6 +44,29 @@ from pwchem.wizards import VariableWizard
 import pwchem.protocols as chemprot
 
 
+class SelectFromListWizard(VariableWizard):
+    '''This wizard let the user select from a list that comes from a function i the target protocol,
+    which is set in the input param'''
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        protocol = form.protocol
+        inputParam, outputParam = self.getInputOutput(form)
+
+        attrsList = getattr(protocol, inputParam[0])()
+        finalAttrsList = []
+        for i in attrsList:
+          finalAttrsList.append(pwobj.String(i))
+        provider = ListTreeProviderString(finalAttrsList)
+        dlg = dialog.ListDialog(form.root, "Attribute selection", provider,
+                                "Select one of the attributes")
+        form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectFromListWizard().addTarget(protocol=chemprot.ProtMapAttributeToSeqROIs,
+                                 targets=['attrName'],
+                                 inputs=['getInputAttributes'],
+                                 outputs=['attrName'])
+
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
 

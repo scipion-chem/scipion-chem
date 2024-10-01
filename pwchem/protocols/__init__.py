@@ -70,6 +70,7 @@ from pwchem.protocols.Sequences.protocol_calculate_conservation import ProtSeqCa
 from pwchem.protocols.Sequences.protocol_extract_attribute_ROIs import ProtExtractSeqsROI
 from pwchem.protocols.Sequences.protocol_operate_sequence_rois import ProtOperateSeqROI
 from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
+from pwchem.protocols.Sequences.protocol_map_attribute_to_sequence_ROIs import ProtMapAttributeToSeqROIs
 
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment

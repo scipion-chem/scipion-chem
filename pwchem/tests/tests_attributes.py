@@ -24,12 +24,14 @@
 # Scipion em imports
 from pyworkflow.tests import BaseTest, DataSet
 import pyworkflow.tests as tests
-from pwem.protocols import ProtImportPdb
+from pwem.protocols import ProtImportPdb, ProtImportSequence
 
 # Scipion chem imports
 from pwchem.protocols import *
 from pwchem.tests import TestImportBase
 from pwchem.utils import assertHandle
+
+from pwchem.tests.tests_sequences import defSeqROIsSeq
 
 solStr = '''1, 0.05
 2, 0.24
@@ -102,3 +104,59 @@ class TestCalculateSASA(BaseTest):
     self._waitOutput(protSASA, 'outputAtomStruct', timeOut=10)
     assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputAtomStruct', None), cwd=protSASA.getWorkingDir())
     assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputSequence', None), cwd=protSASA.getWorkingDir())
+
+class TestMapAttributes(TestCalculateSASA):
+  @classmethod
+  def _runImportSequence(cls):
+    args = {
+      'inputSequenceName': 'User_seq',
+      'inputProteinSequence': ProtImportSequence.IMPORT_FROM_FILES,
+      'fileSequence': cls.ds.getFile('Sequences/1aoi_A_mutated.fasta')
+    }
+    cls.protImportSeq = cls.newProtocol(ProtImportSequence, **args)
+    cls.launchProtocol(cls.protImportSeq)
+
+  @classmethod
+  def _runDefSeqROIs(cls, inProt):
+
+    protDefSeqROIs = cls.newProtocol(
+      ProtDefineSeqROI,
+      chooseInput=0, inROIs=defSeqROIsSeq
+    )
+    protDefSeqROIs.inputSequence.set(inProt)
+    protDefSeqROIs.inputSequence.setExtended('outputSequence')
+
+    cls.proj.launchProtocol(protDefSeqROIs, wait=True)
+    return protDefSeqROIs
+
+  def _runMapROIsAttr(self, protROI, protAttr, mode=0):
+      protMap = self.newProtocol(
+        ProtMapAttributeToSeqROIs,
+        inputFrom=mode, chain_name='{"model": 0, "chain": "A", "residues": 98}', attrName='SASA')
+
+      protMap.inputSequenceROIs.set(protROI)
+      protMap.inputSequenceROIs.setExtended('outputROIs')
+
+      if mode == 0:
+        protMap.inputAtomStruct.set(protAttr)
+        protMap.inputAtomStruct.setExtended('outputAtomStruct')
+      else:
+        protMap.inputSequence.set(protAttr)
+        protMap.inputSequence.setExtended('outputSequence')
+
+      self.proj.launchProtocol(protMap, wait=False)
+      return protMap
+
+
+  def test(self):
+    self._runImportSequence()
+    protSASA = self._runCalculateSASA(self.protImportPDB)
+    protROIs = self._runDefSeqROIs(self.protImportSeq)
+
+    protMap0 = self._runMapROIsAttr(protROIs, protSASA, mode=0)
+    protMap1 = self._runMapROIsAttr(protROIs, protSASA, mode=1)
+
+    self._waitOutput(protMap0, 'outputROIs', timeOut=10)
+    self._waitOutput(protMap1, 'outputROIs', timeOut=10)
+    assertHandle(self.assertIsNotNone, getattr(protMap0, 'outputROIs', None), cwd=protMap0.getWorkingDir())
+    assertHandle(self.assertIsNotNone, getattr(protMap1, 'outputROIs', None), cwd=protMap1.getWorkingDir())

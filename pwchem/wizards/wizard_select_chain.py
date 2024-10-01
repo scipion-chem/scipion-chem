@@ -329,6 +329,11 @@ SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
 
+SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name'])
+
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
                                 targets=['resPosition'],
