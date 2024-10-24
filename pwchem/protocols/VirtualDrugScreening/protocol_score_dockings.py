@@ -146,6 +146,7 @@ class ProtocolScoreDocking(EMProtocol):
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
 
     def convertInputStep(self):
+        #Convert ligands
         allMols = self.getAllInputMols()
         outDir = self.getInputMolsDir()
         os.mkdir(outDir)
@@ -154,7 +155,7 @@ class ProtocolScoreDocking(EMProtocol):
         if len(maeMols) > 0:
             try:
                 from pwchemSchrodinger.utils.utils import convertMAEMolSet
-                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
             except ImportError:
                 print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
@@ -164,6 +165,20 @@ class ProtocolScoreDocking(EMProtocol):
             molBaseFile = os.path.join(outDir, mol.getUniqueName() + molExt)
             createLink(molFile, molBaseFile)
 
+        #Convert receptor
+        recFile = self.getInputReceptorFile()
+        if recFile.endswith('.mae') or recFile.endswith('.maegz'):
+            outFn = self.getConvertReceptorFile()
+            try:
+                from pwchemSchrodinger.utils.utils import convertReceptor2PDB
+                convertReceptor2PDB(recFile, os.path.abspath(outFn))
+            except ImportError:
+                print(
+                    'Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+        else:
+            createLink(recFile, self.getConvertReceptorFile())
+
+
     def performScoring(self, molFiles, molLists, it, receptorFile, msjDic, iS):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}_{}.txt'.format(iS, it)))
         self.writeParamsFile(paramsPath, receptorFile, molFiles, msjDic, iS, it)
@@ -172,7 +187,7 @@ class ProtocolScoreDocking(EMProtocol):
     def scoringStep(self, wStep, i):
         # Perform the scoring using the ODDT package
         nt = self.getnThreads()
-        receptorFile = self.getInputReceptorFile()
+        receptorFile = self.getConvertReceptorFile()
         performBatchThreading(self.performScoring, self.getInputMolFiles(), nt, cloneItem=False,
                               receptorFile=receptorFile, msjDic=eval(wStep), iS=i)
 
@@ -241,6 +256,11 @@ class ProtocolScoreDocking(EMProtocol):
 
     def getInputReceptorFile(self):
         return self.inputMoleculesSets[0].get().getProteinFile()
+
+    def getConvertReceptorFile(self):
+        recFile = self.getInputReceptorFile()
+        recName = getBaseName(recFile)
+        return self._getExtraPath(f'{recName}.pdb')
 
     def defineOutputSet(self):
         inputProteinFile = self.getInputReceptorFile()
