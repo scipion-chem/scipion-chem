@@ -68,9 +68,10 @@ def atomNumFilt(files, minAtoms):
     listPass = []
     molDic = preprocessLigands(files)
     for mol, name in molDic.items():
-        nAtoms = len(mol.GetAtoms())
-        if nAtoms >= minAtoms:
-            listPass.append(name)
+        if mol:
+            nAtoms = len(mol.GetAtoms())
+            if nAtoms >= minAtoms:
+                listPass.append(name)
     return set(listPass)
 
 def cycleNumFilt(files, minCycles):
