@@ -245,13 +245,13 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
     }
 
   def _viewSeqSet(self, e=None):
-    seqSet = self.protocol
+    seqSet = self.getOutputSet()
     setV = SequenceAliViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
 
   def _viewTable(self, e=None):
-    seqSet = self.protocol
+    seqSet = self.getOutputSet()
 
     setV = BioinformaticsDataViewer(project=self.getProject())
     views = setV._visualize(seqSet)
@@ -262,6 +262,9 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
       return True
     else:
       return False
+
+  def getOutputSet(self):
+    return self.protocol
   
 class SequenceChemViewer(SequenceGeneralViewer):
     """ Protocol viewer to visualize different type of sequence objects
