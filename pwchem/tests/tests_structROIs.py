@@ -64,7 +64,7 @@ class TestDefineStructROIs(BaseTest):
 		protDef.inputAtomStruct.set(cls.protImportPDB)
 		protDef.inputAtomStruct.setExtended('outputPdb')
 
-		cls.proj.launchProtocol(protDef, wait=False)
+		cls.proj.launchProtocol(protDef)
 		return protDef
 
 	def test(self):

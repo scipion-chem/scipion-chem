@@ -57,6 +57,11 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
                       label="Input reference ligands: ",
                       help='Select the ligands PDB files')
 
+        form.addParam('inputReceptor', params.PointerParam,
+                      pointerClass='AtomStruct', allowsNull=True,
+                      label="Input receptor: ",  expertLevel=params.LEVEL_ADVANCED,
+                      help='Input receptor in case the ligands are not associated with one')
+
         form.addParam('propRadii', params.FloatParam, default=0.5,
                        label='Pharmacophore radii proportion: ', expertLevel=params.LEVEL_ADVANCED,
                        help="The radii of each feature (sphere) in the pharmacophore is determined by the distance "
@@ -168,6 +173,10 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
         if self.inputSmallMolecules.get().getProteinFile():
             outPharm.setProteinFile(self.inputSmallMolecules.get().getProteinFile())
+
+        elif self.inputReceptor.get().getFileName():
+            outPharm.setProteinFile(self.inputReceptor.get().getFileName())
+
         for feat in radii:
             feat_radii = radii[feat]
             for i, loc in enumerate(centers[feat]):

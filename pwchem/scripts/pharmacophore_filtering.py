@@ -133,6 +133,7 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
     '''
     paramsDic = parseParams(sys.argv[1])
+    it = sys.argv[1].split('_')[-1].split('.')[0]
     outDir = sys.argv[2]
     ligandFiles = paramsDic['ligandFiles']
     pharmDic = eval(paramsDic['pharmDic'])
@@ -156,8 +157,11 @@ if __name__ == "__main__":
 
         res = {}
         for i, mol in enumerate(mols):
-            boundsMat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
-            canMatch, allMatches = EmbedLib.MatchPharmacophoreToMol(mol, featFactory, pcophore)
+            try:
+                boundsMat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
+                canMatch, allMatches = EmbedLib.MatchPharmacophoreToMol(mol, featFactory, pcophore)
+            except:
+                pass
             if canMatch:
                 # for (i, match) in enumerate(allMatches):
                 #     for f in match:
@@ -210,7 +214,7 @@ if __name__ == "__main__":
 
                         res[mol] = [outFile, SSDs[i]]
 
-        with open(os.path.join(outDir, 'deviations.tsv'), 'w') as f:
+        with open(os.path.join(outDir, f'deviations_{it}.tsv'), 'w') as f:
             f.write('OriginalMolecule\tOutputMolecule\tDeviation\n')
             for mol in res:
                 f.write('{}\t{}\t{}\n'.format(getBaseFileName(molFileDic[mol]), res[mol][0], res[mol][1]))
