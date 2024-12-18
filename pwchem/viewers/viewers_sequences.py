@@ -278,6 +278,9 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
       return True
     else:
       return False
+
+  def getOutputSet(self):
+    return self.protocol
   
 class SequenceChemViewer(SequenceGeneralViewer):
     """ Protocol viewer to visualize different type of sequence objects
