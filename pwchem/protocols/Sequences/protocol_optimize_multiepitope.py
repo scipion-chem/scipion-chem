@@ -723,24 +723,24 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     jobs = self.numberOfThreads.get()
     evalDics = self.getEvalDics()
     sequences = self.getMultiEpitopeSeqs(individuals)
+    outDir = os.path.abspath(self._getExtraPath())
 
     resultsDic = {}
-    disJobs = self.getDistributedJobs(evalDics, jobs)
     for source, sDics in evalDics.items():
-      nt = disJobs[source]
       if source == IEDB:
-        epiDic = self.performCoverageAnalysis(individuals, sDics, nt)
+        epiDic = self.performCoverageAnalysis(individuals, sDics, jobs)
 
       elif source == IIITD:
         from immuno import Plugin as iiitdPlugin
-        epiDic = iiitdPlugin.performEvaluations(sequences, sDics, nt, iiitdPlugin.getBrowserData(), verbose=False)
+        epiDic = iiitdPlugin.performEvaluations(sequences, sDics, jobs, iiitdPlugin.getBrowserData(),
+                                                outDir=outDir, verbose=False)
 
       elif source == DDG:
         from ddg import Plugin as ddgPlugin
-        epiDic = ddgPlugin.performEvaluations(sequences, sDics, nt, ddgPlugin.getBrowserData(), verbose=False)
+        epiDic = ddgPlugin.performEvaluations(sequences, sDics, jobs, ddgPlugin.getBrowserData(), verbose=False)
 
       elif source == VAXIGN:
-        epiDic = self.performVaxignML(sequences, sDics, nt)
+        epiDic = self.performVaxignML(sequences, sDics, jobs)
 
       else:
         continue
