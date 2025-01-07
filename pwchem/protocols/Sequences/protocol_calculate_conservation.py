@@ -60,8 +60,6 @@ def simpson(counts):
 
 
 def kabat(counts):
-  print('counts: ', counts)
-  print('kabat: ', sum(counts), len(counts), max(counts), (sum(counts) * len(counts)) / max(counts))
   return (sum(counts) * len(counts)) / max(counts)
 
 class ProtSeqCalculateConservation(EMProtocol):
