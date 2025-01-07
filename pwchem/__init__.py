@@ -51,7 +51,7 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def defineBinaries(cls, env):
 		cls.addRDKitPackage(env)
-		cls.addShapeitPackage(env)
+		# cls.addShapeitPackage(env)
 		cls.addMGLToolsPackage(env)
 		cls.addJChemPaintPackage(env)
 		cls.addPyMolPackage(env)
