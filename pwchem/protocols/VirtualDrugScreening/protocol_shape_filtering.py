@@ -38,6 +38,7 @@ from pwchem.objects import SetOfSmallMolecules
 from pwchem.constants import RDKIT_DIC
 
 scriptName = 'shape_distances_script.py'
+shapePrograms = ['RDKit'] #, 'Shape-it']
 
 
 class ProtocolShapeDistancesFiltering(EMProtocol):
@@ -69,7 +70,7 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
         group = form.addGroup('Descriptors')
         group.addParam('program', params.EnumParam,
-                       choices=['RDKit', 'Shape-it'], default=0,
+                       choices=shapePrograms, default=0,
                        label='Program to calculate distance: ')
         group.addParam('distanceType', params.EnumParam, default=0, label='Distance type: ',
                        choices=self._distanceType, condition='program==0',

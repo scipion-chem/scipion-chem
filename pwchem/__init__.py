@@ -69,7 +69,7 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(JCHEM_DIC['home'], cls.getEnvName(JCHEM_DIC))
 		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
 		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
-		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+		# cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
