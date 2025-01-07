@@ -46,6 +46,10 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
     ##### -------------------------- DEFINE param functions ----------------------
 
+    def __init__(self, **kwargs):
+        EMProtocol.__init__(self, **kwargs)
+        self.stepsExecutionMode = params.STEPS_PARALLEL
+
     def _defineParams(self, form):
         """ """
         form.addSection(label='Input')
@@ -77,14 +81,19 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
                        label='Maximum deviation (SSD): ',
                        help="Maximum sum squares deviation of the ligand aligned to the pharmacophore to be considered")
 
+        form.addParallelSection(threads=4, mpi=1)
 
 
         # --------------------------- STEPS functions ------------------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertStep')
-        self._insertFunctionStep('filterStep')
-        self._insertFunctionStep('createOutputStep')
+        cStep = self._insertFunctionStep('convertStep')
+
+        aSteps = []
+        nt = self.numberOfThreads.get()
+        for it in range(nt-1):
+            aSteps += [self._insertFunctionStep('filterStep', it, prerequisites=[cStep])]
+        self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
 
     def convertStep(self):
         tmpDir, outDir = abspath(self._getTmpPath('convLigands')), self.getInputLigandsDir()
@@ -110,8 +119,8 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
                 format(tmpDir, '*', outDir)
             pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
-    def filterStep(self):
-        paramsPath = self.writeParamsFile()
+    def filterStep(self, it):
+        paramsPath = self.writeParamsFile(it)
 
         args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
         pwchemPlugin.runScript(self, scriptName, args, env=RDKIT_DIC, cwd=self._getPath())
@@ -153,16 +162,16 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
 
-    def writeParamsFile(self):
-        paramsPath = abspath(self._getExtraPath('inputParams.txt'))
+    def writeParamsFile(self, it):
+        paramsPath = abspath(self._getExtraPath(f'inputParams_{it}.txt'))
         convLigandNames = os.listdir(self.getInputLigandsDir())
+        cLigNames = makeSubsets(convLigandNames, nt=self.numberOfThreads.get()-1, cloneItem=False)[it]
 
         ligandFiles = []
-        for fnLigand in convLigandNames:
+        for fnLigand in cLigNames:
             ligandFiles.append(os.path.join(self.getInputLigandsDir(), fnLigand))
 
         pharmDic = self.inputPharmacophore.get().pharm2Dic()
-
 
         with open(paramsPath, 'w') as f:
             # Esta linea vale --> es la que lleva al archivo output
@@ -184,9 +193,11 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
     def parseResults(self):
         resDic = {}
-        with open(self._getPath('deviations.tsv')) as f:
-            f.readline()
-            for line in f:
-                oriBase, outFile, dev = line.split()
-                resDic[oriBase] = [outFile, dev]
+        for file in os.listdir(self._getPath()):
+            if file.startswith('deviations'):
+                with open(self._getPath(file)) as f:
+                    f.readline()
+                    for line in f:
+                        oriBase, outFile, dev = line.split()
+                        resDic[oriBase] = [outFile, dev]
         return resDic

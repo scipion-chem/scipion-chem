@@ -1171,7 +1171,7 @@ class StructROI(data.EMFile):
 
         elif self.getPocketClass() == 'SiteMap':
             props, pId = {}, 1
-            pocketId = int(filename.split('-')[1].split('.')[0])
+            pocketId = int(filename.split('-')[-1].split('.')[0])
             with open(extraFile) as fh:
                 for line in fh:
                     if line.startswith("SiteScore"):
