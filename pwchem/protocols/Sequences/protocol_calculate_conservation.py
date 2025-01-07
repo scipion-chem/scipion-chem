@@ -225,7 +225,7 @@ class ProtSeqCalculateConservation(EMProtocol):
         '''Returns a dictionary of the mapping of the original indexes to the ones aligned to the MSA'''
         alignDic = {}
         with open(self._getExtraPath('mapSequence.fasta.map')) as fIn:
-            for i in range(2):
+            for _ in range(2):
                 fIn.readline()
             for line in fIn:
                 oriPos, alignPos = line.split(',')[1].strip(), line.split(',')[2].strip()

@@ -29,7 +29,8 @@
 """
 This protocol is used to optimize a multiepitope object based on some predictor scores using genetic algorithms
 """
-import numpy, json, os, shutil
+import json, os, shutil, re, time, random
+import numpy as np
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -37,7 +38,8 @@ from pwem.protocols import EMProtocol
 from pwem.objects.data import SetOfSequences, Sequence
 
 from pwchem.utils import runInParallel
-from pwchem.utils.utilsDEAP import *
+from pwchem.utils.utilsDEAP import getProteinNames, ge_eaSimpleChem, ge_eaMuPlusLambdaChem, ge_eaMuCommaLambdaChem, \
+  RepGrammar, RepIndividual, randomInitialisation, crossover_multiepitope, mutationEpitope
 
 from deap import base, creator, tools
 
@@ -53,6 +55,7 @@ REPORT_ITEMS = ['gen', 'invalid', 'avg', 'std', 'min', 'max',
                 'structural_diversity', 'fitness_diversity',
                 'selection_time', 'generation_time']
 
+LINKERSET = 'linkerAction==2'
 
 def buildGrammarFile(gFile, protDic, linkDic, compDic):
   '''Build the multiepitope grammar file with information about the number of proteins and epitopes'''
@@ -279,9 +282,9 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
     group = form.addGroup('Specific epitope sampling scores')
     group.addParam('inSet', params.StringParam, label='Select a input set: ', default='',
-                   help='Choose a score to define the epitope sampling probability')
+                   help='Select the input set for the specific sampling scores')
     group.addParam('inScore', params.StringParam, label='Select a score: ', default='',
-                   help='Choose a score to define the epitope sampling probability')
+                   help='Select a score from the input set')
     group.addParam('scoreWeight', params.FloatParam, label='Score weight: ', default=1,
                    help='Define a weight for the score. The bigger the absolute value of the weight, the more '
                         'important it will be. If negative, the filter will look for smaller values.')
@@ -308,16 +311,16 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                    condition='linkerAction in [1, 2]', label='Define linker set: ', allowsNull=True,
                    help='Define the set of sequences of the linker to be chosen randomly or per protein')
     group.addParam('seleLinker', params.StringParam, label='Selected linker(s): ', default='',
-                   condition='linkerAction==2',
+                   condition='LINKERSET',
                    help='Select the linker(s) to associate with the selected input protein')
 
     group.addParam('linkProtSet', params.StringParam, label='Select a input protein set: ', default='',
-                   condition='linkerAction==2',
+                   condition='LINKERSET',
                    help='Choose a input protein set to associate with the linkers')
-    group.addParam('addLinker', params.LabelParam, label='Add linker: ', condition='linkerAction==2',
+    group.addParam('addLinker', params.LabelParam, label='Add linker: ', condition='LINKERSET',
                    help='Add defined linker(s) for protein')
     group.addParam('linkerSummary', params.TextParam, width=100, label='Linker summary:', default='',
-                   condition='linkerAction==2',
+                   condition='LINKERSET',
                    help='Summary of the defined linkers.')
 
     form.addSection(label='Multiepitope evaluations')
@@ -432,12 +435,12 @@ class ProtOptimizeMultiEpitope(EMProtocol):
       kwargs.update({'mu': nPop, 'lambda_': nOffs, 'nMigr': nMigr})
     gaAlgorithm = self._gaAlgorithms[self.gaType.get()]
     
-    for i in range(self.nReRun.get()):
-      population = deapToolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar,
+    for _ in range(self.nReRun.get()):
+      population = deapToolbox.populationCreator(popSize=nPop, bnfGrammar=bnfGrammar,
                                                  minEps=self.minEp.get(), maxEps=self.maxEp.get(), cProb=self.cProb.get(),
-                                                 min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
-                                                 codon_size=255, codon_consumption='weighted',
-                                                 genome_representation='list')
+                                                 minInitGenomeLength=95, maxInitGenomeLength=115, maxInitDepth=35,
+                                                 codonSize=255, codonConsumption='weighted',
+                                                 genomeRepresentation='list')
 
       gaAlgorithm(population, deapToolbox, bnfGrammar, **kwargs)
 
@@ -482,7 +485,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     # define a single objective, minimising fitness strategy:
     creator.create("FitnessMin", base.Fitness, weights=(1.0,))
     creator.create('Individual', RepIndividual, fitness=creator.FitnessMin)
-    toolbox.register("populationCreator", random_initialisation, creator.Individual)
+    toolbox.register("populationCreator", randomInitialisation, creator.Individual)
 
     toolbox.register("evaluate", self.multiEpitopeEval)
 
@@ -535,7 +538,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     for roiPointer in multiPointer:
       roiSet = roiPointer.get()
       protName = roiSet.getSequenceObj().getId()
-      if not protName in mapDic:
+      if protName not in mapDic:
         mapDic[protName] = []
       for roi in roiSet:
         mapDic[protName].append(roi.clone())
@@ -547,7 +550,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     epDic = {}
     mapDic = self.getROIsPerProt(multiPointer)
     for protName in mapDic:
-      if not protName in epDic:
+      if protName not in epDic:
         epDic[protName] = []
       for roi in mapDic[protName]:
         epDic[protName].append(roi.getROISequence())
@@ -706,9 +709,9 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     '''
     resultsDic = self.performEvaluations(individuals)
     weigths = self.getEvalWeights()
-    fitnesses = numpy.zeros(len(individuals))
+    fitnesses = np.zeros(len(individuals))
     for (evalKey, softName), res in resultsDic.items():
-      scores = numpy.array(list(map(float, res)))
+      scores = np.array(list(map(float, res)))
       fitnesses += scores * weigths[evalKey]
 
     return [(f,) for f in fitnesses]

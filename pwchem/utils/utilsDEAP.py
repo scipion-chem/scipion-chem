@@ -35,56 +35,57 @@ from grape.grape import Individual, Grammar, mapper_eager, mapper_lazy
 
 NOREP, WEIGHT = 'noRepeated', 'weighted'
 PLUS, COMMA = 'plus', 'comma'
+NEXT_NT_STR = r"\<(\w+)\>"
 
 class RepIndividual(Individual):
     '''Individual including the option to not repeated nodes'''
-    def __init__(self, genome, grammar, max_depth, codon_consumption, minEps=None, maxEps=None, cProb=0.9):
+    def __init__(self, genome, grammar, maxDepth, codonConsumption, minEps=None, maxEps=None, cProb=0.9):
         self.genome = genome
-        if codon_consumption == 'lazy':
+        if codonConsumption == 'lazy':
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = mapper_lazy(genome, grammar, max_depth)
-        elif codon_consumption == 'eager':
+            self.structure = mapper_lazy(genome, grammar, maxDepth)
+        elif codonConsumption == 'eager':
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = mapper_eager(genome, grammar, max_depth)
-        elif codon_consumption == NOREP:
+            self.structure = mapper_eager(genome, grammar, maxDepth)
+        elif codonConsumption == NOREP:
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=NOREP, compProb=cProb)
-        elif codon_consumption == WEIGHT:
+            self.structure = generalMapper(genome, grammar, maxDepth, minEps, maxEps, mapType=NOREP, compProb=cProb)
+        elif codonConsumption == WEIGHT:
             self.phenotype, self.nodes, self.depth, \
             self.used_codons, self.invalid, self.n_wraps, \
-            self.structure = generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=WEIGHT, compProb=cProb)
+            self.structure = generalMapper(genome, grammar, maxDepth, minEps, maxEps, mapType=WEIGHT, compProb=cProb)
         else:
             raise ValueError("Unknown mapper")
 
 class RepGrammar(Grammar):
-    def __init__(self, file_address, noRepNTs, weightDic):
-        super().__init__(file_address)
+    def __init__(self, fileAddress, noRepNTs, weightDic):
+        super().__init__(fileAddress)
         self.noRepNTs = noRepNTs
         self.weightDic = weightDic
 
-def random_initialisation(ind_class, pop_size, bnf_grammar, minEps, maxEps, cProb,
-                          min_init_genome_length, max_init_genome_length,
-                          max_init_depth, codon_size, codon_consumption,
-                          genome_representation):
+def randomInitialisation(indClass, popSize, bnfGrammar, minEps, maxEps, cProb,
+                          minInitGenomeLength, maxInitGenomeLength,
+                          maxInitDepth, codonSize, codonConsumption,
+                          genomeRepresentation):
     """
 
     """
     population = []
-    for i in range(pop_size):
-      init_genome_length = random.randint(min_init_genome_length, max_init_genome_length)
-      genome = [random.randint(0, codon_size) for i in range(init_genome_length)]
-      ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption, minEps, maxEps, cProb)
+    for _ in range(popSize):
+      initGenomeLength = random.randint(minInitGenomeLength, maxInitGenomeLength)
+      genome = [random.randint(0, codonSize) for _ in range(initGenomeLength)]
+      ind = indClass(genome, bnfGrammar, maxInitDepth, codonConsumption, minEps, maxEps, cProb)
       while not ind.phenotype:
-        genome = [random.randint(0, codon_size) for i in range(init_genome_length)]
-        ind = ind_class(genome, bnf_grammar, max_init_depth, codon_consumption, minEps, maxEps, cProb)
+        genome = [random.randint(0, codonSize) for _ in range(initGenomeLength)]
+        ind = indClass(genome, bnfGrammar, maxInitDepth, codonConsumption, minEps, maxEps, cProb)
       population.append(ind)
 
-    if genome_representation == 'list':
+    if genomeRepresentation == 'list':
       return population
-    elif genome_representation == 'numpy':
+    elif genomeRepresentation == 'numpy':
       for ind in population:
         ind.genome = np.array(ind.genome)
       return population
@@ -166,7 +167,7 @@ def getNCEpisPerProt(protsDic, compProb):
   epsDic = {}
   protNames = list(protsDic.keys())
   for pName in protNames:
-    epsDic[pName] = sum([1 for i in range(protsDic[pName]) if random.random() < compProb])
+    epsDic[pName] = sum([1 for _ in range(protsDic[pName]) if random.random() < compProb])
 
   return epsDic
 
@@ -184,8 +185,8 @@ def getProtsDic(grammar, comp=False):
       protDic[prodName] = nEps
   return protDic
 
-def generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=WEIGHT, compProb=0.9):
-  idxGenome, idx_depth, nodes, structure = 0, 0, 0, []
+def generalMapper(genome, grammar, maxDepth, minEps, maxEps, mapType=WEIGHT, compProb=0.9):
+  idxGenome, idxDepth, nodes, structure = 0, 0, 0, []
   epsCPerProt = getNCEpisPerProt(getProtsDic(grammar, comp=True), compProb=compProb)
 
   # Min/Maxs number of sampling epitopes are the numbers not filled by compulsory
@@ -196,18 +197,18 @@ def generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=WEIGHT, co
   curEpsPerProt, curCEpsPerProt = {pName: 1 for pName in epsPerProt}, {pName: 1 for pName in epsCPerProt}
 
   phenotype = grammar.start_rule
-  next_NT = re.search(r"\<(\w+)\>", phenotype).group()
-  n_starting_NTs = len([term for term in re.findall(r"\<(\w+)\>", phenotype)])
-  list_depth = [1] * n_starting_NTs  # it keeps the depth of each branch
+  nextNT = re.search(NEXT_NT_STR, phenotype).group()
+  nStartingNTs = len([term for term in re.findall(NEXT_NT_STR, phenotype)])
+  listDepth = [1] * nStartingNTs  # it keeps the depth of each branch
 
   # Used indexes are stored to not be repeated for non-repeatable elements
   noRepNTs = grammar.noRepNTs
   repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
-  while next_NT and idxGenome < len(genome):
-    NT_index = grammar.non_terminals.index(next_NT)
-    repIdxs = repDic[next_NT] if next_NT in repDic else []
+  while nextNT and idxGenome < len(genome):
+    NT_index = grammar.non_terminals.index(nextNT)
+    repIdxs = repDic[nextNT] if nextNT in repDic else []
 
-    prodName, index_production_chosen = next_NT[1:-1], None
+    prodName, index_production_chosen = nextNT[1:-1], None
     if prodName in epsPerProt:
       # Grow eps tree until the decided number of eps per prot is met
       index_production_chosen = 1 if curEpsPerProt[prodName] < epsPerProt[prodName] else 0
@@ -220,50 +221,50 @@ def generalMapper(genome, grammar, max_depth, minEps, maxEps, mapType=WEIGHT, co
 
     else:
       if mapType == WEIGHT:
-        weights = grammar.weightDic[next_NT] if next_NT in grammar.weightDic else {}
+        weights = grammar.weightDic[nextNT] if nextNT in grammar.weightDic else {}
         index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
       elif mapType == NOREP:
         index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
         index_production_chosen = getNonRepeatedIndex(index_production_chosen, repIdxs, grammar.n_rules[NT_index])
 
-    if next_NT in repDic:
+    if nextNT in repDic:
         if index_production_chosen == None:
           return [None] * 7
-        repDic[next_NT].append(index_production_chosen)
+        repDic[nextNT].append(index_production_chosen)
 
     structure.append(index_production_chosen)
     idxGenome += 1
 
-    phenotype = phenotype.replace(next_NT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
-    list_depth[idx_depth] += 1
-    if list_depth[idx_depth] > max_depth:
+    phenotype = phenotype.replace(nextNT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
+    listDepth[idxDepth] += 1
+    if listDepth[idxDepth] > maxDepth:
         break
     if grammar.production_rules[NT_index][index_production_chosen][2] == 0:  # arity 0 (T)
-        idx_depth += 1
+        idxDepth += 1
         nodes += 1
     elif grammar.production_rules[NT_index][index_production_chosen][2] == 1:  # arity 1 (PR with one NT)
         pass
     else:  # it is a PR with more than one NT
         arity = grammar.production_rules[NT_index][index_production_chosen][2]
-        if idx_depth == 0:
-            list_depth = [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
+        if idxDepth == 0:
+            listDepth = [listDepth[idxDepth], ] * arity + listDepth[idxDepth + 1:]
         else:
-            list_depth = list_depth[0:idx_depth] + [list_depth[idx_depth], ] * arity + list_depth[idx_depth + 1:]
+            listDepth = listDepth[0:idxDepth] + [listDepth[idxDepth], ] * arity + listDepth[idxDepth + 1:]
 
-    next_ = re.search(r"\<(\w+)\>", phenotype)
+    next_ = re.search(NEXT_NT_STR, phenotype)
     if next_:
-        next_NT = next_.group()
+        nextNT = next_.group()
     else:
-        next_NT = None
+        nextNT = None
 
-  if next_NT:
+  if nextNT:
       invalid = True
       used_codons = 0
   else:
       invalid = False
       used_codons = idxGenome
 
-  depth = max(list_depth)
+  depth = max(listDepth)
   phenotype = checkPhenotype(phenotype)
   return phenotype, nodes, depth, used_codons, invalid, 0, structure
 
@@ -387,7 +388,7 @@ def mutationEpitope(ind, bnfGrammar, mutEProb=0.3, mutSwapProb=None, mutLProb=No
     protEpDic = getProteinEpitopes(bnfGrammar)
     
     # Determining which mutation(s) to be performed. At least, one must be done
-    mutRandoms = [random.random() for i in range(3)]
+    mutRandoms = [random.random() for _ in range(3)]
     doMuts = [mutR < mProb for mutR, mProb in zip(mutRandoms, [mutSwapProb, mutEProb, mutLProb])]
     if not any(doMuts):
       doMuts[random.randint(0, 2)] = True
@@ -515,10 +516,10 @@ def performEvaluation(p, fitDic, toolbox):
   return p, fitDic
 
 def initPop(toolbox, bnfGrammar, nPop, minEps, maxEps, cProb):
-  return toolbox.populationCreator(pop_size=nPop, bnf_grammar=bnfGrammar, minEps=minEps, maxEps=maxEps, cProb=cProb,
-                                  min_init_genome_length=95, max_init_genome_length=115, max_init_depth=35,
-                                  codon_size=255, codon_consumption='weighted',
-                                  genome_representation='list')
+  return toolbox.populationCreator(popSize=nPop, bnfGrammar=bnfGrammar, minEps=minEps, maxEps=maxEps, cProb=cProb,
+                                  minInitGenomeLength=95, maxInitGenomeLength=115, maxInitDepth=35,
+                                  codonSize=255, codonConsumption='weighted',
+                                  genomeRepresentation='list')
 
 
 def getValids(population):
@@ -563,7 +564,7 @@ def ge_eaSimpleChem(population, toolbox, bnfGrammar, ngen,
   :param ngen: The number of generation.
   :param elite_size: The number of best individuals to be copied to the
                   next generation.
-  :params bnfGrammar, codon_size, max_tree_depth: Parameters
+  :params bnfGrammar, codonSize, max_tree_depth: Parameters
                   used to mapper the individuals after crossover and
                   mutation in order to check if they are valid.
   :param stats: A :class:`~deap.tools.Statistics` object that is updated
@@ -626,7 +627,7 @@ def ge_eaMuLambdaChem(gaType, population, toolbox, bnfGrammar, minEps, maxEps, c
   :param cxpb: The probability of mating two individuals.
   :param mutpb: The probability of mutating an individual.
   :param ngen: The number of generation.
-  :params bnfGrammar, codon_size, max_tree_depth: Parameters
+  :params bnfGrammar, codonSize, max_tree_depth: Parameters
                   used to mapper the individuals after crossover and
                   mutation in order to check if they are valid.
   :param stats: A :class:`~deap.tools.Statistics` object that is updated

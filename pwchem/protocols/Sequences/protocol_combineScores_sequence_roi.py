@@ -37,7 +37,7 @@ from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSequenceROIs
-from pwchem.utils import *
+from pwchem.utils import Float
 
 class ProtCombineScoresSeqROI(EMProtocol):
     """

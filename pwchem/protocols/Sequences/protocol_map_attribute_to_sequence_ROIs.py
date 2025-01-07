@@ -31,24 +31,22 @@ This protocol maps an attribute stored on AtomStruct or SequenceChem residues to
 and calculates and stores the mean value of the attribute for each of its ROIs as attributes.
 
 """
-from scipy.spatial import distance
-from Bio.PDB.ResidueDepth import get_surface
+import os, json
+import numpy as np
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.convert import cifToPdb
 from pwem.protocols import EMProtocol
-from pwem.convert.atom_struct import NAME, RECIP, SPEC, VALUE
+from pwem.convert.atom_struct import NAME, SPEC, VALUE
 from pwem.viewers.viewer_localres import getStructureRecipient, getResiduePositions, getResidueAverage
+from pwem.convert.atom_struct import AtomicStructHandler
 
-from pwchem.objects import SetOfStructROIs, StructROI
-from pwchem.utils import *
+from pwchem.utils import Float, runOpenBabel
 from pwchem.utils.utilsFasta import pairwiseAlign
-from pwchem import Plugin
-from pwchem.constants import MGL_DIC
-from pwchem.protocols import ProtDefineStructROIs
 
 STRUCTURE, SEQUENCE = 0, 1
+fastaName = "pairWise.fasta"
 
 class ProtMapAttributeToSeqROIs(EMProtocol):
     """
@@ -90,16 +88,16 @@ class ProtMapAttributeToSeqROIs(EMProtocol):
         self._insertFunctionStep('alignSequencesStep')
         self._insertFunctionStep('defineOutputStep')
 
-        self._mapWarning = 'Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.fasta")
+        self._mapWarning = 'Mapping of ROIs not posible, check the alignment in ', self._getPath(fastaName)
 
 
     def alignSequencesStep(self):
-        seq, seq_name = self.getInputSequence()
-        seqAttr, seq_nameAttr = self.getInputAttrSequence()
+        seq, seqName = self.getInputSequence()
+        seqAttr, seqNameAttr = self.getInputAttrSequence()
 
         # Alignment
-        out_file = os.path.abspath(self._getPath("pairWise.fasta"))
-        pairwiseAlign(seq, seqAttr, out_file, seqName1=seq_name, seqName2=seq_nameAttr)
+        outFile = os.path.abspath(self._getPath(fastaName))
+        pairwiseAlign(seq, seqAttr, outFile, seqName1=seqName, seqName2=seqNameAttr)
 
     def defineOutputStep(self):
         attrVals = self.getAttrVals()
@@ -161,7 +159,7 @@ class ProtMapAttributeToSeqROIs(EMProtocol):
             if recipient == 'atoms':
                 attrValues, attrSpecs = getResidueAverage(attrValues, attrSpecs)
 
-            attrPositions, attrChainValues = getResiduePositions(attrSpecs, attrValues, self.getChainName())
+            _, attrChainValues = getResiduePositions(attrSpecs, attrValues, self.getChainName())
 
             attrValues = list(map(float, attrChainValues))
 
@@ -206,28 +204,28 @@ class ProtMapAttributeToSeqROIs(EMProtocol):
     def getInputSequence(self):
         inputObj = getattr(self, 'inputSequenceROIs').get()
         seq = inputObj.getSequence()
-        seq_name = inputObj.getSequenceObj().getId()
-        if not seq_name:
-            seq_name = inputObj.getSeqName()
-        return seq, seq_name
+        seqName = inputObj.getSequenceObj().getId()
+        if not seqName:
+            seqName = inputObj.getSeqName()
+        return seq, seqName
 
     def getInputAttrSequence(self):
         if self.inputFrom.get() == STRUCTURE:
             from pwem.convert.atom_struct import AtomicStructHandler
-            ASFile = self.getASFileName()
-            seq_name = os.path.basename(ASFile)
-            handler = AtomicStructHandler(ASFile)
+            asFile = self.getASFileName()
+            seqName = os.path.basename(asFile)
+            handler = AtomicStructHandler(asFile)
             chainName = getattr(self, 'chain_name').get()
 
             # Parse chainName for model and chain selection
             struct = json.loads(chainName)  # From wizard dictionary
-            chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
+            chainID, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
-            seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
+            seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chainID))
         else:
             seqObj = self.inputSequence.get()
-            seq, seq_name= seqObj.getSequence(), seqObj.getSeqName()
-        return seq, seq_name
+            seq, seqName= seqObj.getSequence(), seqObj.getSeqName()
+        return seq, seqName
 
     def mapResidues(self):
         '''Returns a dictionary which maps the idxs of the residues of the ROIs sequence and
@@ -254,7 +252,7 @@ class ProtMapAttributeToSeqROIs(EMProtocol):
     def parseAlignment(self):
         seq, seqAS = '', ''
         first = True
-        with open(self._getPath("pairWise.fasta")) as f:
+        with open(self._getPath(fastaName)) as f:
             f.readline()
             for line in f:
                 if not line.startswith('>'):

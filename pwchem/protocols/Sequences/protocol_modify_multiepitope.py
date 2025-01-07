@@ -99,8 +99,12 @@ class ProtModifyMultiEpitope(EMProtocol):
 
         outROIs, multiStr = [], ''
         for roi in self.inputMultiEpitope.get():
-          if roi.getObjId() in actionsDic['Remove']:
-            pass
+          if roi.getObjId() in actionsDic['Add']:
+            roi = roi.clone()
+            idxs = [len(multiStr) + 1, len(multiStr) + len(roi.getROISequence()) + 1]
+            multiStr += roi.getROISequence()
+            roi.setROIIdxs(idxs)
+            outROIs.append(roi)
           elif roi.getObjId() in actionsDic['Modify']:
             roi = roi.clone()
             seqROIObj = actionsDic['Modify'][roi.getObjId()]
@@ -113,12 +117,6 @@ class ProtModifyMultiEpitope(EMProtocol):
             seqROI = SequenceROI(seqROI=seqROIObj, roiIdx=idxs[0], roiIdx2=idxs[1], type=roi.getType())
             multiStr += roiStr
             outROIs.append(seqROI)
-          else:
-            roi = roi.clone()
-            idxs = [len(multiStr) + 1, len(multiStr) + len(roi.getROISequence()) + 1]
-            multiStr += roi.getROISequence()
-            roi.setROIIdxs(idxs)
-            outROIs.append(roi)
 
         for seqROIObj in actionsDic['Add']:
           if not seqROIObj.getId() and not seqROIObj.getSeqName():
