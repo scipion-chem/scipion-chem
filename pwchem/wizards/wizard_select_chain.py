@@ -516,7 +516,7 @@ class SelectElementWizard(VariableWizard):
     dlg = self.displayDialog(form, inputParam)
     form.setVar(outputParam[0], dlg.values[0].get())
     
-SelectElementWizard().addTarget(protocol=ProtocolLiganParametrization,
+SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
                                targets=['inputLigand'],
                                inputs=['inputSmallMolecules'],
                                outputs=['inputLigand'])
