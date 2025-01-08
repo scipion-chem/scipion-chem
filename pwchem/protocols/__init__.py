@@ -95,5 +95,5 @@ from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 
 # Molecular dynamics
-from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLiganParametrization
+from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
 
