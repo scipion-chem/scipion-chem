@@ -43,19 +43,19 @@ class RepIndividual(Individual):
         self.genome = genome
         if codonConsumption == 'lazy':
             self.phenotype, self.nodes, self.depth, \
-            self.used_codons, self.invalid, self.n_wraps, \
+            self.usedCodons, self.invalid, self.n_wraps, \
             self.structure = mapper_lazy(genome, grammar, maxDepth)
         elif codonConsumption == 'eager':
             self.phenotype, self.nodes, self.depth, \
-            self.used_codons, self.invalid, self.n_wraps, \
+            self.usedCodons, self.invalid, self.n_wraps, \
             self.structure = mapper_eager(genome, grammar, maxDepth)
         elif codonConsumption == NOREP:
             self.phenotype, self.nodes, self.depth, \
-            self.used_codons, self.invalid, self.n_wraps, \
+            self.usedCodons, self.invalid, self.n_wraps, \
             self.structure = generalMapper(genome, grammar, maxDepth, minEps, maxEps, mapType=NOREP, compProb=cProb)
         elif codonConsumption == WEIGHT:
             self.phenotype, self.nodes, self.depth, \
-            self.used_codons, self.invalid, self.n_wraps, \
+            self.usedCodons, self.invalid, self.n_wraps, \
             self.structure = generalMapper(genome, grammar, maxDepth, minEps, maxEps, mapType=WEIGHT, compProb=cProb)
         else:
             raise ValueError("Unknown mapper")
@@ -205,68 +205,68 @@ def generalMapper(genome, grammar, maxDepth, minEps, maxEps, mapType=WEIGHT, com
   noRepNTs = grammar.noRepNTs
   repDic = {NT_label: [] for NT_label in noRepNTs} if noRepNTs else {}
   while nextNT and idxGenome < len(genome):
-    NT_index = grammar.non_terminals.index(nextNT)
+    indexNT = grammar.non_terminals.index(nextNT)
     repIdxs = repDic[nextNT] if nextNT in repDic else []
 
-    prodName, index_production_chosen = nextNT[1:-1], None
+    prodName, indexProductionChosen = nextNT[1:-1], None
     if prodName in epsPerProt:
       # Grow eps tree until the decided number of eps per prot is met
-      index_production_chosen = 1 if curEpsPerProt[prodName] < epsPerProt[prodName] else 0
+      indexProductionChosen = 1 if curEpsPerProt[prodName] < epsPerProt[prodName] else 0
       curEpsPerProt[prodName] += 1
 
     elif prodName in epsCPerProt:
       # Grow eps tree until the decided number of comp eps per prot is met
-      index_production_chosen = 1 if curCEpsPerProt[prodName] < epsCPerProt[prodName] else 0
+      indexProductionChosen = 1 if curCEpsPerProt[prodName] < epsCPerProt[prodName] else 0
       curCEpsPerProt[prodName] += 1
 
     else:
       if mapType == WEIGHT:
         weights = grammar.weightDic[nextNT] if nextNT in grammar.weightDic else {}
-        index_production_chosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[NT_index], weights)
+        indexProductionChosen = getWeightedIndex(genome[idxGenome], repIdxs, grammar.n_rules[indexNT], weights)
       elif mapType == NOREP:
-        index_production_chosen = genome[idxGenome] % grammar.n_rules[NT_index]
-        index_production_chosen = getNonRepeatedIndex(index_production_chosen, repIdxs, grammar.n_rules[NT_index])
+        indexProductionChosen = genome[idxGenome] % grammar.n_rules[indexNT]
+        indexProductionChosen = getNonRepeatedIndex(indexProductionChosen, repIdxs, grammar.n_rules[indexNT])
 
     if nextNT in repDic:
-        if index_production_chosen == None:
+        if indexProductionChosen == None:
           return [None] * 7
-        repDic[nextNT].append(index_production_chosen)
+        repDic[nextNT].append(indexProductionChosen)
 
-    structure.append(index_production_chosen)
+    structure.append(indexProductionChosen)
     idxGenome += 1
 
-    phenotype = phenotype.replace(nextNT, grammar.production_rules[NT_index][index_production_chosen][0], 1)
+    phenotype = phenotype.replace(nextNT, grammar.production_rules[indexNT][indexProductionChosen][0], 1)
     listDepth[idxDepth] += 1
     if listDepth[idxDepth] > maxDepth:
         break
-    if grammar.production_rules[NT_index][index_production_chosen][2] == 0:  # arity 0 (T)
+    if grammar.production_rules[indexNT][indexProductionChosen][2] == 0:  # arity 0 (T)
         idxDepth += 1
         nodes += 1
-    elif grammar.production_rules[NT_index][index_production_chosen][2] == 1:  # arity 1 (PR with one NT)
+    elif grammar.production_rules[indexNT][indexProductionChosen][2] == 1:  # arity 1 (PR with one NT)
         pass
     else:  # it is a PR with more than one NT
-        arity = grammar.production_rules[NT_index][index_production_chosen][2]
+        arity = grammar.production_rules[indexNT][indexProductionChosen][2]
         if idxDepth == 0:
             listDepth = [listDepth[idxDepth], ] * arity + listDepth[idxDepth + 1:]
         else:
             listDepth = listDepth[0:idxDepth] + [listDepth[idxDepth], ] * arity + listDepth[idxDepth + 1:]
 
-    next_ = re.search(NEXT_NT_STR, phenotype)
-    if next_:
-        nextNT = next_.group()
+    nextStr = re.search(NEXT_NT_STR, phenotype)
+    if nextStr:
+        nextNT = nextStr.group()
     else:
         nextNT = None
 
   if nextNT:
       invalid = True
-      used_codons = 0
+      usedCodons = 0
   else:
       invalid = False
-      used_codons = idxGenome
+      usedCodons = idxGenome
 
   depth = max(listDepth)
   phenotype = checkPhenotype(phenotype)
-  return phenotype, nodes, depth, used_codons, invalid, 0, structure
+  return phenotype, nodes, depth, usedCodons, invalid, 0, structure
 
 
 def getProteinNames(bnfGrammar):
@@ -341,7 +341,7 @@ def performReplaceEpitope(ind, pName, nEps):
 def performSwapEpitopes(ind, pName):
     '''Performs the epitope mutation by swapping the order of the epitopes of a protein
     '''
-    tmpEp, mutated_ = 'tmpEpXxXxX', False
+    tmpEp = 'tmpEpXxXxX'
     eps = re.findall(fr'{pName}C?\[\d+\]', ind.phenotype)
     if len(eps) < 2:
       return ind, True
@@ -383,7 +383,7 @@ def mutationEpitope(ind, bnfGrammar, mutEProb=0.3, mutSwapProb=None, mutLProb=No
     mutSwapProb = mutEProb if mutSwapProb is None else mutSwapProb
     mutLProb = mutEProb if mutLProb is None else mutLProb
     
-    mutated_ = False
+    isMutated = False
     newInd = copy.deepcopy(ind)
     protEpDic = getProteinEpitopes(bnfGrammar)
     
@@ -395,26 +395,26 @@ def mutationEpitope(ind, bnfGrammar, mutEProb=0.3, mutSwapProb=None, mutLProb=No
 
     failMut = False
     if doMuts[0]:
-      mutated_ = True
+      isMutated = True
       pName = random.choice(list(protEpDic.keys()))
       newInd, failMut = performSwapEpitopes(newInd, pName)
 
     if doMuts[1] or failMut:
-      mutated_ = True
+      isMutated = True
       pName = random.choice(list(protEpDic.keys()))
       newInd, failMut = performReplaceEpitope(newInd, pName, protEpDic[pName])
 
     if doMuts[2] or failMut:
-      mutated_ = True
+      isMutated = True
       protLinkDic = getProteinLinkers(bnfGrammar)
       pName = random.choice(list(protEpDic.keys()))
       newInd, failMut = performReplaceLinker(newInd, pName, protLinkDic[pName])
 
-    if mutated_:
+    if isMutated:
         del newInd.fitness.values
     return newInd,
 
-def crossover_multiepitope(parent0, parent1, bnfGrammar):
+def crossoverMultiepitope(parent0, parent1, bnfGrammar):
   '''This crossover operates at phenotype level, so no further mapping is necessary.
   The crossover will swap the entire set of epitopes from 1 protein with the same protein set of the other parent.
   - parents: Individuals to be crossed
@@ -478,8 +478,8 @@ def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
 
   offspring = []
   while len(offspring) < lambda_:
-    op_choice = random.random()
-    if op_choice < cxpb:  # Apply crossover
+    opChoice = random.random()
+    if opChoice < cxpb:  # Apply crossover
       ind1, ind2 = [toolbox.clone(i) for i in random.sample(population, 2)]
       ind1, ind2 = toolbox.mate(ind1, ind2, bnfGrammar)
       del ind1.fitness.values
@@ -488,7 +488,7 @@ def phenVarOr(population, toolbox, bnfGrammar, lambda_, cxpb, mutpb, mutProbs):
         offspring.append(ind1)
       elif not ind2.invalid:
         offspring.append(ind2)
-    elif op_choice < cxpb + mutpb:  # Apply mutation
+    elif opChoice < cxpb + mutpb:  # Apply mutation
       ind = toolbox.clone(random.choice(population))
       ind, = toolbox.mutate(ind, bnfGrammar, *mutProbs)
       del ind.fitness.values

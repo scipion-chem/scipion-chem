@@ -39,7 +39,7 @@ from pwem.objects.data import SetOfSequences, Sequence
 
 from pwchem.utils import runInParallel
 from pwchem.utils.utilsDEAP import getProteinNames, ge_eaSimpleChem, ge_eaMuPlusLambdaChem, ge_eaMuCommaLambdaChem, \
-  RepGrammar, RepIndividual, randomInitialisation, crossover_multiepitope, mutationEpitope
+  RepGrammar, RepIndividual, randomInitialisation, crossoverMultiepitope, mutationEpitope
 
 from deap import base, creator, tools
 
@@ -493,7 +493,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     toolbox.register("select", tools.selTournament, tournsize=self.tournSize.get())
 
     # Single-point crossover:
-    toolbox.register("mate", crossover_multiepitope)
+    toolbox.register("mate", crossoverMultiepitope)
     toolbox.decorate("mate", ensureEpitopeNumber(self.minEp.get(), self.maxEp.get(), bnfGrammar))
 
     # Flip-int mutation:

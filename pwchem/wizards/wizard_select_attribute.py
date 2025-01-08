@@ -126,7 +126,7 @@ class SelectMultiPointerAttributeWizard(VariableWizard):
 
   def show(self, form, *params):
     protocol = form.protocol
-    inputParam, outputParam = self.getInputOutput(form)
+    _, outputParam = self.getInputOutput(form)
 
     attrsList = protocol.getAllInputScores()
     finalAttrsList = []
@@ -313,7 +313,7 @@ class SelectEvaluationOrigin(VariableWizard):
     return iedbProts
 
   def show(self, form, *params):
-    inputParam, outputParam = self.getInputOutput(form)
+    _, outputParam = self.getInputOutput(form)
 
     evalProts = []
     evalProts += self.importIEDBProtocols()
