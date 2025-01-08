@@ -868,7 +868,7 @@ class ProtOptimizeMultiEpitope(EMProtocol):
     for i, sline in enumerate(self.evalSummary.get().split('\n')):
       if sline.strip():
         sDic = json.loads(')'.join(sline.split(')')[1:]).strip())
-        source, weight = sDic.pop('Evaluation'), sDic.pop('Weight')
+        source = sDic.pop('Evaluation')
         if source not in evalDics:
           evalDics[source] = {}
 

@@ -43,6 +43,7 @@ from pwem.objects import String
 from pwchem.wizards import VariableWizard
 import pwchem.protocols as chemprot
 
+SELECT_STR = "Select one of the attributes"
 
 class SelectFromListWizard(VariableWizard):
     '''This wizard let the user select from a list that comes from a function i the target protocol,
@@ -59,7 +60,7 @@ class SelectFromListWizard(VariableWizard):
           finalAttrsList.append(pwobj.String(i))
         provider = ListTreeProviderString(finalAttrsList)
         dlg = dialog.ListDialog(form.root, "Attribute selection", provider,
-                                "Select one of the attributes")
+                                SELECT_STR)
         form.setVar(outputParam[0], dlg.values[0].get())
 
 SelectFromListWizard().addTarget(protocol=chemprot.ProtMapAttributeToSeqROIs,
@@ -134,7 +135,7 @@ class SelectMultiPointerAttributeWizard(VariableWizard):
       finalAttrsList.append(pwobj.String(i))
     provider = ListTreeProviderString(finalAttrsList)
     dlg = dialog.ListDialog(form.root, "Attribute selection", provider,
-                            "Select one of the attributes")
+                            SELECT_STR)
     form.setVar(outputParam[0], dlg.values[0].get())
 
 SelectMultiPointerAttributeWizard().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
@@ -166,7 +167,7 @@ class SelectMultiAttributeWizardChem(SelectAttributeWizard):
       finalAttrsList.append(pwobj.String(i))
     provider = ListTreeProviderString(finalAttrsList)
     dlg = dialog.ListDialog(form.root, "Filter set", provider,
-                            "Select one of the attributes")
+                            SELECT_STR)
     form.setVar(outputParam[0], ';'.join([val.get() for val in dlg.values]))
 
 SelectMultiAttributeWizardChem().addTarget(protocol=chemprot.ProtChemOperateSet,
@@ -192,7 +193,7 @@ class SelectAttributeWizardListOperate(SelectAttributeWizardChem):
       finalAttrsList.append(pwobj.String(i))
     provider = ListTreeProviderString(finalAttrsList)
     dlg = dialog.ListDialog(form.root, "Filter set", provider,
-                            "Select one of the attributes")
+                            SELECT_STR)
     form.setVar(outputParam[0], dlg.values[0].get())
 
 SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtChemOperateSet,
