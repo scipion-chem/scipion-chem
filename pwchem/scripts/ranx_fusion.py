@@ -37,7 +37,6 @@ if __name__ == "__main__":
     
     lruns = []
     for nameRun, runDic in runDics.items():
-        print('runDic: ', runDic)
         lruns.append(Run({'q_1': runDic}, name=nameRun))
 
     combinedRun = fuse(runs=lruns,
