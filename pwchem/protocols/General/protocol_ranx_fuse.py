@@ -28,11 +28,10 @@
 # **************************************************************************
 
 """
-This protocol is used to merge different lists of ΔΔG values associated with
-mutations into a single list, generating a combined ranking.
+This protocol is used to merge different lists scores generating a combined ranking.
 """
 
-import os
+import os, json
 
 from pyworkflow.constants import BETA
 import pyworkflow.protocol.params as params
@@ -50,20 +49,36 @@ class ProtocolRANXFuse(EMProtocol):
   This protocol will fuse several result lists into a single list and will
   also generate a ranking.
   """
-  _label = 'Ranx Fusion'
+  _label = 'Ranx Score Fusion'
   _devStatus = BETA
 
   # -------------------------- DEFINE param functions ----------------------
-  def _addSetOfStatsForm(self, group):
-    group.addParam('inputSetOfStats', params.MultiPointerParam, pointerClass="SetOfStats",
+  def _addSetOfStatsForm(self, form):
+    group = form.addGroup('Input sets')
+    group.addParam('inputSets', params.MultiPointerParam, pointerClass="EMSet",
                    label='Set of Stats', allowsNull=False,
                    help='Select the SetOfStats to perform the fusion function.')
-    group.addParam('inAttrName', params.StringParam, label="Input attribute name: ",
-                   help='Select the attribute in the sets where the ID for each element is. e.g: mutation id.\n'
-                        'It must be shared among the different sets, and those with the same ID will be fused')
-    group.addParam('inAttrVal', params.StringParam, label="Input attribute value: ",
+    group = form.addGroup('Define attribute ID')
+    group.addParam('inSetID', params.StringParam, label="Input set name: ",
+                   help='Select the set from the input sets to define its attributes to fuse')
+    group.addParam('inAttrName', params.StringParam, label="Input ID attribute: ",
+                   help='Select the attribute to use as ID (only1 per input Set!) for the score combination')
+    group = form.addGroup('Define attribute values')
+    group.addParam('inAttrVal', params.StringParam, label="Input scores attribute: ",
                    help='Select the attribute in the sets where the value of each element is found. '
                         'e.g: mutation score.\nThey are the values that will be fused')
+    group.addParam('addAttr', params.LabelParam, label='Add score: ',
+                   help='Add ID-score defined')
+
+    group = form.addGroup('Summary')
+    group.addParam('outName', params.StringParam, label="Output name for the fused score: ", default='RanxScore',
+                   expertLevel=params.LEVEL_ADVANCED, help='Output name for fused scores')
+    group.addParam('inAttrs', params.TextParam, width=70, default='', label='List of inputs to fuse: ',
+                   help='Inputs to define the attribute fusion.\n'
+                        'This contains the input list of attributes that will be fused, with their respective input '
+                        'sets, attribute IDs and value columns.\nThe output will combine the input sets, stacking '
+                        'elements with the same attribute ID. If other attributes are shared, the ones in earliest sets'
+                        ' will be saved.')
 
   def _addFusionAlogorithmForm(self, form):
     form.addParam('typeAlgorithm', params.EnumParam, default=0,
@@ -124,10 +139,9 @@ class ProtocolRANXFuse(EMProtocol):
         form: this is the form to be populated with sections and params.
     """
     form.addSection(label=Message.LABEL_INPUT)
+    self._addSetOfStatsForm(form)
 
-    group = form.addGroup('Set of Stats')
-    self._addSetOfStatsForm(group)
-
+    form.addSection(label='Fusion parameters')
     group = form.addGroup('Fusion algorithms')
     self._addFusionAlogorithmForm(group)
 
@@ -137,30 +151,63 @@ class ProtocolRANXFuse(EMProtocol):
     self._insertFunctionStep('createOutputStep')
 
   def performFuseStep(self):
+    inSets = self.getInputSets()
+    inAttrDic = self.getInputAttrsDic()
     normMethod, fusionMethod, kwargs = self.getArgs()
 
     runDics = {}
-    for inSet in self.inputSetOfStats:
-      runDics[inSet.getObjValue().getClassName()] = self.createMutdict(inSet.get())
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, attrID = key.split('-')
+      inSet = inSets[int(inPointIdx)]
+      for attrVal in attrVals:
+        runDics[f"{inPointIdx}-{attrVal}"] = self.createAttrDic(inSet, attrID, attrVal)
 
     paramsFile = self.writeParamsFile(runDics, normMethod, fusionMethod, kwargs)
     pwchemPlugin.runScript(self, 'ranx_fusion.py', paramsFile, RANX_DIC)
 
   def createOutputStep(self):
-    outDic = self.parseOutputFile()
+    inSet = self.inputSets[0].get()
+    outAttrName = self.getOutAttrName()
+    outScores = self.parseOutputFile()
 
-    outputSet = SetOfStats.create(self.getPath())
-    for i, (mutName, scoreComb) in enumerate(outDic.values()):
-      newItem = Object()
-      setattr(newItem, 'Mut', String(mutName))
-      setattr(newItem, 'Score', Float(scoreComb))
-      setattr(newItem, 'Rank', Integer(i))
+    outSet = inSet.createCopy(self._getPath(), copyInfo=True)
+    for item in inSet:
+      inID = item.getAttributeValue(outAttrName)
+      scoreComb = outScores[inID]
+      setattr(item, self.outName.get(), Float(scoreComb))
+      outSet.append(item)
 
-      outputSet.append(newItem)
-
-    self._defineOutputs(outputStats=outputSet)
+    self._defineOutputs(outputSet=outSet)
 
   #  -------------------------- MAIN FUNCTIONS -----------------------------------
+
+  def getInputSets(self):
+    return [inPoint.get() for inPoint in self.inputSets]
+
+  def getInputAttrsDic(self):
+    '''Returns: {pointerIdx-AttrID: AttrValues}. If a pointer idx has several AttrID, only the first will be used as ID
+    for that set.
+    '''
+    inAttrsDic, idxsKey = {}, {}
+    for inLine in self.inAttrs.get().split('\n'):
+      if inLine:
+        inLineDic = json.loads(inLine.strip())
+        pointIdx = int(inLineDic['Set Idx'])
+        lineID = inLineDic['ID']
+        key = f'{pointIdx}-{lineID}'
+        if pointIdx not in idxsKey or idxsKey[pointIdx] == key:
+          if key not in inAttrsDic:
+            inAttrsDic[key] = []
+          inAttrsDic[key].append(inLineDic['Values'])
+          idxsKey[pointIdx] = key
+    return inAttrsDic
+
+  def getOutAttrName(self):
+    attrDic = self.getInputAttrsDic()
+    for k in attrDic:
+      if k.split('-')[0] == '0':
+        return k.split('-')[1]
+
 
   def getArgs(self):
     if self.normStrategy.get():
@@ -183,10 +230,12 @@ class ProtocolRANXFuse(EMProtocol):
       kwargs = {}
     return normMethod, fusionMethod, kwargs
 
-  def createMutdict(self, setStats):
+  def createAttrDic(self, inSet, attrName, attrValue):
+    '''Returns a dictionary {ID: Value} with the IDs in the ID attribute and value attributes columns respectively
+    '''
     mutations = {}
-    for obj in setStats:
-      mutations[str(obj.getAttributeValue(self.inAttrName.get()))] = float(obj.getAttributeValue(self.inAttrVal.get()))
+    for obj in inSet:
+      mutations[str(obj.getAttributeValue(attrName))] = float(obj.getAttributeValue(attrValue))
 
     return mutations
 
@@ -201,7 +250,8 @@ class ProtocolRANXFuse(EMProtocol):
       f.write(f'fusionMethod:: {fus}\n')
       f.write(f'kwargs:: {kwargs}\n')
 
-      f.write(f'runDics:: {runDics}\n')
+      dicLine = f'runDics:: {runDics}\n'
+      f.write(dicLine.replace("'", '"'))
 
     return paramsFile
 
@@ -210,8 +260,8 @@ class ProtocolRANXFuse(EMProtocol):
     with open(self.getOutFile()) as f:
       f.readline()
       for line in f:
-        id, mutName, scoreComb = line.split('\t')
-        outDic[id] = [mutName, scoreComb]
+        _, mutName, scoreComb = line.strip().split('\t')
+        outDic[mutName] = scoreComb
     return outDic
 
   # --------------------------- INFO functions -----------------------------------
@@ -248,4 +298,12 @@ class ProtocolRANXFuse(EMProtocol):
 
   def _citations(self):
     return ['BassaniR22']
-  
+
+  # --------------------------- WIZARD functions -----------------------------------
+  def createElementLine(self):
+    setStr, attrName, attrValue = self.inSetID.get().strip(), self.inAttrName.get().strip(), \
+                                  self.inAttrVal.get().strip()
+    setIdx = setStr.split('//')[0]
+
+    roiDef = f'{{"Set Idx": "{setIdx}", "ID": "{attrName}", "Values": "{attrValue}"}}\n'
+    return roiDef

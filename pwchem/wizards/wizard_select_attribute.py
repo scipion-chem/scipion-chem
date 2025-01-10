@@ -91,6 +91,14 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       targets=['defineScore'],
                                       inputs=['inputMoleculesSets', 'defineInput'],
                                       outputs=['defineScore'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRANXFuse,
+                                      targets=['inAttrName'],
+                                      inputs=['inputSets', 'inSetID'],
+                                      outputs=['inAttrName'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRANXFuse,
+                                      targets=['inAttrVal'],
+                                      inputs=['inputSets', 'inSetID'],
+                                      outputs=['inAttrVal'])
 
 for label in ['1', '2', '1_ratio', '2_ratio']:
   SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtScoreCorrelation,
