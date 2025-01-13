@@ -706,6 +706,10 @@ SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                         outputs=['linkProtSet'])
 
 
+SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRANXFuse,
+                                        targets=['inSetID'],
+                                        inputs=['inputSets'],
+                                        outputs=['inSetID'])
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""

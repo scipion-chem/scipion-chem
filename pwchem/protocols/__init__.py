@@ -93,6 +93,7 @@ from pwchem.protocols.General.protocol_converter import ConvertStructures
 from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
 from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
+from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse
 
 # Molecular dynamics
 from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization

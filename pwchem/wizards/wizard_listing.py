@@ -68,6 +68,10 @@ AddElementWizard().addTarget(protocol=ProtocolRankDocking,
                              targets=['defineSummary'],
                              inputs=[],
                              outputs=['defineSummary'])
+AddElementWizard().addTarget(protocol=ProtocolRANXFuse,
+                             targets=['addAttr'],
+                             inputs=[],
+                             outputs=['inAttrs'])
 
 
 class AddNumberedElementWizard(AddElementWizard):

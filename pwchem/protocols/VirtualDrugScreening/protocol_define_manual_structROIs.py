@@ -159,7 +159,7 @@ class ProtDefineStructROIs(EMProtocol):
 
         form.addSection(label='Input Pointers')
         form.addParam('inputPointerLabels', params.LabelParam, important=True,
-                      label='Records of inputs. Do not modificate manually',
+                      label='Records of inputs. Do not modify manually',
                       help='This is a list of the input pointer to keep track of the inputs received.\n'
                            'It is automatically updated with the first section wizards.\n'
                            'Manual modification (adding inputs from the lens) will have no actual impact on the '
