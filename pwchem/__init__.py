@@ -216,7 +216,7 @@ class Plugin(pwem.Plugin):
 
 		installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
 			addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
-			.addPackage(env, dependencies=['conda' 'pip'], default=default)
+			.addPackage(env, dependencies=['conda', 'pip'], default=default)
 
 	##################### RUN CALLS ######################
 	@classmethod
