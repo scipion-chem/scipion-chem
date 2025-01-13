@@ -36,6 +36,14 @@ solStr = '''1, 0.05
 3, 0.5
 4, 0.15'''
 
+solStr2 = '''1, 0.12
+2, 0.2
+3, 0.54
+4, 0.7'''
+
+INATTR = '''{"Set Idx": "0", "ID": "molName", "Values": "Solubility"}
+{"Set Idx": "1", "ID": "molName", "Values": "Solubility"}'''
+
 class TestAddAttribute(TestImportBase):
   @classmethod
   def _runAddAttribute(cls, inputProt, mode=0, inputFile=None):
@@ -102,3 +110,37 @@ class TestCalculateSASA(BaseTest):
     self._waitOutput(protSASA, 'outputAtomStruct', timeOut=10)
     assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputAtomStruct', None), cwd=protSASA.getWorkingDir())
     assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputSequence', None), cwd=protSASA.getWorkingDir())
+
+class TestRanxFusion(TestAddAttribute):
+  @classmethod
+  def _runRanxFusion(cls, inputProts):
+    protRanx = cls.newProtocol(
+      ProtocolRANXFuse, inAttrs=INATTR)
+
+    for i in range(len(inputProts)):
+      protRanx.inputSets.append(inputProts[i])
+      protRanx.inputSets[i].setExtended('outputSet')
+
+
+    cls.proj.launchProtocol(protRanx)
+    return protRanx
+
+  def test(self):
+    inFile1, inFile2 = self.proj.getTmpPath('attributeMapping.csv'), self.proj.getTmpPath('attributeMapping2.csv')
+    with open(inFile1, 'w') as f:
+      f.write(solStr)
+    protAdd1 = self._runAddAttribute(self.protImportSmallMols, mode=1, inputFile=inFile1)
+
+    with open(inFile2, 'w') as f:
+      f.write(solStr2)
+    protAdd2 = self._runAddAttribute(self.protImportSmallMols, mode=1, inputFile=inFile2)
+
+    self._waitOutput(protAdd1, 'outputSet', timeOut=10)
+    self._waitOutput(protAdd2, 'outputSet', timeOut=10)
+    assertHandle(self.assertIsNotNone, getattr(protAdd1, 'outputSet', None), cwd=protAdd1.getWorkingDir())
+    assertHandle(self.assertIsNotNone, getattr(protAdd2, 'outputSet', None), cwd=protAdd2.getWorkingDir())
+
+    protRanx = self._runRanxFusion([protAdd1, protAdd2])
+    self._waitOutput(protRanx, 'outputSet', timeOut=10)
+    assertHandle(self.assertIsNotNone, getattr(protRanx, 'outputSet', None), cwd=protRanx.getWorkingDir())
+

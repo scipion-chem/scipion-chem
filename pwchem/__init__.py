@@ -58,6 +58,7 @@ class Plugin(pwem.Plugin):
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
+		cls.addRanxPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
@@ -206,6 +207,16 @@ class Plugin(pwem.Plugin):
 
 		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
+
+	@classmethod
+	def addRanxPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(RANX_DIC['name'], packageHome=cls.getVar(RANX_DIC['home']),
+															packageVersion=RANX_DIC['version'])
+
+		installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
+			addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
+			.addPackage(env, dependencies=['conda', 'pip'], default=default)
 
 	##################### RUN CALLS ######################
 	@classmethod
