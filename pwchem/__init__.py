@@ -220,8 +220,8 @@ class Plugin(pwem.Plugin):
 			.addCommand('git clone https://github.com/bdsul/grape.git') \
 			.addCommand(f'mv grape {scipionEnvPath}') \
 			.addPackage(env, dependencies=['conda', 'git'], default=default)
-  
-  @classmethod
+
+	@classmethod
 	def addRanxPackage(cls, env, default=True):
 		# Instantiating install helper
 		installer = InstallHelper(RANX_DIC['name'], packageHome=cls.getVar(RANX_DIC['home']),
