@@ -311,16 +311,16 @@ class ProtOptimizeMultiEpitope(EMProtocol):
                    condition='linkerAction in [1, 2]', label='Define linker set: ', allowsNull=True,
                    help='Define the set of sequences of the linker to be chosen randomly or per protein')
     group.addParam('seleLinker', params.StringParam, label='Selected linker(s): ', default='',
-                   condition='LINKERSET',
+                   condition=f'{LINKERSET}',
                    help='Select the linker(s) to associate with the selected input protein')
 
     group.addParam('linkProtSet', params.StringParam, label='Select a input protein set: ', default='',
-                   condition='LINKERSET',
+                   condition=f'{LINKERSET}',
                    help='Choose a input protein set to associate with the linkers')
-    group.addParam('addLinker', params.LabelParam, label='Add linker: ', condition='LINKERSET',
+    group.addParam('addLinker', params.LabelParam, label='Add linker: ', condition=f'{LINKERSET}',
                    help='Add defined linker(s) for protein')
     group.addParam('linkerSummary', params.TextParam, width=100, label='Linker summary:', default='',
-                   condition='LINKERSET',
+                   condition=f'{LINKERSET}',
                    help='Summary of the defined linkers.')
 
     form.addSection(label='Multiepitope evaluations')
