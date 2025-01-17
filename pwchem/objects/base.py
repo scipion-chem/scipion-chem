@@ -1512,6 +1512,9 @@ class MDSystem(data.EMFile):
     def setLigandName(self, value):
         self._ligName.set(value)
 
+    def getLigandID(self):
+        return 'LIG'
+
     def getLigandTopologyFile(self):
         return self._topoLigFile.get()
 
