@@ -296,9 +296,9 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
         finalResiduesList.append(String(stri))
 
     else:
-      fileName = self.getInputFilename()
-
       structureHandler = AtomicStructHandler()
+      fileName = self.getInputFilename(form.protocol, inputObj, structureHandler)
+
       structureHandler.read(fileName)
       structureHandler.getStructure()
       modelsLength, modelsFirstResidue = structureHandler.getModelsChains()
