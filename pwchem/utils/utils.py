@@ -112,11 +112,15 @@ def organizeThreads(nTasks, nThreads):
       subsets[i % nTasks] += 1
   return subsets
 
-def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
+def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, popen=False, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
     try:
-      protocol.runJob(programPath, progArgs, **kwargs)
+      if not popen:
+        protocol.runJob(programPath, progArgs, **kwargs)
+      else:
+        subprocess.check_call(programPath + progArgs, shell=True, **kwargs)
+
       finished = True
     except Exception:
       i += 1
