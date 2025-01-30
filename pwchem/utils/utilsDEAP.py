@@ -24,10 +24,10 @@
 # *  e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
-import re, random, copy, time, math, warnings, sys
+import re, random, copy, math, warnings, datetime
 import numpy as np
 
-from deap import base, creator, tools, algorithms
+from deap import tools
 
 from grape.grape import Individual, Grammar, mapper_eager, mapper_lazy
 
@@ -545,7 +545,7 @@ def generateRecord(logbook, stats, population, valid, halloffame, ngen, nevals, 
     record = stats.compile(population) if stats is not None else {}
     scores = [ind.fitness.values[0] for ind in valid]
     hofScores = [ind.fitness.values[0] for ind in halloffame]
-    logKwargs = {"gen": ngen, "nevals": nevals,
+    logKwargs = {"time": datetime.datetime.now(), "gen": ngen, "nevals": nevals,
                  "maxScore": max(scores), "minScore": min(scores), "meanScore": sum(scores) / len(scores),
                  "hofScores": hofScores}
 
