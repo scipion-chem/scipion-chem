@@ -24,7 +24,7 @@
 # *  e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
-import re, random, copy, time, math, warnings
+import re, random, copy, time, math, warnings, sys
 import numpy as np
 
 from deap import base, creator, tools, algorithms
@@ -74,14 +74,19 @@ def randomInitialisation(indClass, popSize, bnfGrammar, minEps, maxEps, cProb,
 
     """
     population = []
-    for _ in range(popSize):
+    while len(population) < popSize:
       initGenomeLength = random.randint(minInitGenomeLength, maxInitGenomeLength)
       genome = [random.randint(0, codonSize) for _ in range(initGenomeLength)]
       ind = indClass(genome, bnfGrammar, maxInitDepth, codonConsumption, minEps, maxEps, cProb)
-      while not ind.phenotype:
+
+      ii = 0
+      while not ind.phenotype and ii < 5:
         genome = [random.randint(0, codonSize) for _ in range(initGenomeLength)]
         ind = indClass(genome, bnfGrammar, maxInitDepth, codonConsumption, minEps, maxEps, cProb)
-      population.append(ind)
+        ii += 1
+
+      if ind.phenotype:
+        population.append(ind)
 
     if genomeRepresentation == 'list':
       return population
@@ -148,6 +153,7 @@ def getNEpisPerProt(protsDic, nMin, nMax):
   :return: {protName: nEps} with the number of epitopes to contribute
   '''
   protNames = list(protsDic.keys())
+  nMax = min(nMax, sum(protsDic.values()))
   curNEps, nEps = 0, random.randint(nMin, nMax)
   epsDic = {protName: 0 for protName in protNames}
   while curNEps < nEps:
