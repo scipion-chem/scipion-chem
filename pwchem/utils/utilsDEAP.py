@@ -333,15 +333,15 @@ def performReplaceEpitope(ind, pName, nEps):
     epIdxs = re.findall(fr'{pName}\[(\d+)\]', ind.phenotype)
     if len(epIdxs) == 0:
       return ind, True
-    phen = getProteinPhenotype(ind, pName)
     mutIdx = random.choice(epIdxs)
-    posibleIdx = list(set(range(nEps)) - set(epIdxs))
+
+    allEps = [str(i) for i in range(nEps)]
+    posibleIdx = list(set(allEps) - set(epIdxs))
     if len(posibleIdx) == 0:
       return ind, True
 
     newIdx = random.choice(posibleIdx)
-    phen = phen.replace(f'{pName}[{mutIdx}]', f'{pName}[{newIdx}]')
-    ind.phenotype = ind.phenotype.replace(getProteinPhenotype(ind, pName), phen)
+    ind.phenotype = ind.phenotype.replace(f'{pName}[{mutIdx}]', f'{pName}[{newIdx}]')
     return ind, False
 
 def performSwapEpitopes(ind, pName):
@@ -352,14 +352,23 @@ def performSwapEpitopes(ind, pName):
     if len(eps) < 2:
       return ind, True
 
-    phen = getProteinPhenotype(ind, pName)
+    oldPhen = getProteinPhenotype(ind, pName)
     ep1, ep2 = np.random.choice(eps, 2, replace=False)
-    phen = phen.replace(ep1, tmpEp)
+    phen = oldPhen.replace(ep1, tmpEp)
     phen = phen.replace(ep2, ep1)
     phen = phen.replace(tmpEp, ep2)
 
-    ind.phenotype = ind.phenotype.replace(getProteinPhenotype(ind, pName), phen)
+    ind.phenotype = ind.phenotype.replace(oldPhen, phen)
     return ind, False
+
+def checkDuplicatedEpitope(ind, pNames):
+  duplicated = False
+  for pName in pNames:
+    eps = re.findall(fr'{pName}C?\[\d+\]', ind.phenotype)
+    if len(eps) != len(set(eps)):
+      duplicated = True
+  
+  return duplicated
 
 def performReplaceLinker(ind, pName, nLinks):
     '''Performs the linker epitope mutation by replacement with another epitope linker from a protein
@@ -429,8 +438,9 @@ def crossoverMultiepitope(parent0, parent1, bnfGrammar):
   child0, child1 = copy.deepcopy(parent0), copy.deepcopy(parent1)
   protNames = getProteinNames(bnfGrammar)
   proteinCrosses = {pName: False for pName in protNames}
+  pName = random.choice(protNames)
 
-  proteinCrosses[random.choice(protNames)] = True  # Crossing only one random protein
+  proteinCrosses[pName] = True  # Crossing only one random protein
   child0, child1 = performCrossProtein(child0, child1, proteinCrosses)
   del child0.fitness.values, child1.fitness.values
   return child0, child1
