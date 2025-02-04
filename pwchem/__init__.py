@@ -113,7 +113,9 @@ class Plugin(pwem.Plugin):
 		env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
 		# Installing package
-		installer.addCommand(f'conda create --name {RDKIT_DIC["name"]}-{RDKIT_DIC["version"]} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
+		rdkitEnvName = cls.getEnvName(RDKIT_DIC)
+		installer.addCommand(f'conda create --name {rdkitEnvName} {RDKIT_DIC["name"]}={RDKIT_DIC["version"]} '
+												 f'python=3.10 -y', 'RDKIT_ENV_CREATED')\
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
