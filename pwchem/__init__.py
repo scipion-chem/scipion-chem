@@ -114,8 +114,8 @@ class Plugin(pwem.Plugin):
 
 		# Installing package
 		rdkitEnvName = cls.getEnvName(RDKIT_DIC)
-		installer.addCommand(f'conda create --name {rdkitEnvName} {RDKIT_DIC["name"]}={RDKIT_DIC["version"]} '
-												 f'python=3.10 -y', 'RDKIT_ENV_CREATED')\
+		installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
+												 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} python=3.10 -y', 'RDKIT_ENV_CREATED')\
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
