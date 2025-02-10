@@ -160,7 +160,7 @@ class Plugin(pwem.Plugin):
 
 		# Generating installation commands
 		openbabel_installer.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer'], channel='conda-forge') \
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge') \
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 		
