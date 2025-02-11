@@ -239,12 +239,13 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-def mergeFiles(inFiles, outFile, sep=''):
+def mergeFiles(inFiles, outFile=None, sep=''):
   inTexts = []
   for inFile in inFiles:
     with open(inFile) as f:
       inTexts.append(f.read())
 
+  outFile = f'mergedFiles{os.path.splitext(inFile)[-1]}' if outFile is None else outFile
   with open(outFile, 'w') as fo:
     fo.write(sep.join(inTexts))
   return outFile
