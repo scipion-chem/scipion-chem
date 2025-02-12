@@ -246,15 +246,26 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-def mergeFiles(inFiles, outFile=None, sep=''):
+def mergeFiles(inFiles, outFile=None, oDir='', sep=''):
   inTexts = []
   for inFile in inFiles:
     with open(inFile) as f:
       inTexts.append(f.read())
 
-  outFile = f'mergedFiles{os.path.splitext(inFile)[-1]}' if outFile is None else outFile
+  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
   with open(outFile, 'w') as fo:
     fo.write(sep.join(inTexts))
+  return outFile
+
+def mergeSDFs(sdfFiles, outFile=None, oDir=''):
+  inTexts = []
+  for inFile in sdfFiles:
+    with open(inFile) as f:
+      inTexts.append(f.read().strip())
+
+  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
+  with open(outFile, 'w') as fo:
+    fo.write('\n'.join(inTexts))
   return outFile
 
 def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
