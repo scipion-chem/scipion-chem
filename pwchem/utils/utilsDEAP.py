@@ -89,13 +89,14 @@ def randomInitialisation(indClass, popSize, bnfGrammar, minEps, maxEps, cProb,
         population.append(ind)
 
     if genomeRepresentation == 'list':
-      return population
+      pass
     elif genomeRepresentation == 'numpy':
       for ind in population:
         ind.genome = np.array(ind.genome)
-      return population
     else:
       raise ValueError("Unkonwn genome representation")
+
+    return population
 
 def getNonRepeatedIndex(curIdx, repIdxs, nRules):
     '''Checks whether the index for that production rule has already been used and choses next available index
