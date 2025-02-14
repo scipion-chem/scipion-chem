@@ -1,6 +1,6 @@
 import sys
 
-from .utils import getMolFilesDic, parseParams
+from utils import getMolFilesDic, parseParams
 
 ######################################################
 def atomTypeFilt(files, minNum, atomType):
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles', 'filters'], sep='::')
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'], evalParams=['filters'], sep='::')
     files = paramsDic['ligandFiles']
     filDic = paramsDic['filters']
 

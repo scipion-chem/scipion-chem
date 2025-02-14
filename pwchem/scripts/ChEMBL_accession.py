@@ -4,7 +4,7 @@ import math, sys
 import pandas as pd
 from chembl_webresource_client.new_client import new_client
 
-from .utils import parseParams
+from utils import parseParams
 
 #############################################################################################################
 

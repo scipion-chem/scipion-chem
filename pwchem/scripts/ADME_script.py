@@ -2,7 +2,7 @@ from __future__ import print_function
 from rdkit.Chem import Descriptors, Draw, PandasTools
 import sys
 
-from .utils import getMolFilesDic, parseParams
+from utils import getMolFilesDic, parseParams
 
 #################################################################################################################
 

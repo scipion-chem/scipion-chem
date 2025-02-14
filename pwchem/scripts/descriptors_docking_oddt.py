@@ -38,7 +38,7 @@ from oddt.scoring.descriptors import (fingerprints, oddt_vina_descriptor,
 from oddt.scoring.functions import rfscore, nnscore, PLECscore
 from oddt.fingerprints import *
 
-from .utils import parseParams
+from utils import parseParams
 
 fpDic = {'PLEC': PLEC, 'SimpleInteractionFingerprint': SimpleInteractionFingerprint, 'ECFP': ECFP, 'SPLIF': SPLIF}
 
