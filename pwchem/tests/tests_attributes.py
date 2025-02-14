@@ -43,8 +43,8 @@ solStr2 = '''1, 0.12
 3, 0.54
 4, 0.7'''
 
-INATTR = '''{"Set Idx": "0", "ID": "molName", "Values": "Solubility"}
-{"Set Idx": "1", "ID": "molName", "Values": "Solubility"}'''
+INATTR = '''{"Set Idx": "0", "ID": "molName", "Values": "Solubility", "Higher_is_better": "True"}
+{"Set Idx": "1", "ID": "molName", "Values": "Solubility", "Higher_is_better": "True"}'''
 
 class TestAddAttribute(TestImportBase):
   @classmethod
