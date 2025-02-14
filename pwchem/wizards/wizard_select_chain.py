@@ -34,7 +34,7 @@ information such as name and number of residues.
 
 # Imports
 import os, requests, json
-from Bio.PDB import PDBParser, MMCIFParser
+from Bio.PDB import PDBParser, MMCIFParser, PDBIO
 
 from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
@@ -44,9 +44,9 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
 
-from pwchem.objects import SequenceVariants, SetOfStructROIs
+from pwchem.objects import SequenceVariants, SetOfStructROIs, SetOfSmallMolecules
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort
+from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 
@@ -222,12 +222,9 @@ AddROIWizard().addTarget(protocol=ProtDefineStructROIs,
 
 class SelectChainWizardQT(SelectChainWizard):
   _targets, _inputs, _outputs = [], {}, {}
+
   @classmethod
-  def getModelsChainsStep(cls, protocol, inputObj):
-    """ Returns (1) list with the information
-       {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
-       (2) list with residues, position and chain (modelsFirstResidue)"""
-    structureHandler = AtomicStructHandler()
+  def getInputFilename(cls, protocol, inputObj, structureHandler):
     if type(inputObj) == str:
       if os.path.exists(inputObj):
         fileName = inputObj
@@ -246,7 +243,7 @@ class SelectChainWizardQT(SelectChainWizard):
     elif str(type(inputObj).__name__) == 'SchrodingerAtomStruct':
         fileName = os.path.abspath(inputObj.convert2PDB())
 
-    elif str(type(inputObj).__name__) == 'SetOfStructROIs':
+    elif str(type(inputObj).__name__) == 'SetOfStructROIs' or str(type(inputObj).__name__) == 'SetOfSmallMolecules':
         fileName = inputObj.getProteinFile()
 
     else:
@@ -258,12 +255,20 @@ class SelectChainWizardQT(SelectChainWizard):
       args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
       runOpenBabel(protocol=protocol, args=args, popen=True)
       fileName = pdbFile
+    return fileName
 
+  @classmethod
+  def getModelsChainsStep(cls, protocol, inputObj):
+    """ Returns (1) list with the information
+       {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
+       (2) list with residues, position and chain (modelsFirstResidue)"""
+    structureHandler = AtomicStructHandler()
+    fileName = cls.getInputFilename(protocol, inputObj, structureHandler)
     structureHandler.read(fileName)
     structureHandler.getStructure()
     return structureHandler.getModelsChains()
 
-class SelectResidueWizardQT(SelectResidueWizard):
+class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
   _targets, _inputs, _outputs = [], {}, {}
   @classmethod
   def getModelsChainsStep(cls, protocol, inputObj):
@@ -280,14 +285,86 @@ class SelectResidueWizardQT(SelectResidueWizard):
       return fileName
 
   def getResidues(self, form, inputObj, chainStr):
-    if issubclass(type(inputObj), SetOfStructROIs):
-        inputObj = inputObj.getProteinFile()
-        inputObj = self.checkNoPDBQT(form, inputObj)
-    elif issubclass(type(inputObj), AtomStruct):
-        inputObj = inputObj.getFileName()
-        inputObj = self.checkNoPDBQT(form, inputObj)
+    if issubclass(type(inputObj), Sequence) or str(type(inputObj).__name__) == 'SequenceVariants':
+      finalResiduesList = []
+      for i, res in enumerate(inputObj.getSequence()):
+        if res in RESIDUES1TO3:
+          res3 = RESIDUES1TO3[res]
+        else:
+          res3 = res
+        stri = '{"index": %s, "residue": "%s"}' % (i + 1, res3)
+        finalResiduesList.append(String(stri))
 
-    return super().getResidues(form, inputObj, chainStr)
+    else:
+      structureHandler = AtomicStructHandler()
+      fileName = self.getInputFilename(form.protocol, inputObj, structureHandler)
+
+      structureHandler.read(fileName)
+      structureHandler.getStructure()
+      _, modelsFirstResidue = structureHandler.getModelsChains()
+
+      struct = json.loads(chainStr)  # From wizard dictionary
+      chain, model = struct["chain"].upper().strip(), int(struct["model"])
+
+      residueList = self.editionListOfResidues(modelsFirstResidue, model, chain)
+      finalResiduesList = []
+      for i in residueList:
+        finalResiduesList.append(String(i))
+
+    return finalResiduesList
+
+
+class SelectAtomWizardQT(SelectResidueWizardQT):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getAtoms(self, form, inputObj, chainStr, resStr):
+    protocol = form.protocol
+    structureHandler = AtomicStructHandler()
+    parser = parseAtomStruct(self.getInputFilename(protocol, inputObj, structureHandler))
+
+    chainJson, residueJson = json.loads(chainStr), json.loads(resStr)  # From wizard dictionary
+    chainID, modelID = chainJson["chain"].upper().strip(), int(chainJson["model"])
+    residueID = int(residueJson['index'].split('-')[0])
+
+    atomList = self.editionListOfAtoms(parser, modelID, chainID, residueID)
+    finalAtomList = []
+    for i in atomList:
+      finalAtomList.append(String(i))
+    return finalAtomList
+
+  def editionListOfAtoms(self, parser, modelID, chainID, residueID):
+    atomList = []
+    for model in parser:
+      if model.get_id() == modelID:
+        for chain in model.get_chains():
+          if chain.get_id() in chainID:
+            for residue in chain.get_residues():
+              if residue.get_id()[1] == residueID:
+                for i, atom in enumerate(residue.get_atoms()):
+                  atomID = atom.get_id()
+                  atomList.append(f'{{"index": {i+1}, "atom": "{atomID}"}}')
+
+    return atomList
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    inputObj = getattr(protocol, inputParams[0]).get()
+    chainStr = getattr(protocol, inputParams[1]).get()
+    residueStr = getattr(protocol, inputParams[2]).get()
+
+    finalAtomsList = self.getAtoms(form, inputObj, chainStr, residueStr)
+
+    provider = ListTreeProviderString(finalAtomsList)
+    dlg = dialog.ListDialog(form.root, "Residue atoms", provider,
+                            "Select one atom (atom number, "
+                            "atom name)")
+
+    idx, atomID = json.loads(dlg.values[0].get())['index'], json.loads(dlg.values[0].get())['atom']
+
+    intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
+    form.setVar(outputParam[0], intervalStr)
+
 
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,

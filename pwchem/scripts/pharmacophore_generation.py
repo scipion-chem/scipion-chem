@@ -23,66 +23,22 @@
 # *  e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
-import os, sys, math, ast, pickle, operator
+import os, sys, ast, pickle, operator
 from collections import OrderedDict, Counter
 
-#import pandas as pd
 import numpy as np
 
-from sklearn import datasets, cluster
+from sklearn import cluster
 
 from rdkit import RDConfig, Chem, Geometry, DistanceGeometry
 from rdkit.Chem import ChemicalFeatures, rdDistGeom, Draw, rdMolTransforms, AllChem
 from rdkit.Chem.Pharm3D import Pharmacophore, EmbedLib
 
+from utils import getMolFilesDic, parseParams, getBaseName
 
 ABSOLUTE, PROP_MOLS, PROP_FEATS = ['Absolute', 'Molecules proportion', 'Features proportion']
 DBSCAN, KMEANS = ['DBSCAN', 'KMeans']
 
-def getBaseFileName(filename):
-    return os.path.splitext(os.path.basename(filename))[0]
-
-def preprocessLigands(ligandsFiles):
-    mols_dict = {}
-
-    for molFile in ligandsFiles:
-        if molFile.endswith('.mol2'):
-            m = Chem.MolFromMol2File(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.mol'):
-            m = Chem.MolFromMolFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.pdb'):
-            m = Chem.MolFromPDBFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.smi'):
-            f = open(molFile, "r")
-            firstline = next(f)
-            m = Chem.MolFromSmiles(str(firstline))
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.sdf'):
-            suppl = Chem.SDMolSupplier(molFile)
-            for mol in suppl:
-                mols_dict[mol] = molFile
-
-    mols = list(mols_dict.keys())
-
-    return mols_dict, mols
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split('::')
-            if key == 'ligandFiles' or key == 'moleculesFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
 
 def clusteringDBScan(feature_coord, dbEps):
     clus = None
@@ -172,7 +128,7 @@ def getMinClusterSize(paramsDic, nMols, nFeats):
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
     '''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles', 'moleculesFiles'], sep='::')
     outDir = sys.argv[2]
     paths_ligands = paramsDic['ligandFiles']
     dict_smiles = ast.literal_eval(paramsDic['ligandSmiles'])
@@ -192,9 +148,9 @@ if __name__ == "__main__":
 #####################################################################
     # Load molecules and assign bonds order based on the SMILES
     dict_molecules = {}
-    molsDic, mols = preprocessLigands(paths_ligands)
+    molsDic, mols = getMolFilesDic(paths_ligands)
     for mol in molsDic:
-        dict_molecules[getBaseFileName(molsDic[mol])] = mol
+        dict_molecules[getBaseName(molsDic[mol])] = mol
 
     # Building dictionary: {ligBase: [ChemMol(from file), ChemMol(from SMILES)]}
     dict_mol_reference = {}
