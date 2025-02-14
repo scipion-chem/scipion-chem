@@ -35,9 +35,10 @@ from functools import partial
 import oddt
 from oddt.scoring.descriptors import (fingerprints, oddt_vina_descriptor,
                                       close_contacts_descriptor, universal_descriptor)
-from oddt.scoring.descriptors.binana import binana_descriptor
 from oddt.scoring.functions import rfscore, nnscore, PLECscore
 from oddt.fingerprints import *
+
+from pwchem.utils.scriptUtils import parseParams
 
 fpDic = {'PLEC': PLEC, 'SimpleInteractionFingerprint': SimpleInteractionFingerprint, 'ECFP': ECFP, 'SPLIF': SPLIF}
 
@@ -125,23 +126,12 @@ def preprocessReceptor(receptorFile):
     rec.addh()
     return rec
 
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
-
 
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     descriptor = paramsDic['descriptor']
     if 'Vina' in descriptor:
         results, mols = oddt_vina_descriptors(paramsDic)

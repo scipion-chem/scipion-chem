@@ -2,37 +2,9 @@ from rdkit import Chem, RDConfig
 from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
 import sys
 
-def preprocessLigands(ligandsFiles):
-    mols_dict = {}
+from pwchem.utils.scriptUtils import parseParams
+from pwchem.utils.rdkitUtils import getMolFilesDic
 
-    for molFile in ligandsFiles:
-        if molFile.endswith('.mol2'):
-            with open(molFile) as fIn:
-                m = Chem.MolFromMol2Block(fIn.read(), sanitize=False)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.mol'):
-            m = Chem.MolFromMolFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.pdb'):
-            m = Chem.MolFromPDBFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.smi'):
-            f = open(molFile, "r")
-            firstline = next(f)
-            m = Chem.MolFromSmiles(str(firstline))
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.sdf'):
-            suppl = Chem.SDMolSupplier(molFile)
-            for mol in suppl:
-                mols_dict[mol] = molFile
-
-    mols = list(mols_dict.keys())
-
-    return mols_dict, mols
 
 def preprocessObjective(objective_file):
     mol = " "
@@ -61,25 +33,12 @@ def preprocessObjective(objective_file):
 
     return mol
 
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
-
-
 #################################################################################################################
-def distance_filter(mols_dict, objective, distance, ignore, prealign, permuts):
+def distance_filter(molsDict, objective, distance, ignore, prealign, permuts):
     distance_dict = {}
     ref = Chem.AddHs(objective)
     AllChem.EmbedMolecule(ref)
-    for mol, molFile in mols_dict.items():
+    for mol, molFile in molsDict.items():
         mol = Chem.AddHs(mol)
         AllChem.EmbedMolecule(mol)
         if prealign:
@@ -123,9 +82,9 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     molFiles = paramsDic['ligandFiles']
-    mols_dict, mols = preprocessLigands(molFiles)
+    molsDict, mols = getMolFilesDic(molFiles)
     objectiveFile = str(paramsDic["referenceFile"])
     objective = preprocessObjective(objectiveFile)
     distance = paramsDic["distanceType"]
@@ -133,7 +92,7 @@ if __name__ == "__main__":
     ignore = bool(paramsDic["ignoreHydrogen"])
     cut = float(paramsDic["cut-off"])
 
-    distance_dict = distance_filter(mols_dict, objective, distance, ignore, prealign, permuts)
+    distance_dict = distance_filter(molsDict, objective, distance, ignore, prealign, permuts)
     final_dict = filter(distance_dict, cut)
 
     write_finalfile(paramsDic['outputPath'], final_dict)

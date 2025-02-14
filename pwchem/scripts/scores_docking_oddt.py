@@ -34,6 +34,7 @@ import oddt
 from oddt.scoring.descriptors import (autodock_vina_descriptor, fingerprints, oddt_vina_descriptor)
 from oddt.scoring.functions import rfscore, nnscore, PLECscore
 
+from pwchem.utils.scriptUtils import parseParams
 
 def oddt_vina_score(paramsDic):
     """Score molecules docking using the internal oddt vina score"""
@@ -140,23 +141,11 @@ def preprocessReceptor(receptorFile):
     rec.addh()
     return rec
 
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
-
-
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <Function_version> <PDBBind_train> <outputPath> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     function = paramsDic['function']
     if 'vina' in function.lower():
         results, mols = oddt_vina_score(paramsDic)

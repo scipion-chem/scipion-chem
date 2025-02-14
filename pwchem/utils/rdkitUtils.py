@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import sys
+import sys, os
 from rdkit import Chem
 from rdkit.Chem import Draw
 
@@ -47,6 +47,23 @@ def parseMoleculeFile(molFile):
         mol = Chem.MolFromSmiles(molFile)
 
     return mol
+
+def getMolFilesDic(molFiles):
+    molsDict = {}
+    for molFile in molFiles:
+        m = parseMoleculeFile(molFile)
+        molsDict[m] = molFile
+
+    mols = list(molsDict.keys())
+    return molsDict, mols
+
+def writeMol(mol, outFile, cid=-1, setName=False):
+    w = Chem.SDWriter(outFile)
+    molName = os.path.split(os.path.splitext(outFile)[0])[-1]
+    if setName:
+        mol.SetProp('_Name', molName)
+    w.write(mol, cid)
+    w.close()
 
 def drawMolecule(mol, fnOut):
     Draw.MolToFile(mol, fnOut)

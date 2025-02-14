@@ -9,38 +9,11 @@ from rdkit.Chem import (
     MACCSkeys,
     rdFingerprintGenerator,
 )
+
+from pwchem.utils.scriptUtils import parseParams
+from pwchem.utils.rdkitUtils import getMolFilesDic
+
 ###Funcion para procesar los archivos de input
-
-def preprocessLigands(ligandsFiles):
-    mols_dict = {}
-
-    for molFile in ligandsFiles:
-        if molFile.endswith('.mol2'):
-            m = Chem.MolFromMol2File(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.mol'):
-            m = Chem.MolFromMolFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.pdb'):
-            m = Chem.MolFromPDBFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.smi'):
-            f = open(molFile, "r")
-            firstline = next(f)
-            m = Chem.MolFromSmiles(str(firstline))
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.sdf'):
-            suppl = Chem.SDMolSupplier(molFile)
-            for mol in suppl:
-                mols_dict[mol] = molFile
-
-    mols = list(mols_dict.keys())
-
-    return mols_dict, mols
 
 
 def preprocessObjective(objective_file):
@@ -71,25 +44,13 @@ def preprocessObjective(objective_file):
     return mol
 
 
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
-
-
 #################################################################################################################
 
 ####Funcion para filtrar que se empleara en los dos filtros
 
 def init(molFiles):
-    mols_dict, mols = preprocessLigands(molFiles)
-    dfObj = pd.DataFrame(mols_dict.items(), columns=['ROMol', 'ChEMBL'])
+    molsDict, mols = getMolFilesDic(molFiles)
+    dfObj = pd.DataFrame(molsDict.items(), columns=['ROMol', 'ChEMBL'])
     return dfObj
 
 
@@ -124,7 +85,7 @@ if __name__ == "__main__":
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
 
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     fingerprint_type = paramsDic['fingerprint']
     coefficient_type = paramsDic['coefficient']
     mol_files = paramsDic["ligandFiles"]

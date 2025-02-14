@@ -29,6 +29,17 @@ must be placed separatedly. These are also available in scipion-chem.'''
 
 import threading
 
+def parseParams(paramsFile, listParams=[], sep=':'):
+  paramsDic = {}
+  with open(paramsFile) as f:
+    for line in f:
+      key, value = line.strip().split(sep)
+      if key in listParams:
+        paramsDic[key] = value.strip().split()
+      else:
+        paramsDic[key] = value.strip()
+  return paramsDic
+
 def divideMultiPDB(file):
   '''Divides a PDB into the different models (start with MODEL finish with ENDMDL) and return the string
   with the text for each of them'''
