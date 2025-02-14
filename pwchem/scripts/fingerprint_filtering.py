@@ -11,50 +11,18 @@ from rdkit.Chem import (
 )
 
 from pwchem.utils.scriptUtils import parseParams
-from pwchem.utils.rdkitUtils import getMolFilesDic
+from pwchem.utils.rdkitUtils import getMolFilesDic, parseMoleculeFile
 
-###Funcion para procesar los archivos de input
-
-
-def preprocessObjective(objective_file):
-    mol = " "
-    if objective_file.endswith('.mol2'):
-        mol = Chem.MolFromMol2File(objective_file)
-
-    elif objective_file.endswith('.mol'):
-        mol = Chem.MolFromMolFile(objective_file)
-
-    elif objective_file.endswith('.pdb'):
-        mol = Chem.MolFromPDBFile(objective_file)
-
-    elif objective_file.endswith('.smi'):
-        f = open(objective_file, "r")
-        firstline = next(f)
-        mol = Chem.MolFromSmiles(str(firstline))
-
-    elif objective_file.endswith('.sdf'):
-        suppl = Chem.SDMolSupplier(objective_file)
-        for mol in suppl:
-            mol = mol
-
-    else:
-        mol = Chem.MolFromSmiles(objective_file)
-
-
-    return mol
-
-
-#################################################################################################################
 
 ####Funcion para filtrar que se empleara en los dos filtros
 
 def init(molFiles):
-    molsDict, mols = getMolFilesDic(molFiles)
+    molsDict, _ = getMolFilesDic(molFiles)
     dfObj = pd.DataFrame(molsDict.items(), columns=['ROMol', 'ChEMBL'])
     return dfObj
 
 
-def calculate_coeficient(df, maccs_fp_query, maccs_fp_list, morgan_fp_query, morgan_fp_list):
+def calculateCoeficient(df, maccs_fp_query, maccs_fp_list, morgan_fp_query, morgan_fp_list):
     df["tanimoto_maccs"] = DataStructs.BulkTanimotoSimilarity(maccs_fp_query, maccs_fp_list)
     df["tanimoto_morgan"] = DataStructs.BulkTanimotoSimilarity(morgan_fp_query, morgan_fp_list)
 
@@ -92,14 +60,14 @@ if __name__ == "__main__":
     cut = float(paramsDic['cut-off'])
     objective = paramsDic["referenceFile"]
     df = init(mol_files)
-    query = preprocessObjective(objective)
+    query = parseMoleculeFile(objective)
     ########################################################################################
     maccs_fp_query = MACCSkeys.GenMACCSKeys(query)
     maccs_fp_list = df["ROMol"].apply(MACCSkeys.GenMACCSKeys).tolist()
     morgan_fp_query = rdFingerprintGenerator.GetCountFPs([query])[0]
     morgan_fp_list = rdFingerprintGenerator.GetCountFPs(df["ROMol"].tolist())
     ######################################################################################
-    df2 = calculate_coeficient(df, maccs_fp_query, maccs_fp_list, morgan_fp_query, morgan_fp_list)
+    df2 = calculateCoeficient(df, maccs_fp_query, maccs_fp_list, morgan_fp_query, morgan_fp_list)
 
     filtered_fp = filter(df2, fingerprint_type, coefficient_type, cut)
 

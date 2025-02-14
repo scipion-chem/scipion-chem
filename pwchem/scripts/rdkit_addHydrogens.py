@@ -11,9 +11,9 @@ def fixLigand(mol):
     Add explicit hydrogens to carbon atoms and ensure tetravalent nitrogens are assigned a +1 charge
     """
     chemProblems = Chem.DetectChemistryProblems(mol)
-    for chem_problem in chemProblems:
-        if chem_problem.GetType() == 'AtomValenceException':
-            atom = mol.GetAtomWithIdx(chem_problem.GetAtomIdx())
+    for chemProblem in chemProblems:
+        if chemProblem.GetType() == 'AtomValenceException':
+            atom = mol.GetAtomWithIdx(chemProblem.GetAtomIdx())
             if atom.GetSymbol() == 'N' and atom.GetFormalCharge() == 0 and atom.GetExplicitValence() == 4:
                 atom.SetFormalCharge(1)
     Chem.SanitizeMol(mol)

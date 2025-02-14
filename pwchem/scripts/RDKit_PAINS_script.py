@@ -9,7 +9,7 @@ from pwchem.utils.rdkitUtils import getMolFilesDic
 # initialize filter
 
 
-def rdkit_filter(molsDict):
+def rdkitFilter(molsDict):
     params = FilterCatalogParams()
     params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
     catalog = FilterCatalog(params)
@@ -29,8 +29,8 @@ def rdkit_filter(molsDict):
     return matches, clean
 
 ######################################################
-def pains_filt(files, dic):
-    molsDict, mols = getMolFilesDic(files)
+def painsFilt(files, dic):
+    molsDict, _ = getMolFilesDic(files)
 
     list_pains = []
     list_no_pains = []
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         desc = [line[1] for line in sub_strct]
         dic = dict(zip(smarts, desc))
 
-        pains, no_pains = pains_filt(files, dic)
+        pains, no_pains = painsFilt(files, dic)
 
         with open(paramsDic['outputPath'], 'w') as f:
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     else:
         molsDict, mols = getMolFilesDic(files)
-        matches, clean = rdkit_filter(molsDict)
+        matches, clean = rdkitFilter(molsDict)
 
         #print(matches)
 

@@ -8,7 +8,7 @@ from pwchem.utils.scriptUtils import parseParams
 #################################################################################################################
 
 ####Funcion para filtrar que se empleara en los dos filtros
-def _filter(expression, mols):
+def filterExpression(expression, mols):
     """Filter molecule by a generic expression, such as `mol.logp > 1`."""
 
     out = []
@@ -28,29 +28,29 @@ def _filter(expression, mols):
     return out
 
 
-def ro5_filter(mols):
+def ro5Filter(mols):
     filtered_mols = []
-    out = _filter(mols=mols, expression=['Descriptors.ExactMolWt(mol) < 500',
-                                         'Descriptors.NumHAcceptors(mol) <= 10',
-                                         'Descriptors.NumHDonors(mol) <= 5',
-                                         'Descriptors.MolLogP(mol) <= 5'])
+    out = filterExpression(mols=mols, expression=['Descriptors.ExactMolWt(mol) < 500',
+                                                  'Descriptors.NumHAcceptors(mol) <= 10',
+                                                  'Descriptors.NumHDonors(mol) <= 5',
+                                                  'Descriptors.MolLogP(mol) <= 5'])
 
     filtered_mols.append(out)
     return filtered_mols
 
 
-def ro3_filter(mols):
+def ro3Filter(mols):
     filtered_mols = []
-    out = _filter(mols=mols, expression=['Descriptors.ExactMolWt(mol) < 300',
-                                         'Descriptors.NumHAcceptors(mol) <= 3',
-                                         'Descriptors.NumHDonors(mol) <= 3',
-                                         'Descriptors.MolLogP(mol) <= 3'])
+    out = filterExpression(mols=mols, expression=['Descriptors.ExactMolWt(mol) < 300',
+                                                  'Descriptors.NumHAcceptors(mol) <= 3',
+                                                  'Descriptors.NumHDonors(mol) <= 3',
+                                                  'Descriptors.MolLogP(mol) <= 3'])
 
     filtered_mols.append(out)
     return filtered_mols
 
 ###############################################################################
-def write_details(moleculas, dict):
+def writeDetails(moleculas, dict):
     with open("details.txt", 'w') as a:
         for molecula in moleculas:
             molecular_weight = Descriptors.ExactMolWt(molecula)
@@ -76,9 +76,9 @@ if __name__ == "__main__":
     molFiles = paramsDic['ligandFiles']
     molsDict, mols = getMolFilesDic(molFiles)
     if rule in ['l5', 'ro5']:
-        results = ro5_filter(mols)
+        results = ro5Filter(mols)
     elif 'ro3' in rule:
-        results = ro3_filter(mols)
+        results = ro3Filter(mols)
 
     with open(paramsDic['outputPath'], 'w') as f:
         f.write("#The following molecules have been passed the " + str(rule) + " filter:" + "\n")
@@ -87,5 +87,5 @@ if __name__ == "__main__":
             file_f = molsDict[molecule]
             f.write(str(file_f) + "\n")
 
-    write_details(results, molsDict)
+    writeDetails(results, molsDict)
 

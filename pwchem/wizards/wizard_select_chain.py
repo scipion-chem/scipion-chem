@@ -301,7 +301,7 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
 
       structureHandler.read(fileName)
       structureHandler.getStructure()
-      modelsLength, modelsFirstResidue = structureHandler.getModelsChains()
+      _, modelsFirstResidue = structureHandler.getModelsChains()
 
       struct = json.loads(chainStr)  # From wizard dictionary
       chain, model = struct["chain"].upper().strip(), int(struct["model"])
