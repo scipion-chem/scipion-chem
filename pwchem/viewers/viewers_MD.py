@@ -125,10 +125,10 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       system = self.getMDSystem()
       return MDSystemViewer(project=self.getProject())._visualize(system)
 
-    def writeTCL(self, outTcl, sysFile, sysExt, sysTrj, trjExt, isLig=False):
+    def writeTCL(self, outTcl, sysFile, sysExt, sysTrj, trjExt):
+      system = self.getMDSystem()
       vmdStr = TCL_MD_STR % (sysFile, sysExt, sysTrj, trjExt)
-      if isLig:
-        vmdStr += TCL_MD_LIG_STR
+      vmdStr += TCL_MD_LIG_STR.format(system.getLigandID())
       with open(outTcl, 'w') as f:
         f.write(vmdStr)
 
@@ -139,8 +139,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       outTcl = os.path.join(os.path.dirname(system.getTrajectoryFile()), 'vmdSimulation.tcl')
       sysExt = os.path.splitext(system.getOriStructFile())[1][1:]
       trjExt = os.path.splitext(system.getTrajectoryFile())[1][1:]
-      self.writeTCL(system.getOriStructFile(), sysExt, system.getTrajectoryFile(), trjExt,
-                    system.getLigandTopologyFile())
+      self.writeTCL(outTcl, system.getOriStructFile(), sysExt, system.getTrajectoryFile(), trjExt)
 
       args = '-e {}'.format(outTcl)
       return [VmdViewPopen(args)]

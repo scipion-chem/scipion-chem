@@ -722,10 +722,10 @@ class ProtocolLigandsFetching(EMProtocol):
 		mapDic = {}
 		if self.structDatabase.get() == 0:
 			mapFile = self._getTmpPath('DBD2PubChem.txt')
-			url = "https://www.bindingdb.org/bind/BindingDB_CID.txt"
+			url = "https://www.bindingdb.org/rwd/bind/BindingDB_CID.txt"
 		elif self.structDatabase.get() == 1:
 			mapFile = self._getTmpPath('DBD2DrugBank.txt')
-			url = "https://www.bindingdb.org/bind/BindingDB_DrugBankID.txt"
+			url = "https://www.bindingdb.org/rwd/bind/BindingDB_DrugBankID.txt"
 
 		if not os.path.exists(mapFile):
 			with urlopen(url) as response:

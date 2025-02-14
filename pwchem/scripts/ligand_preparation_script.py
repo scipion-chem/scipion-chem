@@ -2,46 +2,7 @@ from rdkit import Chem, RDConfig
 from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
 import sys, os
 
-def parseMoleculeFile(molFile):
-    if molFile.endswith('.mol2'):
-        mol = Chem.MolFromMol2File(molFile)
-    elif molFile.endswith('.mol'):
-        mol = Chem.MolFromMolFile(molFile)
-    elif molFile.endswith('.pdb'):
-        mol = Chem.MolFromPDBFile(molFile)
-    elif molFile.endswith('.smi'):
-        f = open(molFile, "r")
-        firstline = next(f)
-        mol = Chem.MolFromSmiles(str(firstline))
-    elif molFile.endswith('.sdf'):
-        suppl = Chem.SDMolSupplier(molFile)
-        for mol in suppl:
-            break
-    else:
-        mol = Chem.MolFromSmiles(molFile)
-
-    return mol
-
-def getMolFilesDic(molFiles):
-    mols_dict = {}
-    for molFile in molFiles:
-        m = parseMoleculeFile(molFile)
-        mols_dict[m] = molFile
-
-    mols = list(mols_dict.keys())
-    return mols_dict, mols
-
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
+from utils import getMolFilesDic, parseParams, writeMol
 
 #################################################################################################################
 def conformer_generation(mol, outBase, ffMethod, restrainMethod, numConf, rmsThres):
@@ -74,20 +35,12 @@ def embedAndOptimize(mol):
             return False
     return mol
 
-def writeMol(mol, outFile, cid=-1, setName=False):
-    w = Chem.SDWriter(outFile)
-    molName = os.path.split(os.path.splitext(outFile)[0])[-1]
-    if setName:
-        mol.SetProp('_Name', molName)
-    w.write(mol, cid)
-    w.close()
-
 ###################################################################################################################
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
 

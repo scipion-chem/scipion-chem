@@ -1,16 +1,7 @@
 import sys, csv, json
 from ranx import Run, fuse
 
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split('::')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
+from utils import parseParams
 
 def writeResults(combinedRun, outputPath):
 
@@ -32,7 +23,7 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <normMethod> <fusionMethod> <kwargs> <runDics>'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'], sep='::')
     runDics = json.loads(paramsDic['runDics'])
     
     lruns = []

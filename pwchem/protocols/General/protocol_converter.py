@@ -30,7 +30,7 @@
 import os, shutil, parmed
 
 # Scipion chem imports
-from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam
+from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
@@ -70,6 +70,9 @@ class ConvertStructures(EMProtocol):
                        choices=['PDB', 'Mol2', 'SDF', 'Smiles'],
                        label='Output format: ',
                        help="Output format for the converted molecules")
+        group.addParam('usePose', BooleanParam, default=False,
+                       label='Use the docked ligands: ', expertLevel=LEVEL_ADVANCED,
+                       help='Use the docked ligand files for preparation.')
 
         group.addParam('useManager', EnumParam, default=0, label='Convert using: ',
                       condition=f'{inputTypeCondition}SetOfSmallMolecules)', choices=[RDKIT, OBABEL],
@@ -109,7 +112,7 @@ class ConvertStructures(EMProtocol):
 
             self.convErrors = []  # Save the file paths that could not be transformed
             for mol in self.inputObject.get():
-                fnSmall = os.path.abspath(mol.smallMoleculeFile.get())
+                fnSmall = self.getMolFile(mol)
                 fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
 
                 outFormat = extDic[self.getEnumText('outputFormatSmall')]
@@ -222,6 +225,13 @@ class ConvertStructures(EMProtocol):
             error = " Input format was not recognize (The allowed format are pdb, cif, mol2, sdf and smi)"
             raise Exception(error)
         return args + " %s" % os.path.abspath(fn)
+
+    def getMolFile(self, mol):
+      if self.usePose.get():
+        molFile = mol.getPoseFile()
+      else:
+        molFile = mol.getFileName()
+      return os.path.abspath(molFile)
 
     # --------------------------- Summary functions --------------------
     def _summary(self):
