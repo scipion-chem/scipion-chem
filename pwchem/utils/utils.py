@@ -239,6 +239,17 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
+def mergeFiles(inFiles, outFile=None, sep=''):
+  inTexts = []
+  for inFile in inFiles:
+    with open(inFile) as f:
+      inTexts.append(f.read())
+
+  outFile = f'mergedFiles{os.path.splitext(inFile)[-1]}' if outFile is None else outFile
+  with open(outFile, 'w') as fo:
+    fo.write(sep.join(inTexts))
+  return outFile
+
 def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
@@ -323,6 +334,7 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   else:
     baseName = os.path.splitext(os.path.basename(sdfFile))[0]
     outDir = os.path.abspath(os.path.dirname(sdfFile))
+
   if not os.path.exists(sdfFile) or overWrite:
     args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
            f'--outputName {baseName} --overWrite'
