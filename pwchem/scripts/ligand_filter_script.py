@@ -1,7 +1,6 @@
 import sys
 
-from pwchem.utils.rdkitUtils import getMolFilesDic
-from pwchem.utils.scriptUtils import parseParams
+from .utils import getMolFilesDic, parseParams
 
 ######################################################
 def atomTypeFilt(files, minNum, atomType):

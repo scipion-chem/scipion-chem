@@ -2,9 +2,7 @@ from rdkit import Chem, RDConfig
 from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
 import sys, os
 
-from pwchem.utils import getBaseName
-from pwchem.utils.rdkitUtils import writeMol, getMolFilesDic
-from pwchem.utils.scriptUtils import parseParams
+from .utils import getMolFilesDic, parseParams, getBaseName, writeMol
 
 def fixLigand(mol):
     """

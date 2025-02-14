@@ -1,7 +1,7 @@
 import sys, csv, json
 from ranx import Run, fuse
 
-from pwchem.utils.scriptUtils import parseParams
+from .utils import parseParams
 
 def writeResults(combinedRun, outputPath):
 

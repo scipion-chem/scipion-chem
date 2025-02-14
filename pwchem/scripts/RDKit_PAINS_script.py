@@ -2,8 +2,7 @@ import sys
 from rdkit import Chem
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 
-from pwchem.utils.scriptUtils import parseParams
-from pwchem.utils.rdkitUtils import getMolFilesDic
+from .utils import parseParams, getMolFilesDic
 
 #################################################################################################################
 # initialize filter

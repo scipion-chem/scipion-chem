@@ -34,7 +34,7 @@ import oddt
 from oddt.scoring.descriptors import (autodock_vina_descriptor, fingerprints, oddt_vina_descriptor)
 from oddt.scoring.functions import rfscore, nnscore, PLECscore
 
-from pwchem.utils.scriptUtils import parseParams
+from .utils import parseParams
 
 def oddt_vina_score(paramsDic):
     """Score molecules docking using the internal oddt vina score"""

@@ -2,8 +2,7 @@ from rdkit import Chem, RDConfig
 from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
 import sys, os
 
-from pwchem.utils.rdkitUtils import writeMol, getMolFilesDic
-from pwchem.utils.scriptUtils import parseParams
+from .utils import getMolFilesDic, parseParams, writeMol
 
 #################################################################################################################
 def conformer_generation(mol, outBase, ffMethod, restrainMethod, numConf, rmsThres):

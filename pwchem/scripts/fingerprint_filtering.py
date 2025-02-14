@@ -10,9 +10,7 @@ from rdkit.Chem import (
     rdFingerprintGenerator,
 )
 
-from pwchem.utils.scriptUtils import parseParams
-from pwchem.utils.rdkitUtils import getMolFilesDic, parseMoleculeFile
-
+from .utils import getMolFilesDic, parseParams, parseMoleculeFile
 
 ####Funcion para filtrar que se empleara en los dos filtros
 

@@ -2,9 +2,7 @@ from rdkit import Chem, RDConfig
 from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
 import sys
 
-from pwchem.utils.scriptUtils import parseParams
-from pwchem.utils.rdkitUtils import getMolFilesDic, parseMoleculeFile
-
+from .utils import getMolFilesDic, parseParams, parseMoleculeFile
 
 #################################################################################################################
 def distanceFilter(molsDict, objective, distance, ignore, prealign, permuts):

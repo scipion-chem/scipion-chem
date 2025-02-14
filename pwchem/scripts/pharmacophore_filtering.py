@@ -31,9 +31,7 @@ from rdkit.Chem import ChemicalFeatures, rdDistGeom, Draw, rdMolTransforms, AllC
 from rdkit.Chem.Pharm3D import Pharmacophore, EmbedLib
 from rdkit.Numerics import rdAlignment
 
-from pwchem.utils import getBaseName
-from pwchem.utils.scriptUtils import parseParams
-from pwchem.utils.rdkitUtils import getMolFilesDic, writeMol
+from .utils import getMolFilesDic, parseParams, writeMol, getBaseName
 
 ABSOLUTE, PROP_MOLS, PROP_FEATS = ['Absolute', 'Molecules proportion', 'Features proportion']
 DBSCAN, KMEANS = ['DBSCAN', 'KMeans']
