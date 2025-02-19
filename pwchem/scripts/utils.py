@@ -10,11 +10,11 @@ def parseParams(paramsFile, listParams=[], evalParams=[], sep=':'):
     for line in f:
       key, value = line.strip().split(sep)
       if key in listParams:
-        paramsDic[key] = value.strip().split()
+        paramsDic[key.strip()] = value.strip().split()
       elif key in evalParams:
         paramsDic[key] = eval(value.strip())
       else:
-        paramsDic[key] = value.strip()
+        paramsDic[key.strip()] = value.strip()
   return paramsDic
 
 
