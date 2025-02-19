@@ -149,9 +149,16 @@ class ProtocolRankDocking(EMProtocol):
 
         outMols = SetOfSmallMolecules(filename=self._getPath('outputSmallMolecules.sqlite'))
         bestMols = self.fillEmptyAttributes(bestMols.values())
+
+        usedIds = []
         for mol in bestMols:
           setattr(mol, 'rankScore', Float(self.voteDic[mol.getMolName()]))
+          molId = mol.getObjId()
+          if molId in usedIds:
+            molId = self.getMinObjId(usedIds)
+            mol.setObjId(molId)
           outMols.append(mol)
+          usedIds.append(molId)
 
         self._defineOutputs(outputSmallMolecules=outMols)
 
@@ -207,6 +214,12 @@ class ProtocolRankDocking(EMProtocol):
           for line in f:
               resDic[line.split()[0]] = float(line.split()[1])
       return resDic
+
+    def getMinObjId(self, doneObjIds):
+      '''Return the int not included in the input list'''
+      maxListed = max(doneObjIds)
+      notListed = set(range(1, maxListed)).difference(set(doneObjIds))
+      return min(notListed) if len(notListed) > 0 else maxListed + 1
 
     def getInputSummary(self):
       inDic = {}
