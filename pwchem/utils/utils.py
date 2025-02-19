@@ -1008,6 +1008,10 @@ def normalizeToRange(iterable, normRange=[0, 1]):
   maxIt, minIt = max(iterable), min(iterable)
   return [((normRange[1] - normRange[0]) * (i - minIt)) / (maxIt - minIt) + normRange[0] for i in iterable]
 
+def replaceInFiles(directory, old_string, new_string, file_extension="*"):
+  command = f"find {directory} -type f -name '*{file_extension}' -exec sed -i 's/{old_string}/{new_string}/g' {{}} +"
+  subprocess.run(command, shell=True, check=True)
+
 def replaceInFile(file, inStr, repStr):
   inStr, repStr = inStr.replace('\n', '\\n'), repStr.replace('\n', '\\n')
   subprocess.check_call(f'''sed -i -z 's/{inStr}/{repStr}/g' {file}''', shell=True)
