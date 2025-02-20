@@ -37,7 +37,6 @@ from Bio.PDB.ResidueDepth import get_surface
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
-from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreading, clusterSurfaceCoords,\
@@ -45,10 +44,11 @@ from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreadi
     getMAEMoleculeFiles
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
+from pwchem.protocols import ProtDefineStructROIs
 
 RESIDUE, ATOM = 0, 1
 
-class ProtDefineContactStructROIs(EMProtocol):
+class ProtDefineContactStructROIs(ProtDefineStructROIs):
     """
     Defines a set of structural ROIs ligand-receptor contacts
     """
@@ -57,7 +57,7 @@ class ProtDefineContactStructROIs(EMProtocol):
                   'Single Ligand': 'single'}
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        ProtDefineStructROIs.__init__(self, **kwargs)
         self.stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
@@ -92,17 +92,8 @@ class ProtDefineContactStructROIs(EMProtocol):
                       help="Whether to store the residue or the atom in contact for the ligand")
 
         group = form.addGroup('ROI definition')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
-                       label='Maximum distance between pocket points (A): ',
-                       help='Maximum distance between two pocket atoms to considered them same pocket')
+        group = self._defineClusterParams(group)
 
-        group.addParam('surfaceCoords', params.BooleanParam, default=True,
-                       label='Map coordinates to surface? ',
-                       help='Whether to map the input contact coordinates to the '
-                            'closest surface coordinates or use them directly.')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                       label='Maximum atom depth (A): ', condition='surfaceCoords',
-                       help='Maximum atom distance to the surface to be considered and mapped')
         form.addParallelSection(threads=4, mpi=1)
 
 

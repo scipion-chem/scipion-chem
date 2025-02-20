@@ -140,25 +140,6 @@ class TestImportSequences(BaseTest):
 	def setUpClass(cls):
 		setupTestProject(cls)
 		cls.ds = DataSet.getDataSet('model_building_tutorial')
-		cls.pImpDBs = cls._runImportDBIds()
-		cls._waitOutput(cls.pImpDBs, 'outputDatabaseIDs', sleepTime=5)
-
-	@classmethod
-	def getIdsFilePath(cls, inType=0, dbName='UniProt'):
-		return os.path.abspath(cls.proj.getPath('inputIDs_{}_{}.txt'.format(inType, dbName)))
-
-	@classmethod
-	def _runImportDBIds(cls, inType=0, dbName='UniProt'):
-		idsFile = cls.getIdsFilePath(inType, dbName)
-		with open(idsFile, 'w') as f:
-			f.write('\n'.join(DB_IDS[inType][dbName]))
-
-		protImport = cls.newProtocol(
-			ProtChemImportSetOfDatabaseIDs,
-			filePath=idsFile, databaseName=dbName
-		)
-		cls.proj.launchProtocol(protImport, wait=False)
-		return protImport
 
 	@classmethod
 	def _runImportSeqs(cls):
@@ -170,20 +151,20 @@ class TestImportSequences(BaseTest):
 		cls.protImportSeqs = protImportSeqs
 
 	@classmethod
-	def _runImportSeqsFromDB(cls, inProt):
+	def _runImportSeqsFromDB(cls):
 		protImportSeqs = cls.newProtocol(
 			ProtChemImportSetOfSequences,
 			fromFile=False, database=0)
 
-		protImportSeqs.inputListID.set(inProt)
-		protImportSeqs.inputListID.setExtended('outputDatabaseIDs')
+		ids = '\n'.join(DB_IDS[0]['UniProt'])
+		protImportSeqs.inputListID.set(ids)
 
 		cls.launchProtocol(protImportSeqs)
 		cls.protImportSeqsDB = protImportSeqs
 
 	def test(self):
 		self._runImportSeqs()
-		self._runImportSeqsFromDB(inProt=self.pImpDBs)
+		self._runImportSeqsFromDB()
 
 		assertHandle(self.assertIsNotNone, getattr(self.protImportSeqs, 'outputSequences', None), cwd=self.protImportSeqs.getWorkingDir())
 		assertHandle(self.assertIsNotNone, getattr(self.protImportSeqsDB, 'outputSequences', None), cwd=self.protImportSeqsDB.getWorkingDir())

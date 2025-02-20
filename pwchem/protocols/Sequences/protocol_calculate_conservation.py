@@ -42,10 +42,11 @@ from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.objects import AtomStruct
 from pwem.protocols import EMProtocol
-from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute
+from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute, cifToPdb
 
-from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence, SequenceChem
-from pwchem.utils import *
+from pwchem import Plugin as pwchemPlugin
+from pwchem.objects import SetOfSequenceROIs, Sequence, SequenceChem
+from pwchem.constants import BIOCONDA_DIC
 
 SHANNON, SIMPSON, KABAT, PROP = 'Shannon Entropy', 'Simpson Diversity Index', 'Wu-kabat Variability coefficient', \
                                 'Maximum Proportion Conservation'
@@ -78,37 +79,40 @@ class ProtSeqCalculateConservation(EMProtocol):
         group.addParam('inputSequences', params.PointerParam, pointerClass='SetOfSequences',
                       allowsNull=False, label="Input aligned sequences: ",
                       help='Select the set of sequences object where the ROI will be defined')
-        group.addParam('useCons', params.BooleanParam, default=True,
-                       label='Use consensus sequence for output: ', expertLevel=params.LEVEL_ADVANCED,
+
+        group.addParam('mapCons', params.EnumParam, default=0, label='Map sequence conservation to: ',
+                       choices=['None', 'Structure', 'Sequence ROIs'],
+                       help='Map the conservation from the sequence alignment into a structure or sequence ROIs '
+                            'whose sequence must align to the sequence alignment too')
+        group.addParam('useCons', params.BooleanParam, default=True, condition='mapCons==0',
+                       label='Use consensus sequence for output: ',
                        help='Use consensus sequence for the sequence ROIs output or a specific input sequence')
-        group.addParam('outSeq', params.StringParam, default='', condition='not useCons',
-                       label='Output sequence: ', expertLevel=params.LEVEL_ADVANCED,
+        group.addParam('outSeq', params.StringParam, default='', condition='mapCons==0 and not useCons',
+                       label='Output sequence: ',
                        help='Input sequence to use for the output sequence ROIs')
 
-        group.addParam('mapCons', params.BooleanParam, default=True,
-                       label='Map sequence conservation to structure: ',
-                       help='Map the conservation from the sequence alignment into a structure whose sequence must'
-                            'align to the sequence alignment too')
-        group.addParam('inputAS', params.PointerParam, pointerClass='AtomStruct', condition='mapCons',
+        group.addParam('inputAS', params.PointerParam, pointerClass='AtomStruct', condition='mapCons==1',
                        allowsNull=True, label="Input protein structure: ",
                        help='Input protein structure. If included, the conservation values will be drawed over'
                             'the surface of  the protein in the results analysis.')
-        group.addParam('chain_name', params.StringParam, condition='mapCons', label='Chain of interest:',
+        group.addParam('chain_name', params.StringParam, condition='mapCons==1', label='Chain of interest:',
                        help='Specify the chain of interest')
+        
+        group.addParam('inputROIs', params.PointerParam, pointerClass='SetOfSequenceROIs', condition='mapCons==2',
+                       allowsNull=True, label="Input sequence ROIs: ",
+                       help='Map the conservation over the sequence ROIs')
 
         group = form.addGroup('Variability measure')
-        group.addParam('method', params.EnumParam, default=3,
+        group.addParam('method', params.EnumParam, default=3, label='Method to measure variability: ',
                        choices=[SHANNON, SIMPSON, KABAT, PROP],
-                       label='Method to measure variability: ',
                        help='Method to measure the conservation / variability in each position of the sequences.\n'
                             'http://imed.med.ucm.es/PVS/pvs-help.html#vmth')
 
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        # Insert processing steps
         self._insertFunctionStep('calculateConservationStep')
-        if self.mapCons.get() and self.inputAS.get():
+        if self.mapCons.get() != 0:
             self._insertFunctionStep('mapConservationStep')
         self._insertFunctionStep('defineOutputStep')
 
@@ -119,35 +123,37 @@ class ProtSeqCalculateConservation(EMProtocol):
         oriSeqsFile = self._getExtraPath('originalAlignment.fasta')
         addSeqsFile = self._getExtraPath('structureAddAlignment.fasta')
         self.inputSequences.get().exportToFile(oriSeqsFile)
-        seqAS, seq_nameAS, seqFile = self.getInputASSequence()
+        
+        _, _, seqFile = self.getMapSequence()
+        cline0 = f'{pwchemPlugin.getEnvActivationCommand(BIOCONDA_DIC)} && '
 
-        cline = 'mafft --add {} --mapout {} > {}'.format(seqFile, oriSeqsFile, addSeqsFile)
+        cline = cline0 + f'mafft --add {seqFile} --mapout {oriSeqsFile} > {addSeqsFile}'
         self.runJob(cline, '')
         if os.path.getsize(addSeqsFile) == 0:
             auxAlignFile = self._getExtraPath('mafftAlignment.fasta')
-            print('Alignment of the structure seuqnece failed, most likely because mafft detected that input sequences '
-                  'were not aligned.\nAligning sequences with mafft in {}'.format(auxAlignFile))
-            cline = 'mafft --auto {} > {}'.format(oriSeqsFile, auxAlignFile)
+            print(f'Alignment of the structure sequence failed, most likely because mafft detected that input sequences'
+                  f' were not aligned.\nAligning sequences with mafft in {auxAlignFile}')
+            cline = cline0 + f'mafft --auto {oriSeqsFile} > {auxAlignFile}'
             self.runJob(cline, '')
 
-            cline = 'mafft --add {} --mapout {} > {}'.format(seqFile, auxAlignFile, addSeqsFile)
+            cline = cline0 + f'mafft --add {seqFile} --mapout {auxAlignFile} > {addSeqsFile}'
             self.runJob(cline, '')
 
     def defineOutputStep(self):
-        inSeq = self.getInputSequence()
+        outSeqObj = self.getOutputSequence()
 
         consDic = self.getConsDic()
         outSeq = SequenceChem(attributesFile=self._getExtraPath('sequenceAttributes.txt'))
-        outSeq.copy(inSeq)
+        outSeq.copy(outSeqObj)
         outSeq.addAttributes({self.getEnumText('method'): list(consDic.values())})
 
         self._defineOutputs(outputSequence=outSeq)
 
-        if self.mapCons.get() and self.inputAS.get():
+        if self.mapCons.get() == 1:
             outStructFileName = self._getPath('outputStructure.cif')
             # Write conservation in a section of the output cif file
             ASH = AtomicStructHandler()
-            consScoresDic = self.mapConservation()
+            consScoresDic = self.mapStructConservation()
             inpAS = toCIF(self.inputAS.get().getFileName(), self._getTmpPath('inputStruct.cif'))
             cifDic = ASH.readLowLevel(inpAS)
             cifDic = addScipionAttribute(cifDic, consScoresDic, self._ATTRNAME)
@@ -156,6 +162,17 @@ class ProtSeqCalculateConservation(EMProtocol):
             AS = AtomStruct(filename=outStructFileName)
             self._defineOutputs(outputAtomStruct=AS)
 
+        elif self.mapCons.get() == 2:
+            alignDic = self.getAlignMapping()
+
+            newROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
+            for roi in self.inputROIs.get():
+                idx0, idx1 = roi.getROIIdxs()
+                consVal = self.getMeanConservation(consDic, alignDic[idx0], alignDic[idx1-1])
+                setattr(roi, self.getEnumText('method'), params.Float(consVal))
+                newROIs.append(roi)
+
+            self._defineOutputs(outputROIs=newROIs)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -204,7 +221,19 @@ class ProtSeqCalculateConservation(EMProtocol):
                 f.write('{}\t'.format(value))
         return outFile
 
-    def mapConservation(self):
+    def getAlignMapping(self):
+        '''Returns a dictionary of the mapping of the original indexes to the ones aligned to the MSA'''
+        alignDic = {}
+        with open(self._getExtraPath('mapSequence.fasta.map')) as fIn:
+            for _ in range(2):
+                fIn.readline()
+            for line in fIn:
+                oriPos, alignPos = line.split(',')[1].strip(), line.split(',')[2].strip()
+                if alignPos != '-':
+                    alignDic[int(oriPos)] = int(alignPos)
+        return alignDic
+
+    def mapStructConservation(self):
         '''Return a dictionary with {spec: value}
         "spec" should be a chimera specifier. In this case:  chainId:residueIdx'''
         # Map positions of the original sequence with the actual index in the structure (might not start on 1)
@@ -218,14 +247,7 @@ class ProtSeqCalculateConservation(EMProtocol):
 
         #Maps original positions of the sequence with respect to the new aligned
         # {OriPos: AlignPos}
-        alignDic = {}
-        with open(self._getExtraPath('structSequence.fasta.map')) as fIn:
-            for i in range(2):
-                fIn.readline()
-            for line in fIn:
-                oriPos, alignPos = int(line.split(',')[1].strip()), line.split(',')[2].strip()
-                if alignPos != '-':
-                    alignDic[oriPos] = int(alignPos)
+        alignDic = self.getAlignMapping()
 
         # Map positions of the alignment with conservation values
         # {AlignPos: ConsValue}
@@ -244,7 +266,14 @@ class ProtSeqCalculateConservation(EMProtocol):
 
     ##################
 
+    def getMeanConservation(self, consDic, idx0, idx1):
+        c = 0
+        for i in range(idx0, idx1 + 1):
+            c += float(consDic[i])
+        return c / (idx1-idx0+1)
+
     def getConsDic(self):
+        '''Return a dictionary with the conservation values over the sequence'''
         consDic = {}
         with open(self.getConservationFile()) as fcons:
             line = fcons.readline()
@@ -253,18 +282,34 @@ class ProtSeqCalculateConservation(EMProtocol):
 
         return consDic
 
-    def getInputSequence(self):
-        if self.useCons:
-            outStr = str(self.calcConsensus())
-            outSeq = self.inputSequences.get().getFirstItem()
-            outSeq.setSequence(outStr)
-            outSeq.setSeqName('ConsensusSequence')
+    def getOutputSequence(self):
+        if self.mapCons.get() in [1, 2]:
+            # Map to structure or ROI
+            outSeq, _, _ = self.getMapSequence()
+
         else:
-            outSeqStr = self.outSeq.get()
-            for outSeq in self.inputSequences.get():
-                if outSeq.__str__() == outSeqStr:
-                    break
+            if not self.useCons:
+                outSeqStr = self.outSeq.get()
+                for outSeq in self.inputSequences.get():
+                    if outSeq.__str__() == outSeqStr:
+                        break
+            else:
+                outStr = str(self.calcConsensus())
+                outSeq = self.inputSequences.get().getFirstItem()
+                outSeq.setSequence(outStr)
+                outSeq.setSeqName('ConsensusSequence')
+
         return outSeq
+
+    def getMapSequence(self):
+        if self.mapCons.get() == 1:
+            seqObj, seqName, seqFile = self.getInputASSequence()
+        elif self.mapCons.get() == 2:
+            seqObj, seqName, seqFile = self.getInputROIsSequence()
+        return seqObj, seqName, seqFile
+
+    def getMapSequenceFile(self):
+        return self._getExtraPath('mapSequence.fasta')
 
     def getInputASSequence(self):
         inputObj = getattr(self, 'inputAS').get()
@@ -277,10 +322,20 @@ class ProtSeqCalculateConservation(EMProtocol):
         chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
         seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
-        seqFile = self._getExtraPath('structSequence.fasta')
+        seqFile = self.getMapSequenceFile()
         with open(seqFile, "w") as f:
           f.write(('>{}\n{}\n'.format(seq_name, seq)))
-        return seq, seq_name, seqFile
+
+        seqObj = self.inputSequences.get().getFirstItem()
+        seqObj.setSequence(seq)
+        seqObj.setSeqName('StructureSequence')
+        return seqObj, seq_name, seqFile
+
+    def getInputROIsSequence(self):
+        seqObj = self.inputROIs.get().getSequenceObj()
+        seqName = seqObj.getSeqName()
+        seqObj.exportToFile(self.getMapSequenceFile())
+        return seqObj, seqName, self.getMapSequenceFile()
 
     def mapResidues(self, structModel):
         '''Returns a dictionary which maps the idxs of the residues of  the sequence and the sequence from a structure
@@ -384,35 +439,35 @@ class ProtSeqCalculateConservation(EMProtocol):
     def calcShannon(self, seqsArr, normalized=True):
         entrs = []
         for j in range(seqsArr.shape[1]):
-            counts = self.getElementNumber(seqsArr[:,j])
+            counts = self.getElementNumber(seqsArr[:, j])
             ent = entropy(counts, base=2)
             if normalized:
                 ent = ent / math.log2(21)
-            entrs.append(ent)
+            entrs.append(1 - ent)
         return entrs
 
     def calcSimpson(self, seqsArr):
         entrs = []
         for j in range(seqsArr.shape[1]):
-            counts = self.getElementNumber(seqsArr[:,j])
-            entrs.append(simpson(counts))
+            counts = self.getElementNumber(seqsArr[:, j])
+            entrs.append(1 - simpson(counts))
         return entrs
 
     def calcKabat(self, seqsArr, normalized=True):
         entrs = []
         for j in range(seqsArr.shape[1]):
-            counts = self.getElementNumber(seqsArr[:,j])
+            counts = self.getElementNumber(seqsArr[:, j])
             ent = kabat(counts)
             if normalized:
                 ent = (ent-1) / 440
-            entrs.append(ent)
+            entrs.append(1 - ent)
         return entrs
 
     def calcProp(self, seqsArr):
-        '''Proportion of the more common residue (inverse: 1- prop)'''
+        '''Proportion of the more common residue'''
         entrs = []
         for j in range(seqsArr.shape[1]):
-            counts = self.getElementNumber(seqsArr[:,j])
-            ent = 1 - max(counts) / sum(counts)
+            counts = self.getElementNumber(seqsArr[:, j])
+            ent = max(counts) / sum(counts)
             entrs.append(ent)
         return entrs

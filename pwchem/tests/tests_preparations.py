@@ -31,7 +31,7 @@ from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemOBabelPrepareLigands, ProtChemRDKitPrepareLigands, ProtChemPrepareReceptor, \
-	ProtocolLiganParametrization
+	ProtocolLigandParametrization
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
 
@@ -147,7 +147,7 @@ class TestLigandParametrization(TestImportBase):
 	@classmethod
 	def _runParam(cls, inProt):
 		protParam = cls.newProtocol(
-			ProtocolLiganParametrization,
+			ProtocolLigandParametrization,
 		)
 		protParam.inputSmallMolecules.set(inProt)
 		protParam.inputSmallMolecules.setExtended('outputSmallMolecules')

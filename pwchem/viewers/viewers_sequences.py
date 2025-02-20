@@ -32,17 +32,20 @@ from tkinter.messagebox import askokcancel
 import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params, Protocol
 
-from pwem.objects import SetOfSequences, Sequence
+from pwem.objects import SetOfSequences, Sequence, EMSet
 from pwem.protocols import ProtSubSet
 from pwem.viewers import EmPlotter
+from pwem.viewers.mdviewer.viewer import MDViewer
 
 from pwchem import Plugin as pwchem_plugin
-from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem
+from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem, MultiEpitope
 from pwchem.protocols import ProtExtractInteractingMols
 from pwchem.constants import *
 from pwchem.utils import getFilteredOutput
 from pwchem.viewers import BioinformaticsDataViewer
 
+seqTargets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
+              SequenceVariants, SetOfSequenceROIs, MultiEpitope]
 
 def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kwargs):
   """
@@ -162,9 +165,9 @@ class SequenceAliView(pwviewer.CommandView):
     """ View for calling an external command. """
 
     def __init__(self, seqFiles, cwd, **kwargs):
-        pwviewer.CommandView.__init__(self, '{}/aliview/aliview {}'.
-                                      format(pwchem_plugin.getProgramHome(ALIVIEW_DIC), ' '.join(seqFiles)),
-                                      cwd=cwd, **kwargs)
+      pwviewer.CommandView.__init__(self, f'{pwchem_plugin.getProgramHome(ALIVIEW_DIC)}/aliview/aliview '
+                                          f'{" ".join(seqFiles)}',
+                                    cwd=cwd, **kwargs)
 
     def show(self):
         Popen(self._cmd, cwd=self._cwd, shell=True)
@@ -173,7 +176,8 @@ class SequenceAliViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of sequence objects
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+    _targets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
+                SequenceVariants]
 
     def __init__(self, **kwargs):
         pwviewer.Viewer.__init__(self, **kwargs)
@@ -206,7 +210,7 @@ class SequenceAliViewer(pwviewer.Viewer):
         elif isinstance(obj, SequenceVariants):
             seqFiles += [self.showDefView(obj, outDir)]
 
-        elif isinstance(obj, SetOfSequenceROIs):
+        elif isinstance(obj, SetOfSequenceROIs) or isinstance(obj, MultiEpitope):
             outPath = os.path.join(outDir, f'viewSequences_{obj.getSequenceObj().getId()}.fasta')
             obj.exportToFile(outPath)
 
@@ -219,7 +223,7 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
   """ Protocol viewer to visualize different type of sequence objects
   """
   _label = 'Sequence viewer'
-  _targets = [SequenceChem, Sequence, SetOfSequences, SequenceVariants, SetOfSequenceROIs]
+  _targets = seqTargets
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   def __init__(self, **kwargs):
@@ -230,11 +234,12 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
     aGroup = form.addGroup('AliView viewer')
     aGroup.addParam('aliLabel', params.LabelParam, label='Display sequences with AliView: ',
                     help='Display the output sequences using AliView')
-    
-    tGroup = form.addGroup('Table viewer')
-    tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
-                    help='Display the output sequences using table format')
-      
+
+    if isinstance(self.getOutSequences(), EMSet):
+      tGroup = form.addGroup('Table viewer')
+      tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
+                      help='Display the output sequences using table format')
+
   def _getVisualizeDict(self):
     return {
       # AliView
@@ -244,16 +249,27 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
       'tableLabel': self._viewTable,
     }
 
+  def getOutSequences(self):
+    if self.checkIfProtocol():
+      for oAttr in self.protocol.iterOutputAttributes():
+        for oType in seqTargets:
+          if isinstance(getattr(self.protocol, oAttr[0]), oType):
+            return getattr(self.protocol, oAttr[0])
+    else:
+      return self.protocol
+
   def _viewSeqSet(self, e=None):
-    seqSet = self.getOutputSet()
+    seqSet = self.getOutSequences()
     setV = SequenceAliViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
 
   def _viewTable(self, e=None):
-    seqSet = self.getOutputSet()
-
-    setV = BioinformaticsDataViewer(project=self.getProject())
+    seqSet = self.getOutSequences()
+    try:
+      setV = MDViewer(project=self.getProject())
+    except:
+      setV = BioinformaticsDataViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
 
@@ -278,7 +294,6 @@ class SequenceChemViewer(SequenceGeneralViewer):
 
     def _defineParams(self, form):
         super()._defineParams(form)
-        print('IM here: ', self.checkIfInteractions())
         if self.checkIfInteractions():
             self._defineInteractionParams(form)
 
@@ -422,19 +437,6 @@ class SequenceChemViewer(SequenceGeneralViewer):
             project.launchProtocol(protFilter, wait=True)
 
     ############ UTILS ##############
-    def getOutSequences(self):
-        if self.checkIfProtocol():
-            for oAttr in self.protocol.iterOutputAttributes():
-                if isinstance(getattr(self.protocol, oAttr[0]), SetOfSequencesChem):
-                    return getattr(self.protocol, oAttr[0])
-        else:
-            return self.protocol
-
-    def checkIfProtocol(self):
-        if isinstance(self.protocol, Protocol):
-            return True
-        else:
-            return False
 
     def checkIfInteractions(self):
         if not self.checkIfProtocol():

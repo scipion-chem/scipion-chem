@@ -58,6 +58,7 @@ class Plugin(pwem.Plugin):
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
+		cls.addDEAPPackage(env)
 		cls.addRanxPackage(env)
 
 	@classmethod
@@ -112,7 +113,9 @@ class Plugin(pwem.Plugin):
 		env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
 		# Installing package
-		installer.addCommand(f'conda create --name {RDKIT_DIC["name"]}-{RDKIT_DIC["version"]} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
+		rdkitEnvName = cls.getEnvName(RDKIT_DIC)
+		installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
+												 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
@@ -208,6 +211,18 @@ class Plugin(pwem.Plugin):
 
 		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
+
+	@classmethod
+	def addDEAPPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
+															packageVersion=DEAP_DIC['version'])
+
+		scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
+		installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate scipion3 && conda install conda-forge::deap -y')\
+			.addCommand('git clone https://github.com/bdsul/grape.git') \
+			.addCommand(f'mv grape {scipionEnvPath}') \
+			.addPackage(env, dependencies=['conda', 'git'], default=default)
 
 	@classmethod
 	def addRanxPackage(cls, env, default=True):

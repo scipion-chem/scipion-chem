@@ -74,6 +74,86 @@ AddElementWizard().addTarget(protocol=ProtocolRANXFuse,
                              outputs=['inAttrs'])
 
 
+class AddNumberedElementWizard(AddElementWizard):
+    """Add the content of a parameter to another numbering (and labeling) the elements in the output
+    Input[0]: name of the function in the protocol that builds the summary line
+    Input[1]: optional, parameters to pass to this function
+    """
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getNewElementNumber(self, prevList):
+        return len(prevList.split('\n'))
+
+    def getSumLine(self, protocol, inputParam, outputParam):
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        elemNumber = self.getNewElementNumber(prevList)
+
+        sumLine = ''
+        if hasattr(protocol, inputParam[0]):
+            buildLineFunc = getattr(protocol, inputParam[0])
+            sumLineParams = inputParam[1] if len(inputParam) > 1 else []
+            sumLine = buildLineFunc(*sumLineParams)
+
+        if not sumLine:
+            return ''
+        return f'{elemNumber}) {sumLine}'
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        sumLine = self.getSumLine(protocol, inputParam, outputParam)
+        if sumLine.strip():
+            form.setVar(outputParam[0], prevList + sumLine.strip() + '\n')
+
+AddNumberedElementWizard().addTarget(protocol=ProtDefineSeqROI,
+                                      targets=['addROI'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['inROIs'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtChemGenerateVariants,
+                                 targets=['addVariant'],
+                                 inputs=['buildSumLine'],
+                                 outputs=['toMutateList'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                      targets=['addROI'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['multiSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtModifyMultiEpitope,
+                                      targets=['addMod'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['modSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                      targets=['addFilter'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['filtSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                      targets=['addCondFilter'],
+                                      inputs=['buildCondSumLine'],
+                                      outputs=['condSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addScore'],
+                                      inputs=['buildScoreSumLine'],
+                                      outputs=['scoreSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addScoreDef'],
+                                      inputs=['buildScoreSumLineDef'],
+                                      outputs=['scoreSummaryDef'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addLinker'],
+                                      inputs=['buildLinkerSumLine'],
+                                      outputs=['linkerSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addEval'],
+                                      inputs=['buildEvalSumLine'],
+                                      outputs=['evalSummary'])
+
 class Add_FilterExpression(AddElementWizard):
     """Add ID or keyword in NCBI fetch protocol to the list"""
     _targets, _inputs, _outputs = [], {}, {}

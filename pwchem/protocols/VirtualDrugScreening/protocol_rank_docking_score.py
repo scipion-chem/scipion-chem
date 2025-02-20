@@ -160,7 +160,13 @@ class ProtocolRankDocking(EMProtocol):
           outMols.append(mol)
           usedIds.append(molId)
 
+        outMols.proteinFile.set(self.getOriginalReceptorFile())
+        outMols.setDocked(True)
+        outMols.saveGroupIndexes()
         self._defineOutputs(outputSmallMolecules=outMols)
+
+    def getOriginalReceptorFile(self):
+        return self.inputMoleculesSets[0].get().getProteinFile()
 
     def fillEmptyAttributes(self, inSet):
         '''Fill all items with empty attributes'''

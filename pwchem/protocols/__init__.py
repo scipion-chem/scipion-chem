@@ -70,9 +70,16 @@ from pwchem.protocols.Sequences.protocol_calculate_conservation import ProtSeqCa
 from pwchem.protocols.Sequences.protocol_extract_attribute_ROIs import ProtExtractSeqsROI
 from pwchem.protocols.Sequences.protocol_operate_sequence_rois import ProtOperateSeqROI
 from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
+from pwchem.protocols.Sequences.protocol_map_attribute_to_sequence_ROIs import ProtMapAttributeToSeqROIs
 
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
+
+from pwchem.protocols.Sequences.protocol_define_multiepitope import ProtDefineMultiEpitope
+from pwchem.protocols.Sequences.protocol_modify_multiepitope import ProtModifyMultiEpitope
+from pwchem.protocols.Sequences.protocol_combineScores_sequence_roi import ProtCombineScoresSeqROI
+from pwchem.protocols.Sequences.protocol_optimize_multiepitope import ProtOptimizeMultiEpitope
+
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
@@ -89,5 +96,5 @@ from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse
 
 # Molecular dynamics
-from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLiganParametrization
+from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
 

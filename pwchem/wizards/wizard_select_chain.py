@@ -406,6 +406,11 @@ SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
 
+SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name'])
+
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
                                 targets=['resPosition'],
@@ -588,10 +593,91 @@ class SelectElementWizard(VariableWizard):
     dlg = self.displayDialog(form, inputParam)
     form.setVar(outputParam[0], dlg.values[0].get())
     
-SelectElementWizard().addTarget(protocol=ProtocolLiganParametrization,
+SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
                                targets=['inputLigand'],
                                inputs=['inputSmallMolecules'],
                                outputs=['inputLigand'])
+
+
+class SelectElementMultiPointWizard(SelectElementWizard):
+  """Lists the items in a SetOfX selected from a multipointer"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getInputSet(self, multiPointer, setStr):
+    inSet = None
+    for inPointer in multiPointer:
+      curSet = inPointer.get()
+      if curSet.__str__() == setStr:
+        inSet = curSet
+    return inSet
+
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      multiPointer = getattr(protocol, inputParam[0])
+      inputSetStr = getattr(protocol, inputParam[1]).get()
+
+      inSet = self.getInputSet(multiPointer, inputSetStr)
+      listOfElements = self.getListOfElements(protocol, inSet)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Set items", provider,
+                            "Select one of items in the set")
+    return dlg
+
+SelectElementMultiPointWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                 targets=['inROI'],
+                                 inputs=['inputROIsSets', 'inSet'],
+                                 outputs=['inROI'])
+
+class SelectInputSetWizard(VariableWizard):
+  '''Select a set form a MultiPointer param'''
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, multipointer):
+    eleList = []
+    if multipointer is not None:
+      for inPointer in multipointer:
+        eleList.append(inPointer.get())
+    return eleList
+
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      multiPointer = getattr(protocol, inputParam[0])
+      listOfElements = self.getListOfElements(multiPointer)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Select set", provider,
+                            "Select one of the sets in the input")
+    return dlg
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form, inputParam)
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectInputSetWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                 targets=['inSet'],
+                                 inputs=['inputROIsSets'],
+                                 outputs=['inSet'])
+SelectInputSetWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                 targets=['inSet'],
+                                 inputs=['conditionalROIs'],
+                                 outputs=['inSet'])
+
 
 class SelectMultiElementWizard(SelectElementWizard):
   """Lists the items in a SetOfX and choose one or several"""
@@ -600,8 +686,13 @@ class SelectMultiElementWizard(SelectElementWizard):
   def show(self, form, *params):
     inputParam, outputParam = self.getInputOutput(form)
     dlg = self.displayDialog(form, inputParam)
-    values = [val.get() for val in dlg.values]
-    form.setVar(outputParam[0], ','.join(values))
+    values = [val.get().strip() for val in dlg.values]
+    form.setVar(outputParam[0], ', '.join(values))
+
+SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                     targets=['seleLinker'],
+                                     inputs=['inLinkerSet'],
+                                     outputs=['seleLinker'])
 
 class SelectMultiSeqWizard(SelectMultiElementWizard):
   """Lists the items in a SetOfSequences and choose several"""
@@ -630,6 +721,24 @@ SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  targets=['chooseMol'],
                                  inputs=['inputSequences'],
                                  outputs=['chooseMol'])
+
+class SelectMultiEpitopeElementWizard(SelectElementWizard):
+  """Lists the items in a MultiEpitope and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for item in scipionSet:
+        elemType = 'Linker' if hasattr(item, '_type') and getattr(item, '_type') == 'Linker' else 'Epitope'
+        elem = f'{elemType} (ID {item.getObjId()}): {item.getROISequence()}'
+        eleList.append(elem)
+    return eleList
+
+SelectMultiEpitopeElementWizard().addTarget(protocol=ProtModifyMultiEpitope,
+                                 targets=['inROI'],
+                                 inputs=['inputMultiEpitope'],
+                                 outputs=['inROI'])
 
 class SelectSetMultiPointerWizard(SelectElementWizard):
   """Lists the items in a multipointer of SetOfX and choose one"""
@@ -663,6 +772,16 @@ SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRankDocking,
                                         targets=['defineInput'],
                                         inputs=['inputMoleculesSets'],
                                         outputs=['defineInput'])
+
+SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                        targets=['inSet'],
+                                        inputs=['inputROISets'],
+                                        outputs=['inSet'])
+SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                        targets=['linkProtSet'],
+                                        inputs=['inputROISets'],
+                                        outputs=['linkProtSet'])
+
 
 SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRANXFuse,
                                         targets=['inSetID'],

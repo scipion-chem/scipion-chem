@@ -67,6 +67,9 @@ class ProtocolRANXFuse(EMProtocol):
     group.addParam('inAttrVal', params.StringParam, label="Input scores attribute: ",
                    help='Select the attribute in the sets where the value of each element is found. '
                         'e.g: mutation score.\nThey are the values that will be fused')
+    group.addParam('high', params.BooleanParam, label="Higher is better: ", default=True,
+                   help='Determines whether the score is ascending or decresing, so if a higher value of the score is '
+                        'a "better" value, in order to properly correlate inverse scores')
     group.addParam('addAttr', params.LabelParam, label='Add score: ',
                    help='Add ID-score defined')
 
@@ -80,7 +83,7 @@ class ProtocolRANXFuse(EMProtocol):
                         'elements with the same attribute ID. If other attributes are shared, the ones in earliest sets'
                         ' will be saved.')
 
-  def _addFusionAlogorithmForm(self, form):
+  def addFusionAlgorithmForm(self, form):
     form.addParam('typeAlgorithm', params.EnumParam, default=0,
                   choices=['Score-based Methods', 'Rank-based Methods'],
                   label="Type of fusion method", allowsNull=False,
@@ -143,7 +146,7 @@ class ProtocolRANXFuse(EMProtocol):
 
     form.addSection(label='Fusion parameters')
     group = form.addGroup('Fusion algorithms')
-    self._addFusionAlogorithmForm(group)
+    self.addFusionAlgorithmForm(group)
 
   # --------------------------- STEPS functions ------------------------------
   def _insertAllSteps(self):
@@ -160,7 +163,7 @@ class ProtocolRANXFuse(EMProtocol):
       inPointIdx, attrID = key.split('-')
       inSet = inSets[int(inPointIdx)]
       for attrVal in attrVals:
-        runDics[f"{inPointIdx}-{attrVal}"] = self.createAttrDic(inSet, attrID, attrVal)
+        runDics[f"{inPointIdx}-{attrVal[0]}"] = self.createAttrDic(inSet, attrID, attrVal)
 
     paramsFile = self.writeParamsFile(runDics, normMethod, fusionMethod, kwargs)
     pwchemPlugin.runScript(self, 'ranx_fusion.py', paramsFile, RANX_DIC)
@@ -172,7 +175,7 @@ class ProtocolRANXFuse(EMProtocol):
 
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
     for item in inSet:
-      inID = item.getAttributeValue(outAttrName)
+      inID = str(item.getAttributeValue(outAttrName))
       scoreComb = outScores[inID]
       setattr(item, self.outName.get(), Float(scoreComb))
       outSet.append(item)
@@ -185,7 +188,9 @@ class ProtocolRANXFuse(EMProtocol):
     return [inPoint.get() for inPoint in self.inputSets]
 
   def getInputAttrsDic(self):
-    '''Returns: {pointerIdx-AttrID: AttrValues}. If a pointer idx has several AttrID, only the first will be used as ID
+    '''Returns: {pointerIdx-AttrID: [[AttrValue, highBetter=-1|1], ...]}.
+    If lower is better, highBetter=-1 and the values will be multiplied by -1, changing the order
+    If a pointer idx has several AttrID, only the first will be used as ID
     for that set.
     '''
     inAttrsDic, idxsKey = {}, {}
@@ -198,7 +203,8 @@ class ProtocolRANXFuse(EMProtocol):
         if pointIdx not in idxsKey or idxsKey[pointIdx] == key:
           if key not in inAttrsDic:
             inAttrsDic[key] = []
-          inAttrsDic[key].append(inLineDic['Values'])
+          highMult = 1 if inLineDic["Higher_is_better"] == 'True' else -1
+          inAttrsDic[key].append([inLineDic['Values'], highMult])
           idxsKey[pointIdx] = key
     return inAttrsDic
 
@@ -235,7 +241,8 @@ class ProtocolRANXFuse(EMProtocol):
     '''
     mutations = {}
     for obj in inSet:
-      mutations[str(obj.getAttributeValue(attrName))] = float(obj.getAttributeValue(attrValue))
+      value, mult = float(obj.getAttributeValue(attrValue[0])), attrValue[1]
+      mutations[str(obj.getAttributeValue(attrName))] = value * mult
 
     return mutations
 
@@ -301,9 +308,9 @@ class ProtocolRANXFuse(EMProtocol):
 
   # --------------------------- WIZARD functions -----------------------------------
   def createElementLine(self):
-    setStr, attrName, attrValue = self.inSetID.get().strip(), self.inAttrName.get().strip(), \
-                                  self.inAttrVal.get().strip()
+    setStr, attrName, attrValue, high = self.inSetID.get().strip(), self.inAttrName.get().strip(), \
+                                        self.inAttrVal.get().strip(), self.high.get()
     setIdx = setStr.split('//')[0]
 
-    roiDef = f'{{"Set Idx": "{setIdx}", "ID": "{attrName}", "Values": "{attrValue}"}}\n'
+    roiDef = f'{{"Set Idx": "{setIdx}", "ID": "{attrName}", "Values": "{attrValue}", "Higher_is_better": "{high}"}}\n'
     return roiDef

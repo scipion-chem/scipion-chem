@@ -355,6 +355,7 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 
 	def test(self):
 		protPrep = self._runPrepareTarget(self.protImportPDB)
+		self.protPrepareReceptor = protPrep
 		protExtLig = self._runExtractLigand(self.protImportPDB)
 
 		self._waitOutput(protPrep, 'outputStructure')

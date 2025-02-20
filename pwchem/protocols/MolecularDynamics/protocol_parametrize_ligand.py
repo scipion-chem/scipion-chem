@@ -51,7 +51,7 @@ def performACPYPE(protocol, molFile, outDir, kwargs):
     args += f' -o {kwargs["outType"]}'
   Plugin.runACPYPE(protocol, args=args, cwd=outDir)
 
-class ProtocolLiganParametrization(EMProtocol):
+class ProtocolLigandParametrization(EMProtocol):
     """
     Performs a ligand parametrization using ACPYPE package to generate appropiate MD files
     """
