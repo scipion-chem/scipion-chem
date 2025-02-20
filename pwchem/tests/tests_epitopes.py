@@ -34,11 +34,11 @@ defSeqROIsSeq = '''1) Residues: {"index": "1-10", "residues": "MFVFLVLLPL", "des
 3) Residues: {"index": "56-64", "residues": "LPFFSNVTW", "desc": "None"}
 4) Residues: {"index": "70-81", "residues": "VSGTNGTKRFDN", "desc": "None"}'''
 
-defMultiEp = '''1) Epitope: SequenceROI (Idx: 34-40, ROI: RGVYYPD) (Set 101, Item 2, Name ROI_34-40)
+defMultiEp = '''1) Epitope: SequenceROI (Idx: 34-40, ROI: RGVYYPD) (Set 103, Item 2, Name ROI_34-40)
 2) Linker: LLLLLL
-3) Epitope: SequenceROI (Idx: 70-81, ROI: VSGTNGTKRFDN) (Set 101, Item 4, Name ROI_70-81)
+3) Epitope: SequenceROI (Idx: 70-81, ROI: VSGTNGTKRFDN) (Set 103, Item 4, Name ROI_70-81)
 4) Linker: TTTTTTTT
-5) Epitope: SequenceROI (Idx: 1-10, ROI: MFVFLVLLPL) (Set 101, Item 1, Name ROI_1-10)
+5) Epitope: SequenceROI (Idx: 1-10, ROI: MFVFLVLLPL) (Set 103, Item 1, Name ROI_1-10)
 '''
 
 modMultiEp = '''1) Remove Epitope (ID 4): MFVFLVLLPL
