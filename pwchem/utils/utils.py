@@ -344,6 +344,9 @@ def pdbqt2other(protocol, pdbqtFile, otherFile):
 def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   '''Convert molecule files to sdf using openbabel'''
   if molFile.endswith('.sdf'):
+    if sdfFile:
+      shutil.copy(molFile, sdfFile)
+      molFile = sdfFile
     return molFile
   if not sdfFile:
     baseName = os.path.splitext(os.path.basename(molFile))[0]

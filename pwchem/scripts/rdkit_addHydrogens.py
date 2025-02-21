@@ -15,8 +15,12 @@ def fixLigand(mol):
             if atom.GetSymbol() == 'N' and atom.GetFormalCharge() == 0 and atom.GetExplicitValence() == 4:
                 atom.SetFormalCharge(1)
     Chem.SanitizeMol(mol)
-    return Chem.AddHs(mol, addCoords=True)
-
+    for a in mol.GetAtoms():
+        rad = a.GetNumRadicalElectrons()
+        if rad:
+            a.SetNumExplicitHs(rad)
+            a.SetNumRadicalElectrons(0)
+    return Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
 
 #################################################################################################################
 
