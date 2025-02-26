@@ -30,15 +30,11 @@
 This protocol maps a set of sequence ROIs to structure ROIs for an AtomStruct
 
 """
-import os, json
 from scipy.spatial import distance
 from Bio.PDB.ResidueDepth import get_surface
-from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
-from pyworkflow.object import String
 from pyworkflow.utils import Message
-from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb
 
 from pwchem.objects import SetOfStructROIs, StructROI
@@ -46,9 +42,10 @@ from pwchem.utils import *
 from pwchem.utils.utilsFasta import pairwiseAlign
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
+from pwchem.protocols import ProtDefineStructROIs
 
 
-class ProtMapSequenceROI(EMProtocol):
+class ProtMapSequenceROI(ProtDefineStructROIs):
     """
     Maps a set of SequenceROIs to their respective structure ROIs in an AtomStruct
     """
@@ -81,16 +78,7 @@ class ProtMapSequenceROI(EMProtocol):
                        label='Cluster output coordinates: ',
                        help='Whether to cluster the ROI coordinates and extract those clusters as the final '
                             'structural ROIs or define a structural ROI for each sequence ROI input.')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition='doCluster',
-                       label='Maximum distance between pocket points (A): ',
-                       help='Maximum distance between two cluster atoms to considered them same cluster')
-        group.addParam('surfaceCoords', params.BooleanParam, default=True,
-                       label='Map coordinates to surface? ',
-                       help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
-                            'closest surface coordinates or use them directly.')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                       label='Maximum atom depth (A): ',  condition='surfaceCoords',
-                       help='Maximum atom distance to the surface to be considered and mapped')
+        group = self._defineClusterParams(group, condition='doCluster')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):

@@ -57,6 +57,20 @@ class ProtDefineStructROIs(EMProtocol):
     typeChoices = ['Coordinates', 'Residues', 'Ligand', 'Protein-Protein Interface', 'Near Residues']
 
     # -------------------------- DEFINE param functions ----------------------
+    def _defineClusterParams(self, group, condition='True'):
+      group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition=condition,
+                     label='Maximum distance between pocket points (A): ',
+                     help='Maximum distance between two pocket atoms to considered them same pocket')
+
+      group.addParam('surfaceCoords', params.BooleanParam, default=True,
+                     label='Map coordinates to surface? ',
+                     help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
+                          'closest surface coordinates or use them directly.')
+      group.addParam('maxDepth', params.FloatParam, default='3.0',
+                     label='Maximum atom depth (A): ', condition='surfaceCoords',
+                     help='Maximum atom distance to the surface to be considered and mapped')
+      return group
+
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
@@ -141,21 +155,11 @@ class ProtDefineStructROIs(EMProtocol):
                             'maxDepth and points closer than maxIntraDistance will be considered the same pocket')
 
         group = form.addGroup('Pocket definition')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
-                       label='Maximum distance between pocket points (A): ',
-                       help='Maximum distance between two pocket atoms to considered them same pocket')
-
-        group.addParam('surfaceCoords', params.BooleanParam, default=True,
-                       label='Map coordinates to surface? ',
-                       help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
-                            'closest surface coordinates or use them directly.')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                      label='Maximum atom depth (A): ', condition='surfaceCoords',
-                      help='Maximum atom distance to the surface to be considered and mapped')
+        group = self._defineClusterParams(group)
 
         form.addSection(label='Input Pointers')
         form.addParam('inputPointerLabels', params.LabelParam, important=True,
-                      label='Records of inputs. Do not modificate manually',
+                      label='Records of inputs. Do not modify manually',
                       help='This is a list of the input pointer to keep track of the inputs received.\n'
                            'It is automatically updated with the first section wizards.\n'
                            'Manual modification (adding inputs from the lens) will have no actual impact on the '

@@ -29,6 +29,8 @@ import os
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 
+from pwem.viewers.mdviewer.viewer import MDViewer
+
 from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.constants import *
@@ -108,7 +110,10 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
     else:
       print('Cannot find outputStructROIs')
 
-    setV = BioinformaticsDataViewer(project=self.getProject())
+    try:
+      setV = MDViewer(project=self.getProject())
+    except:
+      setV = BioinformaticsDataViewer(project=self.getProject())
     return setV._visualize(molSet)
 
   def _validate(self):
@@ -250,7 +255,10 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
     #Display functions
     def _showTable(self, paramName=None):
       outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
-      setV = BioinformaticsDataViewer(project=self.getProject())
+      try:
+        setV = MDViewer(project=self.getProject())
+      except:
+        setV = BioinformaticsDataViewer(project=self.getProject())
       return setV._visualize(outPockets)
 
     def _showAtomStructPyMolPoints(self):

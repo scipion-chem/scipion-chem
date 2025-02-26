@@ -34,7 +34,7 @@ from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.objects.data import Sequence, Object, String, Integer, Float
+from pwem.objects.data import Sequence, Object, String, Integer, Float, Pointer
 
 # Plugin imports
 from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
@@ -50,6 +50,9 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
                 'ALA': 'A', 'VAL': 'V', 'GLU': 'E', 'TYR': 'Y', 'MET': 'M'}
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
+
+def checkNormalResidues(sequence):
+  return all([res in RESIDUES1TO3 for res in sequence])
 
 ################# Generic function utils #####################
 def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
@@ -109,11 +112,15 @@ def organizeThreads(nTasks, nThreads):
       subsets[i % nTasks] += 1
   return subsets
 
-def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, **kwargs):
+def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, popen=False, **kwargs):
   i, finished = 1, False
   while not finished and i <= nMax:
     try:
-      protocol.runJob(programPath, progArgs, **kwargs)
+      if not popen:
+        protocol.runJob(programPath, progArgs, **kwargs)
+      else:
+        subprocess.check_call(programPath + progArgs, shell=True, **kwargs)
+
       finished = True
     except Exception:
       i += 1
@@ -239,6 +246,28 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
+def mergeFiles(inFiles, outFile=None, oDir='', sep=''):
+  inTexts = []
+  for inFile in inFiles:
+    with open(inFile) as f:
+      inTexts.append(f.read())
+
+  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
+  with open(outFile, 'w') as fo:
+    fo.write(sep.join(inTexts))
+  return outFile
+
+def mergeSDFs(sdfFiles, outFile=None, oDir=''):
+  inTexts = []
+  for inFile in sdfFiles:
+    with open(inFile) as f:
+      inTexts.append(f.read().strip())
+
+  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
+  with open(outFile, 'w') as fo:
+    fo.write('\n'.join(inTexts))
+  return outFile
+
 def mergePDBs(fn1, fn2, fnOut, hetatm2=False):
   with open(fnOut, 'w') as f:
     with open(fn1) as f1:
@@ -315,6 +344,9 @@ def pdbqt2other(protocol, pdbqtFile, otherFile):
 def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   '''Convert molecule files to sdf using openbabel'''
   if molFile.endswith('.sdf'):
+    if sdfFile:
+      shutil.copy(molFile, sdfFile)
+      molFile = sdfFile
     return molFile
   if not sdfFile:
     baseName = os.path.splitext(os.path.basename(molFile))[0]
@@ -323,6 +355,7 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
   else:
     baseName = os.path.splitext(os.path.basename(sdfFile))[0]
     outDir = os.path.abspath(os.path.dirname(sdfFile))
+
   if not os.path.exists(sdfFile) or overWrite:
     args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
            f'--outputName {baseName} --overWrite'
@@ -713,6 +746,34 @@ def numberSort(strings, rev=False):
 
   return sorted(strings, key=keyFunct, reverse=rev)
 
+def unifyAttributes(itemList):
+  '''Unify the attributes of the objects in a list by setting the missing ones with None so all items
+  end up having all the attributes'''
+  attributes = getAllItemAttributes(itemList)
+  for item in itemList:
+    for attr in attributes:
+      if not hasattr(item, attr):
+        item.__setattr__(attr, attributes[attr])
+  return itemList
+
+def getAllItemAttributes(itemList):
+  attributes = {}
+  for item in itemList:
+    newAttrs = getItemAttributes(item)
+    attributes.update(newAttrs)
+  return attributes
+
+def getItemAttributes(item):
+  '''Return a dic with the attributes of an object and its values set to None in the specified type'''
+  attributes = {}
+  attrKeys = item.getObjDict().keys()
+  for attrK in attrKeys:
+    if attrK not in attributes and hasattr(item, attrK):
+      value = item.__getattribute__(attrK)
+      attributes[attrK] = value.clone()
+      attributes[attrK].set(None)
+  return attributes
+
 def fillEmptyAttributes(inputSets):
   '''Fill all items with empty attributes'''
   attributes = getAllAttributes(inputSets)
@@ -727,13 +788,10 @@ def getAllAttributes(inputSets):
   '''Return a dic with {attrName: ScipionObj=None}'''
   attributes = {}
   for inpSet in inputSets:
-    item = inpSet.get().getFirstItem()
-    attrKeys = item.getObjDict().keys()
-    for attrK in attrKeys:
-      if attrK not in attributes:
-        value = item.__getattribute__(attrK)
-        attributes[attrK] = value.clone()
-        attributes[attrK].set(None)
+    if isinstance(inpSet, Pointer):
+      inpSet = inpSet.get()
+    item = inpSet.getFirstItem()
+    attributes.update(getItemAttributes(item))
   return attributes
 
 def getBaseFileName(filename):
@@ -949,3 +1007,20 @@ def formatInteractionsArray(intDic, seqNames, molNames):
       intAr[i, j] = intDic[seqName][molName]
   return intAr
   
+def normalizeToRange(iterable, normRange=[0, 1]):
+  maxIt, minIt = max(iterable), min(iterable)
+  return [((normRange[1] - normRange[0]) * (i - minIt)) / (maxIt - minIt) + normRange[0] for i in iterable]
+
+def replaceInFiles(directory, old_string, new_string, file_extension="*"):
+  command = f"find {directory} -type f -name '*{file_extension}' -exec sed -i 's/{old_string}/{new_string}/g' {{}} +"
+  subprocess.run(command, shell=True, check=True)
+
+def replaceInFile(file, inStr, repStr):
+  inStr, repStr = inStr.replace('\n', '\\n'), repStr.replace('\n', '\\n')
+  subprocess.check_call(f'''sed -i -z 's/{inStr}/{repStr}/g' {file}''', shell=True)
+  return file
+
+def getReplaceCommand(file, inStr, repStr):
+  inStr, repStr = inStr.replace('\n', '\\n'), repStr.replace('\n', '\\n')
+  quote = "'" if '"' in inStr or '"' in repStr else '"'
+  return f'''sed -i -z {quote}s/{inStr}/{repStr}/g{quote} {file}'''

@@ -80,11 +80,9 @@ class ProtCalculateSASA(EMProtocol):
 
             if inProt:
                 inFile = os.path.abspath(self._getExtraPath('inpdb.pdb'))
-                outDir = self._getExtraPath()
             else:
                 inFile = os.path.abspath(self.getProject().getTmpPath('inpdb.pdb'))
-                outDir = self.getProject().getTmpPath()
-            # Removes HETATM (sometimes yiled error in Biopython)
+            # Removes HETATM (sometimes yield error in Biopython)
             cleanPDB(inputAS, inFile, waters=True, hetatm=True)
 
             calculate_SASA(inFile, outSASA)

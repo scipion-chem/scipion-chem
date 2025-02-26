@@ -51,13 +51,15 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def defineBinaries(cls, env):
 		cls.addRDKitPackage(env)
-		cls.addShapeitPackage(env)
+		cls.addOpenbabelPackage(env)
 		cls.addMGLToolsPackage(env)
 		cls.addJChemPaintPackage(env)
 		cls.addPyMolPackage(env)
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
+		cls.addDEAPPackage(env)
+		cls.addRanxPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
@@ -68,7 +70,7 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(JCHEM_DIC['home'], cls.getEnvName(JCHEM_DIC))
 		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
 		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
-		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+		cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -111,7 +113,9 @@ class Plugin(pwem.Plugin):
 		env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
 		# Installing package
-		installer.addCommand(f'conda create --name {RDKIT_DIC["name"]}-{RDKIT_DIC["version"]} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
+		rdkitEnvName = cls.getEnvName(RDKIT_DIC)
+		installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
+												 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
@@ -153,29 +157,30 @@ class Plugin(pwem.Plugin):
 			.addPackage(env, dependencies=['wget'], default=default)
 
 	@classmethod
-	def addShapeitPackage(cls, env, default=True):
+	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
 		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
 		openbabel_installer.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer'], channel='conda-forge') \
-			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
-		
-		# Instantiating shape it install helper
-		shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
-
-		# Importing commands from openbabel and rdkit installers
-		shape_it_installer.importCommandList(openbabel_installer.getCommandList())
-
-		# Defining binaries folder name
-		binaries_directory = SHAPEIT_DIC['name']
-
-		# Installing package
-		shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
-			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
-			.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge') \
+			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
+		
+		# # Instantiating shape it install helper
+		# shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
+		#
+		# # Importing commands from openbabel and rdkit installers
+		# shape_it_installer.importCommandList(openbabel_installer.getCommandList())
+		#
+		# # Defining binaries folder name
+		# binaries_directory = SHAPEIT_DIC['name']
+		#
+		# # Installing package
+		# shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
+		# 	.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
+		# 	.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
+		# 	.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
 	def addAliViewPackage(cls, env, default=True):
@@ -206,6 +211,28 @@ class Plugin(pwem.Plugin):
 
 		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
+
+	@classmethod
+	def addDEAPPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
+															packageVersion=DEAP_DIC['version'])
+
+		scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
+		installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate scipion3 && conda install conda-forge::deap -y')\
+			.addCommand('git clone https://github.com/bdsul/grape.git') \
+			.addCommand(f'mv grape {scipionEnvPath}') \
+			.addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def addRanxPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(RANX_DIC['name'], packageHome=cls.getVar(RANX_DIC['home']),
+															packageVersion=RANX_DIC['version'])
+
+		installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
+			addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
+			.addPackage(env, dependencies=['conda', 'pip'], default=default)
 
 	##################### RUN CALLS ######################
 	@classmethod

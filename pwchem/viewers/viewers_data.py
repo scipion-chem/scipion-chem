@@ -179,7 +179,6 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
         pwchem.objects.SetOfDatabaseID,
         pwchem.objects.SetOfSmallMolecules,
         pwchem.objects.SetOfBindingSites,
-        pwchem.objects.SetOfSequenceROIs
     ]
 
     def __init__(self, **kwargs):

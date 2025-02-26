@@ -160,8 +160,13 @@ def calculateIdentity(alignFile):
             return round(100 * ident, 2)
 
 
+def fastFastaExport(seqSet, outFasta):
+  lines = []
+  for seq in seqSet:
+    lines.append(f'>{seq.getSeqName()}\n{seq.getSequence()}\n')
 
-
+  with open(outFasta, 'w') as f:
+    f.write(''.join(lines))
 
 
 

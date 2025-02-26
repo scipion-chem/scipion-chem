@@ -35,7 +35,9 @@ def divideMultiPDB(file):
   pdbStrs = []
 
   with open(file) as fIn:
-    pdbs = fIn.read().split('\nENDMDL\n')
+    fileText = fIn.read()
+    endSplit = 'ENDMDL' if 'ENDMDL' in fileText else 'END'
+    pdbs = fileText.split(f'\n{endSplit}\n')
     if len(pdbs) > 1:
       pdbs = pdbs[:-1]
 

@@ -101,13 +101,15 @@ class ProtOperateSeqROI(EMProtocol):
 
     def defineOutputStep(self):
         inSets = self.getInputListOfSets()
-        print(1, inSets)
         if self.operateIntraSet.get():
             inSets = self.getIntraOperatedROIs(inSets)
-        print(2, inSets)
         if self.operateInterSet.get():
             inSets = self.getInterOperatedROIs(inSets)
-        print(3, inSets)
+        else:
+            oSets = []
+            for roiList in inSets:
+                oSets += [roi.clone() for roi in roiList]
+            inSets = oSets
 
         if len(inSets) > 0:
             outROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
@@ -255,6 +257,7 @@ class ProtOperateSeqROI(EMProtocol):
                         setattr(newROI, '_ROISequence', roiSeq)
                         newROI.setROIIdx(consIdxs[0]), newROI.setROIIdx2(consIdxs[-1])
                     else:
+                        # todo: option to merge attributes
                         newROI = SequenceROI(sequence=totalSequence, seqROI=roiSeq,
                                              roiIdx=consIdxs[0], roiIdx2=consIdxs[-1])
                     newROIs.append(newROI)

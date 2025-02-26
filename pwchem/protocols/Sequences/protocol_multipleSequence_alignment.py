@@ -120,7 +120,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         if self.additionalFormat:
             embossSelectedFormat = EMBOSS_FORMATS[self.getEnumText('embossFormats')]
             embossFile = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
-            embossFile = outSequences.convertEMBOSSformat(embossSelectedFormat, embossFile)
+            embossFile = outSeqs.convertEMBOSSformat(embossSelectedFormat, embossFile)
 
 
     def _validate(self):

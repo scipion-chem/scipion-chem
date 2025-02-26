@@ -36,9 +36,11 @@ OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPE
 ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
-RDKIT_DIC =     {'name': 'rdkit',       'version': DEFAULT_VERSION, 'home': 'RDKIT_HOME'}
+RDKIT_DIC =     {'name': 'rdkit',       'version': '2022.09.1', 'home': 'RDKIT_HOME'}
 BIOCONDA_DIC =  {'name': 'bioconda',    'version': DEFAULT_VERSION}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
+DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
+RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',         'home': 'RANKX_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
@@ -499,7 +501,7 @@ mol modrep 1 0
 TCL_MD_LIG_STR = '''
 mol addrep 0
 mol modstyle 2 0 Licorice 0.300000 12.000000 12.000000
-mol modselect 2 0 resname LIG
+mol modselect 2 0 resname {}
 '''
 
 PML_MD_STR = '''load {}
@@ -508,5 +510,7 @@ hide everything, not br. all within 3 of (byres polymer & name CA)
 set movie_fps, 15
 '''
 
-
+NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "borda"]
+SCORE_BASED_METHODS = ["med", "anz"]
+RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 

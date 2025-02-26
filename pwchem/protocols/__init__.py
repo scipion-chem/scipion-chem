@@ -41,6 +41,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import Protoco
 
 from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_structROIs import ProtocolConsensusStructROIs
+from pwchem.protocols.VirtualDrugScreening.protocol_extract_interactingMols import ProtExtractInteractingMols
 
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import ProtocolConsensusDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import ProtocolScoreDocking
@@ -55,7 +56,6 @@ from pwchem.protocols.VirtualDrugScreening.protocol_calculate_SASA import ProtCa
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import ProtocolPharmacophoreGeneration
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_modification import ProtocolPharmacophoreModification
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_filtering import ProtocolPharmacophoreFiltering
-from pwchem.protocols.VirtualDrugScreening.protocol_extract_interactingMols import ProtExtractInteractingMols
 
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
@@ -70,9 +70,16 @@ from pwchem.protocols.Sequences.protocol_calculate_conservation import ProtSeqCa
 from pwchem.protocols.Sequences.protocol_extract_attribute_ROIs import ProtExtractSeqsROI
 from pwchem.protocols.Sequences.protocol_operate_sequence_rois import ProtOperateSeqROI
 from pwchem.protocols.Sequences.protocol_map_sequence_structure_ROIs import ProtMapSequenceROI
+from pwchem.protocols.Sequences.protocol_map_attribute_to_sequence_ROIs import ProtMapAttributeToSeqROIs
 
 from pwchem.protocols.Sequences.protocol_pairWise_alignment import ProtChemPairWiseAlignment
 from pwchem.protocols.Sequences.protocol_multipleSequence_alignment import ProtChemMultipleSequenceAlignment
+
+from pwchem.protocols.Sequences.protocol_define_multiepitope import ProtDefineMultiEpitope
+from pwchem.protocols.Sequences.protocol_modify_multiepitope import ProtModifyMultiEpitope
+from pwchem.protocols.Sequences.protocol_combineScores_sequence_roi import ProtCombineScoresSeqROI
+from pwchem.protocols.Sequences.protocol_optimize_multiepitope import ProtOptimizeMultiEpitope
+
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
@@ -87,7 +94,8 @@ from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
 from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_pymol import ProtPymolOperate
+from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse
 
 # Molecular dynamics
-from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLiganParametrization
+from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
 
