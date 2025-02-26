@@ -3,6 +3,7 @@
 # * Authors:     Marta Martinez (mmmtnez@cnb.csic.es)
 # *              Roberto Marabini (roberto@cnb.csic.es)
 # *              James Krieger (jmkrieger@cnb.csic.es)
+# *              Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # * L'Institut de genetique et de biologie moleculaire et cellulaire (IGBMC)
 # *
@@ -38,13 +39,13 @@ except ImportError:
 
 from pwem.protocols import EMProtocol
 
-from pyworkflow.protocol.params import (MultiPointerParam,
-                                        StringParam)
+from pyworkflow.protocol import params
 from pyworkflow.utils.properties import Message
-from pyworkflow.utils import process
 
 from pwchem import Plugin
 from pwchem.constants import PYMOL_DIC
+
+pymolScriptFileName = 'script.pml'
 
 class ProtPymolOperate(EMProtocol):
     """This protocol provides access to Pymol and allows one to save the result 
@@ -55,16 +56,12 @@ class ProtPymolOperate(EMProtocol):
     # --------------------------- DEFINE param functions --------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputPdbFiles', MultiPointerParam,
-                      pointerClass="AtomStruct", allowsNull=True,
-                      label='Other atomic structures',
-                      help="In case you need to load more PDBx/mmCIF files, "
-                           "you can load them here and save them after "
+        form.addParam('inputPdbFiles', params.MultiPointerParam,
+                      pointerClass="AtomStruct", allowsNull=True, label='Input atomic structures: ',
+                      help="In case you need to load more PDBx/mmCIF files, you can load them here and save them after "
                            "operating with them.")
-        form.addParam('extraCommands', StringParam,
-                      default='',
-                      condition='False',
-                      label='Extra commands for chimera viewer',
+        form.addParam('extraCommands', params.StringParam, default='', condition='False',
+                      label='Extra commands for pymol viewer', expertLevel=params.LEVEL_ADVANCED,
                       help="Add extra commands in cmd file. Use for testing")
 
         return form  # DO NOT remove this return
@@ -78,52 +75,26 @@ class ProtPymolOperate(EMProtocol):
 
     def runPymolStep(self):
         # building script file
-        pymolScriptFileName = 'script.pml'
-        f = open(self._getTmpPath(pymolScriptFileName), "w")
-        #f.write('from pymol import cmd\n')
-
-        if hasattr(self, 'inputPdbFiles'):
-            for pdb in self.inputPdbFiles:
-                f.write("load %s\n" % os.path.abspath(pdb.get(
-                ).getFileName()))
-
-        # run the text:
-        pymolScriptFileName = os.path.abspath(
-            self._getTmpPath(pymolScriptFileName))
-        if len(self.extraCommands.get()) > 2:
-            f.write(self.extraCommands.get())
-        else:
-            args = " " + pymolScriptFileName
-
-        f.close()
+        pymolScript = self.writePymolScript()
 
         # run in the background
-        cwd = os.path.abspath(self._getExtraPath())
-
-        if 'allowFault' in inspect.getfullargspec(process.runJob)[0]:
-            self._log.info('Launching: ' + self._getPymol() + ' ' + args + ' with allowFault')
-            self.runJob(self._getPymol(), args, cwd=cwd, allowFault=True)
-        else:
-            self._log.info('Launching: ' + self._getPymol() + ' ' + args)
-            # may have problems for WSL
-            self.runJob(self._getPymol(), args, cwd=cwd)
+        self._log.info('Launching: ' + self._getPymol() + pymolScript)
+        self.runJob(self._getPymol(), pymolScript, cwd=self._getExtraPath())
 
     def createOutput(self):
         """ Copy the PDB structure and register the output object.
         """
-        # Check vol and pdb files
-        directory = self._getExtraPath()
-        for filename in sorted(os.listdir(directory)):
-            if filename.endswith(".pdb") or filename.endswith(".cif"):
-                path = os.path.join(directory, filename)
-                pdb = AtomStruct()
-                pdb.setFileName(path)
-                if filename.endswith(".cif"):
-                    keyword = filename.split(".cif")[0].replace(".","_")
-                else:
-                    keyword = filename.split(".pdb")[0].replace(".", "_")
-                kwargs = {keyword: pdb}
+        i = 1
+        oDir = self._getExtraPath()
+        for filename in sorted(os.listdir(oDir)):
+            if os.path.splitext(filename)[1] in ['.pdb', '.cif']:
+                path = os.path.join(oDir, filename)
+                pdb = AtomStruct(path)
+
+                kwargs = {f'outputStructure_{i}': pdb}
                 self._defineOutputs(**kwargs)
+                i += 1
+
 
     # --------------------------- INFO functions ----------------------------
     def _validate(self):
@@ -138,14 +109,28 @@ class ProtPymolOperate(EMProtocol):
         summary = []
         if self.getOutputsSize() > 0:
             directory = self._getExtraPath()
-            summary.append("Produced files:")
+            summary.append("Produced files: ")
             for filename in sorted(os.listdir(directory)):
-                if filename.endswith(".pdb"):
-                    summary.append(filename)
-            summary.append("we have some result")
+                if filename.endswith(".pdb") or filename.endswith(".cif"):
+                    summary.append(f'\t- {filename}')
         else:
             summary.append(Message.TEXT_NO_OUTPUT_FILES)
         return summary
     
     def _getPymol(self):
         return Plugin.getProgramHome(PYMOL_DIC, 'pymol/bin/pymol')
+
+    def getPymolScript(self):
+        return os.path.abspath(self._getTmpPath(pymolScriptFileName))
+
+    def writePymolScript(self):
+        scriptFn = self.getPymolScript()
+        with open(scriptFn, 'w') as f:
+            for pdb in self.inputPdbFiles:
+                pdbFile = os.path.abspath(pdb.get().getFileName())
+                f.write(f"load {pdbFile}\n")
+
+            if self.extraCommands.get().strip():
+                f.write(self.extraCommands.get().strip())
+        return scriptFn
+
