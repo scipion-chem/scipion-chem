@@ -80,8 +80,8 @@ if __name__ == "__main__":
                     failedMols.append(outBase)
             else:
                 mol = embedAndOptimize(mol)
-                setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
                 if mol:
+                    setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
                     outFile = outBasef + '.sdf'
                     writeMol(mol, outFile, setName=setMolName)
                 else:
