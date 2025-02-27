@@ -216,18 +216,6 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
                 f.write('numAtoms: {}\n'.format(self.numAtoms.get()))
         return paramsFile
 
-    def mergeErrorFiles(self):
-        lines = []
-        with open(self._getExtraPath('failed.txt'), 'w') as f:
-            for eFile in glob.glob(self._getExtraPath('failed_*.txt')):
-                with open(eFile) as fIn:
-                    for line in fIn:
-                        lines.append(line)
-                os.remove(eFile)
-            lines = natural_sort(lines)
-            for line in lines:
-                f.write(line)
-
     def getLigandCode(self, paramsFile):
       with open(paramsFile) as f:
         code = f.readline().split()[1]

@@ -534,9 +534,10 @@ class SmallMolecule(data.EMObject):
 
         if not os.path.exists(outFile) or overWrite:
             mapDic = self.mapLabels(probMol, mapBy)
-            with open(outFile, 'w') as f:
-                for refLabel in mapDic:
-                    f.write('{}\t{}\n'.format(refLabel, mapDic[refLabel]))
+            if mapDic:
+                with open(outFile, 'w') as f:
+                    for refLabel in mapDic:
+                        f.write('{}\t{}\n'.format(refLabel, mapDic[refLabel]))
         return outFile
 
 
