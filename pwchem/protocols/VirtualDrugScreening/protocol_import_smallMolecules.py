@@ -26,12 +26,14 @@
 # *
 # **************************************************************************
 
-import os, requests, glob, sys, json
-
+import os, requests, glob, sys, json, gzip
+from bs4 import BeautifulSoup
+import random as rd
 
 from pwem.protocols import EMProtocol
 from pyworkflow.utils.path import copyFile
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam, STEPS_PARALLEL
+from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam, \
+  STEPS_PARALLEL, IntParam
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
@@ -41,7 +43,7 @@ from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 RDKIT, OPENBABEL = 0, 1
 DEFAULT_FORMAT = 'sdf'
 
-libraries = ['ECBL', 'ZINC']
+libraries = ['ECBL', 'ZINC', 'PubChem']
 
 urlECBLDic = {'Bioactive (~5000)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Video-Content/other_uploads/Pilot_08_09_2021.sdf',
               'Diversity (~10⁵)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Video-Content/other_uploads/ECBL_08_09_2021.sdf',
@@ -52,6 +54,8 @@ urlZINCJsonDic = {'FDA (~1300)': 'https://zinc.docking.org/substances/subsets/fd
 
 urlZINCDic = {'FDA (~1300)': 'https://zinc.docking.org/substances/subsets/fda.sdf?count=all',
               'Drugs-NotFDA (~2000)': 'https://zinc.docking.org/substances/subsets/world-not-fda.sdf?count=all'}
+
+pubchemDir = 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound_3D/01_conf_per_cmpd/SDF/'
 
 class ProtChemImportSmallMolecules(EMProtocol):
     """Import small molecules from a directory. Each molecule should be in a separate file.
@@ -94,6 +98,18 @@ class ProtChemImportSmallMolecules(EMProtocol):
                            ' just the smiles and the optimize their structure using openbabel. If not, the protocol '
                            'will download the sdf structure of the molecules in the json one by one, which will be '
                            'slower.')
+        group.addParam('nPubChem', IntParam, default=25000,
+                       label='Number of desired molecules: ', condition='defLibraries and choicesLibraries == 2',
+                       help='PubChem database contains around 172M different molecules, stored in 25000 molecules '
+                            'chunks. This protocol will sample the desired number of molecules from these chunks.')
+        group.addParam('pubChemSeed', IntParam, default=44, expertLevel=LEVEL_ADVANCED,
+                       label='Seed for random sampling: ', condition='defLibraries and choicesLibraries == 2',
+                       help='The desired number of molecules will be sampled from the PubChem database using this seed')
+        group.addParam('minChunks', IntParam, default=1, expertLevel=LEVEL_ADVANCED,
+                       label='Minimum number of chunks sampled: ', condition='defLibraries and choicesLibraries == 2',
+                       help='The desired number of molecules will be sampled from the PubChem database 25k molecules '
+                            'chunks. In order to enlarge the sampling, you can chose to get those molecules from '
+                            'a minimum number of different chunks, instead of taking all of them from the same one.')
 
         group = form.addGroup('Local files', condition='not defLibraries')
         group.addParam('multipleFiles', BooleanParam, default=True, condition='not defLibraries',
@@ -161,19 +177,28 @@ class ProtChemImportSmallMolecules(EMProtocol):
             url = urlECBLDic[self.getEnumText('choicesECBL')]
         elif libName == 'ZINC':
             url = urlZINCJsonDic[self.getEnumText('choicesZINC')]
+        elif libName == 'PubChem':
+            nMols, minChunks = self.nPubChem.get(), self.minChunks.get()
+            nChunks = minChunks if nMols / 25000 < minChunks else nMols // 25000 + 1
+            url = self.getPubChemUrls(nChunks)
 
         print('Importing molecules from ', url)
         sys.stdout.flush()
-        r = requests.get(url, allow_redirects=True)
 
         if libName == 'ZINC':
+            r = requests.get(url, allow_redirects=True)
             zIds = self.downloadJsonZINC(r)
             if not self.fromSmiles.get():
-                self.downloadSDFZINCThread(zIds)
+                self.downloadSDFThread(zIds, db=libName)
 
-        else:
-            inFile = self.getDownloadFile()
+        elif libName == 'ZINC':
+            r = requests.get(url, allow_redirects=True)
+            inFile = self.getDownloadFiles()[0]
             open(inFile, 'wb').write(r.content)
+
+        elif libName == 'PubChem':
+            self.downloadSDFThread(url, db=libName)
+
 
     def formatStep(self):
         make3d, mulFiles = self.make3d.get(), self.multipleFiles.get()
@@ -183,8 +208,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
         if self.isLocalMultiple():
             # Format multiple local files placed in filesPath with filesPattern
             outDir = os.path.abspath(self._getExtraPath())
-            for filename in glob.glob(os.path.join(os.getcwd(), self.filesPath.get(), self.filesPattern.get())):
-                fnSmall = os.path.join(self.filesPath.get(), filename)
+            for filename in glob.glob(os.path.join(os.getcwd(), filesPath, self.filesPattern.get())):
+                fnSmall = os.path.join(filesPath, filename)
 
                 # Files need to be converted if they are maestro or they are asked to be optimized 3D
                 if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz") or make3d:
@@ -213,30 +238,31 @@ class ProtChemImportSmallMolecules(EMProtocol):
                     copyFile(fnSmall, os.path.join(outDir, os.path.basename(fnSmall)))
 
         else:
-            # Format single local file or downloaded
-            fnSmall = self.getDownloadFile()
+            # Format single local files or downloaded
+            fnSmalls = self.getDownloadFiles()
             outDir = os.path.abspath(self._getExtraPath())
 
-            outFormat = os.path.splitext(fnSmall)[1][1:]
-            if outFormat in ['smi', 'smiles']:
-              outFormat = DEFAULT_FORMAT
+            for fnSmall in fnSmalls:
+              outFormat = os.path.splitext(fnSmall)[1][1:]
+              if outFormat in ['smi', 'smiles']:
+                outFormat = DEFAULT_FORMAT
 
-            args = ' -i "{}" -of {} --outputDir {}'.format(fnSmall, outFormat, outDir)
-            if make3d:
-                args += ' --make3D -nt {}'.format(self.numberOfThreads.get())
-            if nameKey:
-                args += ' --nameKey {}'.format(nameKey)
+              args = ' -i "{}" -of {} --outputDir {}'.format(fnSmall, outFormat, outDir)
+              if make3d:
+                  args += ' --make3D -nt {}'.format(self.numberOfThreads.get())
+              if nameKey:
+                  args += ' --nameKey {}'.format(nameKey)
 
-            if self.useManager.get() == RDKIT:
-            # Formatting with RDKit
-                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
+              if self.useManager.get() == RDKIT:
+              # Formatting with RDKit
+                  Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
-            elif self.useManager.get() == OPENBABEL:
-            # Formatting with OpenBabel
-                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
+              elif self.useManager.get() == OPENBABEL:
+              # Formatting with OpenBabel
+                  Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
-            if make3d:
-              self.downloadErrors(outDir)
+              if make3d:
+                self.downloadErrors(outDir)
 
     def createOutputStep(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
@@ -276,11 +302,23 @@ class ProtChemImportSmallMolecules(EMProtocol):
           os.remove(errFile)
 
         if len(zIdErrors) > 0:
-            self.downloadSDFZINCThread(zIdErrors)
+            self.downloadSDFThread(zIdErrors)
 
-    def downloadSDFZINCThread(self, zIDs):
+    def getPubChemUrls(self, nChunks):
+        rd.seed(self.pubChemSeed.get())
+        response = requests.get(pubchemDir)
+        if response.status_code == 200:
+          soup = BeautifulSoup(response.text, "html.parser")
+          files = [a['href'] for a in soup.find_all('a', href=True) if not a['href'].startswith('?')]
+          files = rd.sample(files, nChunks)
+        else:
+          raise Exception("Failed to access PubChem url")
+        return files
+
+    def downloadSDFThread(self, ids, db='ZINC'):
         nt = self.numberOfThreads.get()
-        performBatchThreading(self.downloadSDFZINC, zIDs, nt, cloneItem=False)
+        downFunc = self.downloadSDFZINC if db == 'ZINC' else self.downloadSDFPubChem
+        performBatchThreading(downFunc, ids, nt, cloneItem=False)
 
     def downloadSDFZINC(self, zIds, outLists, it):
         for zId in zIds:
@@ -291,6 +329,32 @@ class ProtChemImportSmallMolecules(EMProtocol):
             open(oFile, 'wb').write(rSdf.content)
         return zIds
 
+    def downloadSDFPubChem(self, ids, oList, it):
+      for filename in ids:
+        url = os.path.join(pubchemDir, filename)
+        response = requests.get(url, stream=True)  # Stream to handle large files
+        if response.status_code == 200:
+          gzFile = self._getTmpPath(filename)
+          with open(gzFile, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024):  # Download in chunks
+              f.write(chunk)
+
+          self.gunzipFile(gzFile)
+
+        else:
+          raise Exception(f"Failed to download {url}")
+
+
+    def gunzipFile(self, gzFile, remove=True):
+      sdfFile = gzFile.replace('.sdf.gz', '.sdf')
+      with gzip.open(gzFile, 'rb') as f:
+        sdfText = f.read()
+        with open(sdfFile, 'wb') as fo:
+          fo.write(sdfText)
+
+      if remove:
+        os.remove(gzFile)
+
     def downloadJsonZINC(self, r):
         content, zIds = '', []
         for zjson in eval(r.content):
@@ -298,21 +362,27 @@ class ProtChemImportSmallMolecules(EMProtocol):
           content += '{} {}\n'.format(jDic['smiles'], jDic['zinc_id'])
           zIds.append(jDic['zinc_id'])
 
-        inFile = self.getDownloadFile()
+        inFile = self.getDownloadFiles()[0]
         open(inFile, 'w').write(content)
         return zIds
 
-    def getDownloadFile(self):
+    def getDownloadFiles(self):
+      inFiles = []
       if self.defLibraries:
           libName = self.getEnumText('choicesLibraries')
           if libName == 'ZINC':
               name, ext = self.getEnumText('choicesZINC'), '.smi'
-          else:
+              inFiles = [self._getTmpPath(name + ext)]
+          elif libName == 'ECBL':
               name, ext = self.getEnumText('choicesECBL'), '.sdf'
-          inFile = self._getTmpPath(name + ext)
+              inFiles = [self._getTmpPath(name + ext)]
+          elif libName == 'PubChem':
+              for file in os.listdir(self._getTmpPath()):
+                inFiles.append(self._getTmpPath(file))
+          
       else:
-          inFile = self.filePath.get()
-      return os.path.abspath(inFile)
+          inFiles = [self.filePath.get()]
+      return [os.path.abspath(inFile) for inFile in inFiles]
 
     def isDirectDownload(self):
         return self.defLibraries and self.getEnumText('choicesLibraries') == 'ZINC' and not self.fromSmiles
