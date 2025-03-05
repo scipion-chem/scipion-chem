@@ -103,6 +103,20 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
+def findThreadFiles(filename, directory=None):
+  '''Finds the thread files (file_i.txt) in a directory.
+  filename: name of the merged file (lie.txt)
+  directory: directory where the thread files are. If None, will expect filename to be a path
+  '''
+  if not directory:
+    directory, filename = os.path.dirname(filename), os.path.split(filename)[-1]
+
+  basename, ext = os.path.splitext(filename)
+  pattern = re.compile(rf"{basename}_\d+{ext}")
+
+  matching_files = [f for f in os.listdir(directory) if pattern.match(f)]
+  return matching_files
+
 def organizeThreads(nTasks, nThreads):
   if nTasks > nThreads:
     return [1] * nTasks
