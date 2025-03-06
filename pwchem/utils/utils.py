@@ -114,7 +114,7 @@ def findThreadFiles(filename, directory=None):
   basename, ext = os.path.splitext(filename)
   pattern = re.compile(rf"{basename}_\d+{ext}")
 
-  matching_files = [f for f in os.listdir(directory) if pattern.match(f)]
+  matching_files = [os.path.join(directory, f) for f in os.listdir(directory) if pattern.match(f)]
   return matching_files
 
 def organizeThreads(nTasks, nThreads):
