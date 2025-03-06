@@ -98,18 +98,13 @@ class ProtChemImportSmallMolecules(EMProtocol):
                            ' just the smiles and the optimize their structure using openbabel. If not, the protocol '
                            'will download the sdf structure of the molecules in the json one by one, which will be '
                            'slower.')
-        group.addParam('nPubChem', IntParam, default=25000,
-                       label='Number of desired molecules: ', condition='defLibraries and choicesLibraries == 2',
-                       help='PubChem database contains around 172M different molecules, stored in 25000 molecules '
-                            'chunks. This protocol will sample the desired number of molecules from these chunks.')
+        group.addParam('nChunks', IntParam, default=10,
+                       label='Number of desired molecule chunks: ', condition='defLibraries and choicesLibraries == 2',
+                       help='PubChem database contains around 15M different molecules, stored in 25000 molecule IDs'
+                            'chunks. This protocol will sample the desired number of these chunks.')
         group.addParam('pubChemSeed', IntParam, default=44, expertLevel=LEVEL_ADVANCED,
                        label='Seed for random sampling: ', condition='defLibraries and choicesLibraries == 2',
                        help='The desired number of molecules will be sampled from the PubChem database using this seed')
-        group.addParam('minChunks', IntParam, default=1, expertLevel=LEVEL_ADVANCED,
-                       label='Minimum number of chunks sampled: ', condition='defLibraries and choicesLibraries == 2',
-                       help='The desired number of molecules will be sampled from the PubChem database 25k molecules '
-                            'chunks. In order to enlarge the sampling, you can chose to get those molecules from '
-                            'a minimum number of different chunks, instead of taking all of them from the same one.')
 
         group = form.addGroup('Local files', condition='not defLibraries')
         group.addParam('multipleFiles', BooleanParam, default=True, condition='not defLibraries',
@@ -178,9 +173,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
         elif libName == 'ZINC':
             url = urlZINCJsonDic[self.getEnumText('choicesZINC')]
         elif libName == 'PubChem':
-            nMols, minChunks = self.nPubChem.get(), self.minChunks.get()
-            nChunks = minChunks if nMols / 25000 < minChunks else nMols // 25000 + 1
-            url = self.getPubChemUrls(nChunks)
+            url = self.getPubChemUrls()
 
         print('Importing molecules from ', url)
         sys.stdout.flush()
@@ -204,6 +197,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
         make3d, mulFiles = self.make3d.get(), self.multipleFiles.get()
         filesPath = self.filesPath.get()
         nameKey = self.getNameKey()
+        nt = self.numberOfThreads.get()
 
         if self.isLocalMultiple():
             # Format multiple local files placed in filesPath with filesPattern
@@ -240,29 +234,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
         else:
             # Format single local files or downloaded
             fnSmalls = self.getDownloadFiles()
-            outDir = os.path.abspath(self._getExtraPath())
-
-            for fnSmall in fnSmalls:
-              outFormat = os.path.splitext(fnSmall)[1][1:]
-              if outFormat in ['smi', 'smiles']:
-                outFormat = DEFAULT_FORMAT
-
-              args = ' -i "{}" -of {} --outputDir {}'.format(fnSmall, outFormat, outDir)
-              if make3d:
-                  args += ' --make3D -nt {}'.format(self.numberOfThreads.get())
-              if nameKey:
-                  args += ' --nameKey {}'.format(nameKey)
-
-              if self.useManager.get() == RDKIT:
-              # Formatting with RDKit
-                  Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
-
-              elif self.useManager.get() == OPENBABEL:
-              # Formatting with OpenBabel
-                  Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
-
-              if make3d:
-                self.downloadErrors(outDir)
+            performBatchThreading(self.formatSDF, fnSmalls, nt, cloneItem=False)
 
     def createOutputStep(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
@@ -304,12 +276,14 @@ class ProtChemImportSmallMolecules(EMProtocol):
         if len(zIdErrors) > 0:
             self.downloadSDFThread(zIdErrors)
 
-    def getPubChemUrls(self, nChunks):
+    def getPubChemUrls(self):
         rd.seed(self.pubChemSeed.get())
         response = requests.get(pubchemDir)
         if response.status_code == 200:
           soup = BeautifulSoup(response.text, "html.parser")
           files = [a['href'] for a in soup.find_all('a', href=True) if not a['href'].startswith('?')]
+          files = [file for file in files if file.endswith('.sdf.gz')]
+          nChunks = min(self.nChunks.get(), len(files))
           files = rd.sample(files, nChunks)
         else:
           raise Exception("Failed to access PubChem url")
@@ -328,6 +302,32 @@ class ProtChemImportSmallMolecules(EMProtocol):
             oFile = self._getExtraPath('{}.sdf'.format(zId))
             open(oFile, 'wb').write(rSdf.content)
         return zIds
+    
+    def formatSDF(self, fnSmalls, oLists, it):
+        make3d, nameKey = self.make3d.get(), self.getNameKey()
+        outDir = os.path.abspath(self._getExtraPath())
+        for fnSmall in fnSmalls:
+            outFormat = os.path.splitext(fnSmall)[1][1:]
+            if outFormat in ['smi', 'smiles']:
+                outFormat = DEFAULT_FORMAT
+
+            args = ' -i "{}" -of {} --outputDir {}'.format(fnSmall, outFormat, outDir)
+            if make3d:
+                args += ' --make3D -nt {}'.format(self.numberOfThreads.get())
+            if nameKey:
+                args += ' --nameKey {}'.format(nameKey)
+
+            if self.useManager.get() == RDKIT:
+                # Formatting with RDKit
+                print('Formatting with rdkit: ', args)
+                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir, popen=True)
+
+            elif self.useManager.get() == OPENBABEL:
+                # Formatting with OpenBabel
+                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
+
+            if make3d:
+                self.downloadErrors(outDir)
 
     def downloadSDFPubChem(self, ids, oList, it):
       for filename in ids:
