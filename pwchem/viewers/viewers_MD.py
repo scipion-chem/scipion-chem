@@ -83,7 +83,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                      choices=['RMSD', 'RMSF'], default=0,
                      help='Uses MDTraj to display this analysis of the trajectory')
       group.addParam('selAtoms', params.EnumParam, label='Selection of atoms: ', default=0,
-                     choices=['Protein', 'Backbone', 'CA', 'Sidechain'],
+                     choices=['Protein', 'Backbone', 'CA', 'Sidechain', 'Ligand'],
                      help='Selection of atoms to use in the analysis')
       group.addParam('heavyAtoms', params.BooleanParam, label='Use only heavy atoms: ', default=True,
                      help='Uses only heavy atoms in the analysis of the trajectory')
@@ -146,9 +146,11 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
     def _showMDTrajAnalysis(self, paramName=None):
       system = self.getMDSystem()
+      selAtoms = self.getEnumText("selAtoms")
 
       args = f'-i {system.getOriStructFile()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
-             f'-{self.getEnumText("mdAnalChoices").lower()} -sa {self.getEnumText("selAtoms")} '
+             f'-{self.getEnumText("mdAnalChoices").lower()} -sa {selAtoms} '
       if self.heavyAtoms.get():
         args += '-ha '
       Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+
