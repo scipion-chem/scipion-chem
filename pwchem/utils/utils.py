@@ -103,6 +103,11 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
+def concatFiles(inFiles, oFile, remove=False):
+  subprocess.check_call(f'cat {" ".join(inFiles)} > {oFile}', shell=True)
+  if remove:
+    [os.remove(file) for file in inFiles]
+
 def findThreadFiles(filename, directory=None):
   '''Finds the thread files (file_i.txt) in a directory.
   filename: name of the merged file (lie.txt)

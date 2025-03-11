@@ -167,7 +167,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                         'It is automatically done for smi, and very recommendable for 2D structures.\n'
                         'ECBL provide 2D structures.\nZINC provide 3D structures, so this would not be needed')
     group.addParam('keepSMI', BooleanParam, default=False, label='Output SMI molecules: ',
-                   expertLevel=LEVEL_ADVANCED,
+                   expertLevel=LEVEL_ADVANCED, condition='not make3d',
                    help='Usually, SMIs imported are converted to a 3D representation in any case.'
                         'Set this to True if you want the output molecules to be just SMIs '
                         '(will affect visualization and maybe other features)')
@@ -213,46 +213,24 @@ class ProtChemImportSmallMolecules(EMProtocol):
       self.downloadSDFThread(url, db=libName)
 
   def formatStep(self):
-    make3d, mulFiles = self.make3d.get(), self.multipleFiles.get()
-    filesPath = self.filesPath.get()
+    outDir = os.path.abspath(self._getExtraPath())
+    make3d, nameKey = self.make3d.get(), self.getNameKey()
     nt = self.numberOfThreads.get()
+    keepSMI = self.keepSMI.get()
 
     if self.isLocalMultiple():
-      # Format multiple local files placed in filesPath with filesPattern
-      outDir = os.path.abspath(self._getExtraPath())
-      for filename in glob.glob(os.path.join(os.getcwd(), filesPath, self.filesPattern.get())):
-        fnSmall = os.path.join(filesPath, filename)
-
-        # Files need to be converted if they are maestro or they are asked to be optimized 3D
-        if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz") or make3d:
-          outName = os.path.splitext(os.path.basename(fnSmall))[0]
-          outFormat = os.path.splitext(fnSmall)[1][1:]
-          if outFormat in ['smi', 'smiles']:
-            outFormat = DEFAULT_FORMAT
-
-          args = ' -i "{}" --outputName {} -of {} --outputDir "{}"'.format(fnSmall, outName, outFormat, outDir)
-          if make3d:
-            args += ' --make3D -nt {}'.format(self.numberOfThreads.get())
-
-          # Formatting with RDKit (neccessary if they are maestro)
-          if self.useManager.get() == RDKIT or fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
-            Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
-
-          # Formatting with OpenBabel
-          elif self.useManager.get() == OPENBABEL:
-            Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
-
-          if make3d:
-            self.downloadErrors(outDir)
-
-        # No need of formatting, just copying
-        else:
-          copyFile(fnSmall, os.path.join(outDir, os.path.basename(fnSmall)))
+      filesPath, filesPattern = self.filesPath.get(), self.filesPattern.get()
+      fnSmalls = [os.path.join(filesPath, filename) for filename in
+                  glob.glob(os.path.join(os.getcwd(), filesPath, filesPattern))]
+      kwargs = {"make3d": make3d, "nameKey": False, "keepSMI": keepSMI, "outDir": outDir,
+                "setOutName": True, "multiInput": False}
 
     else:
-      # Format single local files or downloaded
       fnSmalls = self.getDownloadFiles()
-      performBatchThreading(self.formatMolecule, fnSmalls, nt, cloneItem=False)
+      kwargs = {"make3d": make3d, "nameKey": nameKey, "keepSMI": keepSMI, "outDir": outDir,
+                "setOutName": False, "multiInput": True}
+    # self.formatMolecule(fnSmalls, [], 1, **kwargs)
+    performBatchThreading(self.formatMolecule, fnSmalls, nt, cloneItem=False, **kwargs)
 
   def createOutputStep(self):
     outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
@@ -265,33 +243,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
     outputSmallMolecules.updateMolClass()
     self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
-  def _validate(self):
-    errors = []
-    if not self.defLibraries:
-      if not self.multipleFiles.get():
-        ext = os.path.splitext(self.filePath.get())[1][1:]
-        if not ext in self.supportedExt:
-          errors.append('Unknown input file format {}\n'
-                        'Recognized formats: {}'.format(ext, self.supportedExt))
-      else:
-        for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
-          ext = os.path.splitext(filename)[1][1:]
-          if not ext in self.supportedExt:
-            errors.append('Unknown input file format {}\n'
-                          'Recognized formats: {}'.format(ext, self.supportedExt))
-            break
-    return errors
-
-  def downloadErrors(self, outDir):
-    zIdErrors = []
-    for errFile in glob.glob(os.path.join(outDir, 'errors3D_*')):
-      errFile = os.path.join(outDir, errFile)
-      with open(errFile) as f:
-        zIdErrors += f.read().split('\n')[:-1]
-      os.remove(errFile)
-
-    if len(zIdErrors) > 0:
-      self.downloadSDFThread(zIdErrors)
+  ################# MAIN FUNCTIONS #####################
 
   def getPubChemUrls(self):
     rd.seed(self.pubChemSeed.get())
@@ -314,10 +266,75 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     return urls
 
+  def getDownloadFiles(self):
+    inFiles = []
+    if self.defLibraries:
+      libName = self.getEnumText('choicesLibraries')
+      if libName == 'ZINC':
+        name, ext = self.getEnumText('choicesZINC'), '.smi'
+        inFiles = [self._getTmpPath(name + ext)]
+      elif libName == 'ECBL':
+        name, ext = self.getEnumText('choicesECBL'), '.sdf'
+        inFiles = [self._getTmpPath(name + ext)]
+      elif libName == 'PubChem':
+        for file in os.listdir(self._getTmpPath()):
+          inFiles.append(self._getTmpPath(file))
+
+    else:
+      inFiles = [self.filePath.get()]
+    return [os.path.abspath(inFile) for inFile in inFiles]
+
   def downloadSDFThread(self, ids, db='ZINC'):
     nt = self.numberOfThreads.get()
     downFunc = self.downloadSDFZINC if db == 'ZINC' else self.downloadSDFPubChem
     performBatchThreading(downFunc, ids, nt, cloneItem=False)
+
+
+  def formatMolecule(self, fnSmalls, oLists, it, make3d, nameKey, keepSMI, outDir, setOutName, multiInput):
+    for fnSmall in fnSmalls:
+      inFormat = os.path.splitext(fnSmall)[1]
+      if make3d or multiInput or inFormat in ['.mae', '.maegz'] or (inFormat == '.smi' and not keepSMI):
+        outFormat = os.path.splitext(fnSmall)[1][1:]
+        if outFormat in ['smi', 'smiles'] and (not keepSMI or make3d):
+          outFormat = DEFAULT_FORMAT
+
+        args = f' -i "{fnSmall}" -of {outFormat} --outputDir {outDir} '
+        if setOutName:
+          outName = os.path.splitext(os.path.basename(fnSmall))[0]
+          args += f'--outputName {outName} '
+
+        if make3d:
+          args += f'--make3D '
+        if nameKey:
+          args += f'--nameKey {nameKey} '
+
+        if self.useManager.get() == RDKIT and not inFormat == '.mol2':
+          # Formatting with RDKit
+          Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir, popen=True)
+
+        elif self.useManager.get() == OPENBABEL or inFormat == '.mol2':
+          # Formatting with OpenBabel
+          Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
+
+        if make3d:
+          self.downloadErrors(outDir)
+
+      # No need of formatting, just copying
+      else:
+        copyFile(fnSmall, os.path.join(outDir, os.path.basename(fnSmall)))
+
+  #################### UTILS FUNCTIONS #################
+
+  def downloadErrors(self, outDir):
+    zIdErrors = []
+    for errFile in glob.glob(os.path.join(outDir, 'errors3D_*')):
+      errFile = os.path.join(outDir, errFile)
+      with open(errFile) as f:
+        zIdErrors += f.read().split('\n')[:-1]
+      os.remove(errFile)
+
+    if len(zIdErrors) > 0:
+      self.downloadSDFThread(zIdErrors)
 
   def downloadSDFZINC(self, zIds, outLists, it):
     for zId in zIds:
@@ -327,32 +344,6 @@ class ProtChemImportSmallMolecules(EMProtocol):
       oFile = self._getExtraPath('{}.sdf'.format(zId))
       open(oFile, 'wb').write(rSdf.content)
     return zIds
-
-  def formatMolecule(self, fnSmalls, oLists, it):
-    make3d, nameKey = self.make3d.get(), self.getNameKey()
-    keepSMI = self.keepSMI.get()
-    outDir = os.path.abspath(self._getExtraPath())
-    for fnSmall in fnSmalls:
-      outFormat = os.path.splitext(fnSmall)[1][1:]
-      if outFormat in ['smi', 'smiles'] and not keepSMI:
-        outFormat = DEFAULT_FORMAT
-
-      args = f' -i "{fnSmall}" -of {outFormat} --outputDir {outDir}'
-      if make3d:
-        args += f' --make3D -nt {self.numberOfThreads.get()}'
-      if nameKey:
-        args += f' --nameKey {nameKey}'
-
-      if self.useManager.get() == RDKIT:
-        # Formatting with RDKit
-        Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir, popen=True)
-
-      elif self.useManager.get() == OPENBABEL:
-        # Formatting with OpenBabel
-        Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
-
-      if make3d:
-        self.downloadErrors(outDir)
 
   def downloadSDFPubChem(self, urls, oList, it):
     for url in urls:
@@ -367,15 +358,20 @@ class ProtChemImportSmallMolecules(EMProtocol):
         sdfFile = self.gunzipFile(gzFile)
 
         if 'CID-SMILES.smi' in sdfFile:
+          self.reduceNRandomLines(sdfFile, self.nMolsPubChem.get())
           self.swapColumns(sdfFile)
 
       else:
         raise Exception(f"Failed to download {url}")
 
+  def reduceNRandomLines(self, inFile, n):
+    tFile = os.path.abspath(self._getTmpPath('temp.smi'))
+    subprocess.check_call(f'shuf -n {n} {os.path.abspath(inFile)} > {tFile}', shell=True)
+    os.rename(tFile, inFile)
+
   def swapColumns(self, smiFile):
     smiFile = os.path.abspath(smiFile)
     tFile = os.path.abspath(self._getTmpPath('smis.smi'))
-    print('calling: ', f"awk '{{ t=$1; $1=$2; $2=t; print }}' {smiFile} > {tFile}")
     subprocess.check_call(f"awk '{{ t=$1; $1=$2; $2=t; print }}' {smiFile} > {tFile}", shell=True)
     os.rename(tFile, smiFile)
 
@@ -406,28 +402,12 @@ class ProtChemImportSmallMolecules(EMProtocol):
     open(inFile, 'w').write(content)
     return zIds
 
-  def getDownloadFiles(self):
-    inFiles = []
-    if self.defLibraries:
-      libName = self.getEnumText('choicesLibraries')
-      if libName == 'ZINC':
-        name, ext = self.getEnumText('choicesZINC'), '.smi'
-        inFiles = [self._getTmpPath(name + ext)]
-      elif libName == 'ECBL':
-        name, ext = self.getEnumText('choicesECBL'), '.sdf'
-        inFiles = [self._getTmpPath(name + ext)]
-      elif libName == 'PubChem':
-        for file in os.listdir(self._getTmpPath()):
-          inFiles.append(self._getTmpPath(file))
-
-    else:
-      inFiles = [self.filePath.get()]
-    return [os.path.abspath(inFile) for inFile in inFiles]
-
   def isDirectDownload(self):
     return self.defLibraries and self.getEnumText('choicesLibraries') == 'ZINC' and not self.fromSmiles
 
   def isLocalMultiple(self):
+    '''Whether it is local multiple files (each a single molecule)
+    '''
     return not self.defLibraries and self.multipleFiles
 
   def getNameKey(self):
@@ -440,3 +420,23 @@ class ProtChemImportSmallMolecules(EMProtocol):
       elif self.getEnumText('choicesLibraries') == 'ECBL':
         nameKey = 'Supplier_ID'
     return nameKey
+
+
+############# VALIDATION FUNCTIONS ##################
+
+  def _validate(self):
+    errors = []
+    if not self.defLibraries:
+      if not self.multipleFiles.get():
+        ext = os.path.splitext(self.filePath.get())[1][1:]
+        if not ext in self.supportedExt:
+          errors.append('Unknown input file format {}\n'
+                        'Recognized formats: {}'.format(ext, self.supportedExt))
+      else:
+        for filename in glob.glob(os.path.join(self.filesPath.get(), self.filesPattern.get())):
+          ext = os.path.splitext(filename)[1][1:]
+          if not ext in self.supportedExt:
+            errors.append('Unknown input file format {}\n'
+                          'Recognized formats: {}'.format(ext, self.supportedExt))
+            break
+    return errors
