@@ -25,10 +25,27 @@
 # *
 # **************************************************************************
 
-import argparse, os
-import numpy as np
+import argparse
 import mdtraj
 import matplotlib.pyplot as plt
+
+def getAtomSelection(selStr, ligName='LIG'):
+    if selStr == 'CA':
+        aSel = 'protein and name CA'
+    elif selStr == 'Ligand':
+        aSel = f'resname {ligName}'
+    else:
+        aSel = selStr.lower()
+    return aSel
+
+def getSelectionIndex(topo, selStr):
+    aSel = getAtomSelection(selStr)
+    index = set(topo.topology.select(aSel))
+    if not index and selStr == 'Ligand':
+        aSel = getAtomSelection(selStr, ligName='UNK')
+        index = set(topo.topology.select(aSel))
+    return index
+
 
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputTopology <topFile> -t/--inputTraj [<trjFile>]
@@ -57,25 +74,28 @@ if __name__ == "__main__":
     trajectory = mdtraj.load(trjFile, top=topo)
 
     # Atom selection
-    aSel = args.selectAtoms.lower() if args.selectAtoms != 'CA' else 'protein and name CA'
-    index = set(topo.topology.select(aSel))
-    if args.heavyAtoms:
-        index = index.intersection(set([atom.index for atom in topo.topology.atoms if atom.element.symbol != 'H']))
+    index = getSelectionIndex(topo, args.selectAtoms)
+    if index:
+        if args.heavyAtoms:
+            index = index.intersection(set([atom.index for atom in topo.topology.atoms if atom.element.symbol != 'H']))
 
-    plt.figure();
-    if args.rmsd:
-        rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
-        plt.plot(trajectory.time, rmsd, 'r', label='RMSD')
-        plt.title('RMSD')
-        plt.xlabel('Simulation time (ps)')
-        plt.ylabel('RMSD (nm)')
+        plt.figure()
+        if args.rmsd:
+            rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
+            plt.plot(trajectory.time, rmsd, 'r', label='RMSD')
+            plt.title('RMSD')
+            plt.xlabel('Simulation time (ps)')
+            plt.ylabel('RMSD (nm)')
 
-    elif args.rmsf:
-        rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
-        plt.plot(rmsf, 'r', label='RMSF')
-        plt.title('RMSF')
-        plt.xlabel('Protein sequence')
-        plt.ylabel('RMSF (nm)')
+        elif args.rmsf:
+            rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
+            plt.plot(rmsf, 'r', label='RMSF')
+            plt.title('RMSF')
+            plt.xlabel('Protein sequence')
+            plt.ylabel('RMSF (nm)')
 
-    plt.legend()
-    plt.show()
+        plt.legend()
+        plt.show()
+
+    else:
+        print('No atoms found for the atom selection')
