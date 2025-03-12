@@ -304,11 +304,11 @@ class ProtChemImportSmallMolecules(EMProtocol):
           args += f'--outputName {outName} '
 
         if make3d:
-          args += f'--make3D '
+          args += '--make3D '
         if nameKey:
           args += f'--nameKey {nameKey} '
 
-        if self.useManager.get() == RDKIT and not inFormat == '.mol2':
+        if self.useManager.get() == RDKIT and inFormat != '.mol2':
           # Formatting with RDKit
           Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir, popen=True)
 
