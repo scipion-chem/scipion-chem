@@ -396,6 +396,7 @@ def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
   pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
 
 def splitConformerFile(confFile, outDir):
+  writtenFiles = []
   fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
   if '_prep_' in fnRoot:
     fnRoot = fnRoot.split('_prep')[0]
@@ -409,6 +410,7 @@ def splitConformerFile(confFile, outDir):
           towrite += line
         else:
           newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
+          writtenFiles.append(newFile)
           writeFile(towrite, newFile)
           towrite, lastRemark = line, True
           iConf += 1
@@ -417,11 +419,13 @@ def splitConformerFile(confFile, outDir):
         lastRemark = False
   newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
   writeFile(towrite, newFile)
-  return outDir
+  writtenFiles.append(newFile)
+  return writtenFiles
 
 def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
   '''Appends a molecule to a conformers file.
     If outConfFile == None, the output conformers file path is the same as as the start'''
+  rename = False
   if outConfFile == None:
     iExt = os.path.splitext(confFile)[1]
     outConfFile = confFile.replace(iExt, '_aux' + iExt)
