@@ -24,8 +24,6 @@
 # *
 # **************************************************************************
 
-import os
-
 from pyworkflow.protocol.params import EnumParam
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import showError, askYesNoCancel
@@ -54,7 +52,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'
   _targets = [ProtocolConsensusDocking, ProtocolLigandsFetching, SetOfSmallMolecules]
   _environments = [pwviewer.DESKTOP_TKINTER]
-  _viewerOptions = ['PyMol', 'ChimeraX']
+  _viewerOptions = ['PyMol', 'ChimeraX', 'ViewDockX']
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
@@ -63,6 +61,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     self.moleculeLabels, self.moleculeLigandsDic = self.getChoices(vType=MOLECULE)
     self.pocketLabels, self.pocketLigandsDic = self.getChoices(vType=POCKET)
     self.setLabels, self.setLigandsDic = self.getChoices(vType=SET)
+
+  def getViewerOptions(self):
+    if type(self.protocol).__name__ == 'ProtChemVinaDocking':
+      return self._viewerOptions
+    return self._viewerOptions[:-1]
 
   def defineParamsTable(self, form):
       form.addParam('displayTable', EnumParam,
@@ -83,7 +86,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         form.addSection(label='Docking view')
         group = form.addGroup('Visualize docking poses with:')
         group.addParam('displaySoftware', EnumParam,
-                       choices=self._viewerOptions, default=PYMOL,
+                       choices=self.getViewerOptions(), default=PYMOL,
                        label='Display docking poses with: ',
                        help='Display the selected group of docking poses with which software. '
                             'Available: PyMol, ChimeraX and viewDockX (ChimeraX with stored attributes)')
@@ -248,35 +251,66 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
-  def viewChimeraXMols(self, mols, ligandLabel, addTarget=True, disable=True, pose=True, e=None):
+  def getDockFile(self, mol):
+    poseFile = os.path.abspath(mol.getPoseFile())
+    molName, gridId = mol.getMolName(), mol.getGridId()
+
+    dockDir = os.path.dirname(poseFile).replace('outputLigands', f'extra/pocket_{gridId}')
+    molFile = os.path.join(dockDir, f'{molName}.pdbqt')
+    if not os.path.exists(molFile):
+      molFile = mol.getPoseFile()
+    return molFile
+
+  def getMolDic(self, mols, pose, vinaDock):
+    molDic = {}
+    for mol in mols:
+      poseB, dockB = True, True
+      if vinaDock:
+        poseB, dockB = False, False
+
+      molName = mol.getUniqueName(pose=poseB, dock=dockB)
+      if vinaDock:
+        molFile = self.getDockFile(mol)
+      elif pose:
+        molFile = mol.getPoseFile()
+      else:
+        molFile = mol.getFileName()
+
+      molDic[molName] = molFile
+    return molDic
+
+  def writeChimeraScript(self, molDic, ligandLabel, addTarget=True, disable=True, vinaDock=False):
+      pmlsDir = self.getPmlsDir()
+      chimScript = os.path.join(pmlsDir, f'{ligandLabel}_chimeraX.py')
+      with open(chimScript, "w") as f:
+        f.write("from chimerax.core.commands import run\n")
+
+        f.write(f"run(session, 'cd {os.getcwd()}')\n")
+        f.write("run(session, 'cofr 0,0,0')\n")  # set center of coordinates
+
+        if addTarget:
+          _inputStruct = os.path.abspath(self.protocol.getOriginalReceptorFile())
+          f.write(f"run(session, 'open {_inputStruct}')\n")
+
+        i = 2
+        for molName, dockFile in molDic.items():
+          f.write(f"run(session, 'open {dockFile} name {molName}')\n")
+          if disable:
+            f.write(f"run(session, 'hide #{i} models')\n")
+          i += 1
+
+        if vinaDock:
+          f.write("run(session, 'viewdockx')\n")
+      return chimScript
+
+  def viewChimeraXMols(self, mols, ligandLabel, addTarget=True, disable=True,
+                       pose=True, vinaDock=False, e=None):
     if not chimeraInstalled():
         print(CHIMERA_ERROR)
         return [self.warnMessage(CHIMERA_ERROR, 'Chimera not found')]
     else:
-        pmlsDir = self.getPmlsDir()
-        chimScript = os.path.join(pmlsDir, '{}_chimeraX.py'.format(ligandLabel))
-
-        with open(chimScript, "w") as f:
-            f.write("from chimerax.core.commands import run\n")
-
-            f.write("run(session, 'cd %s')\n" % os.getcwd())
-            f.write("run(session, 'cofr 0,0,0')\n")  # set center of coordinates
-
-            if addTarget:
-                _inputStruct = os.path.abspath(self.protocol.getOriginalReceptorFile())
-                f.write("run(session, 'open %s')\n" % _inputStruct)
-
-            i = 2
-            molFiles = []
-            for mol in mols:
-              molFile = mol.getPoseFile() if pose else mol.getFileName()
-              if not molFile in molFiles:
-                  f.write("run(session, 'open %s')\n" % molFile)
-                  if disable:
-                      f.write("run(session, 'hide #%s models')\n" % i)
-                  i += 1
-                  molFiles.append(molFile)
-
+        molDic = self.getMolDic(mols, pose, vinaDock)
+        chimScript = self.writeChimeraScript(molDic, ligandLabel, addTarget, disable, vinaDock)
         view = ChimeraView(chimScript)
         return [view]
 
@@ -297,7 +331,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         elif self.displaySoftware.get() == CHIMERAX:
             return self.viewChimeraXMols(mols, sLabel)
         elif self.displaySoftware.get() == VIEWDOCKX:
-            return self.viewDockChimeraXMols(mols, sLabel)
+            return self.viewChimeraXMols(mols, sLabel, vinaDock=True)
 
   def _viewROIDock(self, e=None):
     ligandLabel = self.getEnumText('displayROIDock')
@@ -309,7 +343,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       elif self.displaySoftware.get() == CHIMERAX:
           return self.viewChimeraXMols(mols, ligandLabel)
       elif self.displaySoftware.get() == VIEWDOCKX:
-        return self.viewDockChimeraXMols(mols, ligandLabel)
+        return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
 
   def _viewMoleculeDock(self, e=None):
@@ -322,7 +356,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       elif self.displaySoftware.get() == CHIMERAX:
           return self.viewChimeraXMols(mols, ligandLabel)
       elif self.displaySoftware.get() == VIEWDOCKX:
-        return self.viewDockChimeraXMols(mols, ligandLabel)
+        return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewSingleDock(self, e=None):
     ligandLabel = self.getEnumText('displaySingleDock')
@@ -334,7 +368,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       elif self.displaySoftware.get() == CHIMERAX:
           return self.viewChimeraXMols(mols, ligandLabel, disable=False)
       elif self.displaySoftware.get() == VIEWDOCKX:
-        return self.viewDockChimeraXMols(mols, ligandLabel)
+        return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewPymolPLIP(self, e=None):
     pmlsDir = self.getPmlsDir()
@@ -426,13 +460,18 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 #################### UTILS ###########################33
 
   def checkIfDocked(self):
+      molSet = None
       if not self.checkIfProtocol():
           molSet = self.protocol
       else:
           for oAttr in self.protocol.iterOutputAttributes():
               if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
                   molSet = getattr(self.protocol, oAttr[0])
-      return molSet.isDocked()
+
+      if molSet is not None:
+        return molSet.isDocked()
+      else:
+        return False
 
   def checkIfProtocol(self):
       if issubclass(type(self.protocol), SetOfSmallMolecules):
