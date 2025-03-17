@@ -417,8 +417,6 @@ class ProtChemImportSmallMolecules(EMProtocol):
     elif self.defLibraries:
       if self.getEnumText('choicesLibraries') == 'ZINC':
         nameKey = 'zinc_id'
-      elif self.getEnumText('choicesLibraries') == 'ECBL':
-        nameKey = 'Supplier_ID'
     return nameKey
 
 
