@@ -135,10 +135,10 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
         resDic = self.parseResults()
         for mol in self.inputSmallMolecules.get():
-            if mol.getPoseFile() and getBaseFileName(mol.getPoseFile()) in resDic:
-                molBase = getBaseFileName(mol.getPoseFile())
-            elif mol.getFileName() and getBaseFileName(mol.getFileName()) in resDic:
-                molBase = getBaseFileName(mol.getFileName())
+            if mol.getPoseFile() and getBaseName(mol.getPoseFile()) in resDic:
+                molBase = getBaseName(mol.getPoseFile())
+            elif mol.getFileName() and getBaseName(mol.getFileName()) in resDic:
+                molBase = getBaseName(mol.getFileName())
             else:
                 continue
 

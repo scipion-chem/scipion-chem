@@ -39,7 +39,7 @@ from pwem.convert.atom_struct import toCIF, toPdb
 # Plugin imports
 from ... import Plugin
 from ...objects import SetOfSmallMolecules, SmallMolecule, MDSystem
-from ...utils import getBaseFileName
+from ...utils import getBaseName
 from ...constants import RDKIT_DIC, OPENBABEL_DIC, MDTRAJ_DIC
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
@@ -182,7 +182,7 @@ class ConvertStructures(EMProtocol):
                 
                 if self.convTopFile.get():
                     top = parmed.load_file(topFile)
-                    topFile = self._getPath('{}.{}'.format(getBaseFileName(topFile),
+                    topFile = self._getPath('{}.{}'.format(getBaseName(topFile),
                                                             self.getEnumText('outputTopFormat').lower()))
                     top.save(topFile)
                 outSystem.setTopologyFile(topFile)

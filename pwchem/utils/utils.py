@@ -153,8 +153,15 @@ def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, popen=Fal
 def getVarName(var):
   return [i for i, a in locals().items() if a == var][0]
 
+def getBaseFileName(file):
+  '''From a file path, returns the name of the file without the directory:
+  /abc/def/file.txt -> filename.txt'''
+  return os.path.basename(file.strip())
+
 def getBaseName(file):
-  return os.path.splitext(os.path.basename(file.strip()))[0]
+  '''From a file path, returns the name of the file without the directory nor the extension:
+    /abc/def/filename.txt -> filename'''
+  return os.path.splitext(getBaseFileName(file))[0]
 
 def parseAtomStruct(asFile):
   '''Parse an atom struct using biopython'''
@@ -579,7 +586,7 @@ class CleanStructureSelect(Select):
 
 def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
   """ Extraction of the heteroatoms of .pdb files """
-  structName = getBaseFileName(structFile)
+  structName = getBaseName(structFile)
   if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
     struct = PDBParser().get_structure(structName, structFile)
   elif structFile.endswith('.cif'):
@@ -816,9 +823,6 @@ def getAllAttributes(inputSets):
     item = inpSet.getFirstItem()
     attributes.update(getItemAttributes(item))
   return attributes
-
-def getBaseFileName(filename):
-  return os.path.splitext(os.path.basename(filename))[0]
 
 def addToDic(dic, key, item):
   '''Add an element to a dic list creting it if the key was not there'''

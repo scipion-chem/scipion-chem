@@ -44,7 +44,7 @@ import os, glob
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import runOpenBabel, splitConformerFile, relabelAtomsMol2, \
-  natural_sort, makeSubsets, getBaseFileName
+  natural_sort, makeSubsets, getBaseName
 
 
 class ProtChemOBabelPrepareLigands(EMProtocol):
@@ -138,7 +138,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         failedMols = []
         for mol in molSet:
             fnSmall = mol.getFileName()
-            fnRoot = getBaseFileName(fnSmall)
+            fnRoot = getBaseName(fnSmall)
             _, fnFormat = os.path.splitext(fnSmall)
 
             try:
@@ -179,7 +179,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         failedMols = []
         for molFn in os.listdir(self.getPrepDir()):
           fnSmall = self.getPrepDir(molFn)
-          fnRoot = getBaseFileName(fnSmall)
+          fnRoot = getBaseName(fnSmall)
 
           if self.method_conf.get() == 0:  # Genetic algorithm
               args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
@@ -207,7 +207,7 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
         for mol in self.inputSmallMolecules.get():
             fnSmall = mol.getFileName()
-            fnRoot = getBaseFileName(fnSmall)
+            fnRoot = getBaseName(fnSmall)
             fnSmall = self.getPrepDir(f"{fnRoot}.mol2")
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:
                 mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=fnSmall), outDir=self._getExtraPath())

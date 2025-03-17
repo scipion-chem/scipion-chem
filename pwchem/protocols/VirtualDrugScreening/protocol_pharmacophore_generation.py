@@ -197,7 +197,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
 
         smiDic = {}
         for fnLigand in ligandsFiles:
-            ligandBase = getBaseFileName(fnLigand)
+            ligandBase = getBaseName(fnLigand)
             with open(smiFileDic[ligandBase]) as f:
                 smile = f.read().split()[0].strip()
 
@@ -238,5 +238,5 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
     def getBaseNameDic(self, inDir):
         bDic = {}
         for file in os.listdir(inDir):
-            bDic[getBaseFileName(file)] = abspath(os.path.join(inDir, file))
+            bDic[getBaseName(file)] = abspath(os.path.join(inDir, file))
         return bDic
