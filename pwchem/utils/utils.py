@@ -272,7 +272,7 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-def mergeFiles(inFiles, outFile=None, oDir='', sep=''):
+def mergeFiles(inFiles, outFile=None, oDir='', sep='', remove=False):
   inTexts = []
   for inFile in inFiles:
     with open(inFile) as f:
@@ -281,6 +281,9 @@ def mergeFiles(inFiles, outFile=None, oDir='', sep=''):
   outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
   with open(outFile, 'w') as fo:
     fo.write(sep.join(inTexts))
+
+  if remove:
+    [os.remove(inFile) for inFile in inFiles]
   return outFile
 
 def mergeSDFs(sdfFiles, outFile=None, oDir=''):
@@ -375,11 +378,11 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
       molFile = sdfFile
     return molFile
   if not sdfFile:
-    baseName = os.path.splitext(os.path.basename(molFile))[0]
+    baseName = getBaseName(molFile)
     outDir = os.path.abspath(protocol._getTmpPath())
     sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
   else:
-    baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+    baseName = getBaseName(sdfFile)
     outDir = os.path.abspath(os.path.dirname(sdfFile))
 
   if not os.path.exists(sdfFile) or overWrite:
