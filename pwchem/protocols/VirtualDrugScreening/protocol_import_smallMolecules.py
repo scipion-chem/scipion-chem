@@ -358,7 +358,9 @@ class ProtChemImportSmallMolecules(EMProtocol):
         sdfFile = self.gunzipFile(gzFile)
 
         if 'CID-SMILES.smi' in sdfFile:
-          self.reduceNRandomLines(sdfFile, self.nMolsPubChem.get())
+          nMols = self.nMolsPubChem.get()
+          if nMols > 0:
+            self.reduceNRandomLines(sdfFile, nMols)
           self.swapColumns(sdfFile)
 
       else:
