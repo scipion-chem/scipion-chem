@@ -272,13 +272,21 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-def splitFile(inFile, n, oDir=None, ext=None, pref='preffix', remove=True):
+def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref='preffix', remove=True):
+  '''Split file into a) n files or b) files of size b (MB)
+  '''
+  assert b is not None or n is not None
   if ext is None:
     ext = os.path.splitext(inFile)[1]
   if oDir is None:
     oDir = os.path.dirname(inFile)
 
-  subprocess.check_call(f'split -n l/{n} {inFile} {pref}', shell=True, cwd=oDir)
+  if n:
+    arg = f'-n l/{n}'
+  elif b:
+    arg = f'-C{b}m'
+
+  subprocess.check_call(f'split {arg} {inFile} {pref}', shell=True, cwd=oDir)
 
   oFiles, i = [], 1
   for file in os.listdir(oDir):

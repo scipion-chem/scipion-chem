@@ -117,6 +117,9 @@ class ProtChemImportSmallMolecules(EMProtocol):
     group.addParam('nMolsPubChem', IntParam, default=10000, label='Number of desired molecules: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='From the whole set of PubChem molecules, save only this number of random ones.')
+    group.addParam('splitSize', IntParam, label='Format files size: ', expertLevel=LEVEL_ADVANCED,
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1', default=1,
+                   help='Maximum size of the files sent to format to avoid memory issues')
     group.addParam('maxFormatThreads', IntParam, label='Maximum number of format threads: ', expertLevel=LEVEL_ADVANCED,
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1', default=10,
                    help='Maximum number of format threads to use to avoid memory issues')
@@ -365,7 +368,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
           if nMols > 0:
             self.reduceNRandomLines(sdfFile, nMols)
           self.swapColumns(sdfFile)
-          splitFile(sdfFile, self.numberOfThreads.get()-1, pref='smis')
+          splitFile(sdfFile, b=self.splitSize.get(), pref='smis')
 
       else:
         raise Exception(f"Failed to download {url}")
