@@ -117,6 +117,9 @@ class ProtChemImportSmallMolecules(EMProtocol):
     group.addParam('nMolsPubChem', IntParam, default=10000, label='Number of desired molecules: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='From the whole set of PubChem molecules, save only this number of random ones.')
+    group.addParam('maxFormatThreads', IntParam, label='Maximum number of format threads: ', expertLevel=LEVEL_ADVANCED,
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1', default=10,
+                   help='Maximum number of format threads to use to avoid memory issues')
     group.addParam('pubChemSeed', IntParam, default=44, expertLevel=LEVEL_ADVANCED,
                    label='Seed for random sampling: ', condition='defLibraries and choicesLibraries == 2',
                    help='The desired number of molecules will be sampled from the PubChem database using this seed')
@@ -215,7 +218,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
   def formatStep(self):
     outDir = os.path.abspath(self._getExtraPath())
     make3d, nameKey = self.make3d.get(), self.getNameKey()
-    nt = self.numberOfThreads.get()
+    nt = min(self.numberOfThreads.get() - 1, self.maxFormatThreads.get()) 
     keepSMI = self.keepSMI.get()
 
     if self.isLocalMultiple():
