@@ -272,6 +272,29 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
+def splitFile(inFile, n, oDir=None, ext=None, pref='preffix', remove=True):
+  if ext is None:
+    ext = os.path.splitext(inFile)[1]
+  if oDir is None:
+    oDir = os.path.dirname(inFile)
+
+  subprocess.check_call(f'split -n l/{n} {inFile} {pref}', shell=True, cwd=oDir)
+
+  oFiles, i = [], 1
+  for file in os.listdir(oDir):
+    if pref in file:
+      nBase = f'{pref}_{i}{ext}'
+      file = os.path.join(oDir, file)
+      oFile = os.path.join(oDir, nBase)
+      os.rename(file, oFile)
+      i += 1
+      oFiles.append(oFile)
+
+  if remove:
+    os.remove(inFile)
+  return oFiles
+
+
 def mergeFiles(inFiles, outFile=None, oDir='', sep='', remove=False):
   inTexts = []
   for inFile in inFiles:

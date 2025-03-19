@@ -37,7 +37,7 @@ from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEV
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
-from pwchem.utils import performBatchThreading
+from pwchem.utils import performBatchThreading, splitFile
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
@@ -355,13 +355,14 @@ class ProtChemImportSmallMolecules(EMProtocol):
           for chunk in response.iter_content(chunk_size=1024):  # Download in chunks
             f.write(chunk)
 
-        sdfFile = self.gunzipFile(gzFile)
+        sdfFile = os.path.abspath(self.gunzipFile(gzFile))
 
         if 'CID-SMILES.smi' in sdfFile:
           nMols = self.nMolsPubChem.get()
           if nMols > 0:
             self.reduceNRandomLines(sdfFile, nMols)
           self.swapColumns(sdfFile)
+          splitFile(sdfFile, self.numberOfThreads.get()-1, pref='smis')
 
       else:
         raise Exception(f"Failed to download {url}")
