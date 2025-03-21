@@ -103,8 +103,8 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
-def concatFiles(inFiles, oFile, remove=False):
-  subprocess.check_call(f'cat {" ".join(inFiles)} > {oFile}', shell=True)
+def concatFiles(inFiles, oFile, remove=False, skipHead=0):
+  subprocess.check_call(f'awk FNR!={skipHead} {" ".join(inFiles)} > {oFile}', shell=True)
   if remove:
     [os.remove(file) for file in inFiles]
 
@@ -272,7 +272,7 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref='preffix', remove=True):
+def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref=None, remove=True):
   '''Split file into a) n files or b) files of size b (MB)
   '''
   assert b is not None or n is not None
@@ -280,6 +280,8 @@ def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref='preffix', remov
     ext = os.path.splitext(inFile)[1]
   if oDir is None:
     oDir = os.path.dirname(inFile)
+  if pref is None:
+    pref = getBaseName(inFile)
 
   if n:
     arg = f'-n l/{n}'
@@ -290,7 +292,7 @@ def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref='preffix', remov
 
   oFiles, i = [], 1
   for file in os.listdir(oDir):
-    if pref in file:
+    if pref in file and file != getBaseFileName(inFile):
       nBase = f'{pref}_{i}{ext}'
       file = os.path.join(oDir, file)
       oFile = os.path.join(oDir, nBase)

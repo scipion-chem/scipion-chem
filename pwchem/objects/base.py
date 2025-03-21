@@ -677,6 +677,27 @@ class SetOfSmallMolecules(data.EMSet):
         self.close()
         return mols
 
+class SmallMoleculesLibrary(data.EMObject):
+    '''Small molecules library object to wrap a single small molecules file containing the whole library in SMI
+    '''
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+        self.libraryFile = pwobj.String(kwargs.get('libraryFilename', None))
+        self.origin = pwobj.String(kwargs.get('origin', None))
+
+    def getFileName(self):
+        return self.libraryFile.get()
+
+    def getLibraryMap(self):
+        '''Returns a map dictionary as: {smi: name}'''
+        mapDic = {}
+        with open(self.getFileName()) as f:
+            for line in f:
+                smi, name = line.strip().split()
+                mapDic[smi] = name
+        return mapDic
+
+
 class BindingSite(data.EMObject):
     """ Binding site """
 
@@ -687,7 +708,6 @@ class BindingSite(data.EMObject):
 
     def getFileName(self):
         return self.bindingSiteFile.get()
-
 
 class SetOfBindingSites(data.EMSet):
     """ Set of Binding sites """

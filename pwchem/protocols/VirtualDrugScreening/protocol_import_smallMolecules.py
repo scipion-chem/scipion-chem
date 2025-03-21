@@ -35,9 +35,9 @@ from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam, \
   STEPS_PARALLEL, IntParam
 
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules, SmallMoleculesLibrary
 from pwchem import Plugin
-from pwchem.utils import performBatchThreading, splitFile
+from pwchem.utils import performBatchThreading, splitFile, getBaseFileName
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
@@ -117,12 +117,15 @@ class ProtChemImportSmallMolecules(EMProtocol):
     group.addParam('nMolsPubChem', IntParam, default=10000, label='Number of desired molecules: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='From the whole set of PubChem molecules, save only this number of random ones.')
-    group.addParam('splitSize', IntParam, label='Format files size (MB): ', expertLevel=LEVEL_ADVANCED,
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1', default=1,
+    group.addParam('libOutput', BooleanParam, default=False, label='Library output: ', expertLevel=LEVEL_ADVANCED,
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
+                   help='Output just the SMI library with not formatting and no single molecules output')
+    group.addParam('splitSize', IntParam, label='Format files size (MB): ', expertLevel=LEVEL_ADVANCED, default=1,
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
                    help='Maximum size (MB) of the files sent to format to avoid memory issues')
     group.addParam('maxFormatThreads', IntParam, label='Maximum number of format threads: ', expertLevel=LEVEL_ADVANCED,
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1', default=10,
-                   help='Maximum number of format threads to use to avoid memory issues')
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
+                   help='Maximum number of format threads to use to avoid memory issues', default=10)
     group.addParam('pubChemSeed', IntParam, default=44, expertLevel=LEVEL_ADVANCED,
                    label='Seed for random sampling: ', condition='defLibraries and choicesLibraries == 2',
                    help='The desired number of molecules will be sampled from the PubChem database using this seed')
@@ -188,7 +191,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
   def _insertAllSteps(self):
     if self.defLibraries:
       self._insertFunctionStep('downloadStep')
-    if not self.isDirectDownload():
+    if not self.isDirectDownload() and not self.libOutput.get():
       self._insertFunctionStep('formatStep')
     self._insertFunctionStep('createOutputStep')
 
@@ -239,15 +242,22 @@ class ProtChemImportSmallMolecules(EMProtocol):
     performBatchThreading(self.formatMolecule, fnSmalls, nt, cloneItem=False, **kwargs)
 
   def createOutputStep(self):
-    outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
-    for fnSmall in glob.glob(self._getExtraPath("*")):
-      smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
-      smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
+    if not self.libOutput.get():
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+        for fnSmall in glob.glob(self._getExtraPath("*")):
+          smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+          smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
 
-      outputSmallMolecules.append(smallMolecule)
+          outputSmallMolecules.append(smallMolecule)
 
-    outputSmallMolecules.updateMolClass()
-    self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+        outputSmallMolecules.updateMolClass()
+        self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+    else:
+        libFile = self.getDownloadFiles()[0]
+        outFile = self._getPath(getBaseFileName(libFile))
+        os.rename(libFile, outFile)
+        outputLib = SmallMoleculesLibrary(libraryFilename=outFile, origin='PubChem')
+        self._defineOutputs(outputLibrary=outputLib)
 
   ################# MAIN FUNCTIONS #####################
 
@@ -368,7 +378,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
           if nMols > 0:
             self.reduceNRandomLines(sdfFile, nMols)
           self.swapColumns(sdfFile)
-          splitFile(sdfFile, b=self.splitSize.get(), pref='smis')
+          if not self.libOutput.get():
+            splitFile(sdfFile, b=self.splitSize.get(), pref='smis')
 
       else:
         raise Exception(f"Failed to download {url}")
