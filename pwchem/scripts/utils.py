@@ -28,9 +28,11 @@ def parseMoleculeFile(molFile):
   elif molFile.endswith('.pdb'):
     mol = Chem.MolFromPDBFile(molFile)
   elif molFile.endswith('.smi'):
-    f = open(molFile, "r")
-    firstline = next(f)
-    mol = Chem.MolFromSmiles(str(firstline))
+    with open(molFile, "r") as f:
+      line = f.readline()
+      if line.startswith('SMILES'):
+        line = f.readline()
+      mol = Chem.MolFromSmiles(line)
   elif molFile.endswith('.sdf'):
     suppl = Chem.SDMolSupplier(molFile)
     for mol in suppl:
