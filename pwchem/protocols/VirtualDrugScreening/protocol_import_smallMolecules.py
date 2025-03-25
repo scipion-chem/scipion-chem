@@ -117,7 +117,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
     group.addParam('nMolsPubChem', IntParam, default=10000, label='Number of desired molecules: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='From the whole set of PubChem molecules, save only this number of random ones.')
-    group.addParam('libOutput', BooleanParam, default=False, label='Library output: ', expertLevel=LEVEL_ADVANCED,
+    group.addParam('libOutput', BooleanParam, default=False, label='Library output: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='Output just the SMI library with not formatting and no single molecules output')
     group.addParam('splitSize', IntParam, label='Format files size (MB): ', expertLevel=LEVEL_ADVANCED, default=1,
@@ -167,7 +167,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                                       ' - Mol2 (Multiple mol2 file) \n'
                                       ' - SDF (Multiple sdf file)')
 
-    group = form.addGroup('Molecules manager')
+    group = form.addGroup('Molecules manager', condition='not libOutput')
     group.addParam('useManager', EnumParam, default=0, label='Manage structure using: ',
                    choices=['RDKit', 'OpenBabel'],
                    help='Whether to manage the structure (parse and optimize if needed) using RDKit or OpenBabel')
