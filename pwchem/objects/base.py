@@ -684,9 +684,33 @@ class SmallMoleculesLibrary(data.EMObject):
         data.EMObject.__init__(self, **kwargs)
         self.libraryFile = pwobj.String(kwargs.get('libraryFilename', None))
         self.origin = pwobj.String(kwargs.get('origin', None))
+        self.length = pwobj.Integer(kwargs.get('length', None))
+
+    def __str__(self):
+        length = self.getLength()
+        if not length:
+            length = self.calculateLength()
+
+        s = f'{self.getClassName()} ({length} items)'
+        return s
+
+    def calculateLength(self):
+        inFile = self.getFileName()
+        count = sum(1 for i in open(inFile, 'rb'))
+        self.setLength(count)
+        return count
+
+    def getLength(self):
+        return self.length.get()
+
+    def setLength(self, value):
+        self.length.set(value)
 
     def getFileName(self):
         return self.libraryFile.get()
+
+    def setFileName(self, value):
+        self.libraryFile.set(value)
 
     def getLibraryMap(self):
         '''Returns a map dictionary as: {smi: name}'''
