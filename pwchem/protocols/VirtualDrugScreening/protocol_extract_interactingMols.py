@@ -29,8 +29,8 @@ import pyworkflow.object as pwobj
 
 from pwem.protocols import EMProtocol
 
-from ...objects import SetOfSmallMolecules
-from ...utils import getFilteredOutput
+from pwchem.objects import SetOfSmallMolecules, SmallMoleculesLibrary
+from pwchem.utils import getFilteredOutput
 
 
 class ProtExtractInteractingMols(EMProtocol):
@@ -71,15 +71,33 @@ class ProtExtractInteractingMols(EMProtocol):
     if len(filtSeqNames) == 1 and filtSeqNames[0].strip() != 'All':
       seqName = filtSeqNames[0].strip()
 
-    outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
-    for mol in self.getInputMols():
-      molName = mol.getMolName()
-      if molName in molNames:
-          if seqName:
-            mol._interactScore = pwobj.Float(inSeqs.getInteractScoresDic()[seqName][molName])
-          outMols.append(mol)
+    intMols = self.getInputMols()
+    intDic = inSeqs.getInteractScoresDic()
+    if isinstance(intMols, SetOfSmallMolecules):
+      outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+      for mol in self.getInputMols():
+        molName = mol.getMolName()
+        if molName in molNames:
+            if seqName:
+              mol._interactScore = pwobj.Float(intDic[seqName][molName])
+            outMols.append(mol)
 
-    self._defineOutputs(outputSmallMolecules=outMols)
+      self._defineOutputs(outputSmallMolecules=outMols)
+
+    elif isinstance(intMols, SmallMoleculesLibrary):
+      inFile, oFile = intMols.getFileName(), self._getPath('outputLibrary.smi')
+      with open(inFile) as fIn:
+        with open(oFile, 'w') as fO:
+          for line in fIn:
+            smi, smiName = line.split()[0].strip(), line.split()[1].strip()
+            if smiName in molNames:
+              if seqName:
+                score = intDic[seqName][smiName]
+              fO.write(f'{smi}\t{smiName}\t{score}\n')
+
+      intMols.setFileName(oFile)
+      intMols.calculateLength()
+      self._defineOutputs(outputLibrary=intMols)
 
   ############## UTILS ########################
   def getInputMols(self):

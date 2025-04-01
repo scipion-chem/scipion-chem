@@ -212,7 +212,8 @@ class SetOfSequencesChem(data.SetOfSequences):
         return [seq.getSeqName() for seq in self]
 
     def getInteractMolNames(self):
-        return [mol.getMolName() for mol in self.getInteractMols()]
+        intDic = self.getInteractScoresDic()
+        return list(set([molName for molDic in intDic.values() for molName in molDic]))
 
 
 class SequenceVariants(data.EMFile):
@@ -712,13 +713,17 @@ class SmallMoleculesLibrary(data.EMObject):
     def setFileName(self, value):
         self.libraryFile.set(value)
 
-    def getLibraryMap(self):
-        '''Returns a map dictionary as: {smi: name}'''
+    def getLibraryMap(self, inverted=False):
+        '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
+        '''
         mapDic = {}
         with open(self.getFileName()) as f:
             for line in f:
-                smi, name = line.strip().split()
-                mapDic[smi] = name
+                smi, name = line.split()[0].strip(), line.split()[1].strip()
+                if inverted:
+                    mapDic[name] = smi
+                else:
+                    mapDic[smi] = name
         return mapDic
 
 
