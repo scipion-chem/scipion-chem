@@ -29,7 +29,7 @@ from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import cleanPDB
+from pwchem.utils import cleanPDB, getBaseName
 from pwchem import Plugin as pwchemPlugin
 
 class ProtChemPrepareReceptor(EMProtocol):
@@ -70,23 +70,21 @@ class ProtChemPrepareReceptor(EMProtocol):
         pGroup = form.addGroup('PDBFixer')
         pGroup.addParam("usePDBFixer", params.BooleanParam, label='Use PDBFixer: ', default=False, important=True,
                         help='Whether to use PDBFixer to further.')
-        form.addParam('addAtoms', params.EnumParam, default=0, condition="usePDBFixer",
-                      label="Add missing atoms: ", choices=['All', 'Heavy', 'Hydrogen', 'None'],
-                      help='Use PDBFixer to add the missing atoms specified in the PDB atomic structure')
-        form.addParam('addRes', params.BooleanParam, default=True,
-                      label="Add missing residues: ",  condition="usePDBFixer",
-                      help='Use PDBFixer to add missing residues')
-        form.addParam('repNonStd', params.BooleanParam, default=False,
-                      label="Replace non-standard residues: ", condition="usePDBFixer",
-                      help='Use PDBFixer to replace nonstandard residues with standard equivalents')
+        pGroup.addParam('addAtoms', params.EnumParam, default=0, condition="usePDBFixer",
+                        label="Add missing atoms: ", choices=['All', 'Heavy', 'Hydrogen', 'None'],
+                        help='Use PDBFixer to add the missing atoms specified in the PDB atomic structure')
+        pGroup.addParam('addRes', params.BooleanParam, default=True,
+                        label="Add missing residues: ",  condition="usePDBFixer",
+                        help='Use PDBFixer to add missing residues')
+        pGroup.addParam('repNonStd', params.BooleanParam, default=False,
+                        label="Replace non-standard residues: ", condition="usePDBFixer",
+                        help='Use PDBFixer to replace nonstandard residues with standard equivalents')
 
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
         self._insertFunctionStep('createOutput')
 
     def preparationStep(self):
-        fnPdb = self.getPreparedFile()
-
         chain_ids = None
         if self.rchains.get():
             chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
@@ -97,25 +95,31 @@ class ProtChemPrepareReceptor(EMProtocol):
                 chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        cleanedPDB = os.path.abspath(cleanPDB(self.inputAtomStruct.get().getFileName(), fnPdb,
-                                              self.waters.get(), self.HETATM.get(), chain_ids, het2keep))
+        inFile = self.inputAtomStruct.get().getFileName()
+        cleanFile = self.getCleanedFile()
+        cleanFile = cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
 
-        addResStr = ' --add-residues' if self.addRes else ''
-        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
-        addAtomsStr = self.getEnumText("addAtoms").lower()
+        if self.usePDBFixer.get():
+          addResStr = ' --add-residues' if self.addRes else ''
+          repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
+          addAtomsStr = self.getEnumText("addAtoms").lower()
 
-        args = f'{cleanedPDB} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {cleanedPDB}'
-        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
+          prepFile = self.getPreparedFile()
+          args = f'{cleanFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
+          pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
 
     def createOutput(self):
-        fnOut = self.getPreparedFile()
+        fnOut = self.getPreparedFile() if self.usePDBFixer.get() else self.getCleanedFile()
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputAtomStruct, target)
 
     def getPreparedFile(self):
-        # Clean PDB
-        pdb_ini = self.inputAtomStruct.get().getFileName()
-        filename = os.path.splitext(os.path.basename(pdb_ini))[0]
-        return self._getPath('%s.pdb' % filename)
+        inFile = self.inputAtomStruct.get().getFileName()
+        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}.pdb'))
+
+    def getCleanedFile(self):
+        inFile = self.inputAtomStruct.get().getFileName()
+        ext = os.path.splitext(inFile)[1]
+        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}{ext}'))
