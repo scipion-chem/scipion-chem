@@ -224,7 +224,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
   def formatStep(self):
     outDir = os.path.abspath(self._getExtraPath())
     make3d, nameKey = self.make3d.get(), self.getNameKey()
-    nt = min(self.numberOfThreads.get() - 1, self.maxFormatThreads.get()) 
+    nt = min(self.numberOfThreads.get() - 1, self.maxFormatThreads.get())
     keepSMI = self.keepSMI.get()
 
     if self.isLocalMultiple():
