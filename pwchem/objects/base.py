@@ -693,14 +693,16 @@ class SmallMoleculesLibrary(data.EMObject):
     self.libraryFile = pwobj.String(kwargs.get('libraryFilename', None))
     self.origin = pwobj.String(kwargs.get('origin', None))
     self.length = pwobj.Integer(kwargs.get('length', None))
-    self.headers = pwobj.List(kwargs.get('headers', ['SMI', 'Name']))
+    self.headers = pwobj.List(objName='_headers')
+    inHeaders = kwargs.get('headers', ['SMI', 'Name'])
+    self.setHeaders(inHeaders)
 
   def __str__(self):
     length = self.getLength()
     if not length:
       length = self.calculateLength()
 
-    s = f'{self.getClassName()} ({length} items)'
+    s = f'{self.getClassName()} ({length} items, headers: {self.getHeaders()})'
     return s
 
   def calculateLength(self):
@@ -729,16 +731,18 @@ class SmallMoleculesLibrary(data.EMObject):
       for line in f:
         smi, name = line.split()[0].strip(), line.split()[1].strip()
         if inverted:
-          mapDic[name] = smi if not fullLine else line
+          mapDic[name] = smi if not fullLine else line.strip()
         else:
-          mapDic[smi] = name if not fullLine else line
+          mapDic[smi] = name if not fullLine else line.strip()
     return mapDic
 
   def getHeaders(self):
-    return self.headers.get()
+    hs = [h.get() for h in self.headers]
+    return hs
 
   def setHeaders(self, headers):
-    return self.headers.set(headers)
+    for head in headers:
+      self.headers.append(pwobj.String(head))
 
 
 class BindingSite(data.EMObject):
