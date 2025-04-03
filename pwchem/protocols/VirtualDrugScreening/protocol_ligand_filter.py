@@ -34,7 +34,7 @@ from pwem.protocols import EMProtocol
 
 # Plugin imports
 from pwchem import Plugin
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SmallMolecule
 from pwchem.constants import RDKIT_DIC
 from pwchem.utils import getBaseName, makeSubsets
 
@@ -53,9 +53,14 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label='Params')
-        form.addParam('inputSmallMolecules', params.PointerParam,
-                      pointerClass='SetOfSmallMolecules', allowsNull=False,
-                      label="Input  Small Molecules: ",
+        form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
+                      help='Whether to use a SMI library SmallMoleculesLibrary object as input')
+
+        form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
+                      label='Input library: ', condition='useLibrary',
+                      help="Input Small molecules library to predict")
+        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules', allowsNull=False,
+                      condition='not useLibrary', label="Input  Small Molecules: ",
                       help='Select the molecules to be filtered')
 
         group = form.addGroup('Define filter')
@@ -85,7 +90,14 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
       aSteps = []
       nt = self.numberOfThreads.get()
       if nt <= 1: nt = 2
-      inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+
+      if self.useLibrary.get():
+        inDir = self._getTmpPath()
+        smiFiles = self.inputLibrary.get().splitInFiles(inDir)
+        inputSubsets = makeSubsets(smiFiles, nt - 1, cloneItem=False)
+      else:
+        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+
       for it, subset in enumerate(inputSubsets):
         aSteps += [self._insertFunctionStep('filterStep', subset, it, prerequisites=[])]
       self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
@@ -98,17 +110,32 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
         self.writeParamsFile(paramsPath, molSet, filDic, it)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
-
     def createOutputStep(self):
-        outputSet = self.inputSmallMolecules.get().create(self._getPath())
-        passMolFiles = self.parseOutputFiles()
-        for mol in self.inputSmallMolecules.get():
-          if os.path.abspath(mol.getFileName()) in passMolFiles:
-            outputSet.append(mol)
+      passMolFiles = self.parseOutputFiles()
+      if self.useLibrary.get():
+          inLib = self.inputLibrary.get()
+          outLib = inLib.clone()
+          mapDic = outLib.getLibraryMap(inverted=True, fullLine=True)
 
-        if len(outputSet) > 0:
-            self._defineOutputs(outputSmallMolecules=outputSet)
-            self._defineSourceRelation(self.inputSmallMolecules, outputSet)
+          oLibFile = self._getPath('outputLibrary.smi')
+          with open(oLibFile, 'w') as f:
+            for molFile in passMolFiles:
+              smiName = getBaseName(molFile)
+              f.write(f'{mapDic[smiName]}\n')
+
+          outputLib = inLib.clone()
+          outputLib.setFileName(oLibFile)
+          self._defineOutputs(outputLibrary=outputLib)
+      else:
+          inMols = self.inputSmallMolecules.get()
+          outputSet = inMols.create(self._getPath())
+          for mol in inMols:
+            if os.path.abspath(mol.getFileName()) in passMolFiles:
+              outputSet.append(mol)
+
+          if len(outputSet) > 0:
+              self._defineOutputs(outputSmallMolecules=outputSet)
+              self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
     # --------------- INFO functions -------------------------
     def _citations(self):
@@ -131,11 +158,14 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
         return filDic
 
 
-    def writeParamsFile(self, paramsFile, molsScipion, filDic, it):
+    def writeParamsFile(self, paramsFile, mols, filDic, it):
       molFiles = []
       with open(paramsFile, 'w') as f:
-        for mol in molsScipion:
-          molFiles.append(os.path.abspath(mol.getFileName()))
+        for molFile in mols:
+          if isinstance(molFile, SmallMolecule):
+            molFile = molFile.getFileName()
+
+          molFiles.append(os.path.abspath(molFile))
 
         f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
         f.write('filters:: {}\n'.format(filDic))
@@ -147,7 +177,6 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
     def parseOutputFiles(self):
       passFileNames = []
       for file in glob.glob(self._getExtraPath('passMolecules_*')):
-        print(file)
         with open(file) as f:
           f.readline()
           for line in f:

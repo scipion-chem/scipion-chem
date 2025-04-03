@@ -7,16 +7,17 @@ def atomTypeFilt(files, minNum, atomType):
     listPass = []
     molDic, _ = getMolFilesDic(files)
     for mol, name in molDic.items():
-        atomCount = {}
-        for atom in mol.GetAtoms():
-            aSymbol = atom.GetSymbol()
-            if aSymbol in atomCount:
-                atomCount[aSymbol] += 1
-            else:
-                atomCount[aSymbol] = 1
+        if mol:
+            atomCount = {}
+            for atom in mol.GetAtoms():
+                aSymbol = atom.GetSymbol()
+                if aSymbol in atomCount:
+                    atomCount[aSymbol] += 1
+                else:
+                    atomCount[aSymbol] = 1
 
-        if atomType in atomCount and atomCount[atomType] >= minNum:
-            listPass.append(name)
+            if atomType in atomCount and atomCount[atomType] >= minNum:
+                listPass.append(name)
     return listPass
 
 def atomNumFilt(files, minAtoms):

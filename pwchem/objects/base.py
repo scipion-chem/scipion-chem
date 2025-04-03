@@ -741,8 +741,22 @@ class SmallMoleculesLibrary(data.EMObject):
     return hs
 
   def setHeaders(self, headers):
+    self.headers.clear()
     for head in headers:
       self.headers.append(pwobj.String(head))
+
+  def splitInFiles(self, outDir, col=1):
+    oFiles = []
+    inFile = self.getFileName()
+    with open(inFile) as f:
+      for line in f:
+        molName = line.split()[col]
+
+        oFile = os.path.join(outDir, f'{molName}.smi')
+        with open(oFile, 'w') as fO:
+          fO.write(line)
+        oFiles.append(oFile)
+    return oFiles
 
 
 class BindingSite(data.EMObject):
