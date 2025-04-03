@@ -37,7 +37,7 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects.data import Sequence, Object, String, Integer, Float, Pointer
 
 # Plugin imports
-from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC
+from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC, RDKIT_DIC
 from .. import Plugin as pwchemPlugin
 from ..utils.scriptUtils import makeSubsets, performBatchThreading
 
@@ -403,8 +403,18 @@ def pdbqt2other(protocol, pdbqtFile, otherFile):
   runOpenBabel(protocol=protocol, args=args, popen=True)
   return os.path.abspath(otherFile)
 
-def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
+def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=False):
   '''Convert molecule files to sdf using openbabel'''
+  def writeAddHParamsFile(outDir, molFn):
+    oFile = os.path.join(outDir, 'addHydrogensParams.txt')
+    with open(oFile, 'w') as f:
+      f.write(f"ligandFiles: {molFn}\n")
+
+      f.write(f'outputDir: {outDir}\n')
+      f.write(f'doHydrogens: True\n')
+      f.write(f'doGasteiger: True\n')
+    return oFile
+
   if molFile.endswith('.sdf'):
     if sdfFile:
       shutil.copy(molFile, sdfFile)
@@ -422,6 +432,11 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False):
     args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
            f'--outputName {baseName} --overWrite'
     pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
+
+  if addHydrogens:
+    paramFile = writeAddHParamsFile(outDir, sdfFile)
+    pwchemPlugin.runScript(protocol, 'rdkit_addHydrogens.py', paramFile, env=RDKIT_DIC, cwd=outDir)
+
   return sdfFile
 
 def getMAEMoleculeFiles(molList):
