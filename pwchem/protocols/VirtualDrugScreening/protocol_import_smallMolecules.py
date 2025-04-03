@@ -256,7 +256,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
         libFile = self.getDownloadFiles()[0]
         outFile = self._getPath(getBaseFileName(libFile))
         os.rename(libFile, outFile)
-        outputLib = SmallMoleculesLibrary(libraryFilename=outFile, origin='PubChem')
+        outputLib = SmallMoleculesLibrary(libraryFilename=outFile, origin='PubChem', headers=['SMI', 'Name'])
         self._defineOutputs(outputLibrary=outputLib)
 
   ################# MAIN FUNCTIONS #####################

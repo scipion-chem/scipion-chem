@@ -693,7 +693,7 @@ class SmallMoleculesLibrary(data.EMObject):
     self.libraryFile = pwobj.String(kwargs.get('libraryFilename', None))
     self.origin = pwobj.String(kwargs.get('origin', None))
     self.length = pwobj.Integer(kwargs.get('length', None))
-    self.headers = pwobj.List(kwargs.get('headers', None))
+    self.headers = pwobj.List(kwargs.get('headers', ['SMI', 'Name']))
 
   def __str__(self):
     length = self.getLength()
@@ -721,7 +721,7 @@ class SmallMoleculesLibrary(data.EMObject):
   def setFileName(self, value):
     self.libraryFile.set(value)
 
-  def getLibraryMap(self, inverted=False):
+  def getLibraryMap(self, inverted=False, fullLine=False):
     '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
         '''
     mapDic = {}
@@ -729,9 +729,9 @@ class SmallMoleculesLibrary(data.EMObject):
       for line in f:
         smi, name = line.split()[0].strip(), line.split()[1].strip()
         if inverted:
-          mapDic[name] = smi
+          mapDic[name] = smi if not fullLine else line
         else:
-          mapDic[smi] = name
+          mapDic[smi] = name if not fullLine else line
     return mapDic
 
   def getHeaders(self):
