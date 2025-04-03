@@ -29,7 +29,7 @@
 import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
 import random as rd
 import numpy as np
-from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select
+from Bio.PDB import PDBParser, MMCIFParser, PDBIO, Select, MMCIFIO
 from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
@@ -625,13 +625,14 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
   structName = getBaseName(structFile)
   if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
     struct = PDBParser().get_structure(structName, structFile)
+    io = PDBIO()
   elif structFile.endswith('.cif'):
     struct = MMCIFParser().get_structure(structName, structFile)
+    io = MMCIFIO()
   else:
     print('Unknown format for file ', structFile)
     exit()
 
-  io = PDBIO()
   io.set_structure(struct)
   io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
   return outFn
