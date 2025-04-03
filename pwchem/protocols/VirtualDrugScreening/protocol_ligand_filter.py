@@ -49,6 +49,10 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
     """
     _label = 'ligand filtering'
 
+    def __init__(self, **args):
+        EMProtocol.__init__(self, **args)
+        self.stepsExecutionMode = params.STEPS_PARALLEL
+
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
