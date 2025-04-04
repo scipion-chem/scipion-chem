@@ -65,8 +65,14 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         """ Define the input parameters that will be used.
         """
         form.addSection(label=Message.LABEL_INPUT)
+        form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
+                      help='Whether to use a SMI library SmallMoleculesLibrary object as input')
+
+        form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
+                      label='Input library: ', condition='useLibrary',
+                      help="Input Small molecules library to predict")
         form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                      label='Set of small molecules:', allowsNull=False,
+                      label='Set of small molecules:', allowsNull=False, condition='not useLibrary',
                       help='It must be in pdb or mol2 format, you may use the converter')
 
         H_C = form.addGroup("Charges assignation")
@@ -122,12 +128,19 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         nt = self.numberOfThreads.get()
         os.makedirs(self.getPrepDir())
         if nt <= 1: nt = 2
-        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+
+        if self.useLibrary.get():
+          inDir = self._getTmpPath()
+          smiFiles = self.inputLibrary.get().splitInFiles(inDir)
+          inputSubsets = makeSubsets(smiFiles, nt - 1, cloneItem=False)
+        else:
+          inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('addChargesStep', subset, it, prerequisites=[])]
         if self.doConformers.get():
             for it, subset in enumerate(inputSubsets):
-                cSteps += [self._insertFunctionStep('conformersStep', subset, it, prerequisites=aSteps)]
+                cSteps += [self._insertFunctionStep('conformersStep', it, prerequisites=aSteps)]
             aSteps = cSteps
         self._insertFunctionStep('createOutput', prerequisites=aSteps)
 
@@ -136,8 +149,9 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             in the open-access and free program openbabel
         """
         failedMols = []
-        for mol in molSet:
-            fnSmall = mol.getFileName()
+        for fnSmall in molSet:
+            if isinstance(fnSmall, SmallMolecule):
+              fnSmall = fnSmall.getFileName()
             fnRoot = getBaseName(fnSmall)
             _, fnFormat = os.path.splitext(fnSmall)
 
@@ -155,10 +169,13 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             # With a given pH
             oFile = self.getPrepDir(f"{fnRoot}.mol2")
             if self.ph.get():
-                args = " -i%s '%s' -p %s --partialcharge %s -O '%s'" % (fnFormat[1:], os.path.abspath(fnSmall),
+                args = " -i%s '%s' -p %s --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall),
                                                                     str(self.phvalue.get()), cmethod, oFile)
             else:
-                args = " -i%s '%s' -h --partialcharge %s -O '%s'" % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
+                args = " -i%s '%s' -h --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
+
+            if fnFormat == '.smi':
+              args += '--gen3D '
 
             try:
               runOpenBabel(protocol=self, args=args, popen=True)
@@ -168,11 +185,11 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
             oFile = relabelAtomsMol2(self.getPrepDir(oFile), it)
 
         if len(failedMols) > 0:
-          with open(os.path.abspath(self._getExtraPath('failedCharges.txt')), 'w') as f:
+          with open(os.path.abspath(self._getExtraPath(f'failedCharges_{it}.txt')), 'w') as f:
             for molFn in failedMols:
               f.write(molFn + '\n')
 
-    def conformersStep(self, molSet, it):
+    def conformersStep(self, it):
         """ Generate a number of conformers of the same small molecule in mol2 format with
             openbabel using two different algorithm
         """
@@ -193,10 +210,10 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
               failedMols.append(fnRoot)
 
         if len(failedMols) > 0:
-          with open(os.path.abspath(self._getExtraPath('failedConfomerGeneration.txt')), 'w') as f:
+          with open(os.path.abspath(self._getExtraPath(f'failedConfomerGeneration_{it}.txt')), 'w') as f:
             for molFn in failedMols:
               f.write(molFn + '\n')
-    
+
     def createOutput(self):
         """Create a set of Small Molecules as output with the path to:
               - Path to small molecule with H (mol2 format)
@@ -205,38 +222,42 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         self.mergeErrorFiles()
 
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
-        for mol in self.inputSmallMolecules.get():
-            fnSmall = mol.getFileName()
-            fnRoot = getBaseName(fnSmall)
+        for fnRoot, mol in self.getOriginalBasenames().items():
             fnSmall = self.getPrepDir(f"{fnRoot}.mol2")
             if os.path.exists(fnSmall) and os.path.getsize(fnSmall) != 0:
-                mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=fnSmall), outDir=self._getExtraPath())
+                if not self.useLibrary.get():
+                  mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=fnSmall), outDir=self._getExtraPath())
+
                 if self.doConformers:
                     fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
                     outDir = self._getExtraPath(fnRoot)
                     os.mkdir(outDir)
-                    confFile = self.getPrepDir("{}_conformers.mol2".format(mol.getMolName()))
+                    confFile = self.getPrepDir(f"{fnRoot}_conformers.mol2")
                     molFiles = splitConformerFile(confFile, outDir=outDir)
                     for molFile in molFiles:
                         confId = os.path.splitext(molFile)[0].split('-')[-1]
 
                         newSmallMol = SmallMolecule()
-                        newSmallMol.copy(mol, copyId=False)
+                        if not self.useLibrary.get():
+                          newSmallMol.copy(mol, copyId=False)
+                          newSmallMol.setMappingFile(pwobj.String(mapFile))
 
                         newSmallMol.setFileName(molFile)
                         newSmallMol.setConfId(confId)
                         newSmallMol._ConformersFile = pwobj.String(confFile)
-                        newSmallMol.setMappingFile(pwobj.String(mapFile))
                         outputSmallMolecules.append(newSmallMol)
                 else:
                     newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
-                    newSmallMol.setMappingFile(pwobj.String(mapFile))
+                    if not self.useLibrary.get():
+                      newSmallMol.setMappingFile(pwobj.String(mapFile))
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:
             outputSmallMolecules.updateMolClass()
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
+
+            inObj = self.inputLibrary if self.useLibrary.get() else self.inputSmallMolecules
+            self._defineSourceRelation(inObj, outputSmallMolecules)
 
 
     # --------------------------- UTILS functions ------------------------------
@@ -270,7 +291,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         '''Atom lines in the file are reordered so the atomNames numbers are in order (C2, C1, C3 -> C1, C2, C3)'''
         atomsDic = {}
         writeFirst, writeLast = '', ''
-        with open(inFile) as fIn:
+        if inFile.endswith('mol2'):
+          with open(inFile) as fIn:
           # if inFile.endswith('pdb'):
           #     for line in fIn:
           #         sline = splitPDBLine(line)
@@ -282,7 +304,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
           #             else:
           #                 writeLast += line
 
-          if inFile.endswith('mol2'):
               atomLines = False
               for line in fIn:
                   if not atomLines and line.startswith('@<TRIPOS>ATOM'):
@@ -313,10 +334,22 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
                         sline = line.split()
                         f.write(line[:6] + idsDic[sline[1]].rjust(5) + idsDic[sline[2]].rjust(5) + line[16:] + '\n')
 
-          else:
-              #Don't touch other kind of files
-              return inFile
+        else:
+          outFile = inFile
 
         return outFile
+
+    def getOriginalBasenames(self):
+      baseNames = {}
+      if self.useLibrary.get():
+        inLib = self.inputLibrary.get()
+        with open(inLib.getFileName()) as f:
+          for line in f:
+            baseNames[line.split()[1]] = None
+      else:
+        for mol in self.inputSmallMolecules.get():
+            fnSmall = mol.getFileName()
+            baseNames[getBaseName(fnSmall)] = mol.clone()
+      return baseNames
 
 

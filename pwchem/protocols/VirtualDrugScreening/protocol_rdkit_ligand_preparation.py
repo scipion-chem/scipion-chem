@@ -44,7 +44,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import natural_sort, makeSubsets, performBatchThreading
+from pwchem.utils import natural_sort, makeSubsets, performBatchThreading, getBaseName
 from pwchem.constants import RDKIT_DIC
 
 scriptName = 'ligand_preparation_script.py'
@@ -69,8 +69,14 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         """ Define the input parameters that will be used.
         """
         form.addSection(label=Message.LABEL_INPUT)
+        form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
+                      help='Whether to use a SMI library SmallMoleculesLibrary object as input')
+
+        form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
+                      label='Input library: ', condition='useLibrary',
+                      help="Input Small molecules library to predict")
         form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                      label='Set of small molecules:', allowsNull=False,
+                      label='Set of small molecules:', allowsNull=False, condition='not useLibrary',
                       help='It must be in pdb or mol2 format, you may use the converter')
 
         group = form.addGroup("Molecule management")
@@ -123,7 +129,14 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         aSteps = []
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
-        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+
+        if self.useLibrary.get():
+          inDir = self._getTmpPath()
+          smiFiles = self.inputLibrary.get().splitInFiles(inDir)
+          inputSubsets = makeSubsets(smiFiles, nt - 1, cloneItem=False)
+        else:
+          inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+
         for it, subset in enumerate(inputSubsets):
             aSteps += [self._insertFunctionStep('preparationStep', subset, it, prerequisites=[])]
         self._insertFunctionStep('createOutput', prerequisites=aSteps)
@@ -135,34 +148,38 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         self.writeParamsFile(paramsPath, molSet)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
+    def getOriginalBasenames(self):
+      baseNames = []
+      if self.useLibrary.get():
+        inLib = self.inputLibrary.get()
+        with open(inLib.getFileName()) as f:
+          for line in f:
+            baseNames.append([line.split()[1], None])
+      else:
+        for mol in self.inputSmallMolecules.get():
+            fnSmall = mol.getFileName()
+            baseNames.append([getBaseName(fnSmall), mol.clone()])
+      return baseNames
 
     def createOutput(self):
         """Create a set of Small Molecules as output
         """
-        inputMols, nt = self.inputSmallMolecules.get(), self.numberOfThreads.get()
+        nt = self.numberOfThreads.get()
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
 
-        outputMols = performBatchThreading(self.generateOutput, inputMols, nt, cloneItem=True)
+        getBasenames = self.getOriginalBasenames()
+
+        outputMols = performBatchThreading(self.generateOutput, getBasenames, nt, cloneItem=False)
         for newSmallMol in outputMols:
           outputSmallMolecules.append(newSmallMol)
 
-        failedIds = []
-        for failFile in glob.glob(self._getExtraPath('failedPreparations_*.txt')):
-          with open(failFile) as fr:
-            failedIds += fr.read().strip().split('\n')
-            os.remove(failFile)
-
-        if len(failedIds) > 0:
-          allFails = self.getFailsPath()
-          with open(allFails, 'w') as f:
-            failedIds.sort()
-            f.write('\n'.join(failedIds))
-
+        self.mergeFails()
 
         if len(outputSmallMolecules) > 0:
             outputSmallMolecules.updateMolClass()
             self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-            self._defineSourceRelation(self.inputSmallMolecules, outputSmallMolecules)
+            inObj = self.inputLibrary if self.useLibrary.get() else self.inputSmallMolecules
+            self._defineSourceRelation(inObj, outputSmallMolecules)
 
 
     # --------------------------- UTILS functions ------------------------------
@@ -172,26 +189,38 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         errors = []
         return errors
 
+    def mergeFails(self):
+      failedIds = []
+      for failFile in glob.glob(self._getExtraPath('failedPreparations_*.txt')):
+        with open(failFile) as fr:
+          failedIds += fr.read().strip().split('\n')
+          os.remove(failFile)
+
+      if len(failedIds) > 0:
+        allFails = self.getFailsPath()
+        with open(allFails, 'w') as f:
+          failedIds.sort()
+          f.write('\n'.join(failedIds))
+
     def generateOutput(self, mols, molLists, it):
       outMols = []
-      for mol in mols:
+      for basename, mol in mols:
         fPattern = "{}-*.sdf" if self.doConformers else "{}.sdf"
-        tempSmall = self._getExtraPath(fPattern.format(mol.getMolName()))
+        tempSmall = self._getExtraPath(fPattern.format(basename))
         for molFile in sorted(list(glob.glob(tempSmall))):
-          mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=molFile), outDir=self._getExtraPath(),
-                                     mapBy='order')
+          if not self.useLibrary.get():
+            mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=molFile), outDir=self._getExtraPath(),
+                                       mapBy='order')
           if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
-            if self.doConformers:
-              confId = os.path.splitext(molFile)[0].split('-')[-1]
-            else:
-              confId = 0
+            confId = os.path.splitext(molFile)[0].split('-')[-1] if self.doConformers else 0
 
             newSmallMol = SmallMolecule()
-            newSmallMol.copy(mol, copyId=False)
+            if not self.useLibrary.get():
+              newSmallMol.copy(mol, copyId=False)
+              newSmallMol.setMappingFile(pwobj.String(mapFile))
 
             newSmallMol.setFileName(molFile)
             newSmallMol.setConfId(confId)
-            newSmallMol.setMappingFile(pwobj.String(mapFile))
 
             outMols.append(newSmallMol)
       molLists[it] = outMols
@@ -199,8 +228,10 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []
         with open(paramsFile, 'w') as f:
-            for mol in molsScipion:
-                molFiles.append(os.path.abspath(mol.getFileName()))
+            for molFile in molsScipion:
+              if isinstance(molFile, SmallMolecule):
+                molFile = molFile.getFileName()
+              molFiles.append(os.path.abspath(molFile))
 
             f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
