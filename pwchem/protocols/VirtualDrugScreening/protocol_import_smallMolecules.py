@@ -26,7 +26,7 @@
 # *
 # **************************************************************************
 
-import os, requests, glob, sys, json, gzip, subprocess
+import os, requests, glob, sys, json, gzip, subprocess, shutil
 from bs4 import BeautifulSoup
 import random as rd
 
@@ -117,15 +117,6 @@ class ProtChemImportSmallMolecules(EMProtocol):
     group.addParam('nMolsPubChem', IntParam, default=10000, label='Number of desired molecules: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='From the whole set of PubChem molecules, save only this number of random ones.')
-    group.addParam('libOutput', BooleanParam, default=False, label='Library output: ',
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
-                   help='Output just the SMI library with not formatting and no single molecules output')
-    group.addParam('splitSize', IntParam, label='Format files size (MB): ', expertLevel=LEVEL_ADVANCED, default=1,
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
-                   help='Maximum size (MB) of the files sent to format to avoid memory issues')
-    group.addParam('maxFormatThreads', IntParam, label='Maximum number of format threads: ', expertLevel=LEVEL_ADVANCED,
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
-                   help='Maximum number of format threads to use to avoid memory issues', default=10)
     group.addParam('pubChemSeed', IntParam, default=44, expertLevel=LEVEL_ADVANCED,
                    label='Seed for random sampling: ', condition='defLibraries and choicesLibraries == 2',
                    help='The desired number of molecules will be sampled from the PubChem database using this seed')
@@ -163,9 +154,21 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     group.addParam('filePath', PathParam, condition='not multipleFiles and not defLibraries',
                    label='File', help='Allowed formats: \n '
-                                      ' - CSV smiles (ID, compound; this is downloaded from ZINC) \n'
+                                      ' - SMILES ("SMILES ID" per line) \n'
                                       ' - Mol2 (Multiple mol2 file) \n'
                                       ' - SDF (Multiple sdf file)')
+
+    group = form.addGroup('Output', condition='(defLibraries and choicesLibraries == 2 and choicesPubChem == 1) or (not defLibraries and not multipleFiles)')
+    group.addParam('libOutput', BooleanParam, default=False, label='Library output: ',
+                   condition='(defLibraries and choicesLibraries == 2 and choicesPubChem == 1) or (not defLibraries and not multipleFiles)',
+                   help='Output just the SMI library with not formatting and no single molecules output')
+
+    group.addParam('splitSize', IntParam, label='Format files size (MB): ', expertLevel=LEVEL_ADVANCED, default=1,
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
+                   help='Maximum size (MB) of the files sent to format to avoid memory issues')
+    group.addParam('maxFormatThreads', IntParam, label='Maximum number of format threads: ', expertLevel=LEVEL_ADVANCED,
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
+                   help='Maximum number of format threads to use to avoid memory issues', default=10)
 
     group = form.addGroup('Molecules manager', condition='not libOutput')
     group.addParam('useManager', EnumParam, default=0, label='Manage structure using: ',
@@ -241,23 +244,29 @@ class ProtChemImportSmallMolecules(EMProtocol):
     # self.formatMolecule(fnSmalls, [], 1, **kwargs)
     performBatchThreading(self.formatMolecule, fnSmalls, nt, cloneItem=False, **kwargs)
 
+  def checkLibraryOutput(self):
+    pubChemLib = self.defLibraries.get() and self.choicesLibraries.get() == 2 and self.choicesPubChem.get() == 1
+    localLib = not self.defLibraries.get() and not self.multipleFiles.get()
+    return (pubChemLib or localLib) and self.libOutput.get()
+
   def createOutputStep(self):
-    if not self.libOutput.get():
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
-        for fnSmall in glob.glob(self._getExtraPath("*")):
-          smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
-          smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
+    if self.checkLibraryOutput() and self.getDownloadFiles()[0].endswith('.smi'):
+      libFile = self.getDownloadFiles()[0]
+      outFile = self._getPath(getBaseFileName(libFile))
+      shutil.copy(libFile, outFile)
+      outputLib = SmallMoleculesLibrary(libraryFilename=outFile, headers=['SMI', 'Name'])
+      self._defineOutputs(outputLibrary=outputLib)
 
-          outputSmallMolecules.append(smallMolecule)
-
-        outputSmallMolecules.updateMolClass()
-        self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
     else:
-        libFile = self.getDownloadFiles()[0]
-        outFile = self._getPath(getBaseFileName(libFile))
-        os.rename(libFile, outFile)
-        outputLib = SmallMoleculesLibrary(libraryFilename=outFile, origin='PubChem', headers=['SMI', 'Name'])
-        self._defineOutputs(outputLibrary=outputLib)
+      outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+      for fnSmall in glob.glob(self._getExtraPath("*")):
+        smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+        smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
+        outputSmallMolecules.append(smallMolecule)
+
+      outputSmallMolecules.updateMolClass()
+      self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+
 
   ################# MAIN FUNCTIONS #####################
 
