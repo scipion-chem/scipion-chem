@@ -38,8 +38,9 @@ from pwchem.objects import SmallMolecule
 from pwchem.constants import RDKIT_DIC
 from pwchem.utils import getBaseName, makeSubsets
 
-ATYPE, SIZE, HASCYCLES = 'Contains at least x atom type', 'Contains at least x atoms', 'Contains at least x cycles'
-ATKEY, ANKEY, CKEY = 'typeAtom',  'numAtoms', 'numCycles'
+ATYPE, SIZE, HASCYCLES, SCORE = 'Contains at least x atom type', 'Contains at least x atoms', \
+                                'Contains at least x cycles', 'Has at least x value for attribute'
+ATKEY, ANKEY, CKEY, ATTRKEY = 'typeAtom',  'numAtoms', 'numCycles', 'attribute'
 
 scriptName = 'ligand_filter_script.py'
 
@@ -72,15 +73,19 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
                        display=params.EnumParam.DISPLAY_HLIST,
                        help='Whether to remove or keep the entry if it meets the attribute')
 
-        group.addParam('filter', params.EnumParam, choices=[ATYPE, SIZE, HASCYCLES], label='Filter by: ', default=0,
+        group.addParam('filter', params.EnumParam, choices=[ATYPE, SIZE, HASCYCLES, SCORE],
+                       label='Filter by: ', default=0,
                        help='Define a filter by different attributes')
         group.addParam('filterValue', params.IntParam, label='With value (x): ', default=1,
                        help='Value x for the defined filter')
         group.addParam('atomTypeFilter', params.StringParam, label='Atom type: ', default='B',
                        condition='filter==0',
                        help='Atom type to keep / remove filter')
+        group.addParam('scoreFilter', params.StringParam, label='Select attribute: ', default='',
+                       condition='filter==3',
+                       help='Score stored in the SetOfSmallMolecules or SmalloleculesLibrary to use as filter')
 
-        group.addParam('addFilter',params.LabelParam, label='Add filter expression: ',
+        group.addParam('addFilter', params.LabelParam, label='Add filter expression: ',
                        help='Add filter expression to the list')
 
         group = form.addGroup('Filter list')
@@ -107,9 +112,12 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
       self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
 
     def filterStep(self, molSet, it):
-        '''Filter the Set of Small molecules with the defined filters'''
+        '''Filter the Set of Small molecules with the defined filters
+        '''
         filDic = self.parseFilter()
 
+        molSet = self.performScoreFilter(molSet, filDic[ATTRKEY])
+        del filDic[ATTRKEY]
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(it)))
         self.writeParamsFile(paramsPath, molSet, filDic, it)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
@@ -146,21 +154,42 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
         return []
 
     # --------------------------- UTILS functions -----------------------------------
+    def createElementLine(self):
+      keepStr = self.getEnumText('mode')
+      filterStr, fValue = self.getEnumText('filter'), self.filterValue.get()
+
+      towrite = f"{keepStr} molecule if {filterStr.replace('x', str(fValue)).lower()} "
+      if filterStr == ATYPE:
+        towrite += self.atomTypeFilter.get()
+      elif filterStr == SCORE:
+        towrite += self.scoreFilter.get()
+      towrite += '\n'
+      return towrite
+
     def parseFilter(self):
-        filDic = {ATKEY: [], ANKEY: [], CKEY: []}
+        filDic = {ATKEY: [], ANKEY: [], CKEY: [], ATTRKEY: []}
         filterStr = self.filterList.get().strip()
         for fil in filterStr.split('\n'):
-            fAction, fVal = fil.split()[0], int(fil.split('at least')[1].split()[0])
+            fAction, fVal = fil.split()[0], float(fil.split('at least')[1].split()[0])
             if 'atom type' in fil:
-              fType, atomType = 'typeAtom', fil.split()[-1]
+              fType, atomType = ATKEY, fil.split()[-1]
             elif 'atoms' in fil:
-              fType, atomType = 'numAtoms', None
+              fType, atomType = ANKEY, None
             elif 'cycles' in fil:
-              fType, atomType = 'numCycles', None
+              fType, atomType = CKEY, None
+            elif 'attribute' in fil:
+              fType, atomType = ATTRKEY, fil.split('attribute')[-1].strip()
 
             filDic[fType].append([fAction, fVal, atomType])
         return filDic
 
+    def getInputAttributes(self):
+      if self.useLibrary.get():
+        attrs = self.inputLibrary.get().getHeaders()
+      else:
+        fMol = self.inputSmallMolecules.get().getFirstItem()
+        attrs = [key for key, attr in fMol.getAttributesToStore()]
+      return attrs
 
     def writeParamsFile(self, paramsFile, mols, filDic, it):
       molFiles = []
@@ -186,3 +215,32 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
           for line in f:
             passFileNames.append(line.strip())
       return passFileNames
+
+    def performScoreFilter(self, molSet, filtList):
+      '''Filters the molSet based on score filters.
+      '''
+      if self.useLibrary.get():
+        headers = self.inputLibrary.get().getHeaders()
+
+      for action, value, scoreName in filtList:
+        if self.useLibrary.get():
+          scIdx = headers.index(scoreName)
+
+        filtSet = molSet.copy()
+        for mol in molSet:
+          if not self.useLibrary.get():
+            molScore = getattr(mol, scoreName).get()
+          else:
+            molScore = self.parseFileScore(mol, scIdx)
+
+          if (molScore >= value and action == 'Remove') or (molScore < value and action == 'Keep'):
+            filtSet.remove(mol)
+        molSet = filtSet.copy()
+
+      return molSet
+
+    def parseFileScore(self, file, column):
+      with open(file) as f:
+        line = f.readline()
+        molScore = float(line.split()[column])
+      return molScore

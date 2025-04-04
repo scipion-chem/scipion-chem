@@ -16,7 +16,7 @@ def atomTypeFilt(files, minNum, atomType):
                 else:
                     atomCount[aSymbol] = 1
 
-            if atomType in atomCount and atomCount[atomType] >= minNum:
+            if atomType in atomCount and atomCount[atomType] >= int(minNum):
                 listPass.append(name)
     return listPass
 
@@ -26,7 +26,7 @@ def atomNumFilt(files, minAtoms):
     for mol, name in molDic.items():
         if mol:
             nAtoms = len(mol.GetAtoms())
-            if nAtoms >= minAtoms:
+            if nAtoms >= int(minAtoms):
                 listPass.append(name)
     return set(listPass)
 
@@ -36,7 +36,7 @@ def cycleNumFilt(files, minCycles):
     for mol, name in molDic.items():
         infoCycles = mol.GetRingInfo()
         nCycles = infoCycles.NumRings()
-        if nCycles >= minCycles:
+        if nCycles >= int(minCycles):
             listPass.append(name)
     return set(listPass)
 

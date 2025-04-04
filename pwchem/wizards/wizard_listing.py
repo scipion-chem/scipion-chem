@@ -154,52 +154,16 @@ AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
                                       inputs=['buildEvalSumLine'],
                                       outputs=['evalSummary'])
 
-class Add_FilterExpression(AddElementWizard):
-    """Add ID or keyword in NCBI fetch protocol to the list"""
-    _targets, _inputs, _outputs = [], {}, {}
 
-    def show(self, form, *params):
-        inputParam, outputParam = self.getInputOutput(form)
-        protocol = form.protocol
+AddElementWizard().addTarget(protocol=ProtChemZINCFilter,
+                             targets=['addFilter'],
+                             inputs=[],
+                             outputs=['filterList'])
 
-        keep = protocol.getEnumText(inputParam[0])
-        subset = protocol.getEnumText(inputParam[1])
-
-        if subset and subset.strip() != '':
-            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
-            towrite = prevList + '{} if in {}\n'.format(keep, subset)
-            form.setVar(outputParam[0], towrite)
-
-
-subGroups = list(ProtChemZINCFilter.subGroups.keys())
-subChoices = ['subset_{}'.format(sb) for sb in subGroups]
-Add_FilterExpression().addTarget(protocol=ProtChemZINCFilter,
-                                 targets=['addFilter'],
-                                 inputs=['mode', {'subGroup': subChoices}],
-                                 outputs=['filterList'])
-
-class AddLigandFilterExpression(AddElementWizard):
-    """Add filter expression in ligand filter protocol"""
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def show(self, form, *params):
-        inputParam, outputParam = self.getInputOutput(form)
-        protocol = form.protocol
-
-        keepStr = protocol.getEnumText(inputParam[0])
-        filterStr, fValue = protocol.getEnumText(inputParam[1]), getattr(protocol, inputParam[2]).get()
-
-        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
-        towrite = prevList + '{} molecule if {} '.format(keepStr, filterStr.replace('x', str(fValue)).lower())
-        if getattr(protocol, inputParam[1]).get() == 0:
-            towrite += getattr(protocol, inputParam[3]).get()
-        towrite += '\n'
-        form.setVar(outputParam[0], towrite)
-
-AddLigandFilterExpression().addTarget(protocol=ProtocolGeneralLigandFiltering,
-                                      targets=['addFilter'],
-                                      inputs=['mode', 'filter', 'filterValue', 'atomTypeFilter'],
-                                      outputs=['filterList'])
+AddElementWizard().addTarget(protocol=ProtocolGeneralLigandFiltering,
+                             targets=['addFilter'],
+                             inputs=[],
+                             outputs=['filterList'])
 
 
 class AddElementSummaryWizard(VariableWizard):

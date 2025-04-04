@@ -68,6 +68,11 @@ SelectFromListWizard().addTarget(protocol=chemprot.ProtMapAttributeToSeqROIs,
                                  inputs=['getInputAttributes'],
                                  outputs=['attrName'])
 
+SelectFromListWizard().addTarget(protocol=chemprot.ProtocolGeneralLigandFiltering,
+                                 targets=['scoreFilter'],
+                                 inputs=['getInputAttributes'],
+                                 outputs=['scoreFilter'])
+
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
 

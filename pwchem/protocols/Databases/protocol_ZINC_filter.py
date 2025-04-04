@@ -186,6 +186,12 @@ class ProtChemZINCFilter(EMProtocol):
     def getSummaryFile(self):
         return self._getPath("summary.txt")
 
+    def createElementLine(self):
+        keep = self.getEnumText('mode')
+        subsetKey = self.getEnumText('subGroup')
+        subset = self.getEnumText(f'subset_{subsetKey}')
+        return f'{keep} if in {subset}\n'
+
     def parseFilter(self):
         filDic = {'Keep': [], 'Remove': []}
         filterStr = self.filterList.get().strip()
