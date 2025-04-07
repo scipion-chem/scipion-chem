@@ -736,6 +736,16 @@ class SmallMoleculesLibrary(data.EMObject):
           mapDic[smi] = name if not fullLine else line.strip()
     return mapDic
 
+  def yieldLibraryMapItems(self, inverted=False, fullLine=False):
+    with open(self.getFileName()) as f:
+      for line in f:
+        smi, name = line.split()[0].strip(), line.split()[1].strip()
+        if inverted:
+          k, v = name, smi if not fullLine else line.strip()
+        else:
+          k, v = smi,  name if not fullLine else line.strip()
+        yield k, v
+
   def getHeaders(self):
     hs = [h.get() for h in self.headers]
     return hs
