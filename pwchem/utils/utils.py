@@ -108,9 +108,23 @@ def concatFiles(inFiles, oFile, remove=False, skipHead=0):
   if remove:
     [os.remove(file) for file in inFiles]
 
+def mergeFiles(inFiles, outFile=None, oDir='', sep='', remove=False):
+  inTexts = []
+  for inFile in inFiles:
+    with open(inFile) as f:
+      inTexts.append(f.read())
+
+  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
+  with open(outFile, 'w') as fo:
+    fo.write(sep.join(inTexts))
+
+  if remove:
+    [os.remove(inFile) for inFile in inFiles]
+  return outFile
+
 def findThreadFiles(filename, directory=None):
   '''Finds the thread files (file_i.txt) in a directory.
-  filename: name of the merged file (lie.txt)
+  filename: name of the merged file (file.txt)
   directory: directory where the thread files are. If None, will expect filename to be a path
   '''
   if not directory:
@@ -121,6 +135,10 @@ def findThreadFiles(filename, directory=None):
 
   matchingFiles = [os.path.join(directory, f) for f in os.listdir(directory) if pattern.match(f)]
   return matchingFiles
+
+def concatThreadFiles(concatFile, inDir=None, remove=True):
+  thFiles = findThreadFiles(concatFile, directory=inDir)
+  concatFiles(thFiles, concatFile, remove=remove)
 
 def organizeThreads(nTasks, nThreads):
   if nTasks > nThreads:
@@ -303,21 +321,6 @@ def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref=None, remove=Tru
   if remove:
     os.remove(inFile)
   return oFiles
-
-
-def mergeFiles(inFiles, outFile=None, oDir='', sep='', remove=False):
-  inTexts = []
-  for inFile in inFiles:
-    with open(inFile) as f:
-      inTexts.append(f.read())
-
-  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
-  with open(outFile, 'w') as fo:
-    fo.write(sep.join(inTexts))
-
-  if remove:
-    [os.remove(inFile) for inFile in inFiles]
-  return outFile
 
 def mergeSDFs(sdfFiles, outFile=None, oDir=''):
   inTexts = []
