@@ -194,7 +194,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
   def _insertAllSteps(self):
     if self.defLibraries:
       self._insertFunctionStep('downloadStep')
-    if not self.isDirectDownload() and not self.libOutput.get():
+    if not self.isDirectDownload() and not self.checkLibraryOutput():
       self._insertFunctionStep('formatStep')
     self._insertFunctionStep('createOutputStep')
 
