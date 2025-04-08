@@ -140,6 +140,18 @@ def concatThreadFiles(concatFile, inDir=None, remove=True):
   thFiles = findThreadFiles(concatFile, directory=inDir)
   concatFiles(thFiles, concatFile, remove=remove)
 
+def removeThreadDirectories(pattern, inDir=None):
+  '''Remove the set of thread directories: pattern_id'''
+  if inDir is None:
+    inDir = os.path.dirname(pattern)
+  inDir = os.path.abspath(inDir)
+  basePatern = os.path.basename(pattern)
+
+  for file in os.listdir(inDir):
+    if basePatern in file:
+      shutil.rmtree(os.path.join(inDir, file))
+
+
 def organizeThreads(nTasks, nThreads):
   if nTasks > nThreads:
     return [1] * nTasks
