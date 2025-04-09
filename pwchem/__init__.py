@@ -191,7 +191,7 @@ class Plugin(pwem.Plugin):
 		file_name = cls.getDefTar(ALIVIEW_DIC)
 
 		# Installing package
-		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=file_name)\
+		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.30/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=file_name)\
 			.addCommand(f'tar -xf {file_name} && rm {file_name}', 'ALIVIEW_EXTRACTED')\
 			.addCommand(f"conda create --name {BIOCONDA_DIC['name']}-{BIOCONDA_DIC['version']} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
 			.addPackage(env, dependencies=['wget', 'conda'], default=default)
