@@ -42,6 +42,7 @@ from pwem.objects import String
 
 from pwchem.wizards import VariableWizard
 import pwchem.protocols as chemprot
+from pwchem.viewers import SmallMoleculesLibraryViewer
 
 SELECT_STR = "Select one of the attributes"
 
@@ -342,3 +343,26 @@ class SelectEvaluationOrigin(VariableWizard):
                             "Select one of the protocols")
     form.setVar(outputParam[0], dlg.values[0].get())
 
+class SelectHeadersLibrary(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getInputHeaders(self, form):
+    viewer = form.protocol
+    return viewer.getLibrary().getHeaders()
+
+  def show(self, form, *params):
+    _, outputParam = self.getInputOutput(form)
+    headers = self.getInputHeaders(form)
+
+    finalOutputLabels = []
+    for i in headers:
+      finalOutputLabels.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalOutputLabels)
+    dlg = dialog.ListDialog(form.root, "Select evaluation origin", provider,
+                            "Select one of the protocols")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectHeadersLibrary().addTarget(protocol=SmallMoleculesLibraryViewer,
+                                 targets=['chooseHeader'],
+                                 inputs=[],
+                                 outputs=['chooseHeader'])

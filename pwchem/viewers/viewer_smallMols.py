@@ -24,14 +24,16 @@
 # *
 # **************************************************************************
 
-from pyworkflow.protocol.params import EnumParam
+from matplotlib import pyplot as plt
+
+from pyworkflow.protocol import params
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import showError, askYesNoCancel
 
 from pwem.viewers.viewer_chimera import Chimera, ChimeraView
 from pwem.viewers.mdviewer.viewer import MDViewer
 
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMoleculesLibrary
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
 from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort
@@ -68,7 +70,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     return self._viewerOptions[:-1]
 
   def defineParamsTable(self, form):
-      form.addParam('displayTable', EnumParam,
+      form.addParam('displayTable', params.EnumParam,
                     choices=self.getChoices(vType=SET, pymol=False)[0], default=0,
                     label='Display ligands set and attributes in table format: ',
                     help='Display the ligands set in the set in table format with their respective attributes')
@@ -85,35 +87,35 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     if self.checkIfDocked():
         form.addSection(label='Docking view')
         group = form.addGroup('Visualize docking poses with:')
-        group.addParam('displaySoftware', EnumParam,
+        group.addParam('displaySoftware', params.EnumParam,
                        choices=self.getViewerOptions(), default=PYMOL,
                        label='Display docking poses with: ',
                        help='Display the selected group of docking poses with which software. '
                             'Available: PyMol, ChimeraX and viewDockX (ChimeraX with stored attributes)')
 
         group = form.addGroup('Display docking poses')
-        group.addParam('displaySetDock', EnumParam,
+        group.addParam('displaySetDock', params.EnumParam,
                        choices=self.setLabels, default=0,
                        label='Display docking poses in set: ',
                        help='Display all ligands docked in this set')
 
-        group.addParam('displayROIDock', EnumParam,
+        group.addParam('displayROIDock', params.EnumParam,
                        choices=self.pocketLabels, default=0,
                        label='Display docking poses in ROI: ',
                        help='Display all conformers and positions docked on this ROI')
 
-        group.addParam('displayMoleculeDock', EnumParam,
+        group.addParam('displayMoleculeDock', params.EnumParam,
                        choices=self.moleculeLabels, default=0,
                        label='Display docking poses of molecule: ',
                        help='Display all conformers and positions of this molecule')
 
-        group.addParam('displaySingleDock', EnumParam,
+        group.addParam('displaySingleDock', params.EnumParam,
                        choices=self.singleLabels, default=0,
                        label='Display docking pose of ligand: ',
                        help='Display this single ligand with the target')
 
         group = form.addGroup('Visualize with PLIP')
-        group.addParam('displayPymolPLIP', EnumParam,
+        group.addParam('displayPymolPLIP', params.EnumParam,
                        choices=self.singleLabels, default=0,
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
@@ -121,24 +123,24 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     #Molecules section
     form.addSection(label='Small molecules view')
     group = form.addGroup('Visualize molecules with:')
-    group.addParam('displaySoftwareMol', EnumParam,
+    group.addParam('displaySoftwareMol', params.EnumParam,
                    choices=self._viewerOptions[:2], default=PYMOL,
                    label='Display docking poses with: ',
                    help='Display the selected group of docking poses with which software. '
                         'Available: PyMol, ChimeraX and viewDockX (ChimeraX with stored attributes)')
 
     group = form.addGroup('Display molecules')
-    group.addParam('displaySet', EnumParam,
+    group.addParam('displaySet', params.EnumParam,
                    choices=self.setLabels, default=0,
                    label='Display molecules in set: ',
                    help='Display all ligands in this set')
 
-    group.addParam('displayMolecule', EnumParam,
+    group.addParam('displayMolecule', params.EnumParam,
                   choices=self.moleculeLabels, default=0,
                   label='Display molecule conformers: ',
                   help='Display all conformers saved for this molecule')
 
-    group.addParam('displaySingle', EnumParam,
+    group.addParam('displaySingle', params.EnumParam,
                   choices=self.singleLabels, default=0,
                   label='Display single molecule: ',
                   help='Display this single ligand with the target')
@@ -530,3 +532,48 @@ class CorrelationViewer(pwviewer.Viewer):
       from PIL import Image
       image = Image.open(protocol.getOuputImgPath())
       image.show()
+
+
+class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
+    ''' Visualize the library characteristics'''
+    _label = 'Viewer Small Molecules Library'
+    _targets = [SmallMoleculesLibrary]
+    _environments = [pwviewer.DESKTOP_TKINTER]
+
+
+    def __init__(self, **args):
+        super().__init__(**args)
+
+    def _defineParams(self, form):
+        form.addSection(label='Visualization of Small Molecules library')
+        group = form.addGroup('Scores')
+        group.addParam('chooseHeader', params.StringParam, default='', label='Library score: ',
+                       help='Choose the library score to analyze')
+        group.addParam('displayDistribution', params.LabelParam, label='Display distribution: ',
+                       help='Display the distribution of the score values')
+
+    def _getVisualizeDict(self):
+        return {
+            'displayDistribution': self._showDistribution,
+        }
+
+    def getLibrary(self):
+      return self.protocol
+
+    def getHeaders(self):
+      return self.getLibrary().getHeaders()
+
+    def _showDistribution(self, e=None):
+      inLib, head = self.getLibrary(), self.chooseHeader.get()
+      colIdx = self.getHeaders().index(head)
+
+      values = [float(val) for val in inLib.yieldLibraryValues(colIdx)]
+
+      plt.hist(values, bins=50, edgecolor='black')
+      plt.title(f"Histogram of {head}")
+      plt.xlabel(f"{head} Values")
+      plt.ylabel("Frequency")
+      plt.tight_layout()
+      plt.show()
+
+

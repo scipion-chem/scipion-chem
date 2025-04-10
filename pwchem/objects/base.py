@@ -768,6 +768,15 @@ class SmallMoleculesLibrary(data.EMObject):
         oFiles.append(oFile)
     return oFiles
 
+  def yieldLibraryValues(self, colIndex):
+    with open(self.getFileName()) as f:
+      for line in f:
+        row = line.split()
+        try:
+          yield row[colIndex].strip()
+        except (IndexError):
+          continue
+
 
 class BindingSite(data.EMObject):
   """ Binding site """
