@@ -36,7 +36,7 @@ from pwem.protocols import EMProtocol
 from pwem.objects import SetOfSequences, AtomStruct, SetOfAtomStructs
 
 import pwchem.objects
-from pwchem import Plugin as pwchem_plugin
+from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import *
 
 class PyMol:
@@ -48,7 +48,7 @@ class PyMol:
     PyMol_HOME variable is read from the ~/.config/scipion.conf file.
     """
     environ = pwutils.Environ(os.environ)
-    environ.set('PATH', pwchem_plugin.getProgramHome(PYMOL_DIC, path='bin'),
+    environ.set('PATH', pwchemPlugin.getProgramHome(OPENBABEL_DIC, path='bin'),
                 position=pwutils.Environ.BEGIN)
     return environ
 
@@ -57,10 +57,12 @@ class PyMolView(pwviewer.CommandView):
   """ View for calling an external command. """
 
   def __init__(self, pymolArgs, cwd, **kwargs):
-    print('command: ', [pwchem_plugin.getProgramHome(PYMOL_DIC), *pymolArgs.split()])
-    pwviewer.CommandView.__init__(self, [pwchem_plugin.getProgramHome(PYMOL_DIC, 'pymol/bin/pymol'), *pymolArgs.split()],
-                                  cwd=cwd,
-                                  env=PyMol.getEnviron(), **kwargs)
+    print('command: ', [self.getPymolBin(), *pymolArgs.split()])
+    pwviewer.CommandView.__init__(self, [self.getPymolBin(), *pymolArgs.split()],
+                                  cwd=cwd, **kwargs)
+    
+  def getPymolBin(self):
+    return pwchemPlugin.getEnvPath(OPENBABEL_DIC, 'bin/pymol')
 
   def show(self):
     Popen(self._cmd, cwd=self._cwd, env=PyMol.getEnviron())
@@ -82,7 +84,7 @@ class VmdViewPopen(pwviewer.CommandView):
     pwviewer.CommandView.__init__(self, 'vmd ' + vmdArgs, **kwargs)
 
   def show(self):
-      fullProgram = '%s && %s' % (pwchem_plugin.getEnvActivationCommand(VMD_DIC), self._cmd)
+      fullProgram = '%s && %s' % (pwchemPlugin.getEnvActivationCommand(VMD_DIC), self._cmd)
       Popen(fullProgram, cwd=self._cwd, shell=True)
 
 class AtomStructViewer(pwviewer.ProtocolViewer):

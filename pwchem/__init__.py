@@ -54,7 +54,6 @@ class Plugin(pwem.Plugin):
 		cls.addOpenbabelPackage(env)
 		cls.addMGLToolsPackage(env)
 		cls.addJChemPaintPackage(env)
-		cls.addPyMolPackage(env)
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
@@ -66,7 +65,6 @@ class Plugin(pwem.Plugin):
 		# Package home directories
 		cls._defineEmVar(RDKIT_DIC['home'], cls.getEnvName(RDKIT_DIC))
 		cls._defineEmVar(MGL_DIC['home'], cls.getEnvName(MGL_DIC))
-		cls._defineEmVar(PYMOL_DIC['home'], cls.getEnvName(PYMOL_DIC))
 		cls._defineEmVar(JCHEM_DIC['home'], cls.getEnvName(JCHEM_DIC))
 		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
 		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
@@ -119,17 +117,6 @@ class Plugin(pwem.Plugin):
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
-	@classmethod
-	def addPyMolPackage(cls, env, default=True):
-		# Instantiating install helper
-		installer = InstallHelper(PYMOL_DIC['name'], packageHome=cls.getVar(PYMOL_DIC['home']), packageVersion=PYMOL_DIC['version'])
-
-		# Installing package
-		installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
-			.addCommand('tar -jxf PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
-			.addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
-			.addPackage(env, dependencies=['tar', 'wget'], default=default)
-
 	@classmethod
 	def addMGLToolsPackage(cls, env, default=True):
 		# Instantiating install helper
@@ -191,7 +178,7 @@ class Plugin(pwem.Plugin):
 		file_name = cls.getDefTar(ALIVIEW_DIC)
 
 		# Installing package
-		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=file_name)\
+		installer.getExtraFile(cls.getAliviewUrl(), 'ALIVIEW_DOWNLOADED', fileName=file_name)\
 			.addCommand(f'tar -xf {file_name} && rm {file_name}', 'ALIVIEW_EXTRACTED')\
 			.addCommand(f"conda create --name {BIOCONDA_DIC['name']}-{BIOCONDA_DIC['version']} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
 			.addPackage(env, dependencies=['wget', 'conda'], default=default)
@@ -337,6 +324,10 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def getDefTar(cls, programDic, ext='tgz'):
 		return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
+
+	@classmethod
+	def getAliviewUrl(cls, version='1.28'):
+		return f'http://www.ormbunkar.se/aliview/downloads/linux/linux-versions-all/linux-version-{version}/aliview.tgz'
 
 DataSet(name='smallMolecules', folder='smallMolecules',
 					files={
