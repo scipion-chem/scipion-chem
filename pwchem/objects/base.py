@@ -768,14 +768,23 @@ class SmallMoleculesLibrary(data.EMObject):
         oFiles.append(oFile)
     return oFiles
 
-  def yieldLibraryValues(self, colIndex):
+  def yieldLibraryValues(self, colIndex, batchSize=1024):
+    batch = []
     with open(self.getFileName()) as f:
       for line in f:
         row = line.split()
         try:
-          yield row[colIndex].strip()
+          val = row[colIndex].strip()
+          batch.append(val)
         except (IndexError):
           continue
+
+        if len(batch) >= batchSize:
+          yield batch
+          batch = []
+
+      if batch:
+        yield batch
 
 
 class BindingSite(data.EMObject):

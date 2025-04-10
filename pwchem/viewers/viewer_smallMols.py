@@ -25,6 +25,7 @@
 # **************************************************************************
 
 from matplotlib import pyplot as plt
+import numpy as np
 
 from pyworkflow.protocol import params
 import pyworkflow.viewer as pwviewer
@@ -552,6 +553,10 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
         group.addParam('displayDistribution', params.LabelParam, label='Display distribution: ',
                        help='Display the distribution of the score values')
 
+        group.addParam('recalc', params.BooleanParam, label='Recalculate: ', default='False',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help='Recalculate the graph instead of loading a previously saved')
+
     def _getVisualizeDict(self):
         return {
             'displayDistribution': self._showDistribution,
@@ -563,17 +568,36 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
     def getHeaders(self):
       return self.getLibrary().getHeaders()
 
+    def getPngFile(self):
+      oDir = os.path.abspath(os.path.dirname(self.getLibrary().getFileName()))
+      return os.path.join(oDir, f'{self.chooseHeader.get()}_distribution.png')
+
     def _showDistribution(self, e=None):
       inLib, head = self.getLibrary(), self.chooseHeader.get()
       colIdx = self.getHeaders().index(head)
 
-      values = [float(val) for val in inLib.yieldLibraryValues(colIdx)]
+      pngFile = self.getPngFile()
+      if not os.path.exists(pngFile) or self.recalc.get():
+        nBins = 50
+        minVal, maxVal = 0, 1
+        binEdges = np.linspace(minVal, maxVal, nBins + 1)
+        histCounts = np.zeros(nBins)
 
-      plt.hist(values, bins=50, edgecolor='black')
-      plt.title(f"Histogram of {head}")
-      plt.xlabel(f"{head} Values")
-      plt.ylabel("Frequency")
-      plt.tight_layout()
+        for batch in inLib.yieldLibraryValues(colIdx):
+          histCounts += np.histogram([float(val) for val in batch], bins=binEdges)[0]
+
+        plt.bar(binEdges[:-1], histCounts, width=np.diff(binEdges), align='edge', edgecolor='black')
+        plt.title(f"Histogram of {head}")
+        plt.xlabel(f"{head} Values")
+        plt.ylabel("Frequency")
+        plt.tight_layout()
+
+        plt.savefig(pngFile)
+      else:
+        from PIL import Image
+        image = Image.open(pngFile)
+        image.show()
+
       plt.show()
 
 
