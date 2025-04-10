@@ -43,7 +43,7 @@ from pyworkflow.protocol import params
 from pyworkflow.utils.properties import Message
 
 from pwchem import Plugin
-from pwchem.constants import PYMOL_DIC
+from pwchem.constants import OPENBABEL_DIC
 
 pymolScriptFileName = 'script.pml'
 
@@ -118,7 +118,7 @@ class ProtPymolOperate(EMProtocol):
         return summary
     
     def _getPymol(self):
-        return Plugin.getProgramHome(PYMOL_DIC, 'pymol/bin/pymol')
+        return Plugin.getEnvPath(OPENBABEL_DIC, 'bin/pymol')
 
     def getPymolScript(self):
         return os.path.abspath(self._getTmpPath(pymolScriptFileName))
