@@ -768,14 +768,14 @@ class SmallMoleculesLibrary(data.EMObject):
         oFiles.append(oFile)
     return oFiles
 
-  def yieldLibraryValues(self, colIndex, batchSize=1024):
+  def yieldLibraryValues(self, colIndexes, batchSize=1024):
     batch = []
     with open(self.getFileName()) as f:
       for line in f:
         row = line.split()
         try:
-          val = row[colIndex].strip()
-          batch.append(val)
+          vals = [row[ci].strip() for ci in colIndexes]
+          batch.append(vals)
         except (IndexError):
           continue
 

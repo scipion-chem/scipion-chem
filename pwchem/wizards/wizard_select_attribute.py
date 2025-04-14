@@ -362,7 +362,34 @@ class SelectHeadersLibrary(VariableWizard):
                             "Select one of the protocols")
     form.setVar(outputParam[0], dlg.values[0].get())
 
-SelectHeadersLibrary().addTarget(protocol=SmallMoleculesLibraryViewer,
-                                 targets=['chooseHeader'],
-                                 inputs=[],
-                                 outputs=['chooseHeader'])
+for i in range(1, 3):
+  SelectHeadersLibrary().addTarget(protocol=SmallMoleculesLibraryViewer,
+                                   targets=[f'chooseHeader{i}'],
+                                   inputs=[],
+                                   outputs=[f'chooseHeader{i}'])
+
+class SetParamValue(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getParamValue(self, form, inFunction, scoreIdx):
+    viewer = form.protocol
+    return getattr(viewer, inFunction)(scoreIdx)
+
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+
+    scoreIdx = outputParam[0][-1]
+    paramValue = self.getParamValue(form, inputParam[0], scoreIdx)
+    form.setVar(outputParam[0], paramValue)
+
+for i in range(1, 3):
+  SetParamValue().addTarget(protocol=SmallMoleculesLibraryViewer,
+                            targets=[f'trueMin{i}'],
+                            inputs=['getMinValue'],
+                            outputs=[f'trueMin{i}'])
+
+  SetParamValue().addTarget(protocol=SmallMoleculesLibraryViewer,
+                            targets=[f'trueMax{i}'],
+                            inputs=['getMaxValue'],
+                            outputs=[f'trueMax{i}'])

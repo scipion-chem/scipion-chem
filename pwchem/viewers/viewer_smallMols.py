@@ -547,44 +547,93 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
 
     def _defineParams(self, form):
         form.addSection(label='Visualization of Small Molecules library')
-        group = form.addGroup('Scores')
-        group.addParam('chooseHeader', params.StringParam, default='', label='Library score: ',
+        group = form.addGroup('Score 1')
+        group.addParam('chooseHeader1', params.StringParam, default='', label='Library score 1: ',
                        help='Choose the library score to analyze')
-        group.addParam('displayDistribution', params.LabelParam, label='Display distribution: ',
-                       help='Display the distribution of the score values')
+        group.addParam('trueMin1', params.FloatParam, label='Minimum score value: ', default=0,
+                       help='Minimum and maximum values for the selected score.'
+                            'Use the wizard to get the actual minimum value or set yourself the histogram limit')
+        group.addParam('trueMax1', params.FloatParam, label='Maximum score value: ', default=1,
+                       help='Minimum and maximum values for the selected score. '
+                            'Use the wizard to get the actual maximum value or set yourself the histogram limit')
 
+        group = form.addGroup('Score 2')
+        group.addParam('chooseHeader2', params.StringParam, default='', label='Library score 2: ',
+                       help='Choose the library score 2 to analyze in a scatterplot')
+        group.addParam('trueMin2', params.FloatParam, label='Minimum score value: ', default=0,
+                       help='Minimum and maximum values for the selected score.'
+                            'Use the wizard to get the actual minimum value or set yourself the histogram limit')
+        group.addParam('trueMax2', params.FloatParam, label='Maximum score value: ', default=1,
+                       help='Minimum and maximum values for the selected score. '
+                            'Use the wizard to get the actual maximum value or set yourself the histogram limit')
+
+        group = form.addGroup('Plots')
         group.addParam('recalc', params.BooleanParam, label='Recalculate: ', default='False',
-                       expertLevel=params.LEVEL_ADVANCED,
                        help='Recalculate the graph instead of loading a previously saved')
+        group.addParam('displayDistribution', params.LabelParam, label='Display histogram: ',
+                       help='Display the distribution of the score 1 values as histogram')
+        group.addParam('displayScatterplot', params.LabelParam, label='Display scatterplot: ',
+                       help='Display the distribution of the score 1 and 2 values as scatterplot')
+        group.addParam('displayHeatmap', params.LabelParam, label='Display heatmap: ',
+                       help='Display the distribution of the score 1 and 2 values as heatmap')
+
 
     def _getVisualizeDict(self):
         return {
             'displayDistribution': self._showDistribution,
+            'displayScatterplot': self._showScatterplot,
+            'displayHeatmap': self._showHeatmap,
         }
 
     def getLibrary(self):
       return self.protocol
 
+    def getMinValue(self, scoreIdx, doRound=True):
+      minVal = 1e6
+      inLib, head = self.getLibrary(), getattr(self, f'chooseHeader{scoreIdx}').get()
+      colIdx = self.getHeaders().index(head)
+      for batch in inLib.yieldLibraryValues([colIdx]):
+        fBatch = [float(val[0]) for val in batch]
+        minVal = min(minVal, min(fBatch))
+
+      if doRound:
+        minVal = int(minVal) - 1
+      return minVal
+
+    def getMaxValue(self, scoreIdx, doRound=True):
+      maxVal = -1e6
+      inLib, head = self.getLibrary(), getattr(self, f'chooseHeader{scoreIdx}').get()
+      colIdx = self.getHeaders().index(head)
+      for batch in inLib.yieldLibraryValues([colIdx]):
+        fBatch = [float(val[0]) for val in batch]
+        maxVal = max(maxVal, max(fBatch))
+
+      if doRound:
+        maxVal = int(maxVal) + 1
+      return maxVal
+
     def getHeaders(self):
       return self.getLibrary().getHeaders()
 
-    def getPngFile(self):
-      oDir = os.path.abspath(os.path.dirname(self.getLibrary().getFileName()))
-      return os.path.join(oDir, f'{self.chooseHeader.get()}_distribution.png')
-
     def _showDistribution(self, e=None):
-      inLib, head = self.getLibrary(), self.chooseHeader.get()
-      colIdx = self.getHeaders().index(head)
-
-      pngFile = self.getPngFile()
+      pngFile = self.getPngFile(plot='distribution')
       if not os.path.exists(pngFile) or self.recalc.get():
-        nBins = 50
-        minVal, maxVal = 0, 1
-        binEdges = np.linspace(minVal, maxVal, nBins + 1)
-        histCounts = np.zeros(nBins)
+        inLib, head = self.getLibrary(), self.chooseHeader1.get()
+        colIdx = self.getHeaders().index(head)
 
-        for batch in inLib.yieldLibraryValues(colIdx):
-          histCounts += np.histogram([float(val) for val in batch], bins=binEdges)[0]
+        iniMin, iniMax = self.trueMin1.get(), self.trueMax1.get()
+        initialBins = 50
+
+        binEdges = np.linspace(iniMin, iniMax, initialBins + 1)
+        histCounts = np.zeros(initialBins)
+        for batch in inLib.yieldLibraryValues([colIdx]):
+          fBatch = [float(val[0]) for val in batch]
+          histCounts += np.histogram(fBatch, bins=binEdges)[0]
+
+          underflow = np.sum(np.array(fBatch) < iniMin)
+          overflow = np.sum(np.array(fBatch) > iniMax)
+          histCounts[0] += underflow
+          histCounts[-1] += overflow
 
         plt.bar(binEdges[:-1], histCounts, width=np.diff(binEdges), align='edge', edgecolor='black')
         plt.title(f"Histogram of {head}")
@@ -600,4 +649,72 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
 
       plt.show()
 
+    def _showScatterplot(self, e=None):
+      pngFile = self.getPngFile(plot='scatterplot', nVars=2)
+      if not os.path.exists(pngFile) or self.recalc.get():
+        inLib, headers = self.getLibrary(), self.getHeaders()
+        head1, head2 = self.chooseHeader1.get(), self.chooseHeader2.get()
+        colIdx1, colIdx2 = headers.index(head1), headers.index(head2)
 
+        for batch in inLib.yieldLibraryValues([colIdx1, colIdx2]):
+          fBatch1, fBatch2 = [float(val[0]) for val in batch], [float(val[1]) for val in batch]
+          plt.scatter(fBatch1, fBatch2, color='blue', s=2)
+
+        plt.title(f"Scatterplot of {head1} vs {head2}")
+        plt.xlabel(f"{head1} Values")
+        plt.ylabel(f"{head2} Values")
+        plt.xlim(self.trueMin1.get(), self.trueMax1.get())
+        plt.ylim(self.trueMin2.get(), self.trueMax2.get())
+
+        plt.legend()
+        plt.grid(True)
+
+        plt.savefig(pngFile)
+      else:
+        from PIL import Image
+        image = Image.open(pngFile)
+        image.show()
+
+      plt.show()
+
+    def _showHeatmap(self, e=None):
+      pngFile = self.getPngFile(plot='heatmap', nVars=2)
+      if not os.path.exists(pngFile) or self.recalc.get():
+        xMin, xMax = self.trueMin1.get(), self.trueMax1.get()
+        yMin, yMax = self.trueMin2.get(), self.trueMax2.get()
+        nBinsX, nBinsY = 50, 50
+
+        # Bin edges
+        x_edges = np.linspace(xMin, xMax, nBinsX + 1)
+        y_edges = np.linspace(yMin, yMax, nBinsY + 1)
+
+        # Accumulator for 2D histogram
+        hist = np.zeros((nBinsX, nBinsY))
+
+        inLib, headers = self.getLibrary(), self.getHeaders()
+        head1, head2 = self.chooseHeader1.get(), self.chooseHeader2.get()
+        colIdx1, colIdx2 = headers.index(head1), headers.index(head2)
+        # Incrementally update histogram
+        for batch in inLib.yieldLibraryValues([colIdx1, colIdx2]):
+          fBatch1, fBatch2 = [float(val[0]) for val in batch], [float(val[1]) for val in batch]
+          h, _, _ = np.histogram2d(fBatch1, fBatch2, bins=[x_edges, y_edges])
+          hist += h
+
+        # Plot heatmap
+        plt.figure(figsize=(8, 6))
+        plt.imshow(hist.T, origin='lower', aspect='auto',
+                   extent=[xMin, xMax, yMin, yMax],
+                   cmap='plasma')
+        plt.colorbar(label='Counts')
+        plt.xlabel(f"{head1} Values")
+        plt.ylabel(f"{head2} Values")
+        plt.xlim(self.trueMin1.get(), self.trueMax1.get())
+        plt.ylim(self.trueMin2.get(), self.trueMax2.get())
+        plt.title(f"Heatplot of {head1} vs {head2}")
+        plt.grid(False)
+        plt.show()
+
+    def getPngFile(self, nVars=1, plot='distribution'):
+      oDir = os.path.abspath(os.path.dirname(self.getLibrary().getFileName()))
+      vars = f'{self.chooseHeader1.get()}' if nVars == 1 else f'{self.chooseHeader1.get()}_{self.chooseHeader2.get()}'
+      return os.path.join(oDir, f'{vars}_{plot}.png')
