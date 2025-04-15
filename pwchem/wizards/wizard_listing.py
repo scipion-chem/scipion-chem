@@ -165,6 +165,11 @@ AddElementWizard().addTarget(protocol=ProtocolGeneralLigandFiltering,
                              inputs=[],
                              outputs=['filterList'])
 
+AddElementWizard().addTarget(protocol=ProtocolLibraryFiltering,
+                             targets=['addFilter'],
+                             inputs=[],
+                             outputs=['filterList'])
+
 
 class AddElementSummaryWizard(VariableWizard):
     """Add a step of the workflow in the defined position"""

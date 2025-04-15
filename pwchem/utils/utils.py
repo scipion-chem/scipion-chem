@@ -130,7 +130,7 @@ def findThreadFiles(filename, directory=None):
   if not directory:
     directory, filename = os.path.dirname(filename), os.path.split(filename)[-1]
 
-  basename, ext = os.path.splitext(filename)
+  basename, ext = os.path.splitext(getBaseFileName(filename))
   pattern = re.compile(rf"{basename}_\d+{ext}")
 
   matchingFiles = [os.path.join(directory, f) for f in os.listdir(directory) if pattern.match(f)]

@@ -597,7 +597,7 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
         minVal = min(minVal, min(fBatch))
 
       if doRound:
-        minVal = int(minVal) - 1
+        minVal = round(minVal, 2)
       return minVal
 
     def getMaxValue(self, scoreIdx, doRound=True):
@@ -609,7 +609,7 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
         maxVal = max(maxVal, max(fBatch))
 
       if doRound:
-        maxVal = int(maxVal) + 1
+        maxVal = round(maxVal, 2)
       return maxVal
 
     def getHeaders(self):
