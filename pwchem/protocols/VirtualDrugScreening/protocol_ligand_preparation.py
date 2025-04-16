@@ -34,46 +34,32 @@ Protocol Steps:
 3. Generate low energy conformers (openbabel with Confab or RDKIT AllChem.EmbedMolecule)
 """
 
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pyworkflow.protocol.params import LEVEL_ADVANCED
-from pyworkflow.utils import Message
 import pyworkflow.object as pwobj
 
 import os, glob
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import runOpenBabel, splitConformerFile, relabelAtomsMol2, \
-  natural_sort, makeSubsets, getBaseName
+from pwchem.utils import runOpenBabel, splitConformerFile, relabelAtomsMol2, natural_sort, getBaseName
+from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolBaseLibraryToSetOfMols
 
 
-class ProtChemOBabelPrepareLigands(EMProtocol):
+class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
     """
-    Prepare a set of molecules for use in a docking program (for example, Rosetta DARC).
+    Prepare a set of molecules for use in a docking program.
     Sets the partial atomic charges, generates low-energy conformers. This is done with OpenBabel.
     """
 
     _label = 'OBabel Ligand preparation'
     _dic_method = {0: "gasteiger", 1: "mmff94", 2: "qeq", 3: "qtpie", 4: "eqeq", 5: "eem", 6: "none"}
-
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         """
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
-                      help='Whether to use a SMI library SmallMoleculesLibrary object as input')
-
-        form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
-                      label='Input library: ', condition='useLibrary',
-                      help="Input Small molecules library to predict")
-        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                      label='Set of small molecules:', allowsNull=False, condition='not useLibrary',
-                      help='It must be in pdb or mol2 format, you may use the converter')
+        form = self.addInputParams(form)
 
         H_C = form.addGroup("Charges assignation")
         H_C.addParam('method_charges', params.EnumParam,
@@ -129,27 +115,22 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
         os.makedirs(self.getPrepDir())
         if nt <= 1: nt = 2
 
-        if self.useLibrary.get():
-          inDir = self._getTmpPath()
-          smiFiles = self.inputLibrary.get().splitInFiles(inDir)
-          inputSubsets = makeSubsets(smiFiles, nt - 1, cloneItem=False)
-        else:
-          inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+        iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
+        for it in range(nt-1):
+            aSteps += [self._insertFunctionStep(self.addChargesStep, it, prerequisites=[iStep])]
 
-        for it, subset in enumerate(inputSubsets):
-            aSteps += [self._insertFunctionStep('addChargesStep', subset, it, prerequisites=[])]
         if self.doConformers.get():
-            for it, subset in enumerate(inputSubsets):
-                cSteps += [self._insertFunctionStep('conformersStep', it, prerequisites=aSteps)]
+            for it in range(nt-1):
+                cSteps += [self._insertFunctionStep(self.conformersStep, it, prerequisites=aSteps)]
             aSteps = cSteps
-        self._insertFunctionStep('createOutput', prerequisites=aSteps)
+        self._insertFunctionStep(self.createOutput, prerequisites=aSteps)
 
-    def addChargesStep(self, molSet, it):
+    def addChargesStep(self, it):
         """ Assign the charges using a method available
             in the open-access and free program openbabel
         """
         failedMols = []
-        for fnSmall in molSet:
+        for fnSmall in self.getInputMolFiles(it):
             if isinstance(fnSmall, SmallMolecule):
               fnSmall = fnSmall.getFileName()
             fnRoot = getBaseName(fnSmall)
@@ -188,6 +169,8 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
           with open(os.path.abspath(self._getExtraPath(f'failedCharges_{it}.txt')), 'w') as f:
             for molFn in failedMols:
               f.write(molFn + '\n')
+
+        os.remove(self.getInputFile(it))
 
     def conformersStep(self, it):
         """ Generate a number of conformers of the same small molecule in mol2 format with
@@ -261,11 +244,6 @@ class ProtChemOBabelPrepareLigands(EMProtocol):
 
 
     # --------------------------- UTILS functions ------------------------------
-    def _validate(self):
-        """ Validate if the inputs are in mol2 or pdb format
-        """
-        errors = []
-        return errors
 
     def mergeErrorFiles(self):
         lines = []

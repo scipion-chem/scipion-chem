@@ -37,47 +37,33 @@ import os, glob
 
 from pyworkflow.protocol import params
 from pyworkflow.protocol.params import LEVEL_ADVANCED
-from pyworkflow.utils import Message
 import pyworkflow.object as pwobj
-
-from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import natural_sort, makeSubsets, performBatchThreading, getBaseName
+from pwchem.utils import natural_sort, performBatchThreading, getBaseName
 from pwchem.constants import RDKIT_DIC
+from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolBaseLibraryToSetOfMols
 
 scriptName = 'ligand_preparation_script.py'
 
 MFF_METHODS = ['MMFF94', 'MMFFp4s']
 CONF_METHODS = ['KDG', 'ETDG', 'ETKDG', 'ETKDGv2', 'ETKDGv3', 'srETKDGv3']
 
-class ProtChemRDKitPrepareLigands(EMProtocol):
+class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
     """
     Prepare a set of molecules for use in a docking program (for example, Rosetta DARC).
     Sets the partial atomic charges, generates low-energy conformers. This is done with OpenBabel.
     """
 
     _label = 'RDKit Ligand preparation'
-
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         """
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
-                      help='Whether to use a SMI library SmallMoleculesLibrary object as input')
-
-        form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
-                      label='Input library: ', condition='useLibrary',
-                      help="Input Small molecules library to predict")
-        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
-                      label='Set of small molecules:', allowsNull=False, condition='not useLibrary',
-                      help='It must be in pdb or mol2 format, you may use the converter')
+        form = self.addInputParams(form)
 
         group = form.addGroup("Molecule management")
         group.addParam('doHydrogens', params.BooleanParam, default=True,
@@ -130,22 +116,16 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
         nt = self.numberOfThreads.get()
         if nt <= 1: nt = 2
 
-        if self.useLibrary.get():
-          inDir = self._getTmpPath()
-          smiFiles = self.inputLibrary.get().splitInFiles(inDir)
-          inputSubsets = makeSubsets(smiFiles, nt - 1, cloneItem=False)
-        else:
-          inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+        iStep = self._insertFunctionStep(self.createInputStep, nt - 1, prerequisites=[])
+        for it in range(nt-1):
+            aSteps += [self._insertFunctionStep(self.preparationStep, it, prerequisites=[iStep])]
+        self._insertFunctionStep(self.createOutput, prerequisites=aSteps)
 
-        for it, subset in enumerate(inputSubsets):
-            aSteps += [self._insertFunctionStep('preparationStep', subset, it, prerequisites=[])]
-        self._insertFunctionStep('createOutput', prerequisites=aSteps)
-
-    def preparationStep(self, molSet, it):
+    def preparationStep(self, it):
         """ Preparate the molecules and generate the conformers as specified
         """
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(it)))
-        self.writeParamsFile(paramsPath, molSet)
+        self.writeParamsFile(paramsPath, it)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def getOriginalBasenames(self):
@@ -183,12 +163,6 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
 
 
     # --------------------------- UTILS functions ------------------------------
-    def _validate(self):
-        """ Validate if the inputs are in mol2 or pdb format
-        """
-        errors = []
-        return errors
-
     def mergeFails(self):
       failedIds = []
       for failFile in glob.glob(self._getExtraPath('failedPreparations_*.txt')):
@@ -225,14 +199,9 @@ class ProtChemRDKitPrepareLigands(EMProtocol):
             outMols.append(newSmallMol)
       molLists[it] = outMols
 
-    def writeParamsFile(self, paramsFile, molsScipion):
-        molFiles = []
+    def writeParamsFile(self, paramsFile, it):
+        molFiles = self.getInputMolFiles(it)
         with open(paramsFile, 'w') as f:
-            for molFile in molsScipion:
-              if isinstance(molFile, SmallMolecule):
-                molFile = molFile.getFileName()
-              molFiles.append(os.path.abspath(molFile))
-
             f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
 
             f.write('outputDir: {}\n'.format(os.path.abspath(self._getExtraPath())))

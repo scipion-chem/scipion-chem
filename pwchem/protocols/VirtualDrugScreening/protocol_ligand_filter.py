@@ -34,21 +34,63 @@ from pwem.protocols import EMProtocol
 
 # Plugin imports
 from pwchem import Plugin
-from pwchem.objects import SmallMolecule
-from pwchem.constants import RDKIT_DIC
+from pwchem.constants import RDKIT_DIC, WARNLIBBIG
 from pwchem.utils import getBaseName, makeSubsets
 
-ATYPE, SIZE, HASCYCLES, SCORE = 'Contains at least x atom type', 'Contains at least x atoms', \
-                                'Contains at least x cycles', 'Has at least x value for attribute'
-ATKEY, ANKEY, CKEY, ATTRKEY = 'typeAtom',  'numAtoms', 'numCycles', 'attribute'
+ATYPE, SIZE, HASCYCLES = 'Contains at least x atom type', 'Contains at least x atoms', \
+                                'Contains at least x cycles'
+ATKEY, ANKEY, CKEY = 'typeAtom',  'numAtoms', 'numCycles'
 
 scriptName = 'ligand_filter_script.py'
 
-class ProtocolGeneralLigandFiltering(EMProtocol):
+class ProtocolBaseLibraryToSetOfMols(EMProtocol):
+
+    def addInputParams(self, form):
+      form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
+                    help='Whether to use a SMI library SmallMoleculesLibrary object as input')
+
+      form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
+                    label='Input library: ', condition='useLibrary',
+                    help="Input Small molecules library to predict")
+      form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules', allowsNull=False,
+                    condition='not useLibrary', label="Input  Small Molecules: ",
+                    help='Select the molecules to be filtered')
+      return form
+
+    def createInputStep(self, nt):
+      if self.useLibrary.get():
+        inDir = os.path.abspath(self._getTmpPath())
+        ligFiles = self.inputLibrary.get().splitInFiles(inDir)
+      else:
+        ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
+
+      inputSubsets = makeSubsets(ligFiles, nt, cloneItem=False)
+      for it, fileSet in enumerate(inputSubsets):
+        with open(self.getInputFile(it), 'w') as f:
+          f.write(' '.join(fileSet))
+
+    def getInputFile(self, it):
+      return self._getExtraPath(f'inputLigandFiles_{it}.txt')
+
+    def getInputMolFiles(self, it):
+      inFile = self.getInputFile(it)
+      with open(inFile) as f:
+        molFiles = f.read().strip().split()
+      return molFiles
+
+    def _validate(self):
+        errors = []
+        if self.useLibrary.get():
+          if not self.inputLibrary.get().validateSplit():
+            errors.append(WARNLIBBIG)
+        return errors
+
+class ProtocolGeneralLigandFiltering(ProtocolBaseLibraryToSetOfMols):
     """
     Filters a set of ligands by some user defined attributes: forbidden / necessary atom types, max/min size...
     """
     _label = 'ligand filtering'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     def __init__(self, **args):
         EMProtocol.__init__(self, **args)
@@ -58,22 +100,14 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
     def _defineParams(self, form):
         """ """
         form.addSection(label='Params')
-        form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
-                      help='Whether to use a SMI library SmallMoleculesLibrary object as input')
-
-        form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
-                      label='Input library: ', condition='useLibrary',
-                      help="Input Small molecules library to predict")
-        form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules', allowsNull=False,
-                      condition='not useLibrary', label="Input  Small Molecules: ",
-                      help='Select the molecules to be filtered')
+        form = self.addInputParams(form)
 
         group = form.addGroup('Define filter')
         group.addParam('mode', params.EnumParam, choices=["Remove", "Keep"], label='Mode: ', default=0,
                        display=params.EnumParam.DISPLAY_HLIST,
                        help='Whether to remove or keep the entry if it meets the attribute')
 
-        group.addParam('filter', params.EnumParam, choices=[ATYPE, SIZE, HASCYCLES, SCORE],
+        group.addParam('filter', params.EnumParam, choices=[ATYPE, SIZE, HASCYCLES],
                        label='Filter by: ', default=0,
                        help='Define a filter by different attributes')
         group.addParam('filterValue', params.IntParam, label='With value (x): ', default=1,
@@ -100,27 +134,20 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
       nt = self.numberOfThreads.get()
       if nt <= 1: nt = 2
 
-      if self.useLibrary.get():
-        inDir = self._getTmpPath()
-        smiFiles = self.inputLibrary.get().splitInFiles(inDir)
-        inputSubsets = makeSubsets(smiFiles, nt - 1, cloneItem=False)
-      else:
-        inputSubsets = makeSubsets(self.inputSmallMolecules.get(), nt - 1)
+      iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
+      for it in range(nt-1):
+        aSteps += [self._insertFunctionStep(self.filterStep, it, prerequisites=[iStep])]
+      self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
 
-      for it, subset in enumerate(inputSubsets):
-        aSteps += [self._insertFunctionStep('filterStep', subset, it, prerequisites=[])]
-      self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
-
-    def filterStep(self, molSet, it):
+    def filterStep(self, it):
         '''Filter the Set of Small molecules with the defined filters
         '''
         filDic = self.parseFilter()
 
-        molSet = self.performScoreFilter(molSet, filDic[ATTRKEY])
-        del filDic[ATTRKEY]
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(it)))
-        self.writeParamsFile(paramsPath, molSet, filDic, it)
+        self.writeParamsFile(paramsPath, filDic, it)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
+        os.remove(self.getInputFile(it))
 
     def createOutputStep(self):
       passMolFiles = self.parseOutputFiles()
@@ -149,9 +176,6 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
               self._defineOutputs(outputSmallMolecules=outputSet)
               self._defineSourceRelation(self.inputSmallMolecules, outputSet)
 
-    # --------------- INFO functions -------------------------
-    def _citations(self):
-        return []
 
     # --------------------------- UTILS functions -----------------------------------
     def createElementLine(self):
@@ -161,13 +185,11 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
       towrite = f"{keepStr} molecule if {filterStr.replace('x', str(fValue)).lower()} "
       if filterStr == ATYPE:
         towrite += self.atomTypeFilter.get()
-      elif filterStr == SCORE:
-        towrite += self.scoreFilter.get()
       towrite += '\n'
       return towrite
 
     def parseFilter(self):
-        filDic = {ATKEY: [], ANKEY: [], CKEY: [], ATTRKEY: []}
+        filDic = {ATKEY: [], ANKEY: [], CKEY: []}
         filterStr = self.filterList.get().strip()
         for fil in filterStr.split('\n'):
             fAction, fVal = fil.split()[0], float(fil.split('at least')[1].split()[0])
@@ -177,34 +199,17 @@ class ProtocolGeneralLigandFiltering(EMProtocol):
               fType, atomType = ANKEY, None
             elif 'cycles' in fil:
               fType, atomType = CKEY, None
-            elif 'attribute' in fil:
-              fType, atomType = ATTRKEY, fil.split('attribute')[-1].strip()
 
             filDic[fType].append([fAction, fVal, atomType])
         return filDic
 
-    def getInputAttributes(self):
-      if self.useLibrary.get():
-        attrs = self.inputLibrary.get().getHeaders()
-      else:
-        fMol = self.inputSmallMolecules.get().getFirstItem()
-        attrs = [key for key, attr in fMol.getAttributesToStore()]
-      return attrs
-
-    def writeParamsFile(self, paramsFile, mols, filDic, it):
-      molFiles = []
+    def writeParamsFile(self, paramsFile, filDic, it):
+      molFiles = self.getInputMolFiles(it)
       with open(paramsFile, 'w') as f:
-        for molFile in mols:
-          if isinstance(molFile, SmallMolecule):
-            molFile = molFile.getFileName()
-
-          molFiles.append(os.path.abspath(molFile))
-
-        f.write('ligandFiles:: {}\n'.format(' '.join(molFiles)))
+        f.write(f'ligandFiles:: {" ".join(molFiles)}\n')
         f.write('filters:: {}\n'.format(filDic))
 
         f.write('outputPath:: {}\n'.format(os.path.abspath(self._getExtraPath('passMolecules_{}.txt'.format(it)))))
-
       return paramsFile
 
     def parseOutputFiles(self):
