@@ -722,6 +722,7 @@ class SmallMoleculesLibrary(data.EMObject):
 
   def setFileName(self, value):
     self.libraryFile.set(value)
+    self.calculateLength()
 
   def getLibraryMap(self, inverted=False, fullLine=False):
     '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
@@ -755,7 +756,12 @@ class SmallMoleculesLibrary(data.EMObject):
     for head in headers:
       self.headers.append(pwobj.String(head))
 
+  def validateSplit(self):
+    maxMols = pwchemPlugin.getVar(MAX_MOLS_SET)
+    return self.length <= maxMols
+
   def splitInFiles(self, outDir, col=1):
+    assert self.validateSplit(), WARNLIBBIG
     oFiles = []
     inFile = self.getFileName()
     with open(inFile) as f:
@@ -785,7 +791,6 @@ class SmallMoleculesLibrary(data.EMObject):
 
       if batch:
         yield batch
-
 
 class BindingSite(data.EMObject):
   """ Binding site """
