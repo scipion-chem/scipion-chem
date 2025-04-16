@@ -24,14 +24,12 @@
 # *
 # **************************************************************************
 
-import os
 from os.path import abspath
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
 
@@ -43,12 +41,9 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
     Perform the filtering of a set of small molecules that match an input pharmacophore.
     """
     _label = 'Pharmacophore filtering'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     ##### -------------------------- DEFINE param functions ----------------------
-
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
 
     def _defineParams(self, form):
         """ """
