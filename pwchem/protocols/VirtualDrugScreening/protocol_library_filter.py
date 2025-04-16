@@ -33,17 +33,14 @@ from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
 # Plugin imports
-from pwchem.utils import concatThreadFiles, splitFile, getBaseFileName
+from pwchem.utils import concatThreadFiles, splitFile, getBaseFileName, getBaseName
 
 class ProtocolLibraryFiltering(EMProtocol):
     """
     Filters a small molecules library by some user defined attributes.
     """
     _label = 'library filtering'
-
-    def __init__(self, **args):
-        EMProtocol.__init__(self, **args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -77,18 +74,21 @@ class ProtocolLibraryFiltering(EMProtocol):
       nt = self.numberOfThreads.get()
       if nt <= 1: nt = 2
 
+      iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
+      for it in range(nt-1):
+        aSteps += [self._insertFunctionStep(self.filterStep, it, prerequisites=[iStep])]
+      self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
+
+    def createInputStep(self, nt):
       inDir = self._getTmpPath()
       libFile = os.path.abspath(self.inputLibrary.get().getFileName())
-      inSMIFiles = splitFile(libFile, n=nt-1, oDir=inDir, remove=False)
+      splitFile(libFile, n=nt, oDir=inDir, remove=False)
 
-      for smiFile in inSMIFiles:
-        aSteps += [self._insertFunctionStep('filterStep', smiFile, prerequisites=[])]
-      self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
-
-    def filterStep(self, smiFile):
+    def filterStep(self, it):
         '''Filter the smiFile with the defined filters
         '''
         filList = self.parseFilter()
+        smiFile = self.getSmiFile(it)
         self.performScoreFilter(smiFile, filList)
 
     def createOutputStep(self):
@@ -99,7 +99,6 @@ class ProtocolLibraryFiltering(EMProtocol):
 
       outputLib = inLib.clone()
       outputLib.setFileName(oLibFile)
-      outputLib.calculateLength()
       self._defineOutputs(outputLibrary=outputLib)
 
     # --------------- INFO functions -------------------------
@@ -113,6 +112,10 @@ class ProtocolLibraryFiltering(EMProtocol):
 
       towrite = f"Keep molecule if {fAttribute} is {overlow} threshold {fValue}\n"
       return towrite
+
+    def getSmiFile(self, it):
+      inFile = self.inputLibrary.get().getFileName()
+      return self._getTmpPath(f'{getBaseName(inFile)}_{it+1}.smi')
 
     def getStringBetween(self, line, before, after):
       return line.split(before)[1].split(after)[0].strip()
