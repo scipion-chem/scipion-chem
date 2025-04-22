@@ -103,8 +103,26 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
+def reduceNRandomLines(inFile, n, oDir='/tmp'):
+  tFile = os.path.abspath(os.path.join(oDir, 'temp.txt'))
+  subprocess.check_call(f'shuf -n {n} {os.path.abspath(inFile)} > {tFile}', shell=True)
+  os.rename(tFile, inFile)
+
+def swapColumns(smiFile, swaps=(1,2), oDir='/tmp'):
+  smiFile = os.path.abspath(smiFile)
+  tFile = os.path.abspath(os.path.join(oDir, 'smis.smi'))
+  subprocess.check_call(f"awk '{{ t=${swaps[0]}; ${swaps[0]}=${swaps[1]}; ${swaps[1]}=t; print }}' "
+                        f"{smiFile} > {tFile}", shell=True)
+  os.rename(tFile, smiFile)
+
 def concatFiles(inFiles, oFile, remove=False, skipHead=0):
   subprocess.check_call(f'awk FNR!={skipHead} {" ".join(inFiles)} > {oFile}', shell=True)
+  if remove:
+    [os.remove(file) for file in inFiles]
+
+def concatGZFiles(inFiles, oFile, remove):
+  cmd = f'zcat {" ".join(inFiles)} > {oFile}'
+  subprocess.check_call(cmd, shell=True)
   if remove:
     [os.remove(file) for file in inFiles]
 

@@ -26,6 +26,7 @@
 
 # Virtual Drug Screening protocols
 from pwchem.protocols.VirtualDrugScreening.protocol_import_smallMolecules import ProtChemImportSmallMolecules
+from pwchem.protocols.VirtualDrugScreening.protocol_import_molecules_library import ProtChemImportMoleculesLibrary
 from pwchem.protocols.VirtualDrugScreening.protocol_drawSmallMol import ProtDrawMolecules
 from pwchem.protocols.VirtualDrugScreening.protocol_extract_ligands import ProtExtractLigands
 

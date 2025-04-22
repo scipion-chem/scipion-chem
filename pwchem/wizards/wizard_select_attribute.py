@@ -398,3 +398,23 @@ for i in range(1, 3):
                             targets=[f'trueMax{i}'],
                             inputs=['getMaxValue'],
                             outputs=[f'trueMax{i}'])
+
+class SelectZINCSubsetWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    prot = form.protocol
+    zincSubsets = prot.zincSubsets
+
+    subset = prot.getEnumText(inputParam[0])
+    hRange, logpRange = zincSubsets[subset][0], zincSubsets[subset][1]
+    form.setVar(outputParam[0], hRange[0]), form.setVar(outputParam[1], hRange[1])
+    form.setVar(outputParam[2], logpRange[0]), form.setVar(outputParam[3], logpRange[1])
+
+
+SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportMoleculesLibrary,
+                                   targets=['setRanges'],
+                                   inputs=['zincSubset'],
+                                   outputs=['minSize', 'maxSize', 'minlogP', 'maxlogP'])

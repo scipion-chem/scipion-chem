@@ -206,4 +206,43 @@ class TestImportSeqROIs(BaseTest):
 
 	def test(self):
 		protImportSeqROIs = self._runImportSeqROIs()
-		assertHandle(self.assertIsNotNone, getattr(protImportSeqROIs, 'outputROIs_P0DTC2', None), cwd=protImportSeqROIs.getWorkingDir())
+		assertHandle(self.assertIsNotNone, getattr(protImportSeqROIs, 'outputROIs_P0DTC2', None),
+								 cwd=protImportSeqROIs.getWorkingDir())
+
+class TestImportSmallMoleculesLibrary(TestImportBase):
+	@classmethod
+	def setUpClass(cls):
+		cls.dsLig = DataSet.getDataSet("smallMolecules")
+		setupTestProject(cls)
+
+	@classmethod
+	def createLibLocal(cls):
+		smiDir = cls.dsLig.getFile('smi')
+		smiFile = os.path.join(smiDir, 'library.smi')
+		with open(smiFile, 'w') as f:
+			for file in os.scandir(smiDir):
+				with open(file.path) as fIn:
+					f.write(fIn.read())
+		return smiFile
+
+	@classmethod
+	def _runImportLibrary(cls, defLib=False, libPath=None, nMols=100):
+
+		kwargs = {'defLibraries': defLib, 'choicesLibraries': 0, 'nMols': nMols} if defLib else \
+			{'filePath': libPath}
+		protImportLibrary = cls.newProtocol(ProtChemImportMoleculesLibrary, **kwargs)
+		cls.proj.launchProtocol(protImportLibrary, wait=False)
+		cls.protImportLibrary = protImportLibrary
+
+	def test(self):
+		smiFile = self.createLibLocal()
+		for i in range(2):
+			if i == 0:
+				self._runImportLibrary(defLib=True)
+			else:
+				self._runImportLibrary(defLib=False, libPath=smiFile)
+
+		self._waitOutput(self.protImportLibrary, 'outputLibrary')
+		assertHandle(self.assertIsNotNone, getattr(self.protImportLibrary, 'outputLibrary', None),
+								 cwd=self.protImportLibrary.getWorkingDir())
+		os.remove(smiFile)
