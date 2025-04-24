@@ -29,7 +29,7 @@ from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import cleanPDB, getBaseName
+from pwchem.utils import cleanPDB, getBaseName, removeStartWithLines
 from pwchem import Plugin as pwchemPlugin
 
 class ProtChemPrepareReceptor(EMProtocol):
@@ -80,6 +80,11 @@ class ProtChemPrepareReceptor(EMProtocol):
                         label="Replace non-standard residues: ", condition="usePDBFixer",
                         help='Use PDBFixer to replace nonstandard residues with standard equivalents')
 
+        pGroup.addParam('extraClean', params.BooleanParam, default=False, condition="usePDBFixer",
+                        label='Perform extra cleaning after PDBFixer: ', expertLevel=params.LEVEL_ADVANCED,
+                        help='Perform extra cleaning round after PDBFixer has been used. Sometimes, PDBFixer will '
+                             'point out some HETATMS that were originally labeled as ATOM.')
+
     def _insertAllSteps(self):
         self._insertFunctionStep('preparationStep')
         self._insertFunctionStep('createOutput')
@@ -107,6 +112,9 @@ class ProtChemPrepareReceptor(EMProtocol):
           prepFile = self.getPreparedFile()
           args = f'{cleanFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
           pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
+
+          if self.extraClean.get():
+            removeStartWithLines(prepFile, 'HETATM')
 
     def createOutput(self):
         fnOut = self.getPreparedFile() if self.usePDBFixer.get() else self.getCleanedFile()

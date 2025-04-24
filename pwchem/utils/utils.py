@@ -599,6 +599,10 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
   io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
   return outFn
 
+def removeStartWithLines(inFile, start):
+  '''Remove the lines in a file starting with a certain string'''
+  subprocess.check_call(f"sed -i '/^{start}/d' {inFile} ", shell=True)
+
 def obabelMolConversion(mol, outFormat, outDir, pose=False):
   '''Converts a molecule into the specified format using OBabel binary'''
   outFormat = outFormat[1:] if outFormat.startswith('.') else outFormat
