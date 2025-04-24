@@ -26,7 +26,7 @@
 # *
 # **************************************************************************
 
-import os, requests, glob, sys, json, gzip, subprocess, shutil
+import os, requests, glob, sys, json, gzip
 from bs4 import BeautifulSoup
 import random as rd
 
@@ -35,9 +35,9 @@ from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEVEL_ADVANCED, EnumParam, \
   STEPS_PARALLEL, IntParam
 
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules, SmallMoleculesLibrary
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
-from pwchem.utils import performBatchThreading, splitFile, getBaseFileName
+from pwchem.utils import performBatchThreading, splitFile, reduceNRandomLines, runInParallel, swapColumns
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
@@ -50,15 +50,56 @@ urlECBLDic = {
   'Diversity (~10⁵)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Video-Content/other_uploads/ECBL_08_09_2021.sdf',
   'Fragments (~1000)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Fragments.sdf'}
 
-urlZINCJsonDic = {'FDA (~1300)': 'https://zinc.docking.org/substances/subsets/fda.json?count=all',
+urlZINCJsonDic = {'FDA (~1600)': 'https://zinc.docking.org/substances/subsets/fda.json?count=all',
                   'Drugs-NotFDA (~2000)': 'https://zinc.docking.org/substances/subsets/world-not-fda.json?count=all'}
-
-urlZINCDic = {'FDA (~1300)': 'https://zinc.docking.org/substances/subsets/fda.sdf?count=all',
-              'Drugs-NotFDA (~2000)': 'https://zinc.docking.org/substances/subsets/world-not-fda.sdf?count=all'}
 
 urlPubChemDic = {'Compound_3D': 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound_3D/01_conf_per_cmpd/SDF/',
                  'All': 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz'}
 
+
+def downloadSDFZINC(zId, oDir):
+  urlSdf = 'https://zinc.docking.org/substances/{}.sdf'.format(zId)
+  rSdf = requests.get(urlSdf, allow_redirects=True)
+  oFile = os.path.join(oDir, f'{zId}.sdf')
+  open(oFile, 'wb').write(rSdf.content)
+  return oFile
+
+
+def downloadSDFPubChem(url, oDir, nMols=0, splitSize=None):
+  response = requests.get(url, stream=True)  # Stream to handle large files
+  if response.status_code == 200:
+    filename = os.path.split(url)[-1]
+    gzFile = os.path.join(oDir, filename)
+    with open(gzFile, "wb") as f:
+      for chunk in response.iter_content(chunk_size=1024):  # Download in chunks
+        f.write(chunk)
+
+    sdfFile = os.path.abspath(gunzipFile(gzFile))
+
+    if 'CID-SMILES.smi' in sdfFile:
+      if nMols > 0:
+        reduceNRandomLines(sdfFile, nMols, oDir=oDir)
+      swapColumns(sdfFile)
+      splitFile(sdfFile, b=splitSize, pref='smis')
+
+  else:
+    raise Exception(f"Failed to download {url}")
+
+def gunzipFile(gzFile, remove=True):
+  if 'CID-SMILES.gz' in gzFile:
+    ngzFile = gzFile.replace('.gz', '.smi.gz')
+    os.rename(gzFile, ngzFile)
+    gzFile = ngzFile
+
+  sdfFile = gzFile.replace('.gz', '')
+  with gzip.open(gzFile, 'rb') as f:
+    sdfText = f.read()
+    with open(sdfFile, 'wb') as fo:
+      fo.write(sdfText)
+
+  if remove:
+    os.remove(gzFile)
+  return sdfFile
 
 class ProtChemImportSmallMolecules(EMProtocol):
   """Import small molecules from a directory. Each molecule should be in a separate file.
@@ -91,8 +132,8 @@ class ProtChemImportSmallMolecules(EMProtocol):
                         'ECBL: https://www.eu-openscreen.eu/services/compound-collection.html')
 
     group.addParam('choicesZINC', EnumParam, default=0,
-                   label='Download ECBL library: ', condition='defLibraries and choicesLibraries == 1',
-                   choices=list(urlZINCDic.keys()),
+                   label='Download ZINC library: ', condition='defLibraries and choicesLibraries == 1',
+                   choices=list(urlZINCJsonDic.keys()),
                    help='Choose the predefined library you want to download.\n'
                         'ZINC: https://zinc.docking.org/substances/subsets/')
     group.addParam('fromSmiles', BooleanParam, default=True, condition='defLibraries and choicesLibraries == 1',
@@ -159,18 +200,15 @@ class ProtChemImportSmallMolecules(EMProtocol):
                                       ' - SDF (Multiple sdf file)')
 
     group = form.addGroup('Output', condition='(defLibraries and choicesLibraries == 2 and choicesPubChem == 1) or (not defLibraries and not multipleFiles)')
-    group.addParam('libOutput', BooleanParam, default=False, label='Library output: ',
-                   condition='(defLibraries and choicesLibraries == 2 and choicesPubChem == 1) or (not defLibraries and not multipleFiles)',
-                   help='Output just the SMI library with not formatting and no single molecules output')
 
     group.addParam('splitSize', IntParam, label='Format files size (MB): ', expertLevel=LEVEL_ADVANCED, default=1,
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='Maximum size (MB) of the files sent to format to avoid memory issues')
     group.addParam('maxFormatThreads', IntParam, label='Maximum number of format threads: ', expertLevel=LEVEL_ADVANCED,
-                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1 and not libOutput',
+                   condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
                    help='Maximum number of format threads to use to avoid memory issues', default=10)
 
-    group = form.addGroup('Molecules manager', condition='not libOutput')
+    group = form.addGroup('Molecules manager')
     group.addParam('useManager', EnumParam, default=0, label='Manage structure using: ',
                    choices=['RDKit', 'OpenBabel'],
                    help='Whether to manage the structure (parse and optimize if needed) using RDKit or OpenBabel')
@@ -194,35 +232,30 @@ class ProtChemImportSmallMolecules(EMProtocol):
   def _insertAllSteps(self):
     if self.defLibraries:
       self._insertFunctionStep('downloadStep')
-    if not self.isDirectDownload() and not self.checkLibraryOutput():
+    if not self.isDirectDownload():
       self._insertFunctionStep('formatStep')
     self._insertFunctionStep('createOutputStep')
 
   def downloadStep(self):
+    oDir = self._getExtraPath() if self.isDirectDownload() else self._getTmpPath()
     libName = self.getEnumText('choicesLibraries')
     if libName == 'ECBL':
       url = urlECBLDic[self.getEnumText('choicesECBL')]
-    elif libName == 'ZINC':
-      url = urlZINCJsonDic[self.getEnumText('choicesZINC')]
-    elif libName == 'PubChem':
-      url = self.getPubChemUrls()
-
-    print('Importing molecules from ', url)
-    sys.stdout.flush()
-
-    if libName == 'ZINC':
       r = requests.get(url, allow_redirects=True)
-      zIds = self.downloadJsonZINC(r)
-      if not self.fromSmiles.get():
-        self.downloadSDFThread(zIds, db=libName)
-
-    elif libName == 'ECBL':
-      r = requests.get(url, allow_redirects=True)
-      inFile = self.getDownloadFiles()[0]
+      inFile = self.getDownloadFiles(oDir)[0]
       open(inFile, 'wb').write(r.content)
 
+    elif libName == 'ZINC':
+      url = urlZINCJsonDic[self.getEnumText('choicesZINC')]
+      r = requests.get(url, allow_redirects=True)
+      zIds = self.downloadJsonZINC(r, oDir)
+      if not self.fromSmiles.get():
+        self.downloadSDFThread(zIds, oDir, db=libName)
+        os.remove(self.getDownloadFiles(oDir, True)[0])
+
     elif libName == 'PubChem':
-      self.downloadSDFThread(url, db=libName)
+      url = self.getPubChemUrls()
+      self.downloadSDFThread(url, oDir, db=libName)
 
   def formatStep(self):
     outDir = os.path.abspath(self._getExtraPath())
@@ -238,34 +271,21 @@ class ProtChemImportSmallMolecules(EMProtocol):
                 "setOutName": True, "multiInput": False}
 
     else:
-      fnSmalls = self.getDownloadFiles()
+      fnSmalls = self.getDownloadFiles(self._getTmpPath())
       kwargs = {"make3d": make3d, "nameKey": nameKey, "keepSMI": keepSMI, "outDir": outDir,
                 "setOutName": False, "multiInput": True}
     # self.formatMolecule(fnSmalls, [], 1, **kwargs)
     performBatchThreading(self.formatMolecule, fnSmalls, nt, cloneItem=False, **kwargs)
 
-  def checkLibraryOutput(self):
-    pubChemLib = self.defLibraries.get() and self.choicesLibraries.get() == 2 and self.choicesPubChem.get() == 1
-    localLib = not self.defLibraries.get() and not self.multipleFiles.get()
-    return (pubChemLib or localLib) and self.libOutput.get()
-
   def createOutputStep(self):
-    if self.checkLibraryOutput() and self.getDownloadFiles()[0].endswith('.smi'):
-      libFile = self.getDownloadFiles()[0]
-      outFile = self._getPath(getBaseFileName(libFile))
-      shutil.copy(libFile, outFile)
-      outputLib = SmallMoleculesLibrary(libraryFilename=outFile, headers=['SMI', 'Name'])
-      self._defineOutputs(outputLibrary=outputLib)
+    outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+    for fnSmall in glob.glob(self._getExtraPath("*")):
+      smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
+      smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
+      outputSmallMolecules.append(smallMolecule)
 
-    else:
-      outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
-      for fnSmall in glob.glob(self._getExtraPath("*")):
-        smallMolecule = SmallMolecule(smallMolFilename=fnSmall)
-        smallMolecule.setMolName(os.path.splitext(os.path.basename(fnSmall))[0])
-        outputSmallMolecules.append(smallMolecule)
-
-      outputSmallMolecules.updateMolClass()
-      self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+    outputSmallMolecules.updateMolClass()
+    self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
 
 
   ################# MAIN FUNCTIONS #####################
@@ -291,29 +311,30 @@ class ProtChemImportSmallMolecules(EMProtocol):
 
     return urls
 
-  def getDownloadFiles(self):
+  def getDownloadFiles(self, oDir, json=False):
     inFiles = []
     if self.defLibraries:
       libName = self.getEnumText('choicesLibraries')
-      if libName == 'ZINC':
+      if libName == 'ZINC' and json:
         name, ext = self.getEnumText('choicesZINC'), '.smi'
-        inFiles = [self._getTmpPath(name + ext)]
+        inFiles = [os.path.join(oDir, name + ext)]
       elif libName == 'ECBL':
         name, ext = self.getEnumText('choicesECBL'), '.sdf'
-        inFiles = [self._getTmpPath(name + ext)]
-      elif libName == 'PubChem':
-        for file in os.listdir(self._getTmpPath()):
-          inFiles.append(self._getTmpPath(file))
+        inFiles = [os.path.join(oDir, name + ext)]
+      elif libName == 'PubChem' or libName == 'ZINC' and not json:
+        for file in os.listdir(oDir):
+          inFiles.append(os.path.join(oDir, file))
 
     else:
       inFiles = [self.filePath.get()]
     return [os.path.abspath(inFile) for inFile in inFiles]
 
-  def downloadSDFThread(self, ids, db='ZINC'):
+  def downloadSDFThread(self, ids, oDir, db='ZINC'):
     nt = self.numberOfThreads.get()
-    downFunc = self.downloadSDFZINC if db == 'ZINC' else self.downloadSDFPubChem
-    performBatchThreading(downFunc, ids, nt, cloneItem=False)
-
+    if db == 'ZINC':
+      runInParallel(downloadSDFZINC, oDir, paramList=ids, jobs=nt)
+    else:
+      runInParallel(downloadSDFPubChem, oDir, self.nMolsPubChem.get(), self.splitSize.get(), paramList=ids, jobs=nt)
 
   def formatMolecule(self, fnSmalls, oLists, it, make3d, nameKey, keepSMI, outDir, setOutName, multiInput):
     for fnSmall in fnSmalls:
@@ -361,73 +382,14 @@ class ProtChemImportSmallMolecules(EMProtocol):
     if len(zIdErrors) > 0:
       self.downloadSDFThread(zIdErrors)
 
-  def downloadSDFZINC(self, zIds, outLists, it):
-    for zId in zIds:
-      urlSdf = 'https://zinc.docking.org/substances/{}.sdf'.format(zId)
-      print('Importing molecules from ', urlSdf)
-      rSdf = requests.get(urlSdf, allow_redirects=True)
-      oFile = self._getExtraPath('{}.sdf'.format(zId))
-      open(oFile, 'wb').write(rSdf.content)
-    return zIds
-
-  def downloadSDFPubChem(self, urls, oList, it):
-    for url in urls:
-      response = requests.get(url, stream=True)  # Stream to handle large files
-      if response.status_code == 200:
-        filename = os.path.split(url)[-1]
-        gzFile = self._getTmpPath(filename)
-        with open(gzFile, "wb") as f:
-          for chunk in response.iter_content(chunk_size=1024):  # Download in chunks
-            f.write(chunk)
-
-        sdfFile = os.path.abspath(self.gunzipFile(gzFile))
-
-        if 'CID-SMILES.smi' in sdfFile:
-          nMols = self.nMolsPubChem.get()
-          if nMols > 0:
-            self.reduceNRandomLines(sdfFile, nMols)
-          self.swapColumns(sdfFile)
-          if not self.libOutput.get():
-            splitFile(sdfFile, b=self.splitSize.get(), pref='smis')
-
-      else:
-        raise Exception(f"Failed to download {url}")
-
-  def reduceNRandomLines(self, inFile, n):
-    tFile = os.path.abspath(self._getTmpPath('temp.smi'))
-    subprocess.check_call(f'shuf -n {n} {os.path.abspath(inFile)} > {tFile}', shell=True)
-    os.rename(tFile, inFile)
-
-  def swapColumns(self, smiFile):
-    smiFile = os.path.abspath(smiFile)
-    tFile = os.path.abspath(self._getTmpPath('smis.smi'))
-    subprocess.check_call(f"awk '{{ t=$1; $1=$2; $2=t; print }}' {smiFile} > {tFile}", shell=True)
-    os.rename(tFile, smiFile)
-
-  def gunzipFile(self, gzFile, remove=True):
-    if 'CID-SMILES.gz' in gzFile:
-      ngzFile = gzFile.replace('.gz', '.smi.gz')
-      os.rename(gzFile, ngzFile)
-      gzFile = ngzFile
-
-    sdfFile = gzFile.replace('.gz', '')
-    with gzip.open(gzFile, 'rb') as f:
-      sdfText = f.read()
-      with open(sdfFile, 'wb') as fo:
-        fo.write(sdfText)
-
-    if remove:
-      os.remove(gzFile)
-    return sdfFile
-
-  def downloadJsonZINC(self, r):
+  def downloadJsonZINC(self, r, oDir):
     content, zIds = '', []
     for zjson in eval(r.content):
       jDic = json.loads(str(zjson).replace("'", '"'))
       content += '{} {}\n'.format(jDic['smiles'], jDic['zinc_id'])
       zIds.append(jDic['zinc_id'])
 
-    inFile = self.getDownloadFiles()[0]
+    inFile = self.getDownloadFiles(oDir, True)[0]
     open(inFile, 'w').write(content)
     return zIds
 
