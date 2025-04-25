@@ -26,7 +26,7 @@
 # *
 # **************************************************************************
 
-import os, requests, glob, sys, json, gzip
+import os, requests, glob, re, json, gzip
 from bs4 import BeautifulSoup
 import random as rd
 
@@ -37,7 +37,7 @@ from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam, LEV
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
-from pwchem.utils import performBatchThreading, splitFile, reduceNRandomLines, runInParallel, swapColumns
+from pwchem.utils import performBatchThreading, splitFile, reduceNRandomLines, runInParallel, swapColumns, makeSubsets
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
@@ -51,18 +51,69 @@ urlECBLDic = {
   'Fragments (~1000)': 'https://www.eu-openscreen.eu/fileadmin/user_upload/Fragments.sdf'}
 
 urlZINCJsonDic = {'FDA (~1600)': 'https://zinc.docking.org/substances/subsets/fda.json?count=all',
-                  'Drugs-NotFDA (~2000)': 'https://zinc.docking.org/substances/subsets/world-not-fda.json?count=all'}
+                  'World Not FDA (~2000)': 'https://zinc.docking.org/substances/subsets/world-not-fda.json?count=all',
+                  'World (~3600)': 'https://zinc.docking.org/substances/subsets/world.json?count=all',
+                  'Investigational only (~3900)': 'https://zinc.docking.org/substances/subsets/investigational-only.json?count=all',
+                  # 'In trials (~10k)': 'https://zinc.docking.org/substances/subsets/in-trials.json?count=all',
+                  # 'In man (~100k)': 'https://zinc.docking.org/substances/subsets/in-man.json?count=all',
+                  # 'In man only (~90k)': 'https://zinc.docking.org/substances/subsets/in-man-only.json?count=all',
+                  # 'In vivo (~115k)': 'https://zinc.docking.org/substances/subsets/in-vivo.json?count=all',
+                  # 'In vivo only (~16k)': 'https://zinc.docking.org/substances/subsets/in-vivo-only.json?count=all',
+                  # 'In cells (~115k)': 'https://zinc.docking.org/substances/subsets/in-cells.json?count=all',
+                  # 'In cells only (~129)': 'https://zinc.docking.org/substances/subsets/in-cells-only.json?count=all',
+                  # 'In vitro (~276k)': 'https://zinc.docking.org/substances/subsets/in-vitro.json?count=all',
+                  # 'In vitro only (~162k)': 'https://zinc.docking.org/substances/subsets/in-vitro-only.json?count=all',
+                  # 'Endogenous (~51k)': 'https://zinc.docking.org/substances/subsets/endogenous.json?count=all',
+                  # 'Metabolites (~53k)': 'https://zinc.docking.org/substances/subsets/metabolites.json?count=all',
+                  'Non-human metabolites (~2k)': 'https://zinc.docking.org/substances/subsets/nonhuman-metabolites.json?count=all',
+                  # 'Natural products (~81k)': 'https://zinc.docking.org/substances/subsets/natural-products.json?count=all',
+                  # 'Biogenic (~136k)': 'https://zinc.docking.org/substances/subsets/biogenic.json?count=all'
+                  }
 
 urlPubChemDic = {'Compound_3D': 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound_3D/01_conf_per_cmpd/SDF/',
                  'All': 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz'}
 
 
-def downloadSDFZINC(zId, oDir):
-  urlSdf = 'https://zinc.docking.org/substances/{}.sdf'.format(zId)
-  rSdf = requests.get(urlSdf, allow_redirects=True)
-  oFile = os.path.join(oDir, f'{zId}.sdf')
-  open(oFile, 'wb').write(rSdf.content)
-  return oFile
+def downloadSDFZINCBatch(zIds, oFileBase, oFormat='sdf'):
+  it, zIds = zIds
+  url = 'https://zinc20.docking.org/substances/resolved/'
+  data = {
+    'paste': "\n".join(zIds), 'output_format': oFormat,
+    'identifiers': 'y', 'structures': 'y', 'names': 'y',
+  }
+
+  response = requests.post(url, data=data)
+  oFile = f'{oFileBase}_{it}.{oFormat}'
+  with open(oFile, 'wb') as f:
+    f.write(response.content)
+
+  return splitZINCSDF(oFile)
+
+def splitZINCSDF(sdfFile, oDir=None, remove=True):
+  oFiles = []
+  if oDir is None:
+    oDir = os.path.dirname(sdfFile)
+
+  with open(sdfFile) as f:
+    sdfText = f.read().strip()
+
+  zincPattern = r'<zinc_id>\s*(\(\d+\))\s*\n(.*)\n'
+  for molText in sdfText.split('$$$$'):
+    molText = molText.strip()
+    if molText:
+      matches = re.search(zincPattern, molText)
+      if matches:
+        number, zincId = matches.group(1), matches.group(2)
+        molText = molText.replace(number, '(1)')
+
+        oFile = os.path.join(oDir, f'{zincId}.sdf')
+        with open(oFile, 'w') as f:
+          f.write(molText)
+        oFiles.append(oFile)
+
+  if remove:
+    os.remove(sdfFile)
+  return oFiles
 
 
 def downloadSDFPubChem(url, oDir, nMols=0, splitSize=None):
@@ -136,12 +187,10 @@ class ProtChemImportSmallMolecules(EMProtocol):
                    choices=list(urlZINCJsonDic.keys()),
                    help='Choose the predefined library you want to download.\n'
                         'ZINC: https://zinc.docking.org/substances/subsets/')
-    group.addParam('fromSmiles', BooleanParam, default=True, condition='defLibraries and choicesLibraries == 1',
-                   label='Format molecule from Smiles: ',
-                   help='Downloads from ZINC database are typically not feasible, so it might be easier to download'
-                        ' just the smiles and the optimize their structure using openbabel. If not, the protocol '
-                        'will download the sdf structure of the molecules in the json one by one, which will be '
-                        'slower.')
+    group.addParam('fromSmiles', BooleanParam, default=False, condition='defLibraries and choicesLibraries == 1',
+                   label='Format molecule from Smiles: ', expertLevel=LEVEL_ADVANCED,
+                   help='Download just the smiles from ZINC and then optimize their structure using '
+                        'openbabel ort rdkit instead of downloading the structure.')
 
     group.addParam('choicesPubChem', EnumParam, default=0,
                    label='Download PubChem library: ', condition='defLibraries and choicesLibraries == 2',
@@ -332,7 +381,11 @@ class ProtChemImportSmallMolecules(EMProtocol):
   def downloadSDFThread(self, ids, oDir, db='ZINC'):
     nt = self.numberOfThreads.get()
     if db == 'ZINC':
-      runInParallel(downloadSDFZINC, oDir, paramList=ids, jobs=nt)
+      oFileBase = os.path.join(oDir, 'ZINC_structures')
+      nChunks = len(ids)//200 + 2
+      idLists = makeSubsets(ids, nChunks, cloneItem=False)
+      idLists = [(i, iList) for i, iList in enumerate(idLists)]
+      runInParallel(downloadSDFZINCBatch, oFileBase, paramList=idLists, jobs=nt)
     else:
       runInParallel(downloadSDFPubChem, oDir, self.nMolsPubChem.get(), self.splitSize.get(), paramList=ids, jobs=nt)
 
