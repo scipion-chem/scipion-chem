@@ -1447,8 +1447,19 @@ class SetOfStructROIs(data.EMSet):
   def getProteinFile(self):
     return self.getFirstItem().getProteinFile()
 
+  def getProteinSequencesDic(self):
+      '''Returns the chains sequences for the protein file
+      '''
+      seqDic = {}
+      from pwem.convert.atom_struct import AtomicStructHandler
+      handler = AtomicStructHandler(self.getProteinFile())
+      listChains, listRes = handler.getModelsChains()
+      for chain in listChains[0]:
+          seqDic[chain] = str(handler.getSequenceFromChain(0, chain))
+      return seqDic
+
   def getProteinHetatmFile(self):
-    return self._hetatmFile.get()
+      return self._hetatmFile.get()
 
   def setProteinHetatmFile(self, value):
     self._hetatmFile.set(value)

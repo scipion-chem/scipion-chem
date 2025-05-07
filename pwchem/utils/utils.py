@@ -1139,3 +1139,6 @@ def getReplaceCommand(file, inStr, repStr):
   inStr, repStr = inStr.replace('\n', '\\n'), repStr.replace('\n', '\\n')
   quote = "'" if '"' in inStr or '"' in repStr else '"'
   return f'''sed -i -z {quote}s/{inStr}/{repStr}/g{quote} {file}'''
+
+def flipDic(dic):
+  return {v:k for k, v in dic.items()}
