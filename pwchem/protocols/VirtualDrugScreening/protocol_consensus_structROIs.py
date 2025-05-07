@@ -266,7 +266,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
         return resMap
 
     def performMSA(self, inpChainDic, group, refChain):
-        print('Aligning chain group : ', refChain)
         iFile, oFile = self._getTmpPath(f'chains_{refChain}.fa'), \
                        self._getExtraPath(f'chains_{refChain}_alignment.fa')
         with open(iFile, 'w') as f:
