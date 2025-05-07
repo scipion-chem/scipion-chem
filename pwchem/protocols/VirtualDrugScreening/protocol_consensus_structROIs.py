@@ -31,18 +31,37 @@ This protocol is used to make a consensus over several input sets of pockets tha
 sources
 
 """
-import os
+
+import numpy as np
+from Bio import pairwise2, AlignIO
+from Bio.Align import substitution_matrices
+from scipy.optimize import linear_sum_assignment
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import *
-
-from pwchem.constants import *
+from pwchem.utils import writePDBLine, splitPDBLine, flipDic
+from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
 MAXVOL, MAXSURF, INTERSEC = 0, 1, 2
+
+def mapMsaResidues(alFile):
+    '''Return the mapping of the residues resNumber -> AlignPos
+    {seqIdx: {resNum: alignPos}}
+    '''
+    alignment = AlignIO.read(alFile, "clustal")
+    align2Ori = {}
+    for seqIdx, record in enumerate(alignment):
+        oriPos = 0
+        align2Ori[seqIdx] = {}
+        for i, residue in enumerate(record.seq):
+            if residue != "-":
+                oriPos += 1
+                align2Ori[seqIdx][oriPos] = i
+    return align2Ori
+
 
 class ProtocolConsensusStructROIs(EMProtocol):
     """
@@ -90,44 +109,47 @@ class ProtocolConsensusStructROIs(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def consensusStep(self):
-        pocketDic = self.buildPocketDic()
+        self.doMap = False
+        if self.checkDifferentInput():
+            self.chainsMapDic = self.buildChainsMapDic()
+            self.residuesMapDic = self.buildResiduesMapDic()
+            self.doMap = True
+
+        self.pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
         # Getting the representative of the clusters from any of the inputs
-        self.consensusPockets = self.cluster2representative(pocketClusters, pocketDic)
+        ref = 0 if self.doMap else None
+        self.consensusPockets = self.cluster2representative(pocketClusters, onlyRef=ref)
 
         if self.outIndv.get():
             self.indepConsensusSets = {}
-            # Separating clusters by input set
-            indepClustersDic = self.getIndepClusters(pocketClusters, pocketDic)
-            for inSetId in indepClustersDic:
+            for inSetId in range(len(self.inputStructROIsSets)):
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId],
-                                                                               pocketDic, minSize=1)
-
+                self.indepConsensusSets[inSetId] = self.cluster2representative(pocketClusters, onlyRef=inSetId)
 
     def createOutputStep(self):
-            self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
-            self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
+        self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
+        self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
-            outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
-            for outPock in self.consensusPockets:
-                newPock = outPock.clone()
-                outPockets.append(newPock)
-            if outPockets.getSize() > 0:
-                outPockets.buildPDBhetatmFile(suffix='_All')
-                self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
+        outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
+        for outPock in self.consensusPockets:
+            newPock = outPock.clone()
+            outPockets.append(newPock)
+        if outPockets.getSize() > 0:
+            outPockets.buildPDBhetatmFile(suffix='_All')
+            self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
 
-            if self.outIndv.get():
-                indepOutputs = self.createIndepOutputs()
-                for setId in indepOutputs:
-                    #Index should be the same as in the input
-                    suffix = '_{:03d}'.format(setId+1)
-                    outName = 'outputStructROIs' + suffix
-                    outSet = indepOutputs[setId]
-                    if outSet.getSize() > 0:
-                        outSet.buildPDBhetatmFile(suffix=suffix)
-                        self._defineOutputs(**{outName: outSet})
-                        self._defineSourceRelation(self.inputStructROIsSets[setId].get(), outSet)
+        if self.outIndv.get():
+            indepOutputs = self.createIndepOutputs()
+            for setId in indepOutputs:
+                #Index should be the same as in the input
+                suffix = '_{:03d}'.format(setId+1)
+                outName = 'outputStructROIs' + suffix
+                outSet = indepOutputs[setId]
+                if outSet.getSize() > 0:
+                    outSet.buildPDBhetatmFile(suffix=suffix)
+                    self._defineOutputs(**{outName: outSet})
+                    self._defineSourceRelation(self.inputStructROIsSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -141,19 +163,125 @@ class ProtocolConsensusStructROIs(EMProtocol):
     def _warnings(self):
         """ Try to find warnings on define params. """
         warnings = []
-        names = []
-        for inSet in self.inputStructROIsSets:
-            names.append(inSet.get().getProteinName())
-        if len(set(names)) > 1:
+        if self.checkDifferentInput():
+            names = self.getInputProtNames()
             warnings.append('The protein this structural ROIs are calculated might not be the same for all the inputs.'
                   '\nDetected protein names: {}'.format(' | '.join(set(names))))
         return warnings
 
+    def checkDifferentInput(self):
+        diff = False
+        names = self.getInputProtNames()
+        if len(set(names)) > 1:
+            diff = True
+        return diff
+
+    def getInputProtNames(self):
+        names = []
+        for inSet in self.inputStructROIsSets:
+            names.append(inSet.get().getProteinName())
+        return names
+
+
     # --------------------------- UTILS functions -----------------------------------
+    def getInputChainSequences(self):
+        '''Returns a dict: {inpIndex: {chainId: protSeq, ...}, ...}
+        '''
+        dic = {}
+        for i, pPointer in enumerate(self.inputStructROIsSets):
+            pSet = pPointer.get()
+            dic[i] = pSet.getProteinSequencesDic()
+        return dic
+
+    def getSequencesSimilarity(self, seq1, seq2):
+        blos = substitution_matrices.load('BLOSUM80')
+        align = pairwise2.align.globaldx(seq1, seq2, blos)[0]
+        return align.score
+
+    def getPairWiseChainMapping(self, seqDic1, seqDic2):
+        simMatrix = np.zeros((len(seqDic1), len(seqDic2)))
+        for i, (_, newSeq) in enumerate(seqDic1.items()):
+            for j, (_, refSeq) in enumerate(seqDic2.items()):
+                simMatrix[i, j] = self.getSequencesSimilarity(newSeq, refSeq)
+
+        rowInd, colInd = linear_sum_assignment(-simMatrix)
+        matches = list(zip(rowInd, colInd))
+        refKeys, newKeys = list(seqDic2.keys()), list(seqDic1.keys())
+        return {newKeys[i]: refKeys[j] for i, j in matches}
+
+    def buildChainsMapDic(self):
+        '''Build a mapping of the chains to the reference protein (first setOfStructROIs protein).
+        The chains will be mapped by pairwise alignment of the sequences to the reference protein
+        It will be a dictionary where first level is the index input.
+        Second level is a mapping where the key is the chainId of that input and the value is the reference chainId.
+        Therefore, first item will be just the first input mapped to itself
+
+        :return: {  inpIndex0: {refChainId0: refChainId0, ...},
+                    inpIndex1: {chainId11: refChainId0, chainId10: refChainId1, ...},
+                  }
+        '''
+        inpChainDic = self.getInputChainSequences()
+        for i in inpChainDic:
+            if i == 0:
+                refSeqDic = inpChainDic[0]
+                mapDic = {0: {k: k for k in refSeqDic}}
+            else:
+                seqDic = inpChainDic[i]
+                mapDic[i] = self.getPairWiseChainMapping(seqDic, refSeqDic)
+
+        return mapDic
+
+    def getChainGroups(self):
+        '''Returns a list of lists with the grouped chains:
+        [[chain00, chain10, chain20], [chain01, chain11, chain21]]'''
+        for idx, protDic in self.chainsMapDic.items():
+            if idx == 0:
+                chainGroups = [[chain] for chain in protDic]
+            else:
+                mDic = flipDic(protDic)
+                for group in chainGroups:
+                    group.append(mDic[group[0]])
+        return chainGroups
+
+    def buildResiduesMapDic(self):
+        '''Build a mapping of the residues to the reference protein (first setOfStructROIs protein).
+        The residues of each chain will be mapped to the ones in the reference protein by a multiple alignment
+
+        It will be a dictionary where first level is the index input.
+        Second level is a mapping where the key is the chainId of that input and the value is the reference chainId.
+        Therefore, first item will be just the first input mapped to itself
+
+        :return: {  refChain0: {seqIdx: {resNum: alignPos}, seqIdx2: {resNum: alignPos}, ...}
+                    refChain1: {seqIdx: {resNum: alignPos}, seqIdx2: {resNum: alignPos}, ...},
+                  }
+        '''
+        chainGroups = self.getChainGroups()
+        inpChainDic = self.getInputChainSequences()
+
+        resMap = {}
+        for group in chainGroups:
+            refChain = group[0]
+            alignFile = self.performMSA(inpChainDic, group, refChain)
+            resMap[refChain] = mapMsaResidues(alignFile)
+        return resMap
+
+    def performMSA(self, inpChainDic, group, refChain):
+        print('Aligning chain group : ', refChain)
+        iFile, oFile = self._getTmpPath(f'chains_{refChain}.fa'), \
+                       self._getExtraPath(f'chains_{refChain}_alignment.fa')
+        with open(iFile, 'w') as f:
+            for i, chain in enumerate(group):
+                seq = inpChainDic[i][chain]
+                f.write(f'>prot{i}_chain{chain}\n{seq}\n')
+
+        cline = getMultipleAlignmentCline('MAFFT', iFile, oFile)
+        self.runJob(cline, '')
+        return oFile
+
     def buildPocketDic(self):
         dic = {}
-        for i, pSet in enumerate(self.inputStructROIsSets):
-            for pocket in pSet.get():
+        for i, pPointer in enumerate(self.inputStructROIsSets):
+            for pocket in pPointer.get():
                 dic[pocket.getFileName()] = i
         return dic
 
@@ -208,14 +336,14 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 clusters = newClusters.copy()
         return clusters
 
-    def getIndepClusters(self, clusters, pocketDic):
+    def getIndepClusters(self, clusters):
         indepClustersDic = {}
         for clust in clusters:
             if len(clust) >= self.numOfOverlap.get():
                 curIndepCluster = {}
                 for pock in clust:
                     curPockFile = pock.getFileName()
-                    inSetId = pocketDic[curPockFile]
+                    inSetId = self.pocketDic[curPockFile]
                     if inSetId in curIndepCluster:
                         curIndepCluster[inSetId] += [pock]
                     else:
@@ -228,30 +356,45 @@ class ProtocolConsensusStructROIs(EMProtocol):
                         indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
         return indepClustersDic
 
-    def countPocketsInCluster(self, cluster, pocketDic):
+    def countPocketsInCluster(self, cluster):
         setIds = []
         for pock in cluster:
-            setId = pocketDic[pock.getFileName()]
+            setId = self.pocketDic[pock.getFileName()]
             if self.sameClust.get() or not setId in setIds:
                 setIds.append(setId)
         return len(setIds)
 
-    def cluster2representative(self, clusters, pocketDic, minSize=None):
+    def cluster2representative(self, clusters, minSize=None, onlyRef=None):
         if minSize == None:
             minSize = self.numOfOverlap.get()
 
         representatives = []
         for i, clust in enumerate(clusters):
-            if self.countPocketsInCluster(clust, pocketDic) >= minSize:
-                if self.repChoice.get() == MAXVOL:
-                    outPocket = self.getMaxVolumePocket(clust)
-                elif self.repChoice.get() == MAXSURF:
-                    outPocket = self.getMaxSurfacePocket(clust)
-                elif self.repChoice.get() == INTERSEC:
-                    outPocket = self.getIntersectionPocket(clust, i)
+            # Check if cluster is big enough
+            if self.countPocketsInCluster(clust) >= minSize:
+                # Representative only from reference (first) protein if they are different
+                if onlyRef is not None:
+                    clust = self.filterPocketsBySet(clust, onlyRef)
 
-                representatives.append(outPocket)
+                if clust:
+                    if self.repChoice.get() == MAXVOL:
+                        outPocket = self.getMaxVolumePocket(clust)
+                    elif self.repChoice.get() == MAXSURF:
+                        outPocket = self.getMaxSurfacePocket(clust)
+                    elif self.repChoice.get() == INTERSEC:
+                        outPocket = self.getIntersectionPocket(clust, i)
+
+                    representatives.append(outPocket)
         return representatives
+
+    def filterPocketsBySet(self, pockets, setId):
+        nPocks = []
+        for pock in pockets:
+            curPockFile = pock.getFileName()
+            inSetId = self.pocketDic[curPockFile]
+            if inSetId == setId:
+                nPocks.append(pock.clone())
+        return nPocks
 
     def getMaxVolumePocket(self, cluster):
         '''Return the pocket with max volume in a cluster
@@ -302,9 +445,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         '''Return the pocket as set of intersection residues in a cluster.'''
         inters = cluster[0].getDecodedCResidues()
         pdbFile = cluster[0].getProteinFile()
-        atomsDic = {}
         for pocket in cluster:
-            # todo: align protein sequence to have correspondant residues for calculating intersection
             pRes = pocket.getDecodedCResidues()
             inters = set(inters).intersection(set(pRes))
 
@@ -324,9 +465,21 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def getPocketsIntersection(self, pock1, pock2):
         res1, res2 = pock1.getDecodedCResidues(), pock2.getDecodedCResidues()
-        # todo: align protein sequence to have correspondant residues for calculating intersection
+        inSetId1, inSetId2 = self.pocketDic[pock1.getFileName()], self.pocketDic[pock2.getFileName()]
+
+        if self.doMap:
+            res1, res2 = self.performMapping(res1, inSetId1), self.performMapping(res2, inSetId2)
         overlap = set(res1).intersection(set(res2))
         return overlap
+
+    def performMapping(self, resList, setId):
+        mapResList = []
+        for resId in resList:
+            chain, res = resId.split('_')
+            refChain = self.chainsMapDic[setId][chain]
+            refRes = self.residuesMapDic[refChain][setId][int(res)]
+            mapResList.append(f'{refChain}_{refRes}')
+        return mapResList
 
     def calculateResiduesOverlap(self, pock1, pock2):
         res1, res2 = pock1.getDecodedCResidues(), pock2.getDecodedCResidues()
