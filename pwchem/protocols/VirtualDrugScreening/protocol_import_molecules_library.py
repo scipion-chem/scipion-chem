@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
 from pwchem.objects import SmallMoleculesLibrary
-from pwchem.utils import getBaseFileName, runInParallel, reduceNRandomLines, swapColumns
+from pwchem.utils import getBaseFileName, runInParallel, reduceNRandomLines, swapColumns, gunzipFile
 
 baseZINCUrl = "https://files.docking.org/zinc22/2d-all"
 pubchemUrl = 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz'
@@ -166,11 +166,11 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
           reduceNRandomLines(oFile, nMols, oDir=self._getTmpPath())
 
     elif libChoice == PUBCHEM:
-      smiFile = downloadUrlFile(pubchemUrl, self._getPath())
+      gzFile = downloadUrlFile(pubchemUrl, self._getPath())
+      smiFile = gunzipFile(gzFile, oFile=self.getOutLibraryFile(), remove=True)
       if nMols > 0:
         reduceNRandomLines(smiFile, nMols, oDir=self._getTmpPath())
       swapColumns(smiFile, oDir=self._getTmpPath())
-      os.rename(smiFile, self.getOutLibraryFile())
 
   def createOutputStep(self):
     oFile = self.getOutLibraryFile()
