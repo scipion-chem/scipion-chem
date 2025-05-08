@@ -108,6 +108,16 @@ def reduceNRandomLines(inFile, n, oDir='/tmp'):
   subprocess.check_call(f'shuf -n {n} {os.path.abspath(inFile)} > {tFile}', shell=True)
   os.rename(tFile, inFile)
 
+def gunzipFile(gzFile, oFile=None, remove=False):
+  if oFile is None:
+    filename = '.'.join(getBaseFileName(gzFile).split('.')[:-1])
+    oFile = os.path.join(os.path.dirname(gzFile), filename)
+
+  subprocess.check_call(f'gunzip -d {gzFile} -c > {oFile}', shell=True)
+  if remove:
+    os.remove(gzFile)
+  return oFile
+
 def swapColumns(smiFile, swaps=(1,2), oDir='/tmp'):
   smiFile = os.path.abspath(smiFile)
   tFile = os.path.abspath(os.path.join(oDir, 'smis.smi'))
