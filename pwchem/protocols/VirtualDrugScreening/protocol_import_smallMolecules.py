@@ -27,7 +27,8 @@
 # **************************************************************************
 
 import os, requests, glob, re, json, gzip
-from bs4 import BeautifulSoup
+from html.parser import HTMLParser
+from urllib.parse import urljoin
 import random as rd
 
 from pwem.protocols import EMProtocol
@@ -73,6 +74,29 @@ urlZINCJsonDic = {'FDA (~1600)': 'https://zinc.docking.org/substances/subsets/fd
 urlPubChemDic = {'Compound_3D': 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound_3D/01_conf_per_cmpd/SDF/',
                  'All': 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz'}
 
+
+class LinkParser(HTMLParser):
+  def __init__(self, baseUrl):
+    super().__init__()
+    self.links = []
+    self.baseUrl = baseUrl
+
+  def handle_starttag(self, tag, attrs):
+    if tag == 'a':
+      attrs = dict(attrs)
+      if 'href' in attrs:
+        href = attrs['href']
+        if not href.startswith('?'):
+          fullUrl = urljoin(self.baseUrl, href)
+          self.links.append(fullUrl)
+
+def extractLinks(html_content, baseUrl, pattern=r'\.sdf\.gz$'):
+  parser = LinkParser(baseUrl)
+  parser.feed(html_content)
+
+  # Filtrar los enlaces según el patrón
+  filteredLinks = [link for link in parser.links if re.search(pattern, link)]
+  return filteredLinks
 
 def downloadSDFZINCBatch(zIds, oFileBase, oFormat='sdf'):
   it, zIds = zIds
@@ -202,7 +226,7 @@ class ProtChemImportSmallMolecules(EMProtocol):
                         'This is a listing of all CIDs with their isomeric SMILES.')
     group.addParam('nChunks', IntParam, default=10, label='Number of desired molecule chunks: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 0',
-                   help='PubChem database contains around 15M different molecules, stored in 25000 molecule IDs'
+                   help='PubChem database contains around 15M different molecules, stored in 25000 molecule IDs '
                         'chunks. This protocol will sample the desired number of these chunks.')
     group.addParam('nMolsPubChem', IntParam, default=10000, label='Number of desired molecules: ',
                    condition='defLibraries and choicesLibraries == 2 and choicesPubChem == 1',
@@ -347,12 +371,9 @@ class ProtChemImportSmallMolecules(EMProtocol):
     if pubChemChoice == 'Compound_3D':
       response = requests.get(pubChemUrl)
       if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "html.parser")
-        files = [a['href'] for a in soup.find_all('a', href=True) if not a['href'].startswith('?')]
-        files = [file for file in files if file.endswith('.sdf.gz')]
+        files = extractLinks(response.text, pubChemUrl)
         nChunks = min(self.nChunks.get(), len(files))
-        files = rd.sample(files, nChunks)
-        urls = [os.path.join(pubChemUrl, file) for file in files]
+        urls = rd.sample(files, nChunks)
       else:
         raise Exception("Failed to access PubChem url")
     else:
