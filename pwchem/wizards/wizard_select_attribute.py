@@ -406,15 +406,19 @@ class SelectZINCSubsetWizard(VariableWizard):
   def show(self, form, *params):
     inputParam, outputParam = self.getInputOutput(form)
     prot = form.protocol
-    zincSubsets = prot.zincSubsets
+    zincSubsets = getattr(prot, inputParam[1])
 
     subset = prot.getEnumText(inputParam[0])
     hRange, logpRange = zincSubsets[subset][0], zincSubsets[subset][1]
     form.setVar(outputParam[0], hRange[0]), form.setVar(outputParam[1], hRange[1])
     form.setVar(outputParam[2], logpRange[0]), form.setVar(outputParam[3], logpRange[1])
 
+SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportMoleculesLibrary,
+                                   targets=['setRanges20'],
+                                   inputs=['zinc20Subset', 'zinc20Subsets'],
+                                   outputs=['minSize20', 'maxSize20', 'minLogP20', 'maxLogP20'])
 
 SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportMoleculesLibrary,
-                                   targets=['setRanges'],
-                                   inputs=['zincSubset'],
-                                   outputs=['minSize', 'maxSize', 'minlogP', 'maxlogP'])
+                                   targets=['setRanges22'],
+                                   inputs=['zinc22Subset', 'zinc22Subsets'],
+                                   outputs=['minSize22', 'maxSize22', 'minLogP22', 'maxLogP22'])
