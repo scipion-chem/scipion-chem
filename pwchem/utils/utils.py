@@ -250,6 +250,16 @@ def getLigCoords(asFile, ligName):
             coords.append(list(atom.get_coord()))
   return coords
 
+def downloadUrlFile(url, oDir, trials=3):
+  '''Downloads a file from its url and return the local file downloaded'''
+  coms = f"wget -P {oDir} {url} -q"
+  oFile = os.path.join(oDir, getBaseFileName(url))
+  i = 0
+  while i < trials and not os.path.exists(oFile):
+    subprocess.run(coms, shell=True)
+    i += 1
+  return oFile
+
 def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   if not structureHandler:
     structureHandler = AtomicStructHandler()

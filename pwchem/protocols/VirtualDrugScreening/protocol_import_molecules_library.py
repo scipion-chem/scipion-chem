@@ -26,32 +26,21 @@
 # *
 # **************************************************************************
 
-import os, requests, re, subprocess, shutil, time, gzip
+import os, requests, re, shutil, time, gzip
 from itertools import product
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
 from pwchem.objects import SmallMoleculesLibrary
-from pwchem.utils import getBaseFileName, runInParallel, reduceNRandomLines, swapColumns, gunzipFile, flipDic
+from pwchem.utils import getBaseFileName, runInParallel, reduceNRandomLines, swapColumns, gunzipFile, flipDic, \
+  downloadUrlFile
 
 baseZINCUrl = "https://files.docking.org/zinc22/2d-all"
 pubchemUrl = 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz'
 
 libraries = ['ZINC20', 'ZINC22', 'PubChem']
 ZINC20, ZINC22, PUBCHEM = 0, 1, 2
-
-zinc20SizeTranches = {200: 'A', 250: 'B', 300: 'C', 325: 'D', 350: 'E', 375: 'F', 400: 'G', 425: 'H', 450: 'I',
-                        500: 'J', '>500': 'K'}
-zinc20LogPTranches = {-1: 'A', 0: 'B', 1: 'C', 2: 'D', 2.5: 'E', 3: 'F', 3.5: 'G', 4: 'H', 4.5: 'I',
-                      5: 'J', '>5': 'K'}
-
-# Reactivity groups for Zinc20, 3rd letter in code. First element in tuple is the exclusive, the second not
-reactGroups = {'Anodyne': ('A', 'A'), 'Bother': ('B', 'AB'), 'Clean': ('C', 'ABC'), 'Standard': ('E', 'ABCE'),
-               'Reactive': ('G', 'ABCEG'), 'Hot': ('I', 'ABCEGI')}
-# Purchasability groups for Zinc20, 4th letter in code. First element in tuple is the exclusive, the second not
-purchGroups = {'In-Stock': ('AB', 'AB'), 'Agent': ('C', 'ABC'), 'Wait OK': ('D', 'ABCD'), 'Boutique': ('E', 'ABCDE'),
-               'Annotated': ('F', 'ABCDEF')}
 
 def getMatchingFiles(hSize, logPRange):
   url = f"{baseZINCUrl}/H{hSize}/"
@@ -77,16 +66,6 @@ def getMatchingFiles(hSize, logPRange):
       urls.append(file_url)
 
   return urls
-
-def downloadUrlFile(url, oDir, trials=5):
-  '''Downloads a file from its url and return the local file downloaded'''
-  coms = f"wget -P {oDir} {url}"
-  oFile = os.path.join(oDir, getBaseFileName(url))
-  i = 0
-  while i < trials and not os.path.exists(oFile):
-    subprocess.run(coms, shell=True)
-  return oFile
-
 
 class ProtChemImportMoleculesLibrary(EMProtocol):
   """Import a small molecules library from local or a web server in a single SMI format file.
@@ -115,6 +94,64 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
                    'lugs (969M)': ((350, 450), (-1, 4.5)),
                    'shards (17M)': ((200, 200), (-1, '>5'))}
 
+  zinc20SizeTranches = {200: 'A', 250: 'B', 300: 'C', 325: 'D', 350: 'E', 375: 'F', 400: 'G', 425: 'H', 450: 'I',
+                        500: 'J', '>500': 'K'}
+  zinc20LogPTranches = {-1: 'A', 0: 'B', 1: 'C', 2: 'D', 2.5: 'E', 3: 'F', 3.5: 'G', 4: 'H', 4.5: 'I',
+                        5: 'J', '>5': 'K'}
+
+  # Reactivity groups for Zinc20, 3rd letter in code. First element in tuple is the exclusive, the second not
+  reactGroups = {'Anodyne': ('A', 'A'), 'Bother': ('B', 'AB'), 'Clean': ('C', 'ABC'), 'Standard': ('E', 'ABCE'),
+                 'Reactive': ('G', 'ABCEG'), 'Hot': ('I', 'ABCEGI')}
+  # Purchasability groups for Zinc20, 4th letter in code. First element in tuple is the exclusive, the second not
+  purchGroups = {'In-Stock': ('AB', 'AB'), 'Agent': ('C', 'ABC'), 'Wait OK': ('D', 'ABCD'), 'Boutique': ('E', 'ABCDE'),
+                 'Annotated': ('F', 'ABCDEF')}
+
+  def _defineZINC20TranchesParams(self, form, condition='True'):
+    form.addParam('zinc20Subset', params.EnumParam, default=0,
+                  choices=['Any', 'Manual'] + list(self.zinc20Subsets.keys()),
+                  label='ZINC20 subset: ', condition=condition,
+                  help='ZINC20 define subsets based on Heavy atom count and logP ranges.'
+                       'Use the wizard to select a predefined subset and the ranges will automatically update.'
+                       'You can also define your own ranges.\n'
+                       'Be aware that for subsets other than "Any" and "lead-like", ZINC22 is not prepared for the '
+                       'random download, so the whole dataset will be downloaded and then the selected number of '
+                       'molecules will be randomly picked.')
+
+    # Size / logP ranges ZINC20
+    form.addParam('setRanges20', params.LabelParam, label='Set ZINC20 subset ranges: ',
+                  condition=f'{condition} and zinc20Subset>1',
+                  help='Set the ranges for the selected subset')
+
+    line = form.addLine('Size range (Daltons): ', condition=f'{condition} and zinc20Subset!=0',
+                        help='Range of size for the downloaded molecules in Daltons, limits included.\n'
+                             'If Manual, the range goes from 200 to >500')
+    line.addParam('minSize20', params.StringParam, label='Min: ', default=250)
+    line.addParam('maxSize20', params.StringParam, label='Max: ', default=500)
+
+    line = form.addLine('LogP range ZINC20: ', condition=f'{condition} and zinc20Subset!=0',
+                        help='Range of logP for the downloaded molecules, limits included.\n'
+                             'If Manual, the range goes from -1 to >5')
+    line.addParam('minLogP20', params.StringParam, label='Min: ', default=-1)
+    line.addParam('maxLogP20', params.StringParam, label='Max: ', default=5)
+
+    line = form.addLine('Reactivity: ', condition=condition,
+                        help='Reactivity subsets defined in ZINC20. In the order showed, each subset includes the previous '
+                       'ones unless the exclusive param is set to true, then the molecules exclusively in that group '
+                       'are selected.\nFor more information visit ZINC20: https://zinc20.docking.org/ ')
+    line.addParam('reactivity', params.EnumParam, default=0, choices=list(self.reactGroups.keys()),
+                  label='Reactivity subset: ')
+    line.addParam('reactExclusive', params.BooleanParam, default=False, label='Exclusive: ')
+
+    line = form.addLine('Purchasability: ', condition=condition,
+                        help='Purchasability subsets defined in ZINC20. In the order showed, each subset includes the '
+                       'previous ones unless the exclusive param is set to true, then the molecules exclusively in '
+                       'that group are selected.\nFor more information visit ZINC20: https://zinc20.docking.org/ ')
+    line.addParam('purchasability', params.EnumParam, default=0, choices=list(self.purchGroups.keys()),
+                  label='Purchasability subset: ')
+    line.addParam('purchExclusive', params.BooleanParam, default=False, label='Exclusive: ')
+
+    return form
+
 
   def _defineParams(self, form):
     form.addSection(label='Input')
@@ -135,57 +172,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
                         'ZINC20: SMI libraries from ZINC20'
                         'ZINC22: SMI libraries from ZINC22'
                         'PubChem: SMI libraries from PubChem')
-
-    group.addParam('zinc20Subset', params.EnumParam, default=0, choices=['Any', 'Manual'] + list(self.zinc20Subsets.keys()),
-                   label='ZINC20 subset: ', condition=f'defLibraries and choicesLibraries == {ZINC20}',
-                   help='ZINC20 define subsets based on Heavy atom count and logP ranges.'
-                        'Use the wizard to select a predefined subset and the ranges will automatically update.'
-                        'You can also define your own ranges.\n'
-                        'Be aware that for subsets other than "Any" and "lead-like", ZINC22 is not prepared for the '
-                        'random download, so the whole dataset will be downloaded and then the selected number of '
-                        'molecules will be randomly picked.')
-
-    # Size / logP ranges ZINC20
-    group.addParam('setRanges20', params.LabelParam, label='Set ZINC20 subset ranges: ',
-                   condition=f'defLibraries and choicesLibraries == {ZINC20} and zinc20Subset>1',
-                   help='Set the ranges for the selected subset')
-
-    line = group.addLine('Size range (Daltons): ',
-                         condition=f'defLibraries and choicesLibraries == {ZINC20} and zinc20Subset!=0',
-                         help='Range of size for the downloaded molecules in Daltons, limits included.\n'
-                              'If Manual, the range goes from 200 to >500')
-    line.addParam('minSize20', params.IntParam, label='Min: ', default=250)
-    line.addParam('maxSize20', params.IntParam, label='Max: ', default=500)
-
-    line = group.addLine('LogP range ZINC20: ',
-                         condition=f'defLibraries and choicesLibraries == {ZINC20} and zinc20Subset!=0',
-                         help='Range of logP for the downloaded molecules, limits included.\n'
-                              'If Manual, the range goes from -1 to >5')
-    line.addParam('minLogP20', params.FloatParam, label='Min: ', default=-1)
-    line.addParam('maxLogP20', params.FloatParam, label='Max: ', default=5)
-
-
-    group.addParam('reactivity', params.EnumParam, default=0, choices=list(reactGroups.keys()),
-                   label='Reactivity subset: ', condition=f'defLibraries and choicesLibraries == {ZINC20}',
-                   help='Reactivity subsets defined in ZINC20. In the order showed, each subset includes the previous '
-                        'ones unless the exclusive param is set to true, then the molecules exclusively in that group '
-                        'are selected.\nFor more information visit ZINC20: https://zinc20.docking.org/ ')
-    group.addParam('reactExclusive', params.BooleanParam, default=False,
-                   condition=f'defLibraries and choicesLibraries == {ZINC20}',
-                   label='Download exclusively this reactivity group: ',
-                   help='Download exclusively this reactivity group or all the ones included in it')
-
-    group.addParam('purchasability', params.EnumParam, default=0, choices=list(purchGroups.keys()),
-                   label='Purchasability subset: ', condition=f'defLibraries and choicesLibraries == {ZINC20}',
-                   help='Purchasability subsets defined in ZINC20. In the order showed, each subset includes the '
-                        'previous ones unless the exclusive param is set to true, then the molecules exclusively in '
-                        'that group are selected.\nFor more information visit ZINC20: https://zinc20.docking.org/ ')
-    group.addParam('purchExclusive', params.BooleanParam, default=False,
-                   condition=f'defLibraries and choicesLibraries == {ZINC20}',
-                   label='Download exclusively this purchasability group: ',
-                   help='Download exclusively this purchasability group or all the ones included in it')
-
-
+    groupT = form.addGroup('ZINC20 tranches', condition=f'defLibraries and choicesLibraries == {ZINC20}')
+    groupT = self._defineZINC20TranchesParams(groupT, condition=f'defLibraries and choicesLibraries == {ZINC20}')
     group.addParam('zinc22Subset', params.EnumParam, default=0,
                    condition=f'defLibraries and choicesLibraries == {ZINC22}',
                    label='ZINC22 subset: ', choices=['Any', 'Manual'] + list(self.zinc22Subsets.keys()),
@@ -212,7 +200,6 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
                          help='Range of logP for the downloaded molecules, limits included.')
     line.addParam('minLogP22', params.FloatParam, label='Min: ', default=0)
     line.addParam('maxLogP22', params.FloatParam, label='Max: ', default=2)
-
 
 
     group = form.addGroup('Local files', condition='not defLibraries')
@@ -321,19 +308,21 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     sizeCodes = logPCodes = [letter for letter in 'ABCDEFGHIJK']
     if self.zinc20Subset.get() != 0:
       # Reducing the size and logP tranches to the ones defined by user
-      sizeTranches, logpTranches = list(zinc20SizeTranches.keys()), list(zinc20LogPTranches.keys())
+      sizeTranches, logpTranches = list(self.zinc20SizeTranches.keys()), list(self.zinc20LogPTranches.keys())
+      maxSize = self.maxSize20.get() if self.maxSize20.get() != sizeTranches[-1] else sizeTranches[-2] + 1
+      maxLogP = self.maxLogP20.get() if self.maxLogP20.get() != logpTranches[-1] else logpTranches[-2] + 1
       minSizeIdx, maxSizeIdx = self.getCloserTrancheIdx(sizeTranches, self.minSize20.get()), \
-                               self.getCloserTrancheIdx(sizeTranches, self.maxSize20.get())
+                               self.getCloserTrancheIdx(sizeTranches, maxSize)
       minLogPIdx, maxLogPIdx = self.getCloserTrancheIdx(logpTranches, self.minLogP20.get()), \
-                               self.getCloserTrancheIdx(logpTranches, self.maxLogP20.get())
+                               self.getCloserTrancheIdx(logpTranches, maxLogP)
 
       sizeCodes, logPCodes = sizeCodes[minSizeIdx: maxSizeIdx + 1], logPCodes[minLogPIdx: maxLogPIdx + 1]
 
     reactExclIdx = 0 if self.reactExclusive.get() else 1
-    reactCodes = reactGroups[self.getEnumText('reactivity')][reactExclIdx]
+    reactCodes = self.reactGroups[self.getEnumText('reactivity')][reactExclIdx]
 
     purchExclIdx = 0 if self.purchExclusive.get() else 1
-    purchCodes = purchGroups[self.getEnumText('purchasability')][purchExclIdx]
+    purchCodes = self.purchGroups[self.getEnumText('purchasability')][purchExclIdx]
 
     downTranches = [''.join(p) for p in product(sizeCodes, logPCodes, reactCodes, purchCodes)]
     allUrls = [f'http://files.docking.org/2D/{tranche[:2]}/{tranche}.smi' for tranche in downTranches]
@@ -341,6 +330,7 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     oDir = os.path.abspath(self._getTmpPath())
     nt = self.numberOfThreads.get()
     pFiles = runInParallel(downloadUrlFile, oDir, paramList=allUrls, jobs=nt)
+    pFiles = [pFile for pFile in pFiles if os.path.exists(pFile)]
     self.mergeZINC20Files(pFiles, oFile)
 
   #################### UTILS FUNCTIONS #################
@@ -358,7 +348,7 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
 
   def getCloserTrancheIdx(self, tranches, value):
     tr, i = tranches[0], 1
-    while i < len(tranches) and value > tr:
+    while i < len(tranches) and float(value) > tr:
       tr = tranches[i]
       i += 1
     return i - 1
@@ -379,21 +369,28 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
            (sizeRange[0] == leadSizeRange[0] and sizeRange[1] == leadSizeRange[1] and
             logpRange[0] == leadLogPRange[0] and logpRange[1] == leadLogPRange[1] and
             self.nMols.get() > 0)
-  
+
+  def getDecodeZinc20Dics(self):
+    return [flipDic(self.zinc20SizeTranches),  # Size (Daltons)
+            flipDic(self.zinc20LogPTranches),  # LogP
+            {v[0]: k for k, v in self.reactGroups.items()},  # Reactivity
+            {v1: k for k, v in self.purchGroups.items() for v1 in v[0]}  # Purchasability
+            ]
+
+  def decodeTranche(self, tranche, infoDics):
+    '''Returns the info from the tranche code as: [size, logP, Reactivity, Purchasability]'''
+    return [infoDics[i][tranche[i]] for i in range(len(infoDics))]
+
   def mergeZINC20Files(self, inFiles, oFile):
     '''Merge a set of smi ZINC20 files into a smi file, adding the size, logP, reactivity and purchasability
     '''
     # Tranche code to values dic
-    infoDics = [flipDic(zinc20SizeTranches),  # Size (Daltons)
-                flipDic(zinc20LogPTranches),  # LogP
-                {v[0]: k for k, v in reactGroups.items()},  # Reactivity
-                {v1: k for k, v in purchGroups.items() for v1 in v[0]} # Purchasability
-                ]
+    infoDics = self.getDecodeZinc20Dics()
 
     with open(oFile, 'w') as f:
       for inFile in inFiles:
         tranche = os.path.split(inFile)[-1].split('.')[0]
-        size, logP, react, purch = [infoDics[i][tranche[i]] for i in range(len(tranche))]
+        size, logP, react, purch = self.decodeTranche(tranche, infoDics)
         with open(inFile) as fIn:
           fIn.readline()
           for line in fIn:

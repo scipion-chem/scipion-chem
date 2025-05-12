@@ -413,6 +413,11 @@ class SelectZINCSubsetWizard(VariableWizard):
     form.setVar(outputParam[0], hRange[0]), form.setVar(outputParam[1], hRange[1])
     form.setVar(outputParam[2], logpRange[0]), form.setVar(outputParam[3], logpRange[1])
 
+SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportSmallMolecules,
+                                   targets=['setRanges20'],
+                                   inputs=['zinc20Subset', 'zinc20Subsets'],
+                                   outputs=['minSize20', 'maxSize20', 'minLogP20', 'maxLogP20'])
+
 SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportMoleculesLibrary,
                                    targets=['setRanges20'],
                                    inputs=['zinc20Subset', 'zinc20Subsets'],
