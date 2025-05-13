@@ -325,7 +325,7 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     purchCodes = self.purchGroups[self.getEnumText('purchasability')][purchExclIdx]
 
     downTranches = [''.join(p) for p in product(sizeCodes, logPCodes, reactCodes, purchCodes)]
-    allUrls = [f'http://files.docking.org/2D/{tranche[:2]}/{tranche}.smi' for tranche in downTranches]
+    allUrls = [f'https://files.docking.org/2D/{tranche[:2]}/{tranche}.smi' for tranche in downTranches]
 
     oDir = os.path.abspath(self._getTmpPath())
     nt = self.numberOfThreads.get()

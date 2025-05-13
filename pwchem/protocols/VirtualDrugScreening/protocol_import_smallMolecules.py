@@ -445,7 +445,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
     chargeCodes = [c.strip() for c in self.repCharge.get().split(',')]
 
     downTranches = [''.join(p) for p in product(sizeCodes, logPCodes, reactCodes, purchCodes, phCodes, chargeCodes)]
-    allUrls = [f'http://files.docking.org/3D/{tranche[:2]}/{tranche[2:]}/{tranche}.xaa.sdf.gz' for tranche in downTranches]
+    allUrls = [f'https://files.docking.org/3D/{tranche[:2]}/{tranche[2:]}/{tranche}.xaa.sdf.gz' for tranche in downTranches]
 
     nt = self.numberOfThreads.get()
     gzFiles = runInParallel(downloadUrlFile, oDir, 2, paramList=allUrls, jobs=nt)
