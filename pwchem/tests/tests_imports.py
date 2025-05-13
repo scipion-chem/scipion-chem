@@ -1,6 +1,5 @@
 # **************************************************************************
 # *
-# * Name:     TEST OF PROTOCOL_IMPORT_SMALLMOLECULES.PY
 # *
 # * Authors:    Alberto M. Parra Pérez (amparraperez@gmail.com)
 # *
@@ -63,77 +62,79 @@ class TestImportBase(BaseTest):
 			filesPath=cls.dsLig.getFile('mol2'))
 		cls.proj.launchProtocol(cls.protImportSmallMols, wait=False)
 
-class TestImportSmallMolecules(TestImportBase):
-	MULTIPLE_T = True
-	MULTIPLE_F = False
+class TestImportSmallMolecules(BaseTest):
 	filesPattern = '*'
 
-	def testImport_one_mol_smi(self):
-		""" Import a single file of a small molecule provided by the user in smi format. """
-		print("\nImport Experiment: 1 molecule smi format")
+	@classmethod
+	def setUpClass(cls):
+		cls.dsLig = DataSet.getDataSet("smallMolecules")
+		setupTestProject(cls)
 
-		kwargs = {
-			'multipleFiles': self.MULTIPLE_F,
-			'filePath': self.dsLig.getFile(os.path.join("mix", "2000_smi.smi"))
-		}
-
-		prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
-		self.launchProtocol(prot1)
-		small1 = getattr(prot1, 'outputSmallMolecules', None)
-		assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
-		assertHandle(self.assertTrue, small1.getSize()==1,
-								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
-
-	def testImport_one_mol_pdb(self):
+	def testImportOneMolPdb(self):
 			""" Import a single file of a small molecule provided by the user in pdb format
 			"""
 			print("\nImport Experiment: 1 molecule pdb format")
 
 			kwargs = {
-				'multipleFiles': self.MULTIPLE_F,
-				'filePath': self.dsLig.getFile(os.path.join("mix", "2000_pdb.pdb"))
+				'singleFiles': True,
+				'filesPath': self.dsLig.getFile("pdb"),
+				'filesPattern': "2000_noH.pdb"
 			}
 
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			prot1.setObjLabel('Single File PDB')
 			self.launchProtocol(prot1)
 			small1 = getattr(prot1, 'outputSmallMolecules', None)
 			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
 			assertHandle(self.assertTrue, small1.getSize()==1,
 								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
 
-	def testImport_one_mol_sdf(self):
-			""" Import a single file of a small molecule provided by the user in sdf format
-			"""
-			print("\nImport Experiment: 1 molecule sdf format")
+	def testImportMolsSdf(self):
+			""" Import several files of a small molecule provided by the user"""
+			print("\nImport Experiment: 4 molecules in SDF format")
 
 			kwargs = {
-				'multipleFiles': self.MULTIPLE_F,
-				'filePath': self.dsLig.getFile(os.path.join("mix", "2000_sdf.sdf"))
-			}
-
-			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
-			self.launchProtocol(prot1)
-			small1 = getattr(prot1, 'outputSmallMolecules', None)
-			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
-			assertHandle(self.assertTrue, small1.getSize()==1,
-								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
-
-	def testImport_mols_mix(self):
-			""" Import several files of a small molecule provided by the user in different formats. """
-			print("\nImport Experiment: 4 molecules in several formats")
-
-			kwargs = {
-				'multipleFiles': self.MULTIPLE_T,
-				'filesPath': self.dsLig.getFile(os.path.join("mix")),
+				'singleFiles': True,
+				'filesPath': self.dsLig.getFile("sdf"),
 				'filesPattern': self.filesPattern
 			}
 
 			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			prot1.setObjLabel('Multiple files SDF')
 			self.launchProtocol(prot1)
 			small1 = getattr(prot1, 'outputSmallMolecules', None)
 			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
-			assertHandle(self.assertTrue, small1.getSize()==4,
-								 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
+			assertHandle(self.assertTrue, small1.getSize() == 4,
+									 message=emptySetOfMoleculesErrorMessage, cwd=prot1.getWorkingDir())
+
+	def testImportECBL(self):
+			""" Import small molecules from ECBL library"""
+			print("\nImport Experiment: ECBL library")
+
+			kwargs = {'defLibraries': True, 'choicesLibraries': 0, 'choicesECBL': 2
+			}
+
+			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			prot1.setObjLabel('ECBL library')
+			self.launchProtocol(prot1)
+			small1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
+
+	def testImportZINC(self):
+			""" Import small molecules from ZINC library"""
+			print("\nImport Experiment: ZINC library")
+
+			kwargs = {'defLibraries': True, 'choicesLibraries': 1, 'fromTranches': True,
+								'minSize20': 250, 'maxSize20': 250, 'minLogP20': 0, 'maxLogP20': 1,
+								'reactivity': 5, 'reactExclusive': True, 'purchasability': 4, 'purchExclusive': True,
+								'repPH': 'R', 'repCharge': 'N'
+								}
+
+			prot1 = self.newProtocol(ProtChemImportSmallMolecules, **kwargs)
+			prot1.setObjLabel('ZINC library')
+			self.launchProtocol(prot1)
+			small1 = getattr(prot1, 'outputSmallMolecules', None)
+			assertHandle(self.assertIsNotNone, small1, message=importErrorMessage, cwd=prot1.getWorkingDir())
 
 class TestImportSequences(BaseTest):
 	@classmethod
