@@ -77,9 +77,9 @@ class LinkParser(HTMLParser):
           fullUrl = urljoin(self.baseUrl, href)
           self.links.append(fullUrl)
 
-def extractLinks(html_content, baseUrl, pattern=r'\.sdf\.gz$'):
+def extractLinks(htmlContent, baseUrl, pattern=r'\.sdf\.gz$'):
   parser = LinkParser(baseUrl)
-  parser.feed(html_content)
+  parser.feed(htmlContent)
 
   # Filtrar los enlaces según el patrón
   filteredLinks = [link for link in parser.links if re.search(pattern, link)]
@@ -137,7 +137,7 @@ def downloadSDFPubChem(url, oDir):
       for chunk in response.iter_content(chunk_size=1024):  # Download in chunks
         f.write(chunk)
 
-    sdfFile = os.path.abspath(gunzipFile(gzFile))
+    os.path.abspath(gunzipFile(gzFile))
 
   else:
     raise Exception(f"Failed to download {url}")
@@ -294,7 +294,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
           os.remove(self.getDownloadFiles(oDir, True)[0])
 
       else:
-        sdfFiles = self.getZINC20Range(oDir)
+        self.getZINC20Range(oDir)
 
     elif libName == 'PubChem':
       url = self.getPubChemUrls()
@@ -422,24 +422,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
         copyFile(fnSmall, os.path.join(wDir, os.path.basename(fnSmall)))
 
   def getZINC20Range(self, oDir):
-    sizeCodes = logPCodes = [letter for letter in 'ABCDEFGHIJK']
-    if self.zinc20Subset.get() != 0:
-      # Reducing the size and logP tranches to the ones defined by user
-      sizeTranches, logpTranches = list(self.zinc20SizeTranches.keys()), list(self.zinc20LogPTranches.keys())
-      maxSize = self.maxSize20.get() if self.maxSize20.get() != sizeTranches[-1] else sizeTranches[-2] + 1
-      maxLogP = self.maxLogP20.get() if self.maxLogP20.get() != logpTranches[-1] else logpTranches[-2] + 1
-      minSizeIdx, maxSizeIdx = self.getCloserTrancheIdx(sizeTranches, self.minSize20.get()), \
-                               self.getCloserTrancheIdx(sizeTranches, maxSize)
-      minLogPIdx, maxLogPIdx = self.getCloserTrancheIdx(logpTranches, self.minLogP20.get()), \
-                               self.getCloserTrancheIdx(logpTranches, maxLogP)
-
-      sizeCodes, logPCodes = sizeCodes[minSizeIdx: maxSizeIdx + 1], logPCodes[minLogPIdx: maxLogPIdx + 1]
-
-    reactExclIdx = 0 if self.reactExclusive.get() else 1
-    reactCodes = self.reactGroups[self.getEnumText('reactivity')][reactExclIdx]
-
-    purchExclIdx = 0 if self.purchExclusive.get() else 1
-    purchCodes = self.purchGroups[self.getEnumText('purchasability')][purchExclIdx]
+    sizeCodes, logPCodes, reactCodes, purchCodes = self.getZINC20Codes()
 
     phCodes = [c.strip() for c in self.repPH.get().split(',')]
     chargeCodes = [c.strip() for c in self.repCharge.get().split(',')]

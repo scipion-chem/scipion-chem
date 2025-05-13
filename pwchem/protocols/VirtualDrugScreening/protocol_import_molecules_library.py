@@ -304,7 +304,7 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     pFiles = runInParallel(downloadUrlFile, oDir, paramList=allUrls, jobs=nt)
     self.mergeZINC22Files(pFiles, outFile)
 
-  def getZINC20Range(self, oFile):
+  def getZINC20Codes(self):
     sizeCodes = logPCodes = [letter for letter in 'ABCDEFGHIJK']
     if self.zinc20Subset.get() != 0:
       # Reducing the size and logP tranches to the ones defined by user
@@ -323,7 +323,10 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
 
     purchExclIdx = 0 if self.purchExclusive.get() else 1
     purchCodes = self.purchGroups[self.getEnumText('purchasability')][purchExclIdx]
+    return sizeCodes, logPCodes, reactCodes, purchCodes
 
+  def getZINC20Range(self, oFile):
+    sizeCodes, logPCodes, reactCodes, purchCodes = self.getZINC20Codes()
     downTranches = [''.join(p) for p in product(sizeCodes, logPCodes, reactCodes, purchCodes)]
     allUrls = [f'https://files.docking.org/2D/{tranche[:2]}/{tranche}.smi' for tranche in downTranches]
 
