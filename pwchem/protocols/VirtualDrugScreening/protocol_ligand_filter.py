@@ -80,8 +80,7 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
     def _validate(self):
         errors = []
-        if self.useLibrary.get():
-          if not self.inputLibrary.get().validateSplit():
+        if self.useLibrary.get() and not self.inputLibrary.get().validateSplit():
             errors.append(WARNLIBBIG)
         return errors
 

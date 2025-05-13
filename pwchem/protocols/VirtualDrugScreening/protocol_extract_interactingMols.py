@@ -62,6 +62,32 @@ class ProtExtractInteractingMols(EMProtocol):
   def _insertAllSteps(self):
     self._insertFunctionStep(self.createOutputStep)
 
+  def defineMolsOutput(self, intDic, molNames, seqName):
+    outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+    for mol in self.getInputMols():
+      molName = mol.getMolName()
+      if molName in molNames:
+        if seqName:
+          mol._interactScore = pwobj.Float(intDic[seqName][molName])
+        outMols.append(mol)
+
+    self._defineOutputs(outputSmallMolecules=outMols)
+
+  def defineLibraryOutput(self, intMols, intDic, molNames, seqName):
+    inFile, oFile = intMols.getFileName(), self._getPath('outputLibrary.smi')
+    with open(inFile) as fIn:
+      with open(oFile, 'w') as fO:
+        for line in fIn:
+          smi, smiName = line.split()[0].strip(), line.split()[1].strip()
+          if smiName in molNames:
+            if seqName:
+              score = intDic[seqName][smiName]
+            fO.write(f'{smi}\t{smiName}\t{score}\n')
+
+    intMols.setFileName(oFile)
+    intMols.calculateLength()
+    self._defineOutputs(outputLibrary=intMols)
+
   def createOutputStep(self):
     inSeqs = self.inputSequences.get()
     filtSeqNames, filtMolNames = self.chooseSeq.get().strip().split(','), self.chooseMol.get().strip().split(',')
@@ -74,30 +100,11 @@ class ProtExtractInteractingMols(EMProtocol):
     intMols = self.getInputMols()
     intDic = inSeqs.getInteractScoresDic()
     if isinstance(intMols, SetOfSmallMolecules):
-      outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
-      for mol in self.getInputMols():
-        molName = mol.getMolName()
-        if molName in molNames:
-            if seqName:
-              mol._interactScore = pwobj.Float(intDic[seqName][molName])
-            outMols.append(mol)
-
-      self._defineOutputs(outputSmallMolecules=outMols)
+      self.defineMolsOutput(intDic, molNames, seqName)
 
     elif isinstance(intMols, SmallMoleculesLibrary):
-      inFile, oFile = intMols.getFileName(), self._getPath('outputLibrary.smi')
-      with open(inFile) as fIn:
-        with open(oFile, 'w') as fO:
-          for line in fIn:
-            smi, smiName = line.split()[0].strip(), line.split()[1].strip()
-            if smiName in molNames:
-              if seqName:
-                score = intDic[seqName][smiName]
-              fO.write(f'{smi}\t{smiName}\t{score}\n')
+      self.defineLibraryOutput(intMols, intDic, molNames, seqName)
 
-      intMols.setFileName(oFile)
-      intMols.calculateLength()
-      self._defineOutputs(outputLibrary=intMols)
 
   ############## UTILS ########################
   def getInputMols(self):

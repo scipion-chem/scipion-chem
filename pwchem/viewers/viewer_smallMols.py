@@ -685,8 +685,8 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
         nBinsX, nBinsY = 50, 50
 
         # Bin edges
-        x_edges = np.linspace(xMin, xMax, nBinsX + 1)
-        y_edges = np.linspace(yMin, yMax, nBinsY + 1)
+        xEdges = np.linspace(xMin, xMax, nBinsX + 1)
+        yEdges = np.linspace(yMin, yMax, nBinsY + 1)
 
         # Accumulator for 2D histogram
         hist = np.zeros((nBinsX, nBinsY))
@@ -697,7 +697,7 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
         # Incrementally update histogram
         for batch in inLib.yieldLibraryValues([colIdx1, colIdx2]):
           fBatch1, fBatch2 = [float(val[0]) for val in batch], [float(val[1]) for val in batch]
-          h, _, _ = np.histogram2d(fBatch1, fBatch2, bins=[x_edges, y_edges])
+          h, _, _ = np.histogram2d(fBatch1, fBatch2, bins=[xEdges, yEdges])
           hist += h
 
         # Plot heatmap
@@ -716,5 +716,5 @@ class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
 
     def getPngFile(self, nVars=1, plot='distribution'):
       oDir = os.path.abspath(os.path.dirname(self.getLibrary().getFileName()))
-      vars = f'{self.chooseHeader1.get()}' if nVars == 1 else f'{self.chooseHeader1.get()}_{self.chooseHeader2.get()}'
-      return os.path.join(oDir, f'{vars}_{plot}.png')
+      hVars = f'{self.chooseHeader1.get()}' if nVars == 1 else f'{self.chooseHeader1.get()}_{self.chooseHeader2.get()}'
+      return os.path.join(oDir, f'{hVars}_{plot}.png')

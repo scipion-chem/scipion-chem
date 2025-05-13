@@ -36,6 +36,9 @@ from pwchem.objects import SmallMoleculesLibrary
 from pwchem.utils import getBaseFileName, runInParallel, reduceNRandomLines, swapColumns, gunzipFile, flipDic, \
   downloadUrlFile
 
+MIN_STR, MAX_STR = 'Min: ', 'Max: '
+NO_DEF_LIB = 'not defLibraries'
+
 baseZINCUrl = "https://files.docking.org/zinc22/2d-all"
 pubchemUrl = 'https://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-SMILES.gz'
 
@@ -62,8 +65,8 @@ def getMatchingFiles(hSize, logPRange):
 
     if logPRange[0] <= num <= logPRange[1]:
       filename = f"H{hSize}{match}.smi.gz"
-      file_url = f"{url}{filename}"
-      urls.append(file_url)
+      fileUrl = f"{url}{filename}"
+      urls.append(fileUrl)
 
   return urls
 
@@ -125,14 +128,14 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     line = form.addLine('Size range (Daltons): ', condition=f'{condition} and zinc20Subset!=0',
                         help='Range of size for the downloaded molecules in Daltons, limits included.\n'
                              'If Manual, the range goes from 200 to >500')
-    line.addParam('minSize20', params.StringParam, label='Min: ', default=250)
-    line.addParam('maxSize20', params.StringParam, label='Max: ', default=500)
+    line.addParam('minSize20', params.StringParam, label=MIN_STR, default=250)
+    line.addParam('maxSize20', params.StringParam, label=MAX_STR, default=500)
 
     line = form.addLine('LogP range ZINC20: ', condition=f'{condition} and zinc20Subset!=0',
                         help='Range of logP for the downloaded molecules, limits included.\n'
                              'If Manual, the range goes from -1 to >5')
-    line.addParam('minLogP20', params.StringParam, label='Min: ', default=-1)
-    line.addParam('maxLogP20', params.StringParam, label='Max: ', default=5)
+    line.addParam('minLogP20', params.StringParam, label=MIN_STR, default=-1)
+    line.addParam('maxLogP20', params.StringParam, label=MAX_STR, default=5)
 
     line = form.addLine('Reactivity: ', condition=condition,
                         help='Reactivity subsets defined in ZINC20. In the order showed, each subset includes the previous '
@@ -192,20 +195,20 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     line = group.addLine('Heavy atoms range: ',
                          condition=f'defLibraries and choicesLibraries == {ZINC22} and zinc22Subset!=0',
                          help='Range of heavy atoms for the downloaded molecules, limits included.')
-    line.addParam('minSize22', params.IntParam, label='Min: ', default=4)
-    line.addParam('maxSize22', params.IntParam, label='Max: ', default=20)
+    line.addParam('minSize22', params.IntParam, label=MIN_STR, default=4)
+    line.addParam('maxSize22', params.IntParam, label=MAX_STR, default=20)
 
     line = group.addLine('LogP range ZINC22: ',
                          condition=f'defLibraries and choicesLibraries == {ZINC22} and zinc22Subset!=0',
                          help='Range of logP for the downloaded molecules, limits included.')
-    line.addParam('minLogP22', params.FloatParam, label='Min: ', default=0)
-    line.addParam('maxLogP22', params.FloatParam, label='Max: ', default=2)
+    line.addParam('minLogP22', params.FloatParam, label=MIN_STR, default=0)
+    line.addParam('maxLogP22', params.FloatParam, label=MAX_STR, default=2)
 
 
-    group = form.addGroup('Local files', condition='not defLibraries')
-    group.addParam('filePath', params.PathParam, condition='not defLibraries',
+    group = form.addGroup('Local files', condition=NO_DEF_LIB)
+    group.addParam('filePath', params.PathParam, condition=NO_DEF_LIB,
                    label='Library file: ', help='File path to the SMI library in local.')
-    group.addParam('headers', params.StringParam, condition='not defLibraries',
+    group.addParam('headers', params.StringParam, condition=NO_DEF_LIB,
                    label='Library headers: ', default='',
                    help='Headers of the selected library file. Set them separated by commas. e.g: SMI,Name')
 
@@ -267,21 +270,21 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     if response.status_code != 200:
       print(f"Error: Failed to submit job. Status code: {response.status_code}")
 
-    task_id = response.json().get("task")
-    if not task_id:
+    taskId = response.json().get("task")
+    if not taskId:
       print("Error: No task ID found in the response.")
 
-    status_url = f"https://cartblanche22.docking.org/substance/random/{task_id}.txt"
+    statusUrl = f"https://cartblanche22.docking.org/substance/random/{taskId}.txt"
     while True:
-      status_response = requests.get(status_url)
-      if status_response.status_code != 200:
-        print(f"Error: Failed to check status. Status code: {status_response.status_code}")
+      statusResponse = requests.get(statusUrl)
+      if statusResponse.status_code != 200:
+        print(f"Error: Failed to check status. Status code: {statusResponse.status_code}")
 
-      status_json = status_response.json()
-      status = status_json.get("status")
+      statusJson = statusResponse.json()
+      status = statusJson.get("status")
 
       if status == "SUCCESS":
-        results = status_json.get("result")
+        results = statusJson.get("result")
         self.writeSMIFile(results, outFile)
         break
 

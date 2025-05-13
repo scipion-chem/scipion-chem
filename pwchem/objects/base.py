@@ -707,7 +707,7 @@ class SmallMoleculesLibrary(data.EMObject):
 
   def calculateLength(self):
     inFile = self.getFileName()
-    count = sum(1 for i in open(inFile, 'rb'))
+    count = sum(1 for _ in open(inFile, 'rb'))
     self.setLength(count)
     return count
 
