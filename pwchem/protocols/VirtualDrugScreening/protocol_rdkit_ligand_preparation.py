@@ -63,6 +63,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         """
+        form.addSection(label='Input')
         form = self.addInputParams(form)
 
         group = form.addGroup("Molecule management")
@@ -83,11 +84,10 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
                        help='Set the minimum number of atoms of a fragment to be kept. This might be used to delete'
                             'water or other molecules stored in the molecule files.')
 
-
         conformers = form.addGroup("Conformers generation")
         conformers.addParam('doConformers', params.BooleanParam, default=False,
-                      label='Do you want to generate conformers? ',
-                      help='You can produce conformers of the ligand in order to do a better rigid docking')
+                            label='Do you want to generate conformers? ',
+                            help='You can produce conformers of the ligand in order to do a better rigid docking')
 
         conformers.addParam('restrainMethod', params.EnumParam,
                             choices=CONF_METHODS,
@@ -128,19 +128,6 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         self.writeParamsFile(paramsPath, it)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
-    def getOriginalBasenames(self):
-      baseNames = []
-      if self.useLibrary.get():
-        inLib = self.inputLibrary.get()
-        with open(inLib.getFileName()) as f:
-          for line in f:
-            baseNames.append([line.split()[1], None])
-      else:
-        for mol in self.inputSmallMolecules.get():
-            fnSmall = mol.getFileName()
-            baseNames.append([getBaseName(fnSmall), mol.clone()])
-      return baseNames
-
     def createOutput(self):
         """Create a set of Small Molecules as output
         """
@@ -175,6 +162,19 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         with open(allFails, 'w') as f:
           failedIds.sort()
           f.write('\n'.join(failedIds))
+
+    def getOriginalBasenames(self):
+      baseNames = []
+      if self.useLibrary.get():
+        inLib = self.inputLibrary.get()
+        with open(inLib.getFileName()) as f:
+          for line in f:
+            baseNames.append([line.split()[1], None])
+      else:
+        for mol in self.inputSmallMolecules.get():
+            fnSmall = mol.getFileName()
+            baseNames.append([getBaseName(fnSmall), mol.clone()])
+      return baseNames
 
     def generateOutput(self, mols, molLists, it):
       outMols = []

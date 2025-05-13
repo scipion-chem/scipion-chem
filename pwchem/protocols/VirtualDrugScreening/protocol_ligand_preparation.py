@@ -59,34 +59,34 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
     def _defineParams(self, form):
         """ Define the input parameters that will be used.
         """
+        form.addSection(label='Input')
         form = self.addInputParams(form)
 
         H_C = form.addGroup("Charges assignation")
         H_C.addParam('method_charges', params.EnumParam,
-                      choices=list(self._dic_method.values()),
-                      default=0, label='Assign charges method', allowsNull=False,
-                      help='Choose the method to add partial charges to small molecule atoms. OpenBabel is used.')
+                     choices=list(self._dic_method.values()),
+                     default=0, label='Assign charges method', allowsNull=False,
+                     help='Choose the method to add partial charges to small molecule atoms. OpenBabel is used.')
 
-        H_C.addParam('ph', params.BooleanParam,
-                      default=False, label='Do you want to set pH of the ligand?:',  # Next step --> PRopKA
-                      help='Set the pH of the ligand environment using OpenBabel program. \n'
-                           'In this way, the ligand will present more or less hydrogens depending on the pH. '
-                           'Note that openbabel (program that add H) has not a general model of pH-dependent '
-                           'protonation. It has a set of rules in a file called phmodel.txt,'
-                           ' particularly for amino acids. \n\n For more accurate pKa determination and H addition'
-                           ', you will probably want semiempirical quantum calculations or a more complete model '
-                           '(It is not trivial).',
-                      expertLevel=LEVEL_ADVANCED)
+        H_C.addParam('ph', params.BooleanParam, expertLevel=LEVEL_ADVANCED,
+                     default=False, label='Do you want to set pH of the ligand?:',  # Next step --> PRopKA
+                     help='Set the pH of the ligand environment using OpenBabel program. \n'
+                          'In this way, the ligand will present more or less hydrogens depending on the pH. '
+                          'Note that openbabel (program that add H) has not a general model of pH-dependent '
+                          'protonation. It has a set of rules in a file called phmodel.txt,'
+                          ' particularly for amino acids. \n\n For more accurate pKa determination and H addition'
+                          ', you will probably want semiempirical quantum calculations or a more complete model '
+                          '(It is not trivial).')
 
         H_C.addParam('phvalue', params.FloatParam, condition="ph",
-                      default=7.4, expertLevel=LEVEL_ADVANCED, label='pH value:',
-                      help='Set the pH of the ligand environment.')
+                     default=7.4, expertLevel=LEVEL_ADVANCED, label='pH value:',
+                     help='Set the pH of the ligand environment.')
 
 
         conformers = form.addGroup("Conformers generation")
         conformers.addParam('doConformers', params.BooleanParam, default=False,
-                      label='Do you want to generate conformers? ', allowsNull=False,
-                      help='You can produce conformers of the ligand in order to do a better rigid docking')
+                            label='Do you want to generate conformers? ', allowsNull=False,
+                            help='You can produce conformers of the ligand in order to do a better rigid docking')
         conformers.addParam('method_conf', params.EnumParam,
                             choices=["OpenBabel Genetic Algorithm", "OpenBabel Confab"],
                             default=0, condition = "doConformers", label='Method of conformers generation: ',
