@@ -464,7 +464,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
       os.remove(errFile)
 
     if len(zIdErrors) > 0:
-      self.downloadSDFThread(zIdErrors)
+      self.downloadSDFThread(zIdErrors, outDir)
 
   def downloadJsonZINC(self, r, oDir):
     content, zIds = '', []
