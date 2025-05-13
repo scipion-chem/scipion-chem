@@ -74,8 +74,8 @@ class TestAddAttribute(TestImportBase):
       f.write(solStr)
     protAdd2 = self._runAddAttribute(self.protImportSmallMols, mode=1, inputFile=inFile)
 
-    self._waitOutput(protAdd1, 'outputObject', timeOut=10)
-    self._waitOutput(protAdd2, 'outputSet', timeOut=10)
+    self._waitOutput(protAdd1, 'outputObject', sleepTime=10)
+    self._waitOutput(protAdd2, 'outputSet', sleepTime=10)
     assertHandle(self.assertIsNotNone, getattr(protAdd1, 'outputObject', None), cwd=protAdd1.getWorkingDir())
     assertHandle(self.assertIsNotNone, getattr(protAdd2, 'outputSet', None), cwd=protAdd2.getWorkingDir())
 
@@ -109,7 +109,7 @@ class TestCalculateSASA(BaseTest):
 
   def test(self):
     protSASA = self._runCalculateSASA(self.protImportPDB)
-    self._waitOutput(protSASA, 'outputAtomStruct', timeOut=10)
+    self._waitOutput(protSASA, 'outputAtomStruct', sleepTime=10)
     assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputAtomStruct', None), cwd=protSASA.getWorkingDir())
     assertHandle(self.assertIsNotNone, getattr(protSASA, 'outputSequence', None), cwd=protSASA.getWorkingDir())
 
@@ -164,8 +164,8 @@ class TestMapAttributes(TestCalculateSASA):
     protMap0 = self._runMapROIsAttr(protROIs, protSASA, mode=0)
     protMap1 = self._runMapROIsAttr(protROIs, protSASA, mode=1)
 
-    self._waitOutput(protMap0, 'outputROIs', timeOut=10)
-    self._waitOutput(protMap1, 'outputROIs', timeOut=10)
+    self._waitOutput(protMap0, 'outputROIs', sleepTime=10)
+    self._waitOutput(protMap1, 'outputROIs', sleepTime=10)
     assertHandle(self.assertIsNotNone, getattr(protMap0, 'outputROIs', None), cwd=protMap0.getWorkingDir())
     assertHandle(self.assertIsNotNone, getattr(protMap1, 'outputROIs', None), cwd=protMap1.getWorkingDir())
     
@@ -193,12 +193,12 @@ class TestRanxFusion(TestAddAttribute):
       f.write(solStr2)
     protAdd2 = self._runAddAttribute(self.protImportSmallMols, mode=1, inputFile=inFile2)
 
-    self._waitOutput(protAdd1, 'outputSet', timeOut=10)
-    self._waitOutput(protAdd2, 'outputSet', timeOut=10)
+    self._waitOutput(protAdd1, 'outputSet', sleepTime=10)
+    self._waitOutput(protAdd2, 'outputSet', sleepTime=10)
     assertHandle(self.assertIsNotNone, getattr(protAdd1, 'outputSet', None), cwd=protAdd1.getWorkingDir())
     assertHandle(self.assertIsNotNone, getattr(protAdd2, 'outputSet', None), cwd=protAdd2.getWorkingDir())
 
     protRanx = self._runRanxFusion([protAdd1, protAdd2])
-    self._waitOutput(protRanx, 'outputSet', timeOut=10)
+    self._waitOutput(protRanx, 'outputSet', sleepTime=10)
     assertHandle(self.assertIsNotNone, getattr(protRanx, 'outputSet', None), cwd=protRanx.getWorkingDir())
 
