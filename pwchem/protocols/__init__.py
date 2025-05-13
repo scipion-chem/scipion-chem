@@ -26,6 +26,7 @@
 
 # Virtual Drug Screening protocols
 from pwchem.protocols.VirtualDrugScreening.protocol_import_smallMolecules import ProtChemImportSmallMolecules
+from pwchem.protocols.VirtualDrugScreening.protocol_import_molecules_library import ProtChemImportMoleculesLibrary
 from pwchem.protocols.VirtualDrugScreening.protocol_drawSmallMol import ProtDrawMolecules
 from pwchem.protocols.VirtualDrugScreening.protocol_extract_ligands import ProtExtractLigands
 
@@ -38,6 +39,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolA
 from pwchem.protocols.VirtualDrugScreening.protocol_shape_filtering import ProtocolShapeDistancesFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprints import ProtocolFingerprintFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolGeneralLigandFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_library_filter import ProtocolLibraryFiltering
 
 from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_structROIs import ProtocolConsensusStructROIs

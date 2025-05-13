@@ -44,7 +44,7 @@ from pwchem.constants import *
 from pwchem.utils import getFilteredOutput
 from pwchem.viewers import BioinformaticsDataViewer
 
-seqTargets = [SetOfSequencesChem, SequenceChem, Sequence, SetOfSequences,
+seqTargets = [SequenceChem, Sequence, SetOfSequences,
               SequenceVariants, SetOfSequenceROIs, MultiEpitope]
 
 def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kwargs):

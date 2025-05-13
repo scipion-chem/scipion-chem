@@ -34,7 +34,7 @@ from pwchem.objects import PharmacophoreChem
 from pwchem.protocols import ProtocolPharmacophoreGeneration, ProtocolPharmacophoreFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_generation import *
 from pwchem.constants import *
-from pwchem.utils import getBaseFileName
+from pwchem.utils import getBaseName
 
 colors = [(0, 0.9, 0), (0.9, 0, 0), (1, 0.9, 0), (0.5, 0, 1)]
 colors_advanced = [(0, 1, 1), (1, 0.5, 0), (0, 0, 0.9), (0, 0.5, 1)]
@@ -147,7 +147,7 @@ class GeneratePharmacophoreViewer(PharmacophoreViewer):
     def getLigandsStr(self, disabled=True):
       ligStr = ''
       for file in self.getLigandsFiles():
-        ligBase = getBaseFileName(file)
+        ligBase = getBaseName(file)
         ligStr += LOAD_LIGAND.format(file, ligBase)
         if disabled:
           ligStr += DISABLE_LIGAND.format(ligBase)
@@ -171,7 +171,7 @@ class FilterPharmacophoreViewer(PharmacophoreViewer):
   def getLigandsStr(self, disabled=True):
     ligStr = ''
     for file in self.getLigandsFiles():
-      ligBase = getBaseFileName(file)
+      ligBase = getBaseName(file)
       ligStr += LOAD_LIGAND.format(file, ligBase)
       if disabled:
         ligStr += DISABLE_LIGAND.format(ligBase)

@@ -42,6 +42,7 @@ from pwem.objects import String
 
 from pwchem.wizards import VariableWizard
 import pwchem.protocols as chemprot
+from pwchem.viewers import SmallMoleculesLibraryViewer
 
 SELECT_STR = "Select one of the attributes"
 
@@ -67,6 +68,16 @@ SelectFromListWizard().addTarget(protocol=chemprot.ProtMapAttributeToSeqROIs,
                                  targets=['attrName'],
                                  inputs=['getInputAttributes'],
                                  outputs=['attrName'])
+
+SelectFromListWizard().addTarget(protocol=chemprot.ProtocolGeneralLigandFiltering,
+                                 targets=['scoreFilter'],
+                                 inputs=['getInputAttributes'],
+                                 outputs=['scoreFilter'])
+
+SelectFromListWizard().addTarget(protocol=chemprot.ProtocolLibraryFiltering,
+                                 targets=['scoreFilter'],
+                                 inputs=['getInputAttributes'],
+                                 outputs=['scoreFilter'])
 
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
@@ -337,3 +348,82 @@ class SelectEvaluationOrigin(VariableWizard):
                             "Select one of the protocols")
     form.setVar(outputParam[0], dlg.values[0].get())
 
+class SelectHeadersLibrary(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getInputHeaders(self, form):
+    viewer = form.protocol
+    return viewer.getLibrary().getHeaders()
+
+  def show(self, form, *params):
+    _, outputParam = self.getInputOutput(form)
+    headers = self.getInputHeaders(form)
+
+    finalOutputLabels = []
+    for i in headers:
+      finalOutputLabels.append(pwobj.String(i))
+    provider = ListTreeProviderString(finalOutputLabels)
+    dlg = dialog.ListDialog(form.root, "Select evaluation origin", provider,
+                            "Select one of the protocols")
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+for i in range(1, 3):
+  SelectHeadersLibrary().addTarget(protocol=SmallMoleculesLibraryViewer,
+                                   targets=[f'chooseHeader{i}'],
+                                   inputs=[],
+                                   outputs=[f'chooseHeader{i}'])
+
+class SetParamValue(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getParamValue(self, form, inFunction, scoreIdx):
+    viewer = form.protocol
+    return getattr(viewer, inFunction)(scoreIdx)
+
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+
+    scoreIdx = outputParam[0][-1]
+    paramValue = self.getParamValue(form, inputParam[0], scoreIdx)
+    form.setVar(outputParam[0], paramValue)
+
+for i in range(1, 3):
+  SetParamValue().addTarget(protocol=SmallMoleculesLibraryViewer,
+                            targets=[f'trueMin{i}'],
+                            inputs=['getMinValue'],
+                            outputs=[f'trueMin{i}'])
+
+  SetParamValue().addTarget(protocol=SmallMoleculesLibraryViewer,
+                            targets=[f'trueMax{i}'],
+                            inputs=['getMaxValue'],
+                            outputs=[f'trueMax{i}'])
+
+class SelectZINCSubsetWizard(VariableWizard):
+  _targets, _inputs, _outputs = [], {}, {}
+
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    prot = form.protocol
+    zincSubsets = getattr(prot, inputParam[1])
+
+    subset = prot.getEnumText(inputParam[0])
+    hRange, logpRange = zincSubsets[subset][0], zincSubsets[subset][1]
+    form.setVar(outputParam[0], hRange[0]), form.setVar(outputParam[1], hRange[1])
+    form.setVar(outputParam[2], logpRange[0]), form.setVar(outputParam[3], logpRange[1])
+
+SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportSmallMolecules,
+                                   targets=['setRanges20'],
+                                   inputs=['zinc20Subset', 'zinc20Subsets'],
+                                   outputs=['minSize20', 'maxSize20', 'minLogP20', 'maxLogP20'])
+
+SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportMoleculesLibrary,
+                                   targets=['setRanges20'],
+                                   inputs=['zinc20Subset', 'zinc20Subsets'],
+                                   outputs=['minSize20', 'maxSize20', 'minLogP20', 'maxLogP20'])
+
+SelectZINCSubsetWizard().addTarget(protocol=chemprot.ProtChemImportMoleculesLibrary,
+                                   targets=['setRanges22'],
+                                   inputs=['zinc22Subset', 'zinc22Subsets'],
+                                   outputs=['minSize22', 'maxSize22', 'minLogP22', 'maxLogP22'])

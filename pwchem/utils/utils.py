@@ -103,19 +103,82 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
+def reduceNRandomLines(inFile, n, oDir='/tmp'):
+  tFile = os.path.abspath(os.path.join(oDir, 'temp.txt'))
+  subprocess.check_call(f'shuf -n {n} {os.path.abspath(inFile)} > {tFile}', shell=True)
+  os.rename(tFile, inFile)
+
+def gunzipFile(gzFile, oFile=None, remove=False):
+  if oFile is None:
+    filename = '.'.join(getBaseFileName(gzFile).split('.')[:-1])
+    oFile = os.path.join(os.path.dirname(gzFile), filename)
+
+  subprocess.check_call(f'gunzip -d {gzFile} -c > {oFile}', shell=True)
+  if remove:
+    os.remove(gzFile)
+  return oFile
+
+def swapColumns(smiFile, swaps=(1,2), oDir='/tmp'):
+  smiFile = os.path.abspath(smiFile)
+  tFile = os.path.abspath(os.path.join(oDir, 'smis.smi'))
+  subprocess.check_call(f"awk '{{ t=${swaps[0]}; ${swaps[0]}=${swaps[1]}; ${swaps[1]}=t; print }}' "
+                        f"{smiFile} > {tFile}", shell=True)
+  os.rename(tFile, smiFile)
+
+def concatFiles(inFiles, oFile, remove=False, skipHead=0):
+  subprocess.check_call(f'awk FNR!={skipHead} {" ".join(inFiles)} > {oFile}', shell=True)
+  if remove:
+    [os.remove(file) for file in inFiles]
+
+def concatGZFiles(inFiles, oFile, remove):
+  cmd = f'zcat {" ".join(inFiles)} > {oFile}'
+  subprocess.check_call(cmd, shell=True)
+  if remove:
+    [os.remove(file) for file in inFiles]
+
+def mergeFiles(inFiles, outFile=None, oDir='', sep='', remove=False):
+  inTexts = []
+  for inFile in inFiles:
+    with open(inFile) as f:
+      inTexts.append(f.read())
+
+  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
+  with open(outFile, 'w') as fo:
+    fo.write(sep.join(inTexts))
+
+  if remove:
+    [os.remove(inFile) for inFile in inFiles]
+  return outFile
+
 def findThreadFiles(filename, directory=None):
   '''Finds the thread files (file_i.txt) in a directory.
-  filename: name of the merged file (lie.txt)
+  filename: name of the merged file (file.txt)
   directory: directory where the thread files are. If None, will expect filename to be a path
   '''
   if not directory:
     directory, filename = os.path.dirname(filename), os.path.split(filename)[-1]
 
-  basename, ext = os.path.splitext(filename)
+  basename, ext = os.path.splitext(getBaseFileName(filename))
   pattern = re.compile(rf"{basename}_\d+{ext}")
 
-  matching_files = [f for f in os.listdir(directory) if pattern.match(f)]
-  return matching_files
+  matchingFiles = [os.path.join(directory, f) for f in os.listdir(directory) if pattern.match(f)]
+  return matchingFiles
+
+def concatThreadFiles(concatFile, inDir=None, remove=True):
+  thFiles = findThreadFiles(concatFile, directory=inDir)
+  concatFiles(thFiles, concatFile, remove=remove)
+
+def removeThreadDirectories(pattern, inDir=None):
+  '''Remove the set of thread directories: pattern_id'''
+  if inDir is None:
+    inDir = os.path.dirname(pattern)
+  inDir = os.path.abspath(inDir)
+  basePatern = os.path.basename(pattern)
+
+  for file in os.listdir(inDir):
+    if basePatern in file:
+      shutil.rmtree(os.path.join(inDir, file))
+
 
 def organizeThreads(nTasks, nThreads):
   if nTasks > nThreads:
@@ -148,8 +211,15 @@ def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, popen=Fal
 def getVarName(var):
   return [i for i, a in locals().items() if a == var][0]
 
+def getBaseFileName(file):
+  '''From a file path, returns the name of the file without the directory:
+  /abc/def/file.txt -> filename.txt'''
+  return os.path.basename(file.strip())
+
 def getBaseName(file):
-  return os.path.splitext(os.path.basename(file.strip()))[0]
+  '''From a file path, returns the name of the file without the directory nor the extension:
+    /abc/def/filename.txt -> filename'''
+  return os.path.splitext(getBaseFileName(file))[0]
 
 def parseAtomStruct(asFile):
   '''Parse an atom struct using biopython'''
@@ -179,6 +249,16 @@ def getLigCoords(asFile, ligName):
           for atom in residue:
             coords.append(list(atom.get_coord()))
   return coords
+
+def downloadUrlFile(url, oDir, trials=3):
+  '''Downloads a file from its url and return the local file downloaded'''
+  coms = f"wget -P {oDir} {url} -q"
+  oFile = os.path.join(oDir, getBaseFileName(url))
+  i = 0
+  while i < trials and not os.path.exists(oFile):
+    subprocess.run(coms, shell=True)
+    i += 1
+  return oFile
 
 def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   if not structureHandler:
@@ -260,16 +340,37 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
-def mergeFiles(inFiles, outFile=None, oDir='', sep=''):
-  inTexts = []
-  for inFile in inFiles:
-    with open(inFile) as f:
-      inTexts.append(f.read())
+def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref=None, remove=True):
+  '''Split file into a) n files or b) files of size b (MB)
+  '''
+  assert b is not None or n is not None
+  if ext is None:
+    ext = os.path.splitext(inFile)[1]
+  if oDir is None:
+    oDir = os.path.dirname(inFile)
+  if pref is None:
+    pref = getBaseName(inFile)
 
-  outFile = os.path.join(oDir, f'mergedFiles{os.path.splitext(inFile)[-1]}') if outFile is None else outFile
-  with open(outFile, 'w') as fo:
-    fo.write(sep.join(inTexts))
-  return outFile
+  if n:
+    arg = f'-n l/{n}'
+  elif b:
+    arg = f'-C{b}m'
+
+  subprocess.check_call(f'split {arg} {inFile} {pref}', shell=True, cwd=oDir)
+
+  oFiles, i = [], 1
+  for file in os.listdir(oDir):
+    if pref in file and file != getBaseFileName(inFile):
+      nBase = f'{pref}_{i}{ext}'
+      file = os.path.join(oDir, file)
+      oFile = os.path.join(oDir, nBase)
+      os.rename(file, oFile)
+      i += 1
+      oFiles.append(oFile)
+
+  if remove:
+    os.remove(inFile)
+  return oFiles
 
 def mergeSDFs(sdfFiles, outFile=None, oDir=''):
   inTexts = []
@@ -373,11 +474,11 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
       molFile = sdfFile
     return molFile
   if not sdfFile:
-    baseName = os.path.splitext(os.path.basename(molFile))[0]
+    baseName = getBaseName(molFile)
     outDir = os.path.abspath(protocol._getTmpPath())
     sdfFile = os.path.abspath(os.path.join(outDir, baseName + '.sdf'))
   else:
-    baseName = os.path.splitext(os.path.basename(sdfFile))[0]
+    baseName = getBaseName(sdfFile)
     outDir = os.path.abspath(os.path.dirname(sdfFile))
 
   if not os.path.exists(sdfFile) or overWrite:
@@ -406,6 +507,7 @@ def runOpenBabel(protocol, args, cwd='/tmp', popen=False):
   pwchemPlugin.runOPENBABEL(protocol=protocol, args=args, cwd=cwd, popen=popen)
 
 def splitConformerFile(confFile, outDir):
+  writtenFiles = []
   fnRoot, ext = os.path.splitext(os.path.split(confFile)[1])
   if '_prep_' in fnRoot:
     fnRoot = fnRoot.split('_prep')[0]
@@ -419,6 +521,7 @@ def splitConformerFile(confFile, outDir):
           towrite += line
         else:
           newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
+          writtenFiles.append(newFile)
           writeFile(towrite, newFile)
           towrite, lastRemark = line, True
           iConf += 1
@@ -427,11 +530,13 @@ def splitConformerFile(confFile, outDir):
         lastRemark = False
   newFile = os.path.join(outDir, '{}-{}{}'.format(fnRoot, iConf, ext))
   writeFile(towrite, newFile)
-  return outDir
+  writtenFiles.append(newFile)
+  return writtenFiles
 
 def appendToConformersFile(confFile, newFile, outConfFile=None, beginning=True):
   '''Appends a molecule to a conformers file.
     If outConfFile == None, the output conformers file path is the same as as the start'''
+  rename = False
   if outConfFile == None:
     iExt = os.path.splitext(confFile)[1]
     outConfFile = confFile.replace(iExt, '_aux' + iExt)
@@ -585,7 +690,7 @@ class CleanStructureSelect(Select):
 
 def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
   """ Extraction of the heteroatoms of .pdb files """
-  structName = getBaseFileName(structFile)
+  structName = getBaseName(structFile)
   if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
     struct = PDBParser().get_structure(structName, structFile)
   elif structFile.endswith('.cif'):
@@ -826,9 +931,6 @@ def getAllAttributes(inputSets):
     item = inpSet.getFirstItem()
     attributes.update(getItemAttributes(item))
   return attributes
-
-def getBaseFileName(filename):
-  return os.path.splitext(os.path.basename(filename))[0]
 
 def addToDic(dic, key, item):
   '''Add an element to a dic list creting it if the key was not there'''

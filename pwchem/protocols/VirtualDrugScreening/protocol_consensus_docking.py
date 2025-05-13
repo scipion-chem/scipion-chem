@@ -51,9 +51,7 @@ class ProtocolConsensusDocking(EMProtocol):
     """
     _label = 'Consensus docking'
 
-    def __init__(self, **args):
-        EMProtocol.__init__(self, **args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):

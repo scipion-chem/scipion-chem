@@ -116,8 +116,8 @@ class ProtExtractLigands(EMProtocol):
         else:
             chain_id = None
 
-        cleanFile = self._getPath('{}.pdb'.format(getBaseFileName(inputStructureFile)))
-        tmpCleanFile = self._getTmpPath('{}.pdb'.format(getBaseFileName(inputStructureFile)))
+        cleanFile = self._getPath('{}.pdb'.format(getBaseName(inputStructureFile)))
+        tmpCleanFile = self._getTmpPath('{}.pdb'.format(getBaseName(inputStructureFile)))
 
         # Keep only structure chains selected, with ligands for extraction
         tmpCleanFile = cleanPDB(inputStructureFile, tmpCleanFile, self.waters.get(), False, chain_id)
@@ -130,7 +130,7 @@ class ProtExtractLigands(EMProtocol):
         outputSet.setProteinFile(cleanedPDB)
         outputSet.setDocked(True)
         for i, lFile in enumerate(ligandFiles):
-            molName = getBaseFileName(lFile).split('-')[0]
+            molName = getBaseName(lFile).split('-')[0]
             oMol = SmallMolecule(smallMolFilename=lFile, molName=molName, poseFile=lFile, poseId=1)
             oMol.setGridId(i+1)
             oMol.setConfId(i+1)
@@ -141,7 +141,7 @@ class ProtExtractLigands(EMProtocol):
 
     def extract_ligands(self, struct_file):
         """ Extraction of the heteroatoms of .pdb files """
-        struct_name = getBaseFileName(struct_file)
+        struct_name = getBaseName(struct_file)
         if struct_file.endswith('.pdb') or struct_file.endswith('.ent'):
             struct = PDBParser().get_structure(struct_name, struct_file)
         elif struct_file.endswith('.cif'):

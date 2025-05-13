@@ -34,11 +34,12 @@ manipulation of atomic struct objects
 import os, subprocess
 from subprocess import run
 
-# Scipion em imports
-import pwem
+# Scipion core imports
+from pyworkflow import VarTypes
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 from scipion.install.funcs import InstallHelper
+import pwem
 
 # Plugin imports
 from .bibtex import _bibtexStr
@@ -74,6 +75,9 @@ class Plugin(pwem.Plugin):
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
 		cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
 		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
+		cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
+									 description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
+															 'and IO overuse')
 
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
 	@classmethod

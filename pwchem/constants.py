@@ -63,6 +63,10 @@ POCKET_ATTRIBUTES_MAPPING.update({'SiteScore': 'score', 'Dscore': 'druggability'
 FEATURE_LABELS_SIMPLE = ["Donor", "Acceptor", "Hydrophobe", "Aromatic"]
 FEATURE_LABELS_ADVANCED = ["LumpedHydrophobe", "PosIonizable", "NegIonizable", "ZnBinder"]
 
+MAX_MOLS_SET = 'MAX_MOLS_SET'
+WARNLIBBIG = f'WARNING: you are about to split an immense library of molecules, ' \
+             'which can cause severe disk IO traffic and storage use.\n' \
+             f'You can update this value setting the {MAX_MOLS_SET} scipion variable in your scipion.conf file'
 
 PML_STR = '''from pymol import cmd,stored
 load {}
