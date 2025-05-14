@@ -22,14 +22,12 @@ jobs:
     
     - name: Get tag name
       id: variables
-      env:
-        FOLDER_WITH_VERSION: ${{ vars.FOLDER_WITH_VERSION }}
       run: |
-        VERSION=$(python -c "import $FOLDER_WITH_VERSION; print('VERSION', 'v'+$FOLDER_WITH_VERSION.__version__)" | grep VERSION | sed "s/VERSION //g") || (echo "Could not import version, check that variables are correctly set!" && exit 1)
-        echo "TAG_NAME=${VERSION#v}" >> $GITHUB_OUTPUT
-        echo "TAG NAME (must not contain version prefix): ${VERSION#v}"
+        VERSION=$(python -c "import importlib.metadata; print(importlib.metadata.version(\"${{ vars.FOLDER_WITH_VERSION }}\"))")
+        echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
     
     - name: Build and publish
+      if: false
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

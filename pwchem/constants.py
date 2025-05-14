@@ -26,7 +26,7 @@
 # **************************************************************************
 
 # Versions
-DEFAULT_VERSION = '1.0'
+DEFAULT_VERSION = '1.0.0'
 
 #Constant dictionaries
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}

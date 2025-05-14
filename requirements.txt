@@ -1,3 +1,6 @@
+scipion-app
+scipion-em
+scipion-pyworkflow
 lxml
 scipy
 parmed

@@ -4,8 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scipion-chem"
-version = "1.0.0"
-dynamic = ["dependencies"]
+dynamic = ["version", "dependencies"]
 
 authors = [
     {name = "Daniel Del Hoyo", email = "ddelhoyo@cnb.csic.es"},
@@ -24,6 +23,7 @@ Homepage = "https://github.com/scipion-chem/scipion-chem"
 Issues = "https://github.com/scipion-chem/scipion-chem/issues"
 
 [tool.setuptools.dynamic]
+version = {attr = "pwchem.__init__.__version__"}
 dependencies = {file = ["requirements.txt"]}
 
 [project.entry-points."pyworkflow.plugin"]
