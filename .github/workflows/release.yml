@@ -19,6 +19,7 @@ jobs:
       run: |
         pip install setuptools wheel twine build
         pip install -r requirements.txt
+        pip install .
     
     - name: Get tag name
       id: variables
