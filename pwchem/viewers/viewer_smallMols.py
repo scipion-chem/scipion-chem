@@ -24,133 +24,159 @@
 # *
 # **************************************************************************
 
-import os
+from matplotlib import pyplot as plt
+import numpy as np
 
-from pyworkflow.protocol.params import EnumParam, LabelParam
+from pyworkflow.protocol import params
 import pyworkflow.viewer as pwviewer
-from pyworkflow.gui.dialog import showError
+from pyworkflow.gui.dialog import showError, askYesNoCancel
 
-from pwchem.objects import SetOfSmallMolecules
+from pwem.viewers.viewer_chimera import Chimera, ChimeraView
+from pwem.viewers.mdviewer.viewer import MDViewer
+
+from pwchem.objects import SetOfSmallMolecules, SmallMoleculesLibrary
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
-from pwchem.utils import runOpenBabel, mergePDBs, clean_PDB, natural_sort
+from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
+PYMOL, CHIMERAX, VIEWDOCKX = 0, 1, 2
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
+
+def chimeraInstalled():
+  return Chimera.getHome() and os.path.exists(Chimera.getProgram())
+
+CHIMERA_ERROR = 'Chimera program is not found were it was expected: \n\n{}\n\n' \
+                'Either install ChimeraX in this path or install our ' \
+                'scipion-em-chimera plugin'.format(Chimera.getProgram())
 
 class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'
   _targets = [ProtocolConsensusDocking, ProtocolLigandsFetching, SetOfSmallMolecules]
   _environments = [pwviewer.DESKTOP_TKINTER]
+  _viewerOptions = ['PyMol', 'ChimeraX', 'ViewDockX']
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
+    self.protocolObject = self.protocol
     self.singleLabels, self.singleLigandsDic = self.getChoices(vType=SINGLE)
     self.moleculeLabels, self.moleculeLigandsDic = self.getChoices(vType=MOLECULE)
     self.pocketLabels, self.pocketLigandsDic = self.getChoices(vType=POCKET)
     self.setLabels, self.setLigandsDic = self.getChoices(vType=SET)
 
+  def getViewerOptions(self):
+    if type(self.protocol).__name__ == 'ProtChemVinaDocking':
+      return self._viewerOptions
+    return self._viewerOptions[:-1]
+
   def defineParamsTable(self, form):
-      form.addParam('displayTable', EnumParam,
+      form.addParam('displayTable', params.EnumParam,
                     choices=self.getChoices(vType=SET, pymol=False)[0], default=0,
                     label='Display ligands set and attributes in table format: ',
                     help='Display the ligands set in the set in table format with their respective attributes')
 
+  def getOutputSetLabels(self):
+    if not self.setLabels:
+      for oAttr in self.protocolObject.iterOutputAttributes():
+        if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
+          self.setLabels.append(oAttr[0])
+    return self.setLabels
 
   def _defineParams(self, form):
     #Doking section
     if self.checkIfDocked():
         form.addSection(label='Docking view')
-        group = form.addGroup('Each docked set')
-        group.addParam('displayPymolSetDock', EnumParam,
-                       choices=self.getChoices(vType=SET)[0], default=0,
-                       label='Display docking on set result: ',
+        group = form.addGroup('Visualize docking poses with:')
+        group.addParam('displaySoftware', params.EnumParam,
+                       choices=self.getViewerOptions(), default=PYMOL,
+                       label='Display docking poses with: ',
+                       help='Display the selected group of docking poses with which software. '
+                            'Available: PyMol, ChimeraX and viewDockX (ChimeraX with stored attributes)')
+
+        group = form.addGroup('Display docking poses')
+        group.addParam('displaySetDock', params.EnumParam,
+                       choices=self.setLabels, default=0,
+                       label='Display docking poses in set: ',
                        help='Display all ligands docked in this set')
 
-        group = form.addGroup('Each docked ROI')
-        group.addParam('displayPymolROIDock', EnumParam,
-                       choices=self.getChoices(vType=POCKET)[0], default=0,
-                       label='Display molecules in ROI: ',
+        group.addParam('displayROIDock', params.EnumParam,
+                       choices=self.pocketLabels, default=0,
+                       label='Display docking poses in ROI: ',
                        help='Display all conformers and positions docked on this ROI')
 
-        group = form.addGroup('Each docked molecule')
-        group.addParam('displayPymolMoleculeDock', EnumParam,
-                       choices=self.getChoices(vType=MOLECULE)[0], default=0,
-                       label='Display one ligand type: ',
+        group.addParam('displayMoleculeDock', params.EnumParam,
+                       choices=self.moleculeLabels, default=0,
+                       label='Display docking poses of molecule: ',
                        help='Display all conformers and positions of this molecule')
 
-        group = form.addGroup('Each docked single')
-        group.addParam('displayPymolSingleDock', EnumParam,
-                       choices=self.getChoices(vType=SINGLE)[0], default=0,
-                       label='Display single ligand: ',
+        group.addParam('displaySingleDock', params.EnumParam,
+                       choices=self.singleLabels, default=0,
+                       label='Display docking pose of ligand: ',
                        help='Display this single ligand with the target')
 
         group = form.addGroup('Visualize with PLIP')
-        group.addParam('displayPymolPLIP', EnumParam,
-                       choices=self.getChoices(vType=SINGLE)[0], default=0,
+        group.addParam('displayPymolPLIP', params.EnumParam,
+                       choices=self.singleLabels, default=0,
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
 
     #Molecules section
     form.addSection(label='Small molecules view')
-    group = form.addGroup('Each set')
-    group.addParam('displayPymolSet', EnumParam,
-                   choices=self.getChoices(vType=SET)[0], default=0,
-                   label='Display set: ',
+    group = form.addGroup('Visualize molecules with:')
+    group.addParam('displaySoftwareMol', params.EnumParam,
+                   choices=self._viewerOptions[:2], default=PYMOL,
+                   label='Display docking poses with: ',
+                   help='Display the selected group of docking poses with which software. '
+                        'Available: PyMol, ChimeraX and viewDockX (ChimeraX with stored attributes)')
+
+    group = form.addGroup('Display molecules')
+    group.addParam('displaySet', params.EnumParam,
+                   choices=self.setLabels, default=0,
+                   label='Display molecules in set: ',
                    help='Display all ligands in this set')
 
-    group = form.addGroup('Each molecule')
-    group.addParam('displayPymolMolecule', EnumParam,
-                  choices=self.getChoices(vType=MOLECULE)[0], default=0,
-                  label='Display small molecule conformers: ',
-                  help='Docking results are grouped by their pocket, choose the one to visualize')
+    group.addParam('displayMolecule', params.EnumParam,
+                  choices=self.moleculeLabels, default=0,
+                  label='Display molecule conformers: ',
+                  help='Display all conformers saved for this molecule')
 
-    group = form.addGroup('Each single')
-    group.addParam('displayPymolSingle', EnumParam,
-                  choices=self.getChoices(vType=SINGLE)[0], default=0,
-                  label='Display single ligand: ',
+    group.addParam('displaySingle', params.EnumParam,
+                  choices=self.singleLabels, default=0,
+                  label='Display single molecule: ',
                   help='Display this single ligand with the target')
 
     #Table section
     form.addSection(label='Table view')
     self.defineParamsTable(form)
 
-  def updateLigandsDic(self, outputLigandsDic, molSet, vType, oLabelSet=None):
-    if vType == SET:
-        oLabel = oLabelSet
-        outputLigandsDic[oLabel] = molSet
-    else:
-        for mol in molSet:
-          curMol = mol.clone()
-          if vType == SINGLE:
-            oLabel = curMol.getUniqueName()
-          elif vType == MOLECULE:
-            oLabel = curMol.getMolName()
-          elif vType == POCKET:
-            oLabel = 'g_{}'.format(curMol.getGridId())
-
-          if not oLabel in outputLigandsDic:
-            outputLigandsDic[oLabel] = [curMol]
-          else:
-            outputLigandsDic[oLabel] += [curMol]
-    return outputLigandsDic
-
   def getChoices(self, vType=SET, pymol=True):
-    outputLigandsDic = {}
+    '''Return based on the subgroups of the output set(s):
+        outputLabels: list of labels with the choices of subgroups that can be made for selection vType
+                      (single, molecule, pocket or set)
+        outputLigandsDic: dictionary containing the items contained in each of the subgroups in the labels
+                          the dictionary is  separated by each of the output sets:
+                          {outputSetLabel1: {outputSubGroupLabel1: [indexes]}, }
+    '''
+    outputLigandsDic, outputLabels = {}, []
     if issubclass(type(self.protocol), SetOfSmallMolecules):
-        '''If the viewer has been called for a SetOfMolecules'''
-        molSet = self.protocol
-        oLabel = 'outputSmallMolecules'
-        outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oLabel)
-    else:
-        '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
-        for oAttr in self.protocol.iterOutputAttributes():
-            if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
-              molSet = getattr(self.protocol, oAttr[0])
-              outputLigandsDic = self.updateLigandsDic(outputLigandsDic, molSet, vType, oAttr[0])
+      '''If the viewer has been called for a SetOfMolecules'''
+      molSet = self.protocol
+      setLabel = 'outputSmallMolecules'
+      outputLigandsDic[setLabel] = molSet.getGroupIndexes()[vType]
+      outputLabels = [setLabel]
 
-    outputLabels = list(outputLigandsDic.keys())
+    else:
+      '''If the viewer has been called for a protocol with SetOfMolecules (can be several) as output'''
+      molSets = self.getOutputMolSets()
+      for setLabel, molSet in molSets.items():
+          molSet = getattr(self.protocol, setLabel)
+          curLigDic = molSet.getGroupIndexes(setLabel)[vType]
+
+          outputLabels += list(curLigDic.keys())
+          outputLigandsDic[setLabel] = curLigDic
+
+    outputLabels = list(set(outputLabels))
     outputLabels = natural_sort(outputLabels)
     if vType in SET and pymol and len(outputLabels) > 1:
         outputLabels = ['All'] + outputLabels
@@ -160,193 +186,276 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   def _getVisualizeDict(self):
     return {
       #Docking
-      'displayPymolSetDock': self._viewPymolSetDock,
-      'displayPymolROIDock': self._viewPymolROIDock,
-      'displayPymolMoleculeDock': self._viewPymolMoleculeDock,
-      'displayPymolSingleDock': self._viewPymolSingleDock,
+      'displaySetDock': self._viewSetDock,
+      'displayROIDock': self._viewROIDock,
+      'displayMoleculeDock': self._viewMoleculeDock,
+      'displaySingleDock': self._viewSingleDock,
       'displayPymolPLIP': self._viewPymolPLIP,
 
       #Ligand
-      'displayPymolSet': self._viewPymolSet,
-      'displayPymolMolecule': self._viewPymolMolecule,
-      'displayPymolSingle': self._viewPymolSingle,
+      'displaySet': self._viewSet,
+      'displayMolecule': self._viewMolecule,
+      'displaySingle': self._viewSingle,
 
       # Table
-      'displayTable': self._viewSet,
+      'displayTable': self._viewTable,
     }
 
 
-################# DOCKING VIEWS ###################
+################# MAIN VIEWER FUNCTIONS ###################
 
-  def _viewPymolSetDock(self, e=None):
-    pmlsDir = self.getPmlsDir()
+  def getOutputMolSets(self):
+    '''Return the sets of output molecules in the protocol'''
+    outputMolSets = {}
+    for oAttr in self.protocolObject.iterOutputAttributes():
+      if type(getattr(self.protocolObject, oAttr[0])) == SetOfSmallMolecules:
+        outputMolSets[oAttr[0]] = getattr(self.protocolObject, oAttr[0])
+    return outputMolSets
 
-    if self.checkIfProtocol():
-        ligandLabel = self.getEnumText('displayPymolSetDock')
+  def index2MolDic(self, molSets, groupDic):
+    '''From the sets of molecules selected in the output, return a dictionary with the index dictionaries
+    of form {groupLabel: [mols]}
+    '''
+    molDic = {}
+    for molSetLabel, molSet in molSets.items():
+      indexDic = groupDic[molSetLabel]
+      for groupLabel, indexes in indexDic.items():
+        if groupLabel in molDic:
+          molDic[groupLabel] += molSet.getMolsFromIds(indexes)
+        else:
+          molDic[groupLabel] = molSet.getMolsFromIds(indexes)
+    return molDic
+
+  def getGroupMols(self, groupDic, sLabel):
+    '''Return the molecules determined by the sLabel in the dictionary of index (groupDic)
+    '''
+    molSets = self.getOutputMolSets()
+    molDic = self.index2MolDic(molSets, groupDic)
+    if sLabel != 'All':
+        mols = sortMolsByUnique(molDic[sLabel])
     else:
-        ligandLabel = 'All'
+        mols = []
+        for sLab in self.setLabels:
+          if sLab != 'All':
+              mols += sortMolsByUnique(molDic[sLab])
+    if len(mols) > 1000:
+      res = askYesNoCancel('Slow display',
+                  f'Trying to display a high number of molecules ({len(mols)}) might be slow, do you want to continue?',
+                  self.getTkRoot())
+      if res != 0:
+        return []
+    return mols
 
-    if ligandLabel != 'All':
-      pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
-      mols = sortMolsByUnique(self.setLigandsDic[ligandLabel])
-      pmlStr = ''
-      addTarget = True
-      for mol in mols:
-        pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
-        addTarget = False
+  def viewPymolMols(self, mols, ligandLabel, addTarget=True, disable=True, pose=True, e=None):
+    pmlsDir = self.getPmlsDir()
+    pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
+    writePmlFile(pmlFile, buildPMLDockingGroupsStr(self, mols, addTarget=addTarget, disable=disable, pose=pose))
 
+    pymolV = PyMolViewer(project=self.getProject())
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+
+  def getDockFile(self, mol):
+    poseFile = os.path.abspath(mol.getPoseFile())
+    molName, gridId = mol.getMolName(), mol.getGridId()
+
+    dockDir = os.path.dirname(poseFile).replace('outputLigands', f'extra/pocket_{gridId}')
+    molFile = os.path.join(dockDir, f'{molName}.pdbqt')
+    if not os.path.exists(molFile):
+      molFile = mol.getPoseFile()
+    return molFile
+
+  def getMolDic(self, mols, pose, vinaDock):
+    molDic = {}
+    for mol in mols:
+      poseB, dockB = True, True
+      if vinaDock:
+        poseB, dockB = False, False
+
+      molName = mol.getUniqueName(pose=poseB, dock=dockB)
+      if vinaDock:
+        molFile = self.getDockFile(mol)
+      elif pose:
+        molFile = mol.getPoseFile()
+      else:
+        molFile = mol.getFileName()
+
+      molDic[molName] = molFile
+    return molDic
+
+  def writeChimeraScript(self, molDic, ligandLabel, addTarget=True, disable=True, vinaDock=False):
+      pmlsDir = self.getPmlsDir()
+      chimScript = os.path.join(pmlsDir, f'{ligandLabel}_chimeraX.py')
+      with open(chimScript, "w") as f:
+        f.write("from chimerax.core.commands import run\n")
+
+        f.write(f"run(session, 'cd {os.getcwd()}')\n")
+        f.write("run(session, 'cofr 0,0,0')\n")  # set center of coordinates
+
+        if addTarget:
+          _inputStruct = os.path.abspath(self.protocol.getOriginalReceptorFile())
+          f.write(f"run(session, 'open {_inputStruct}')\n")
+
+        i = 2
+        for molName, dockFile in molDic.items():
+          f.write(f"run(session, 'open {dockFile} name {molName}')\n")
+          if disable:
+            f.write(f"run(session, 'hide #{i} models')\n")
+          i += 1
+
+        if vinaDock:
+          f.write("run(session, 'viewdockx')\n")
+      return chimScript
+
+  def viewChimeraXMols(self, mols, ligandLabel, addTarget=True, disable=True,
+                       pose=True, vinaDock=False, e=None):
+    if not chimeraInstalled():
+        print(CHIMERA_ERROR)
+        return [self.warnMessage(CHIMERA_ERROR, 'Chimera not found')]
     else:
-      pmlFile, pmlStr = os.path.join(pmlsDir, 'allSetDockedMolecules.pml'), ''
-      addTarget = True
-      for ligandLabel in self.setLabels:
-        if ligandLabel != 'All':
-          mols = sortMolsByUnique(self.setLigandsDic[ligandLabel])
-          for mol in mols:
-            pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
-            addTarget = False
-    writePmlFile(pmlFile, pmlStr)
+        molDic = self.getMolDic(mols, pose, vinaDock)
+        chimScript = self.writeChimeraScript(molDic, ligandLabel, addTarget, disable, vinaDock)
+        view = ChimeraView(chimScript)
+        return [view]
 
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
-  def _viewPymolROIDock(self, e=None):
-    pmlsDir = self.getPmlsDir()
+  ################### DOCKING POSES VIEWS #################
 
-    ligandLabel = self.getEnumText('displayPymolROIDock')
-    pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
+  def _viewSetDock(self, e=None):
+      if self.checkIfProtocol():
+          ligandLabel = self.getEnumText('displaySetDock')
+          sLabel = ligandLabel
+      else:
+          ligandLabel, sLabel = 'All', 'allSetDockedMolecules'
 
-    mols = sortMolsByUnique(self.pocketLigandsDic[ligandLabel])
-    pmlStr, addTarget = '', True
-    for mol in mols:
-      pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
-      addTarget = False
-    writePmlFile(pmlFile, pmlStr)
+      mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
+      if len(mols) > 0:
+        if self.displaySoftware.get() == PYMOL:
+            return self.viewPymolMols(mols, sLabel)
+        elif self.displaySoftware.get() == CHIMERAX:
+            return self.viewChimeraXMols(mols, sLabel)
+        elif self.displaySoftware.get() == VIEWDOCKX:
+            return self.viewChimeraXMols(mols, sLabel, vinaDock=True)
 
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+  def _viewROIDock(self, e=None):
+    ligandLabel = self.getEnumText('displayROIDock')
 
-  def _viewPymolMoleculeDock(self, e=None):
-    pmlsDir = self.getPmlsDir()
+    mols = self.getGroupMols(self.pocketLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
-    ligandLabel = self.getEnumText('displayPymolMoleculeDock')
-    pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
 
-    mols = sortMolsByUnique(self.moleculeLigandsDic[ligandLabel])
-    pmlStr, addTarget = '', True
-    for mol in mols:
-      pmlStr += buildPMLDockingSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=addTarget)
-      addTarget = False
-    writePmlFile(pmlFile, pmlStr)
+  def _viewMoleculeDock(self, e=None):
+    ligandLabel = self.getEnumText('displayMoleculeDock')
 
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
-  def _viewPymolSingleDock(self, e=None):
-    pmlsDir = self.getPmlsDir()
+  def _viewSingleDock(self, e=None):
+    ligandLabel = self.getEnumText('displaySingleDock')
 
-    ligandLabel = self.getEnumText('displayPymolSingleDock')
-    pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
-
-    mol = self.singleLigandsDic[ligandLabel][0].clone()
-    writePmlFile(pmlFile, buildPMLDockingSingleStr(self, mol, ligandLabel, addTarget=True, disable=False))
-
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+    mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftware.get() == PYMOL:
+          return self.viewPymolMols(mols, ligandLabel, disable=False)
+      elif self.displaySoftware.get() == CHIMERAX:
+          return self.viewChimeraXMols(mols, ligandLabel, disable=False)
+      elif self.displaySoftware.get() == VIEWDOCKX:
+        return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewPymolPLIP(self, e=None):
     pmlsDir = self.getPmlsDir()
 
     ligandLabel = self.getEnumText('displayPymolPLIP')
-    mol = self.singleLigandsDic[ligandLabel][0].clone()
+    mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      mol = mols[0].clone()
+      mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
+                                        os.path.join(pmlsDir, ligandLabel + '.pdb'))
 
-    mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
-                                      os.path.join(pmlsDir, ligandLabel + '.pdb'))
+      pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
+                           cwd=os.path.abspath(pmlsDir))
 
-    pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
-                         cwd=os.path.abspath(pmlsDir))
+      pmlFile, pmlFiles = '', []
+      for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
+          if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
+              pmlFiles.append(file)
 
-    pmlFile, pmlFiles = '', []
-    for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
-        if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
-            pmlFiles.append(file)
+      for file in pmlFiles:
+          for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
+              if ligName in file:
+                  pmlFile = file
+                  break
+      if pmlFile == '' and len(pmlFiles) > 0:
+          pmlFile = pmlFiles[0]
 
-    for file in pmlFiles:
-        for ligName in ['UNK', 'UNL', 'LIG']: #typical ligand names
-            if ligName in file:
-                pmlFile = file
-                break
-    if pmlFile == '' and len(pmlFiles) > 0:
-        pmlFile = pmlFiles[0]
+      if pmlFile != '':
+        pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
+        pymolV = PyMolViewer(project=self.getProject())
+        return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+      else:
+        showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
+        print('PLIP found no interactions in the docking position')
 
-    if pmlFile != '':
-      pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
-      pymolV = PyMolViewer(project=self.getProject())
-      return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
-    else:
-      showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
-      print('PLIP found no interactions in the docking position')
-
-################### LIGANDS VIEWS #################
-
-  def _viewPymolSet(self, e=None):
-    pmlsDir = self.getPmlsDir()
-
-    if self.checkIfProtocol():
-        ligandLabel = self.getEnumText('displayPymolSet')
-    else:
-        ligandLabel = 'All'
-
-    if ligandLabel != 'All':
-      pmlFile = os.path.join(pmlsDir, '{}.pml'.format(ligandLabel))
-      mols = sortMolsByUnique(self.setLigandsDic[ligandLabel])
-      pmlStr = ''
-      for mol in mols:
-        pmlStr += buildPMLFileNameSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=False)
-
-    else:
-      pmlFile, pmlStr = os.path.join(pmlsDir, 'allSetMolecules.pml'), ''
-      for ligandLabel in self.setLabels:
-        if ligandLabel != 'All':
-          mols = sortMolsByUnique(self.setLigandsDic[ligandLabel])
-          for mol in mols:
-            pmlStr += buildPMLFileNameSingleStr(self, mol.clone(), mol.getUniqueName(), addTarget=False)
-    writePmlFile(pmlFile, pmlStr)
-
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
-
-  def _viewPymolSingle(self, e=None):
-    ligandLabel = self.getEnumText('displayPymolSingle')
-    mol = self.singleLigandsDic[ligandLabel][0].clone()
-    pmlFile = mol.getFileName()
-
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
-
-  def _viewPymolMolecule(self, e=None):
-    ligandLabel = self.getEnumText('displayPymolMolecule')
-    mols = sortMolsByUnique(self.moleculeLigandsDic[ligandLabel])
-
-    outDir = self.getPmlsDir()
-    pmlFile = os.path.join(outDir, '{}.pml'.format(ligandLabel))
-    with open(pmlFile, 'w') as f:
-        for mol in mols:
-            molFile, molName = os.path.abspath(mol.getFileName()), mol.getUniqueName()
-            f.write('load {}, {}\nhide spheres, {}\nshow sticks, {}\n'.format(molFile, molName, molName, molName))
-
-    pymolV = PyMolViewer(project=self.getProject())
-    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
-
-    ###################   TABLE VIEW ####################
+################### MOLECULES VIEWS #################
 
   def _viewSet(self, e=None):
     if self.checkIfProtocol():
+      ligandLabel = self.getEnumText('displaySet')
+      sLabel = ligandLabel
+    else:
+      ligandLabel, sLabel = 'All', 'allSetMolecules'
+
+    mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, sLabel, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, sLabel, pose=False, addTarget=False)
+
+  def _viewMolecule(self, e=None):
+    ligandLabel = self.getEnumText('displayMolecule')
+
+    mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, ligandLabel, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, ligandLabel, pose=False, addTarget=False)
+
+  def _viewSingle(self, e=None):
+    ligandLabel = self.getEnumText('displaySingle')
+
+    mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      if self.displaySoftwareMol.get() == PYMOL:
+        return self.viewPymolMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
+      elif self.displaySoftwareMol.get() == CHIMERAX:
+        return self.viewChimeraXMols(mols, ligandLabel, disable=False, pose=False, addTarget=False)
+
+    ###################   TABLE VIEW ####################
+
+  def _viewTable(self, e=None):
+    if self.checkIfProtocol():
       ligandLabel = self.getEnumText('displayTable')
-      molSet = self.setLigandsDic[ligandLabel]
+      molSet = self.getOutputMolSets()[ligandLabel]
     else:
       molSet = self.protocol
 
-    setV = BioinformaticsDataViewer(project=self.getProject())
+    try:
+      setV = MDViewer(project=self.getProject())
+    except:
+      setV = BioinformaticsDataViewer(project=self.getProject())
     views = setV._visualize(molSet)
     return views
 
@@ -354,13 +463,18 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 #################### UTILS ###########################33
 
   def checkIfDocked(self):
+      molSet = None
       if not self.checkIfProtocol():
           molSet = self.protocol
       else:
           for oAttr in self.protocol.iterOutputAttributes():
               if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
                   molSet = getattr(self.protocol, oAttr[0])
-      return molSet.isDocked()
+
+      if molSet is not None:
+        return molSet.isDocked()
+      else:
+        return False
 
   def checkIfProtocol(self):
       if issubclass(type(self.protocol), SetOfSmallMolecules):
@@ -402,7 +516,205 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       receptorFile = outFile
 
     mergePDBs(receptorFile, molFile, auxPath, hetatm2=True)
-    clean_PDB(auxPath, outPath, waters=True, HETATM=False)
+    cleanPDB(auxPath, outPath, waters=True, hetatm=False)
     return outPath
 
+class CorrelationViewer(pwviewer.Viewer):
+    from pwchem.protocols.VirtualDrugScreening.protocol_scores_correlation import ProtScoreCorrelation
+    _environments = [pwviewer.DESKTOP_TKINTER]
+    _targets = [
+      ProtScoreCorrelation,
+    ]
 
+    def __init__(self, **kwargs):
+      pwviewer.Viewer.__init__(self, **kwargs)
+
+    def _visualize(self, protocol, **kwargs):
+      from PIL import Image
+      image = Image.open(protocol.getOuputImgPath())
+      image.show()
+
+
+class SmallMoleculesLibraryViewer(pwviewer.ProtocolViewer):
+    ''' Visualize the library characteristics'''
+    _label = 'Viewer Small Molecules Library'
+    _targets = [SmallMoleculesLibrary]
+    _environments = [pwviewer.DESKTOP_TKINTER]
+
+
+    def __init__(self, **args):
+        super().__init__(**args)
+
+    def _defineParams(self, form):
+        form.addSection(label='Visualization of Small Molecules library')
+        group = form.addGroup('Score 1')
+        group.addParam('chooseHeader1', params.StringParam, default='', label='Library score 1: ',
+                       help='Choose the library score to analyze')
+        group.addParam('trueMin1', params.FloatParam, label='Minimum score value: ', default=0,
+                       help='Minimum and maximum values for the selected score.'
+                            'Use the wizard to get the actual minimum value or set yourself the histogram limit')
+        group.addParam('trueMax1', params.FloatParam, label='Maximum score value: ', default=1,
+                       help='Minimum and maximum values for the selected score. '
+                            'Use the wizard to get the actual maximum value or set yourself the histogram limit')
+
+        group = form.addGroup('Score 2')
+        group.addParam('chooseHeader2', params.StringParam, default='', label='Library score 2: ',
+                       help='Choose the library score 2 to analyze in a scatterplot')
+        group.addParam('trueMin2', params.FloatParam, label='Minimum score value: ', default=0,
+                       help='Minimum and maximum values for the selected score.'
+                            'Use the wizard to get the actual minimum value or set yourself the histogram limit')
+        group.addParam('trueMax2', params.FloatParam, label='Maximum score value: ', default=1,
+                       help='Minimum and maximum values for the selected score. '
+                            'Use the wizard to get the actual maximum value or set yourself the histogram limit')
+
+        group = form.addGroup('Plots')
+        group.addParam('recalc', params.BooleanParam, label='Recalculate: ', default='False',
+                       help='Recalculate the graph instead of loading a previously saved')
+        group.addParam('displayDistribution', params.LabelParam, label='Display histogram: ',
+                       help='Display the distribution of the score 1 values as histogram')
+        group.addParam('displayScatterplot', params.LabelParam, label='Display scatterplot: ',
+                       help='Display the distribution of the score 1 and 2 values as scatterplot')
+        group.addParam('displayHeatmap', params.LabelParam, label='Display heatmap: ',
+                       help='Display the distribution of the score 1 and 2 values as heatmap')
+
+
+    def _getVisualizeDict(self):
+        return {
+            'displayDistribution': self._showDistribution,
+            'displayScatterplot': self._showScatterplot,
+            'displayHeatmap': self._showHeatmap,
+        }
+
+    def getLibrary(self):
+      return self.protocol
+
+    def getMinValue(self, scoreIdx, doRound=True):
+      minVal = 1e6
+      inLib, head = self.getLibrary(), getattr(self, f'chooseHeader{scoreIdx}').get()
+      colIdx = self.getHeaders().index(head)
+      for batch in inLib.yieldLibraryValues([colIdx]):
+        fBatch = [float(val[0]) for val in batch]
+        minVal = min(minVal, min(fBatch))
+
+      if doRound:
+        minVal = round(minVal, 2)
+      return minVal
+
+    def getMaxValue(self, scoreIdx, doRound=True):
+      maxVal = -1e6
+      inLib, head = self.getLibrary(), getattr(self, f'chooseHeader{scoreIdx}').get()
+      colIdx = self.getHeaders().index(head)
+      for batch in inLib.yieldLibraryValues([colIdx]):
+        fBatch = [float(val[0]) for val in batch]
+        maxVal = max(maxVal, max(fBatch))
+
+      if doRound:
+        maxVal = round(maxVal, 2)
+      return maxVal
+
+    def getHeaders(self):
+      return self.getLibrary().getHeaders()
+
+    def _showDistribution(self, e=None):
+      pngFile = self.getPngFile(plot='distribution')
+      if not os.path.exists(pngFile) or self.recalc.get():
+        inLib, head = self.getLibrary(), self.chooseHeader1.get()
+        colIdx = self.getHeaders().index(head)
+
+        iniMin, iniMax = self.trueMin1.get(), self.trueMax1.get()
+        initialBins = 50
+
+        binEdges = np.linspace(iniMin, iniMax, initialBins + 1)
+        histCounts = np.zeros(initialBins)
+        for batch in inLib.yieldLibraryValues([colIdx]):
+          fBatch = [float(val[0]) for val in batch]
+          histCounts += np.histogram(fBatch, bins=binEdges)[0]
+
+          underflow = np.sum(np.array(fBatch) < iniMin)
+          overflow = np.sum(np.array(fBatch) > iniMax)
+          histCounts[0] += underflow
+          histCounts[-1] += overflow
+
+        plt.bar(binEdges[:-1], histCounts, width=np.diff(binEdges), align='edge', edgecolor='black')
+        plt.title(f"Histogram of {head}")
+        plt.xlabel(f"{head} Values")
+        plt.ylabel("Frequency")
+        plt.tight_layout()
+
+        plt.savefig(pngFile)
+      else:
+        from PIL import Image
+        image = Image.open(pngFile)
+        image.show()
+
+      plt.show()
+
+    def _showScatterplot(self, e=None):
+      pngFile = self.getPngFile(plot='scatterplot', nVars=2)
+      if not os.path.exists(pngFile) or self.recalc.get():
+        inLib, headers = self.getLibrary(), self.getHeaders()
+        head1, head2 = self.chooseHeader1.get(), self.chooseHeader2.get()
+        colIdx1, colIdx2 = headers.index(head1), headers.index(head2)
+
+        for batch in inLib.yieldLibraryValues([colIdx1, colIdx2]):
+          fBatch1, fBatch2 = [float(val[0]) for val in batch], [float(val[1]) for val in batch]
+          plt.scatter(fBatch1, fBatch2, color='blue', s=2)
+
+        plt.title(f"Scatterplot of {head1} vs {head2}")
+        plt.xlabel(f"{head1} Values")
+        plt.ylabel(f"{head2} Values")
+        plt.xlim(self.trueMin1.get(), self.trueMax1.get())
+        plt.ylim(self.trueMin2.get(), self.trueMax2.get())
+
+        plt.legend()
+        plt.grid(True)
+
+        plt.savefig(pngFile)
+      else:
+        from PIL import Image
+        image = Image.open(pngFile)
+        image.show()
+
+      plt.show()
+
+    def _showHeatmap(self, e=None):
+      pngFile = self.getPngFile(plot='heatmap', nVars=2)
+      if not os.path.exists(pngFile) or self.recalc.get():
+        xMin, xMax = self.trueMin1.get(), self.trueMax1.get()
+        yMin, yMax = self.trueMin2.get(), self.trueMax2.get()
+        nBinsX, nBinsY = 50, 50
+
+        # Bin edges
+        xEdges = np.linspace(xMin, xMax, nBinsX + 1)
+        yEdges = np.linspace(yMin, yMax, nBinsY + 1)
+
+        # Accumulator for 2D histogram
+        hist = np.zeros((nBinsX, nBinsY))
+
+        inLib, headers = self.getLibrary(), self.getHeaders()
+        head1, head2 = self.chooseHeader1.get(), self.chooseHeader2.get()
+        colIdx1, colIdx2 = headers.index(head1), headers.index(head2)
+        # Incrementally update histogram
+        for batch in inLib.yieldLibraryValues([colIdx1, colIdx2]):
+          fBatch1, fBatch2 = [float(val[0]) for val in batch], [float(val[1]) for val in batch]
+          h, _, _ = np.histogram2d(fBatch1, fBatch2, bins=[xEdges, yEdges])
+          hist += h
+
+        # Plot heatmap
+        plt.figure(figsize=(8, 6))
+        plt.imshow(hist.T, origin='lower', aspect='auto',
+                   extent=[xMin, xMax, yMin, yMax],
+                   cmap='plasma')
+        plt.colorbar(label='Counts')
+        plt.xlabel(f"{head1} Values")
+        plt.ylabel(f"{head2} Values")
+        plt.xlim(self.trueMin1.get(), self.trueMax1.get())
+        plt.ylim(self.trueMin2.get(), self.trueMax2.get())
+        plt.title(f"Heatplot of {head1} vs {head2}")
+        plt.grid(False)
+        plt.show()
+
+    def getPngFile(self, nVars=1, plot='distribution'):
+      oDir = os.path.abspath(os.path.dirname(self.getLibrary().getFileName()))
+      hVars = f'{self.chooseHeader1.get()}' if nVars == 1 else f'{self.chooseHeader1.get()}_{self.chooseHeader2.get()}'
+      return os.path.join(oDir, f'{hVars}_{plot}.png')

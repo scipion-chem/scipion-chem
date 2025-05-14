@@ -29,7 +29,7 @@
 """
 
 """
-import os, re
+import os
 from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.utils import Message
@@ -153,18 +153,10 @@ class ProtocolRMSDDocking(EMProtocol):
     def mapLabels(self, mol, posDic):
         '''Map the atom labels which were normally reorganized during the ligand preparation to those in the original
         molecule'''
-        mapDic, pDic = {}, {}
-        with open(mol._mappingFile.get()) as fIn:
-            for line in fIn:
-                sline = line.split()
-                mapDic[sline[1]] = sline[0]
+        mapDic, pDic = mol.getMapDic(), {}
         for prevLabel in posDic:
-            pDic[mapDic[prevLabel]] = posDic[prevLabel]
+            pDic[mapDic[prevLabel.upper()]] = posDic[prevLabel.upper()]
         return pDic
-
-    def is_het(self, residue):
-        res = residue.id[0]
-        return res != " " and res != "W"
 
     def getLigandPosDic(self, item, molName=None):
         onlyHeavy = self.onlyHeavy.get()
@@ -186,7 +178,7 @@ class ProtocolRMSDDocking(EMProtocol):
             for model in parser:
                 for chain in model:
                     for residue in chain:
-                        if self.is_het(residue) and residue.resname == molName:
+                        if isHet(residue) and residue.resname == molName:
                             for atom in residue:
                                 atomId, coords = atom.get_id(), atom.get_coord()
                                 if not atomId.startswith('H') or not onlyHeavy:

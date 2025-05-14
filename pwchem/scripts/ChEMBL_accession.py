@@ -1,9 +1,10 @@
 #Code adapted from https://projects.volkamerlab.org/teachopencadd/talktorials/T001_query_chembl.html
 
-import math
-import sys
+import math, sys
 import pandas as pd
 from chembl_webresource_client.new_client import new_client
+
+from utils import parseParams
 
 #############################################################################################################
 
@@ -40,18 +41,6 @@ def getChemblId(targets_api, paramsDic):
         return input_id
 
 
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
-
-
 #################Ad bioactivity values #############
 def convert_ic50_to_pic50(IC50_value):
     pIC50_value = 9 - math.log10(IC50_value)
@@ -67,7 +56,7 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     assay_type = paramsDic['assayType']
     relation = paramsDic['relation']
     bioactivity = paramsDic['bioactivity']

@@ -24,26 +24,27 @@
 # *
 # **************************************************************************
 
-import os, re, glob
+# General imports
+import os
 
+# Scipion em imports
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
-from pyworkflow.utils import Message
-from pyworkflow.utils.path import copyFile
 from pwem.protocols import EMProtocol
 
-from pwchem.utils import *
+# Plugin imports
 from pwchem import Plugin
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.constants import RDKIT_DIC
 
 scriptName = 'shape_distances_script.py'
+shapePrograms = ['RDKit'] #, 'Shape-it']
 
 
 class ProtocolShapeDistancesFiltering(EMProtocol):
     """
     Performs shape filtering of a set of ligands by the calculation of Tanimoto and Protrude distances between
-     a molecule in smi format and a query.
-
+    a molecule in smi format and a query.
     """
 
     _label = 'Shape Distance filtering'
@@ -69,7 +70,7 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
         group = form.addGroup('Descriptors')
         group.addParam('program', params.EnumParam,
-                       choices=['RDKit', 'Shape-it'], default=0,
+                       choices=shapePrograms, default=0,
                        label='Program to calculate distance: ')
         group.addParam('distanceType', params.EnumParam, default=0, label='Distance type: ',
                        choices=self._distanceType, condition='program==0',
@@ -122,9 +123,9 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
         mols = self.inputSmallMolecules.get()
         for mol in mols:
-            file = os.path.abspath(mol.getFileName())
-            if file in filtered_molecules:
-                mol._shapeDistance = pwobj.String(filtered_molecules_dict[file])
+            molFile = os.path.abspath(mol.getFileName())
+            if molFile in filtered_molecules:
+                mol._shapeDistance = pwobj.String(filtered_molecules_dict[molFile])
                 newMols.append(mol)
 
         newMols.updateMolClass()
@@ -138,7 +139,7 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)  # , receptorFile)
 
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def shapeitFilter(self):
         mols = self.inputSmallMolecules.get()
@@ -160,7 +161,6 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
 
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []
-        file_mol_dict = {}
         f = open(paramsFile, 'w')
         f.write('outputPath: results.tsv\n')
         for mol in molsScipion:
@@ -197,16 +197,13 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
         return self.refFile
 
     def getDistance(self):
-        function = self.getEnumText('distanceType')
-        return function
+        return self.getEnumText('distanceType')
 
     def parseResults(self, outputFile):
         molecules = {}
         with open(outputFile) as read_tsv:
             for row in read_tsv:
-                if row[0] == "#":
-                    pass
-                else:
+                if row[0] != "#":
                     row1 = row.split("\t")
                     molecules[row1[0]] = row1[1]
 
@@ -221,6 +218,3 @@ class ProtocolShapeDistancesFiltering(EMProtocol):
                 if float(score) > self.cut.get():
                     molecules_dic[mol.getFileName()] = score
         return molecules_dic
-
-
-

@@ -26,15 +26,11 @@
 
 import glob, os, urllib
 
-import pyworkflow.object as pwobj
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol import params
 
 from pwem.protocols import EMProtocol
 from pwem.objects import Sequence, SetOfSequences
-
-from pwchem import Plugin
-
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory
@@ -86,9 +82,8 @@ class ProtChemImportSetOfSequences(EMProtocol):
         group = form.addGroup('From database', condition='not fromFile')
         group.addParam('database', params.EnumParam, default=0, condition='not fromFile',
                        label='Input  database: ', choices=['Uniprot', 'ENA'])
-        group.addParam('inputListID', params.PointerParam, pointerClass="SetOfDatabaseID",
-                      label='List of Database Ids:', allowsNull=True,
-                      help="List of input Ids for downloading")
+        group.addParam('inputListID', params.TextParam, label='List of Database Ids:',
+                       help="List of input Ids for downloading. One per line.")
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
@@ -116,8 +111,8 @@ class ProtChemImportSetOfSequences(EMProtocol):
         outputSequences = SetOfSequences().create(outputPath=self._getPath())
         outFns = []
 
-        for item in self.inputListID.get():
-            inId = item.getDbId()
+        for item in self.inputListID.get().split('\n'):
+            inId = item.strip()
             print("Processing %s" % inId)
             fnFasta = self._getExtraPath("%s.fasta" % inId)
 
@@ -147,10 +142,4 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
     def _warnings(self):
         ws = []
-        if not self.fromFile:
-            targetDB = self.getEnumText('database')
-            for dbId in self.inputListID.get():
-                if not dbId.getDatabase().strip().lower() == targetDB.lower():
-                    ws.append('Some IDs seems not to be from {} db'.format(targetDB))
-                    break
         return ws

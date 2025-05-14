@@ -80,7 +80,7 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
         ext = os.path.splitext(inFile)[1][1:]
 
     if not nameKey:
-        nameKey = '_name'
+        nameKey = '_Name'
 
     if ext == 'maegz' or ext == 'gz':
         inFile = decompressFile(inFile)
@@ -94,8 +94,9 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
             for line in f:
                 smi, name = line.strip().split()
                 mol = Chem.MolFromSmiles(smi)
-                mol.SetProp(nameKey, name)
-                mols.append(mol)
+                if mol:
+                    mol.SetProp(nameKey, name)
+                    mols.append(mol)
 
     elif ext == 'mol2':
         mols = Mol2MolSupplier(inFile)
@@ -127,12 +128,12 @@ def make3DCoords(mols, mols3dLists, it, errBase):
         try:
             AllChem.MMFFOptimizeMolecule(mol2)
         except:
-            if mol.HasProp('_name'):
-                print('Could not optimize 3D structure of molecule: {}'.format(mol.GetProp('_name')))
+            if mol.HasProp('_Name'):
+                print('Could not optimize 3D structure of molecule: {}'.format(mol.GetProp('_Name')))
                 errFile = '{}_{}.txt'.format(errBase, it)
                 mode = 'a' if os.path.exists(errFile) else 'w'
                 with open(errFile, mode) as f:
-                    f.write(mol.GetProp('_name') + '\n')
+                    f.write(mol.GetProp('_Name') + '\n')
 
         if len(mol.GetAtoms()) != len(mol2.GetAtoms()):
             mol2 = Chem.RemoveHs(mol2)

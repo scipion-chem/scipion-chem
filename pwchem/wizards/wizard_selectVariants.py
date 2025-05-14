@@ -33,12 +33,14 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui.tree import ListTreeProviderString
 from pyworkflow.gui import dialog
 from pyworkflow.object import String
-from pwchem.protocols import ProtChemGenerateVariants, ProtExtractSeqsROI, ProtDefineSeqROI, ProtCalculateSASA
-from pwem.wizards.wizard import VariableWizard
+
+from pwem.wizards.wizard import VariableWizard, EmWizard
+from pwem.objects import SetOfSequences, Pointer
+
+from pwchem.protocols import ProtChemGenerateVariants, ProtDefineSeqROI
 
 ################# Sequence variants ###############################
 class SelectVariant(VariableWizard):
@@ -109,128 +111,4 @@ SelectMutation().addTarget(protocol=ProtDefineSeqROI,
                            targets=['selectMutation'],
                            inputs=['inputSequenceVariants'],
                            outputs=['selectMutation'])
-
-
-class AddSequenceROIWizard(VariableWizard):
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def getOriginLabel(self, inParamName):
-        if inParamName == 'resPosition':
-            return 'Residues'
-        elif inParamName == 'selectVariant':
-            return 'Variant'
-        elif inParamName == 'selectMutation':
-            return 'Mutations'
-
-    def show(self, form, *params):
-      protocol = form.protocol
-      inputParams, outputParam = self.getInputOutput(form)
-
-      inList = getattr(protocol, inputParams[1]).get()
-      num = len(inList.strip().split('\n'))
-      if inList.strip() != '':
-        num += 1
-
-      inParamName = inputParams[0]
-      label = self.getOriginLabel(inParamName)
-
-      roiInfo = getattr(protocol, inParamName).get()
-      if len(inputParams) > 2 and hasattr(protocol, inputParams[2]):
-          roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (getattr(protocol, inputParams[2]).get()))
-
-      form.setVar(outputParam[0], getattr(protocol, inputParams[1]).get() + '{}) {}: {}\n'.format(num, label, roiInfo))
-
-
-AddSequenceROIWizard().addTarget(protocol=ProtDefineSeqROI,
-                                 targets=['addROI'],
-                                 inputs=[{'whichToAdd': ['resPosition', 'selectVariant', 'selectMutation']},
-                                         'inROIs', 'descrip'],
-                                 outputs=['inROIs'])
-
-AddSequenceROIWizard().addTarget(protocol=ProtChemGenerateVariants,
-                                 targets=['addVariant'],
-                                 inputs=[{'fromVariant': ['selectVariant', 'selectMutation']},
-                                         'toMutateList'],
-                                 outputs=['toMutateList'])
-
-
-
-
-########################## Sequence conservation ####################################
-
-class CheckSequencesConservation(EmWizard):
-  _targets = [(ProtExtractSeqsROI, ['thres'])]
-
-  def getConservationValues(self, protocol):
-      protocol.calcConservation()
-      with open(protocol.getConservationFile()) as f:
-        consValues = f.readline().split()
-      return list(map(float, consValues))
-
-  def show(self, form, *params):
-    protocol = form.protocol
-    consValues = self.getConservationValues(protocol)
-
-    xs = np.arange(len(consValues))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.bar(xs, consValues)
-    yloc = plt.MaxNLocator(10)
-    ax.yaxis.set_major_locator(yloc)
-    ax.set_ylim(0, 1)
-
-    plt.xlabel("Sequence position")
-    plt.ylabel("Variability value")
-    plt.title('Variability values along sequence')
-
-    plt.show()
-
-class CheckSequencesAccesibility(EmWizard):
-  _targets = [(ProtCalculateSASA, ['thres'])]
-
-  def show(self, form, *params):
-    protocol = form.protocol
-    consValues = protocol.getAccesibilityValues(inProt=False)
-
-    xs = np.arange(len(consValues))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.bar(xs, consValues)
-    yloc = plt.MaxNLocator(10)
-    ax.yaxis.set_major_locator(yloc)
-
-    plt.xlabel("Sequence position")
-    plt.ylabel("Accesibility value")
-    plt.title('Accesibility values along sequence')
-
-    plt.show()
-
-class GetSequencesWizard(EmWizard):
-    """Lists the sequences in a SetOfSequences and choose one"""
-    _targets = [(ProtExtractSeqsROI, ['outSeq'])]
-
-    def getListOfSequences(self, protocol):
-      seqList = []
-      if hasattr(protocol, 'inputSequences') and protocol.inputSequences.get() is not None:
-        for i, seq in enumerate(protocol.inputSequences.get()):
-          seqList.append('{}) {}'.format(i+1, seq.clone()))
-      return seqList
-
-    def show(self, form, *params):
-      protocol = form.protocol
-      try:
-        listOfSeqs = self.getListOfSequences(protocol)
-      except Exception as e:
-        print("ERROR: ", e)
-        return
-
-      finalSeqsList = []
-      for i in listOfSeqs:
-        finalSeqsList.append(String(i))
-      provider = ListTreeProviderString(finalSeqsList)
-      dlg = dialog.ListDialog(form.root, "Sequences", provider,
-                              "Select one sequence")
-      form.setVar('outSeq', dlg.values[0].get())
 

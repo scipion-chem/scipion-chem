@@ -2,63 +2,19 @@ import sys
 from rdkit import Chem
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
 
-###Funcion para procesar los archivos de input
-
-def preprocessLigands(ligandsFiles):
-    mols_dict = {}
-
-    for molFile in ligandsFiles:
-        if molFile.endswith('.mol2'):
-            m = Chem.MolFromMol2File(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.mol'):
-            m = Chem.MolFromMolFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.pdb'):
-            m = Chem.MolFromPDBFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.smi'):
-            f = open(molFile, "r")
-            firstline = next(f)
-            m = Chem.MolFromSmiles(str(firstline))
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.sdf'):
-            suppl = Chem.SDMolSupplier(molFile)
-            for mol in suppl:
-                mols_dict[mol] = molFile
-
-    mols = list(mols_dict.keys())
-
-    return mols_dict, mols
-
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
-
+from utils import parseParams, getMolFilesDic
 
 #################################################################################################################
 # initialize filter
 
 
-def rdkit_filter(mols_dict):
+def rdkitFilter(molsDict):
     params = FilterCatalogParams()
     params.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
     catalog = FilterCatalog(params)
     matches = []
     clean = []
-    for key, item in mols_dict.items():
+    for key, item in molsDict.items():
         entry = catalog.GetFirstMatch(key)  # Get the first matching PAINS
         if entry is not None:
             # store PAINS information
@@ -72,12 +28,12 @@ def rdkit_filter(mols_dict):
     return matches, clean
 
 ######################################################
-def pains_filt(files, dic):
-    mols_dict, mols = preprocessLigands(files)
+def painsFilt(files, dic):
+    molsDict, _ = getMolFilesDic(files)
 
     list_pains = []
     list_no_pains = []
-    for mol, name in mols_dict.items():
+    for mol, name in molsDict.items():
         counter = 0
         for k, v in dic.items():
             subs = Chem.MolFromSmarts(k)
@@ -101,7 +57,7 @@ if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     files = paramsDic['ligandFiles']
 
     if "painsFile" in paramsDic.keys():
@@ -113,7 +69,7 @@ if __name__ == "__main__":
         desc = [line[1] for line in sub_strct]
         dic = dict(zip(smarts, desc))
 
-        pains, no_pains = pains_filt(files, dic)
+        pains, no_pains = painsFilt(files, dic)
 
         with open(paramsDic['outputPath'], 'w') as f:
 
@@ -130,8 +86,8 @@ if __name__ == "__main__":
 
 
     else:
-        mols_dict, mols = preprocessLigands(files)
-        matches, clean = rdkit_filter(mols_dict)
+        molsDict, mols = getMolFilesDic(files)
+        matches, clean = rdkitFilter(molsDict)
 
         #print(matches)
 

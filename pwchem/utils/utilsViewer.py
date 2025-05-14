@@ -25,9 +25,9 @@
 # **************************************************************************
 
 import os
-from ..viewers import PyMolViewer
+from ..utils import addToDic, getBaseName, natural_sort
 
-def buildPMLDockingSingleStr(viewer, mol, molName, addTarget=True, disable=True):
+def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=True):
     pmlStr = ''
     if addTarget:
         pmlStr = 'load {}\n'.format(os.path.abspath(viewer.protocol.getOriginalReceptorFile()))
@@ -36,24 +36,62 @@ def buildPMLDockingSingleStr(viewer, mol, molName, addTarget=True, disable=True)
     if disable:
         disableStr = '\ndisable {}'.format(molName)
 
-    pdbFile = os.path.abspath(mol.getPoseFile())
+    pdbFile = os.path.abspath(molFile)
     pmlStr += 'load {}, {}{}\nhide spheres, {}\nshow sticks, {}\n'. \
         format(pdbFile, molName, disableStr, molName, molName)
     return pmlStr
 
-def buildPMLFileNameSingleStr(viewer, mol, molName, addTarget=True, disable=True):
-    pmlStr = ''
-    if addTarget:
-        pmlStr = 'load {}\n'.format(os.path.abspath(viewer.protocol.getOriginalReceptorFile()))
+def buildSchShowStr(name, isReceptor=True):
+    schStrBase = ', mimic=1, object_props=*, atom_props=*'
+    schStr = f'{schStrBase}\nhide lines, {name}'
+    if isReceptor:
+        schStr += f'\nshow cartoon, {name}'
+    else:
+        schStr += f'\nshow sticks, {name}'
+    return schStr
 
-    disableStr = ''
-    if disable:
-        disableStr = '\ndisable {}'.format(molName)
+def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True):
+    if addTarget and pose:
+        genRecFile = os.path.abspath(viewer.protocol.getOriginalReceptorFile())
 
-    pdbFile = os.path.abspath(mol.getFileName())
-    pmlStr += 'load {}, {}{}\nhide spheres, {}\nshow sticks, {}\n'. \
-        format(pdbFile, molName, disableStr, molName, molName)
+    # Build complex groups, in case mols have different receptor files
+    cGroups, uNames = {}, {}
+    for mol in mols:
+        molFile = mol.getPoseFile() if pose else mol.getFileName()
+        if addTarget and pose:
+            if mol.getProteinFile():
+                recFile = mol.getProteinFile()
+            else:
+                recFile = genRecFile
+
+            cGroups = addToDic(cGroups, recFile, molFile)
+        else:
+            cGroups = addToDic(cGroups, 'all', molFile)
+        uNames[molFile] = mol.getUniqueName()
+
+    pmlStr, ci = '', 1
+
+    for recFile, molFiles in cGroups.items():
+        gNames = []
+        if recFile != 'all':
+            gNames += [f'{getBaseName(recFile)}_{ci}']
+            schStr = '' if '.mae' not in recFile else buildSchShowStr(gNames[-1], True)
+            pmlStr += f'load {os.path.abspath(recFile)}, {gNames[-1]}{schStr}\n'
+
+        molFiles = natural_sort(set(molFiles))
+        for mi, molFile in enumerate(molFiles):
+            gNames.append(uNames[molFile])
+            schStr = '' if '.mae' not in molFile else buildSchShowStr(gNames[-1], False)
+            disableStr = f'\ndisable {gNames[-1]}' if (disable and mi != 0) else ''
+            pmlStr += f'load {os.path.abspath(molFile)}, {gNames[-1]}{schStr}{disableStr}\n'
+
+        if recFile != 'all':
+            complexName = f'{gNames[0]}_{ci}' if len(gNames) > 2 else f'{gNames[-1]}_{ci}'
+            disableStr = f'\ndisable {complexName}' if (disable and ci != 1) else ''
+            pmlStr += f'group {complexName}, {" ".join(gNames)} add{disableStr}\n'
+            ci += 1
     return pmlStr
+
 
 def writePmlFile(pmlFile, pmlStr):
     with open(pmlFile, 'w') as f:

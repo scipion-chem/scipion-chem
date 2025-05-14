@@ -32,9 +32,8 @@ same or different software
 
 """
 
-import os, re
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from scipy.spatial import distance
+import os, re, glob
+from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.metrics.pairwise import pairwise_distances
 
 from pyworkflow.protocol import params
@@ -52,9 +51,7 @@ class ProtocolConsensusDocking(EMProtocol):
     """
     _label = 'Consensus docking'
 
-    def __init__(self, **args):
-        EMProtocol.__init__(self, **args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -84,19 +81,21 @@ class ProtocolConsensusDocking(EMProtocol):
                       help='Creates an output set related to each input set, with the elements from each input'
                            'present in the consensus clusters')
         form.addParam('sameClust', params.BooleanParam, default=True,
-                      label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                      label='Count poses from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping docked molecules from the same input set when calculating the '
                            'cluster size')
 
         group.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
                       help="Maximum RMSD for clustering different docked molecules")
-        group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings',
+        group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings: ',
                       help="Min number of docked molecules to be considered consensus docking")
 
         group = form.addGroup('Representative')
         group.addParam('repAttr', params.StringParam, default='',
                       label='Criteria to choose cluster representative: ',
-                      help='Criteria to follow on docking clusters to choose a representative')
+                      help='Criteria to follow on docking clusters to choose a representative. '
+                           'It will extract the representative as the pose with max/min (next argument) value '
+                           'of this attribute')
         group.addParam('maxmin', params.BooleanParam, default=True,
                       label='Keep maximum values: ',
                       help='True to keep the maximum values. False to get the minimum')
@@ -106,8 +105,22 @@ class ProtocolConsensusDocking(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        self._insertFunctionStep('consensusStep')
-        self._insertFunctionStep('createOutputStep')
+        cStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
+        conStep = self._insertFunctionStep('consensusStep', prerequisites=[cStep])
+        self._insertFunctionStep('createOutputStep', prerequisites=[conStep])
+
+    def convertInputStep(self):
+        allMols = self.getAllInputMols()
+        outDir = self.getInputMolsDir()
+        os.mkdir(outDir)
+
+        maeMols, _ = getMAEMoleculeFiles(allMols)
+        if len(maeMols) > 0:
+            try:
+                from pwchemSchrodinger.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
+            except ImportError:
+                print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
     def consensusStep(self):
         molDic = self.buildMolDic()
@@ -131,7 +144,7 @@ class ProtocolConsensusDocking(EMProtocol):
             indepClustersDic = self.getIndepClusters(molClusters, molDic)
             for inSetId in indepClustersDic:
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], molDic, minSize=1)
 
 
     def createOutputStep(self):
@@ -188,11 +201,14 @@ class ProtocolConsensusDocking(EMProtocol):
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputMolsDir(self):
+        return os.path.abspath(self._getExtraPath('inputMolecules'))
+
     def buildMolDic(self):
         dic = {}
         for i, pSet in enumerate(self.inputMoleculesSets):
             for mol in pSet.get():
-                dic[mol.getPoseFile()] = i
+                dic[mol.getUniqueName()] = i
         return dic
 
     def createIndepOutputs(self):
@@ -302,20 +318,23 @@ class ProtocolConsensusDocking(EMProtocol):
 
         finalClusters = []
         for keys in posArrays:
-            # Matrix distance and clustering perform over different molecules separatedly
-            rmsds = pairwise_distances(posArrays[keys], metric=self.calculateFlattenRMSD,
-                                       n_jobs=self.numberOfThreads.get())   # Parallel distance matrix calculation
+            if len(posArrays[keys]) > 1: #Needed more than 1 mol to cluster
+                # Matrix distance and clustering perform over different molecules separatedly
+                rmsds = pairwise_distances(posArrays[keys], metric=self.calculateFlattenRMSD,
+                                           n_jobs=self.numberOfThreads.get())   # Parallel distance matrix calculation
 
-            linked = linkage(rmsds, self.getEnumText('linkage').lower())
-            clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
+                linked = linkage(rmsds, self.getEnumText('linkage').lower())
+                clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
 
-            clusterMol = {}
-            for i, cl in enumerate(clusters):
-                if cl in clusterMol:
-                    clusterMol[cl] += [molsDic[keys][i]]
-                else:
-                    clusterMol[cl] = [molsDic[keys][i]]
-            finalClusters += list(clusterMol.values())
+                clusterMol = {}
+                for i, cl in enumerate(clusters):
+                    if cl in clusterMol:
+                        clusterMol[cl] += [molsDic[keys][i]]
+                    else:
+                        clusterMol[cl] = [molsDic[keys][i]]
+                finalClusters += list(clusterMol.values())
+            else:
+                finalClusters += [molsDic[keys]]
 
         return finalClusters
 
@@ -350,7 +369,7 @@ class ProtocolConsensusDocking(EMProtocol):
     def countMolsInCluster(self, cluster, molDic):
         setIds = []
         for mol in cluster:
-            setId = molDic[mol.getPoseFile()]
+            setId = molDic[mol.getUniqueName()]
             if self.sameClust.get() or not setId in setIds:
                 setIds.append(setId)
         return len(setIds)
@@ -426,23 +445,6 @@ class ProtocolConsensusDocking(EMProtocol):
             item.setObjId(i+1)
         return inSet, idsDic
 
-    def createOutPDB(self, idsDic):
-        outStr = self.getTemplateOutPDB()
-        for pocket in self.consensusPockets:
-            outFile = pocket.getProteinFile()
-            newId, oldId = pocket.getObjId(), idsDic[pocket.getObjId()]
-            outStr += self.parseHETATM(outFile, oldId, newId)
-
-        outPDBFile = self._getExtraPath(self.getPDBName()) + '_out.pdb'
-        with open(outPDBFile, 'w') as f:
-            f.write(outStr)
-            f.write('\nTER\n')
-
-        pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
-        with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outPDBFile.split('/')[-1]))
-        return os.path.abspath(outPDBFile), os.path.abspath(pmlFile)
-
     def getTemplateOutPDB(self):
         templatePocket = None
         for pock in self.consensusPockets:
@@ -508,11 +510,22 @@ class ProtocolConsensusDocking(EMProtocol):
 
         return mol
 
+    def getConvMolNames(self):
+        molDir = self.getInputMolsDir()
+        convMolsName  = {}
+        for molFile in glob.glob(os.path.join(molDir, '*')):
+            convMolsName[getBaseName(molFile)] = molFile
+        return convMolsName
+
     def getAllInputMols(self):
         mols = []
+        convMolNames = self.getConvMolNames()
         for molSet in self.inputMoleculesSets:
             for mol in molSet.get():
-                mols.append(mol.clone())
+                newMol = mol.clone()
+                if mol.getUniqueName() in convMolNames:
+                    newMol.setPoseFile(os.path.relpath(convMolNames[newMol.getUniqueName()]))
+                mols.append(newMol)
         return mols
 
 

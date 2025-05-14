@@ -25,12 +25,13 @@
 # **************************************************************************
 
 import os
-from subprocess import Popen
 
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 
-from pwchem.objects import StructROI, SetOfStructROIs
+from pwem.viewers.mdviewer.viewer import MDViewer
+
+from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.constants import *
 from pwchem.protocols import ProtocolConsensusStructROIs
@@ -43,7 +44,7 @@ class StructROIPointsViewer(pwviewer.Viewer):
   # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
-    outHETMFile = obj.buildPDBhetatmFile()
+    hetatmFile = obj.buildPDBhetatmFile()
     pmlFile = obj.createPML(bBox=bBox)
 
     pymolV = PyMolViewer(project=self.getProject())
@@ -109,7 +110,10 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
     else:
       print('Cannot find outputStructROIs')
 
-    setV = BioinformaticsDataViewer(project=self.getProject())
+    try:
+      setV = MDViewer(project=self.getProject())
+    except:
+      setV = BioinformaticsDataViewer(project=self.getProject())
     return setV._visualize(molSet)
 
   def _validate(self):
@@ -168,21 +172,17 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
 
     def _defineParams(self, form):
       form.addSection(label='Visualization of consensus Structural ROIs')
-      form.addParam('outputSet', params.EnumParam,
+      pGroup = form.addGroup('Pymol General Viewer')
+      pGroup.addParam('outputSet', params.EnumParam,
                     choices=self.getChoices(), default=0,
                     label='Set of pockets output: ',
                     help='Set of pockets output to visualize'
                     )
-      form.addParam('displayTable', params.LabelParam,
-                    label='Display table view of set of Pockets: ',
-                    help='Table view'
-                    )
-
-      form.addParam('setClass', params.StringParam,
+      pGroup.addParam('setClass', params.StringParam,
                     label='Set of Pockets Class: ', default='-',
                     help='Pocket class in chosen set')
 
-      form.addParam('displayFPocket', params.EnumParam,
+      pGroup.addParam('displayFPocket', params.EnumParam,
                     choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)', 'VMD'],
                     default=0, condition='setClass=="{}"'.format(FPOCKET),
                     display=params.EnumParam.DISPLAY_HLIST,
@@ -191,20 +191,25 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
                          '*VMD*: display Set of Pockets with VMD.'
                     )
 
-      form.addParam('displayPyMol', params.EnumParam,
+      pGroup.addParam('displayPyMol', params.EnumParam,
                     choices=['PyMol (Pocket Points)', 'PyMol (Contact Surface)'],
                     default=0, condition='setClass!="{}"'.format(FPOCKET),
                     display=params.EnumParam.DISPLAY_HLIST,
                     label='Display output Set of Pockets with: ',
                     help='*PyMol*: display Set of Pockets and pockets as points / surface'
                     )
-      form.addParam('displayBBoxes', params.BooleanParam,
+      pGroup.addParam('displayBBoxes', params.BooleanParam,
                     default=False, label='Display pocket bounding boxes',
                     condition='not (setClass=="{}" and displayFPocket==0)'.format(FPOCKET),
                     help='Display the bounding boxes in pymol to check the size for the localized docking')
-      form.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
+      pGroup.addParam('pocketRadiusN', params.FloatParam, label='Grid radius vs pocket radius: ',
                     default=1.1, condition='displayBBoxes and not (setClass=="{}" and displayFPocket==0)'.format(FPOCKET),
                     help='The radius * n of each pocket will be used as grid radius')
+      
+      tGroup = form.addGroup('Table view')
+      tGroup.addParam('displayTable', params.LabelParam,
+                      label='Display table view of set of Pockets: ',
+                      help='Table view')
 
     def getChoices(self):
         outputLabels = []
@@ -250,7 +255,10 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
     #Display functions
     def _showTable(self, paramName=None):
       outPockets = getattr(self.protocol, self.getEnumText('outputSet'))
-      setV = BioinformaticsDataViewer(project=self.getProject())
+      try:
+        setV = MDViewer(project=self.getProject())
+      except:
+        setV = BioinformaticsDataViewer(project=self.getProject())
       return setV._visualize(outPockets)
 
     def _showAtomStructPyMolPoints(self):

@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, json
+import json
 from os.path import abspath
 
 from pyworkflow.protocol import params
@@ -33,7 +33,6 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import PharmFeature, PharmacophoreChem
 from pwchem.constants import *
 from pwchem.utils import *
-from pwchem import Plugin as pwchemPlugin
 
 
 ADD, REM, MOD = 'ADD', 'REMOVE', 'MODIFY'
@@ -42,7 +41,6 @@ class ProtocolPharmacophoreModification(EMProtocol):
     """
     Perform the modification of a pharmacophore.
     Allows to add, remove or modify its chemical features
-
     """
     _label = 'Pharmacophore modification'
 
@@ -115,7 +113,7 @@ class ProtocolPharmacophoreModification(EMProtocol):
             outPharm = PharmacophoreChem().create(outputPath=self._getPath())
 
         if self.inputAtomStruct.get():
-            outPharm.setProteinFile(abspath(self.inputAtomStruct.get().getFileName()))
+            outPharm.setProteinFile(self.inputAtomStruct.get().getFileName())
 
         operDic, addList = self.getOperationDic()
         featsDic = self.getCurrentFeaturesDic()

@@ -1,0 +1,28 @@
+name: Build & test plugin
+
+on:
+  pull_request:
+    branches: [devel, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup enviroment
+        uses: scipion-chem/.github/.github/composites/install-scipion@main
+      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+  
+      - name: Install plugin from pull request
+        working-directory: ${{ github.workspace }}
+        run: ../scipion/scipion3 installp -p . --devel
+      
+      - name: Run tests
+        working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
+        run: |
+          pip install --user scipion-testrunner
+          scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json

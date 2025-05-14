@@ -26,64 +26,15 @@
 import os, sys, copy
 from operator import itemgetter
 
-#import pandas as pd
-import numpy as np
-
-from sklearn import datasets, cluster
-
 from rdkit import RDConfig, Chem, Geometry, DistanceGeometry
 from rdkit.Chem import ChemicalFeatures, rdDistGeom, Draw, rdMolTransforms, AllChem
 from rdkit.Chem.Pharm3D import Pharmacophore, EmbedLib
 from rdkit.Numerics import rdAlignment
 
+from utils import getMolFilesDic, parseParams, writeMol, getBaseName
 
 ABSOLUTE, PROP_MOLS, PROP_FEATS = ['Absolute', 'Molecules proportion', 'Features proportion']
 DBSCAN, KMEANS = ['DBSCAN', 'KMeans']
-
-def getBaseFileName(filename):
-    return os.path.splitext(os.path.basename(filename))[0]
-
-def readLigands(ligandsFiles):
-    mols_dict = {}
-
-    for molFile in ligandsFiles:
-        if molFile.endswith('.mol2'):
-            m = Chem.MolFromMol2File(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.mol'):
-            m = Chem.MolFromMolFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.pdb'):
-            m = Chem.MolFromPDBFile(molFile)
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.smi'):
-            f = open(molFile, "r")
-            firstline = next(f)
-            m = Chem.MolFromSmiles(str(firstline))
-            mols_dict[m] = molFile
-
-        elif molFile.endswith('.sdf'):
-            suppl = Chem.SDMolSupplier(molFile)
-            for mol in suppl:
-                mols_dict[mol] = molFile
-
-    mols = list(mols_dict.keys())
-
-    return mols_dict, mols
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split('::')
-            if key == 'ligandFiles' or key == 'moleculesFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
 
 
 def buildPharmacophore(pharmDic):
@@ -124,15 +75,11 @@ def transformEmbeddings(pcophore, embeddings, atomMatch):
     confs.append(conf)
   return SSDs, confs
 
-def writeMol(mol, outFile, cid=-1):
-    w = Chem.SDWriter(outFile)
-    w.write(mol, cid)
-    w.close()
-
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile> <outputDir>
     '''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles', 'moleculesFiles'], sep='::')
+    it = sys.argv[1].split('_')[-1].split('.')[0]
     outDir = sys.argv[2]
     ligandFiles = paramsDic['ligandFiles']
     pharmDic = eval(paramsDic['pharmDic'])
@@ -146,7 +93,7 @@ if __name__ == "__main__":
 #####################################################################
     # Load molecules and pharmacophore to RDKit objects
     dict_molecules = {}
-    molFileDic, mols = readLigands(ligandFiles)
+    molFileDic, mols = getMolFilesDic(ligandFiles)
     if len(mols) > 0:
         pcophore = buildPharmacophore(pharmDic)
 
@@ -156,9 +103,15 @@ if __name__ == "__main__":
 
         res = {}
         for i, mol in enumerate(mols):
-            boundsMat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
-            canMatch, allMatches = EmbedLib.MatchPharmacophoreToMol(mol, featFactory, pcophore)
+            try:
+                boundsMat = rdDistGeom.GetMoleculeBoundsMatrix(mol)
+                canMatch, allMatches = EmbedLib.MatchPharmacophoreToMol(mol, featFactory, pcophore)
+            except:
+                pass
             if canMatch:
+                # for (i, match) in enumerate(allMatches):
+                #     for f in match:
+                #         print("%d %s %s %s" % (i, f.GetFamily(), f.GetType(), f.GetAtomIds()))
                 failed, boundsMatMatched, matched, matchDetails = \
                     EmbedLib.MatchPharmacophore(allMatches, boundsMat, pcophore, useDownsampling=downSample)
                 if failed:
@@ -168,9 +121,13 @@ if __name__ == "__main__":
                 print("Couldn't match molecule {}".format(molFileDic[mol]))
                 continue
             atomMatch = [list(x.GetAtomIds()) for x in matched]
+            # for match in matched:
+            #     print("%s %d" % (match.GetFamily(), match.GetAtomIds()[0]))
+
             try:
                 molH = Chem.AddHs(mol, addCoords=True)
-                bm, embeddings, numFail = EmbedLib.EmbedPharmacophore(molH, atomMatch, pcophore, randomSeed=44,
+                Chem.AssignStereochemistry(molH, force=True, cleanIt=True)
+                bm, embeddings, numFail = EmbedLib.EmbedPharmacophore(molH, atomMatch, pcophore, randomSeed=44, silent=True,
                                                                       targetNumber=nAlignments, count=nAlignments*10)
                 # always yielding equal embeddings for all nAlignments
                 if optimize:
@@ -182,30 +139,31 @@ if __name__ == "__main__":
                 else:
                     optEmbeddings = embeddings
 
-            except ValueError:
+            except:
                 print("Bounds smoothing failed for molecule {}".format(molFileDic[mol]))
                 continue
 
 
             SSDs, confs = transformEmbeddings(pcophore, optEmbeddings, atomMatch)
-            bestFitIndex = min(enumerate(SSDs), key=itemgetter(1))[0]
+            if SSDs:
+                bestFitIndex = min(enumerate(SSDs), key=itemgetter(1))[0]
 
-            #print('Best: ', bestFitIndex)
-            #print('SSDs: ', SSDs)
-            prevSSDs = []
-            for i, conf in enumerate(confs):
-                if maxSSD >= SSDs[i] and not SSDs[i] in prevSSDs:
-                    optMol = optEmbeddings[i]
-                    outFile = os.path.join(outDir, getBaseFileName(molFileDic[mol]) + '_{}.sdf'.format(i))
-                    writeMol(optMol, outFile, cid=confs[i].GetId())
-                    prevSSDs.append(SSDs[i])
+                #print('Best: ', bestFitIndex)
+                #print('SSDs: ', SSDs)
+                prevSSDs = []
+                for i, conf in enumerate(confs):
+                    if maxSSD >= SSDs[i] and not SSDs[i] in prevSSDs:
+                        optMol = optEmbeddings[i]
+                        outFile = os.path.join(outDir, getBaseName(molFileDic[mol]) + '_{}.sdf'.format(i))
+                        writeMol(optMol, outFile, cid=confs[i].GetId())
+                        prevSSDs.append(SSDs[i])
 
-                    res[mol] = [outFile, SSDs[i]]
+                        res[mol] = [outFile, SSDs[i]]
 
-        with open(os.path.join(outDir, 'deviations.tsv'), 'w') as f:
+        with open(os.path.join(outDir, f'deviations_{it}.tsv'), 'w') as f:
             f.write('OriginalMolecule\tOutputMolecule\tDeviation\n')
             for mol in res:
-                f.write('{}\t{}\t{}\n'.format(getBaseFileName(molFileDic[mol]), res[mol][0], res[mol][1]))
+                f.write('{}\t{}\t{}\n'.format(getBaseName(molFileDic[mol]), res[mol][0], res[mol][1]))
 
     else:
         print('None of the input molecules could be read by RDKit.\n'

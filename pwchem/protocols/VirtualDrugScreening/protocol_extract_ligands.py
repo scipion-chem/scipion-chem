@@ -40,11 +40,6 @@ from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import *
 
 
-def is_het(residue):
-    res = residue.id[0]
-    return res != " " and res != "W"
-
-
 class ResidueSelect(Select):
     def __init__(self, chain, residue):
         self.chain = chain
@@ -55,7 +50,7 @@ class ResidueSelect(Select):
 
     def accept_residue(self, residue):
         """ Recognition of heteroatoms - Remove water molecules """
-        return residue == self.residue and is_het(residue)
+        return residue == self.residue and isHet(residue)
 
 
 class ProtExtractLigands(EMProtocol):
@@ -121,21 +116,21 @@ class ProtExtractLigands(EMProtocol):
         else:
             chain_id = None
 
-        cleanFile = self._getPath('{}.pdb'.format(getBaseFileName(inputStructureFile)))
-        tmpCleanFile = self._getTmpPath('{}.pdb'.format(getBaseFileName(inputStructureFile)))
+        cleanFile = self._getPath('{}.pdb'.format(getBaseName(inputStructureFile)))
+        tmpCleanFile = self._getTmpPath('{}.pdb'.format(getBaseName(inputStructureFile)))
 
         # Keep only structure chains selected, with ligands for extraction
-        tmpCleanFile = clean_PDB(inputStructureFile, tmpCleanFile, self.waters.get(), False, chain_id)
+        tmpCleanFile = cleanPDB(inputStructureFile, tmpCleanFile, self.waters.get(), False, chain_id)
         ligandFiles = self.extract_ligands(tmpCleanFile)
 
         # Keep only structure chains selected, without ligands for reference structure
-        cleanedPDB = clean_PDB(inputStructureFile, cleanFile, self.waters.get(), True, chain_id)
+        cleanedPDB = cleanPDB(inputStructureFile, cleanFile, self.waters.get(), True, chain_id)
 
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         outputSet.setProteinFile(cleanedPDB)
         outputSet.setDocked(True)
         for i, lFile in enumerate(ligandFiles):
-            molName = getBaseFileName(lFile).split('-')[0]
+            molName = getBaseName(lFile).split('-')[0]
             oMol = SmallMolecule(smallMolFilename=lFile, molName=molName, poseFile=lFile, poseId=1)
             oMol.setGridId(i+1)
             oMol.setConfId(i+1)
@@ -146,7 +141,7 @@ class ProtExtractLigands(EMProtocol):
 
     def extract_ligands(self, struct_file):
         """ Extraction of the heteroatoms of .pdb files """
-        struct_name = getBaseFileName(struct_file)
+        struct_name = getBaseName(struct_file)
         if struct_file.endswith('.pdb') or struct_file.endswith('.ent'):
             struct = PDBParser().get_structure(struct_name, struct_file)
         elif struct_file.endswith('.cif'):
@@ -162,7 +157,7 @@ class ProtExtractLigands(EMProtocol):
         for model in struct:
             for chain in model:
                 for residue in chain:
-                    if not is_het(residue) or len(list(residue.get_atoms())) < self.nAtoms.get():
+                    if not isHet(residue) or len(list(residue.get_atoms())) < self.nAtoms.get():
                         continue
                     print(f"saving {chain} {residue}")
                     outFile = self._getPath(f"{struct_name}_{residue.get_resname()}-{i}.pdb")

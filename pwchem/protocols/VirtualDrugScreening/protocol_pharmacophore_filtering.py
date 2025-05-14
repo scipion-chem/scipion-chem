@@ -24,14 +24,12 @@
 # *
 # **************************************************************************
 
-import os, json
 from os.path import abspath
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.constants import *
 from pwchem.utils import *
 from pwchem import Plugin as pwchemPlugin
 
@@ -41,9 +39,9 @@ scriptName = 'pharmacophore_filtering.py'
 class ProtocolPharmacophoreFiltering(EMProtocol):
     """
     Perform the filtering of a set of small molecules that match an input pharmacophore.
-
     """
     _label = 'Pharmacophore filtering'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     ##### -------------------------- DEFINE param functions ----------------------
 
@@ -78,14 +76,19 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
                        label='Maximum deviation (SSD): ',
                        help="Maximum sum squares deviation of the ligand aligned to the pharmacophore to be considered")
 
+        form.addParallelSection(threads=4, mpi=1)
 
 
         # --------------------------- STEPS functions ------------------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertStep')
-        self._insertFunctionStep('filterStep')
-        self._insertFunctionStep('createOutputStep')
+        cStep = self._insertFunctionStep('convertStep')
+
+        aSteps = []
+        nt = self.numberOfThreads.get()
+        for it in range(nt-1):
+            aSteps += [self._insertFunctionStep('filterStep', it, prerequisites=[cStep])]
+        self._insertFunctionStep('createOutputStep', prerequisites=aSteps)
 
     def convertStep(self):
         tmpDir, outDir = abspath(self._getTmpPath('convLigands')), self.getInputLigandsDir()
@@ -109,13 +112,13 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
             # we need the input files in a RDKit readable format (not pdbqt for example)
             args = ' --multiFiles -iD "{}" --pattern "{}" -of pdb --outputDir "{}"'. \
                 format(tmpDir, '*', outDir)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
-    def filterStep(self):
-        paramsPath = self.writeParamsFile()
+    def filterStep(self, it):
+        paramsPath = self.writeParamsFile(it)
 
         args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
-        pwchemPlugin.runScript(self, scriptName, args, env='rdkit', cwd=self._getPath())
+        pwchemPlugin.runScript(self, scriptName, args, env=RDKIT_DIC, cwd=self._getPath())
 
     def createOutputStep(self):
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath())
@@ -127,17 +130,17 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
         resDic = self.parseResults()
         for mol in self.inputSmallMolecules.get():
-            if mol.getPoseFile() and getBaseFileName(mol.getPoseFile()) in resDic:
-                molBase = getBaseFileName(mol.getPoseFile())
-            elif mol.getFileName() and getBaseFileName(mol.getFileName()) in resDic:
-                molBase = getBaseFileName(mol.getFileName())
+            if mol.getPoseFile() and getBaseName(mol.getPoseFile()) in resDic:
+                molBase = getBaseName(mol.getPoseFile())
+            elif mol.getFileName() and getBaseName(mol.getFileName()) in resDic:
+                molBase = getBaseName(mol.getFileName())
             else:
                 continue
 
             newSmallMol = SmallMolecule()
             newSmallMol.copy(mol, copyId=False)
             newSmallMol.setGridId(1)
-            newSmallMol.setPoseFile(resDic[molBase][0])
+            newSmallMol.setPoseFile(os.path.relpath(resDic[molBase][0]))
             newSmallMol.setEnergy(resDic[molBase][1])
 
             poseId = resDic[molBase][0].split('.')[0].split('_')[-1]
@@ -154,16 +157,16 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
 
-    def writeParamsFile(self):
-        paramsPath = abspath(self._getExtraPath('inputParams.txt'))
+    def writeParamsFile(self, it):
+        paramsPath = abspath(self._getExtraPath(f'inputParams_{it}.txt'))
         convLigandNames = os.listdir(self.getInputLigandsDir())
+        cLigNames = makeSubsets(convLigandNames, nt=self.numberOfThreads.get()-1, cloneItem=False)[it]
 
         ligandFiles = []
-        for fnLigand in convLigandNames:
+        for fnLigand in cLigNames:
             ligandFiles.append(os.path.join(self.getInputLigandsDir(), fnLigand))
 
         pharmDic = self.inputPharmacophore.get().pharm2Dic()
-
 
         with open(paramsPath, 'w') as f:
             # Esta linea vale --> es la que lleva al archivo output
@@ -185,9 +188,11 @@ class ProtocolPharmacophoreFiltering(EMProtocol):
 
     def parseResults(self):
         resDic = {}
-        with open(self._getPath('deviations.tsv')) as f:
-            f.readline()
-            for line in f:
-                oriBase, outFile, dev = line.split()
-                resDic[oriBase] = [outFile, dev]
+        for file in os.listdir(self._getPath()):
+            if file.startswith('deviations'):
+                with open(self._getPath(file)) as f:
+                    f.readline()
+                    for line in f:
+                        oriBase, outFile, dev = line.split()
+                        resDic[oriBase] = [outFile, dev]
         return resDic

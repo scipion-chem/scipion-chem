@@ -31,6 +31,8 @@ from pwem.objects.data import Sequence
 
 from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
+from pwchem.constants import BIOCONDA_DIC
+from pwchem import Plugin
 
 EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
                   'SwisProt': 'sw', 'NCBI': 'ncbi',
@@ -44,7 +46,8 @@ EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x
 def convertEMBOSSformat(inputAlignmentFile, embossFormat, outputAligmentFile):
   '''Connvert alignment files. Options in EMBOSS_FORMATS dictionary
   Returns a command line which must be executed into the scipion environment'''
-  cl_run = 'seqret -sequence {} -osformat2 {} {}'. \
+  cl_run = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+  cl_run += 'seqret -sequence {} -osformat2 {} {}'. \
     format(inputAlignmentFile, embossFormat, outputAligmentFile)
   return cl_run
 
@@ -112,8 +115,8 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False
         fmt = 'clu'
 
     # Alignment
-    cline = str(alignClustalSequences(oriFasta, outPath))
-    cline += ' --outfmt={}'.format(fmt)
+    activate_env_line = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+    cline = '{} {} --outfmt={}'.format(activate_env_line, alignClustalSequences(oriFasta, outPath), fmt)
     if force:
         cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)
@@ -157,10 +160,41 @@ def calculateIdentity(alignFile):
             return round(100 * ident, 2)
 
 
+def fastFastaExport(seqSet, outFasta):
+  lines = []
+  for seq in seqSet:
+    lines.append(f'>{seq.getSeqName()}\n{seq.getSequence()}\n')
+
+  with open(outFasta, 'w') as f:
+    f.write(''.join(lines))
 
 
+CLUSTALO, MUSCLE, MAFFT = 'CLUSTAL_OMEGA', 'MUSCLE', 'MAFFT'
+def getMultipleAlignmentCline(programName, inputFasta, outputFile, extraArgs=None):
+  programName = programName.upper()
+  if extraArgs is None or extraArgs.strip() == '':
+    if programName == MUSCLE:
+      extraArgs = '-align'
+    elif programName == MAFFT:
+      extraArgs = '--auto'
+    elif programName == CLUSTALO:
+      extraArgs = '--auto'
+    else:
+      extraArgs = ''
 
+  cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+  # Clustal Omega
+  if programName == CLUSTALO:
+    cline += 'clustalo -i {} {} -o {} --outfmt=clu'.format(inputFasta, extraArgs, outputFile)
 
+  # Muscle
+  elif programName == MUSCLE:
+    cline += 'muscle {} {} -output {}'.format(extraArgs, inputFasta, outputFile)
 
+  elif programName == MAFFT:
+    cline += 'mafft {} --clustalout {} > {}'.format(extraArgs, inputFasta, outputFile)
+  else:
+    cline += 'exit'
 
+  return cline
 

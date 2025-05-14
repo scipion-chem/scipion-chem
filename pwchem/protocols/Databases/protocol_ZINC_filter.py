@@ -27,9 +27,8 @@
 import os, glob
 from urllib.request import urlopen
 
-import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import PointerParam, BooleanParam, EnumParam, TextParam, LabelParam, STEPS_PARALLEL
+from pyworkflow.protocol.params import PointerParam, EnumParam, TextParam, LabelParam, STEPS_PARALLEL
 
 from pwchem.utils import performBatchThreading
 
@@ -178,14 +177,20 @@ class ProtChemZINCFilter(EMProtocol):
             except:
                 print("Could not retrieve {} information from ZINC. Keeping the molecule by default".format(zincId))
                 with open(presFile, 'a') as f:
-                    f.write('{}\t-\t{}\t-\t{}\t{}\n'.format(zincId, '\t'.join(['Not_found'] * len(keepBools)),
-                                                            '\t'.join(['Not_found'] * len(remBools)), add))
+                    f.write('{}\t-\t{}\t-\t{}\t{}\n'.format(zincId, '\t'.join(['Not_found'] * len(filDic['Keep'])),
+                                                            '\t'.join(['Not_found'] * len(filDic['Remove'])), add))
 
             if add:
                 molLists[it].append(mol)
 
     def getSummaryFile(self):
         return self._getPath("summary.txt")
+
+    def createElementLine(self):
+        keep = self.getEnumText('mode')
+        subsetKey = self.getEnumText('subGroup')
+        subset = self.getEnumText(f'subset_{subsetKey}')
+        return f'{keep} if in {subset}\n'
 
     def parseFilter(self):
         filDic = {'Keep': [], 'Remove': []}

@@ -24,15 +24,16 @@
 # *
 # **************************************************************************
 
-import os, time, json, sys, glob
-from urllib.request import urlopen, urlretrieve
+import os, time, json, glob
+from urllib.request import urlopen
 
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
 from pwchem import Plugin
-from pwchem.utils import runOpenBabel, performBatchThreading
+from pwchem.utils import performBatchThreading
+from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
 PUBCHEMID, PUBCHEMNAME, ZINC, CHEMBL = 1, 2, 3, 4
@@ -101,6 +102,8 @@ class ProtChemSmallMolIdentify(EMProtocol):
                     for dbName in DbChoices:
                         if dbName in smiDic[smi]:
                             setattr(mol, dbName, pwobj.String(smiDic[smi][dbName]))
+                        else:
+                            setattr(mol, dbName, pwobj.String(None))
 
                     # Setting molname
                     chdbName = self.getEnumText('nameDatabase')
@@ -154,11 +157,11 @@ class ProtChemSmallMolIdentify(EMProtocol):
             args = ' -i "{}" -of smi -o {} --outputDir {} -nt {}'.format(fnSmall, fnOut, outDir, nt)
 
             if self.useManager.get() == RDKIT or fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
-                Plugin.runScript(self, 'rdkit_IO.py', args, env='rdkit', cwd=outDir)
+                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
 
             # Formatting with OpenBabel
             elif self.useManager.get() == OPENBABEL:
-                Plugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
         return self.parseSMI(fnOut)
 

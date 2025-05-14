@@ -25,7 +25,7 @@
 # *
 # **************************************************************************
 
-import os, re, pickle
+import os, pickle
 from os.path import abspath
 
 from pyworkflow.protocol import params
@@ -44,7 +44,6 @@ scriptName = 'pharmacophore_generation.py'
 class ProtocolPharmacophoreGeneration(EMProtocol):
     """
     Perform the construction of a consensus pharmacophore from a set of docked small molecules
-
     """
     _label = 'Pharmacophore generation'
 
@@ -57,6 +56,11 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
                       pointerClass='SetOfSmallMolecules', allowsNull=False,
                       label="Input reference ligands: ",
                       help='Select the ligands PDB files')
+
+        form.addParam('inputReceptor', params.PointerParam,
+                      pointerClass='AtomStruct', allowsNull=True,
+                      label="Input receptor: ",  expertLevel=params.LEVEL_ADVANCED,
+                      help='Input receptor in case the ligands are not associated with one')
 
         form.addParam('propRadii', params.FloatParam, default=0.5,
                        label='Pharmacophore radii proportion: ', expertLevel=params.LEVEL_ADVANCED,
@@ -132,7 +136,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
             os.makedirs(outDir)
 
         for ligand in self.inputSmallMolecules.get():
-            inFile = ligand.getPoseFile()
+            inFile = ligand.getPoseFile() if ligand.getPoseFile() else ligand.getFileName()
             if not inFile.split('.')[-1] in ['pdb', 'mol2', 'sdf', 'mol']:
                 shutil.copy(inFile, os.path.join(tmpDir, os.path.basename(inFile)))
             else:
@@ -142,20 +146,20 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
             # we need the input files in a RDKit readable format (not pdbqt for example)
             args = ' --multiFiles -iD "{}" --pattern "{}" -of pdb --outputDir "{}"'. \
                 format(tmpDir, '*', outDir)
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
         smiDir = self.getInputSMIDir()
         if not os.path.exists(smiDir):
             os.makedirs(smiDir)
         args = ' --multiFiles -iD "{}" --pattern "{}" -of smi --outputDir "{}"'. \
             format(outDir, '*', smiDir)
-        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env='plip', cwd=outDir)
+        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
     def generationStep(self):
         paramsPath = self.writeParamsFile()
 
         args = ' {} {}'.format(paramsPath, abspath(self._getPath()))
-        pwchemPlugin.runScript(self, scriptName, args, env='rdkit', cwd=self._getPath())
+        pwchemPlugin.runScript(self, scriptName, args, env=RDKIT_DIC, cwd=self._getPath())
 
     def createOutputStep(self):
         cenPath = os.path.abspath(self._getPath('cluster_centers.pkl'))
@@ -167,7 +171,12 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
           radii = pickle.load(clRadii)
 
         outPharm = PharmacophoreChem().create(outputPath=self._getPath())
-        outPharm.setProteinFile(abspath(self.inputSmallMolecules.get().getProteinFile()))
+        if self.inputSmallMolecules.get().getProteinFile():
+            outPharm.setProteinFile(self.inputSmallMolecules.get().getProteinFile())
+
+        elif self.inputReceptor.get().getFileName():
+            outPharm.setProteinFile(self.inputReceptor.get().getFileName())
+
         for feat in radii:
             feat_radii = radii[feat]
             for i, loc in enumerate(centers[feat]):
@@ -188,7 +197,7 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
 
         smiDic = {}
         for fnLigand in ligandsFiles:
-            ligandBase = getBaseFileName(fnLigand)
+            ligandBase = getBaseName(fnLigand)
             with open(smiFileDic[ligandBase]) as f:
                 smile = f.read().split()[0].strip()
 
@@ -229,5 +238,5 @@ class ProtocolPharmacophoreGeneration(EMProtocol):
     def getBaseNameDic(self, inDir):
         bDic = {}
         for file in os.listdir(inDir):
-            bDic[getBaseFileName(file)] = abspath(os.path.join(inDir, file))
+            bDic[getBaseName(file)] = abspath(os.path.join(inDir, file))
         return bDic

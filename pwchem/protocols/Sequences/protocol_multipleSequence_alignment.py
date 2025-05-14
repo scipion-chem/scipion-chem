@@ -29,13 +29,13 @@ import os
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwem.protocols import EMProtocol
 
-from pwchem.utils.utilsFasta import EMBOSS_FORMATS, convertEMBOSSformat, parseFasta, parseAlnFile
+from pwchem.utils.utilsFasta import EMBOSS_FORMATS, parseFasta, parseAlnFile, getMultipleAlignmentCline
 from pwchem.objects import SetOfSequencesChem, Sequence
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
-    """Run multiple sequence alignment for a set of sequences"""
+    """Runs multiple sequence alignment for a set of sequences"""
     _label = 'multiple sequence alignment'
 
     def _defineParams(self, form):
@@ -78,36 +78,32 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         programName = self.getEnumText('programList')
         print('Aligning with: ', programName)
         setForAlignment = self.inputSequences.get()
-        input_file = os.path.abspath(self._getPath('SequencesForAlignment.fasta'))
-        setForAlignment.exportToFile(input_file)
-        extraArgs = self.getExtraArgs()
+        inFile = os.path.abspath(self._getPath('SequencesForAlignment.fasta'))
+        setForAlignment.exportToFile(inFile)
 
         # Clustal Omega
         if programName == CLUSTALO:
-            output_file = os.path.abspath(self._getPath('clustal_Omega.aln'))
-            cline = 'clustalo -i {} {} -o {} --outfmt=clu'.format(input_file, extraArgs, output_file)
-
+            outFile = os.path.abspath(self._getPath('clustal_Omega.aln'))
         # Muscle
         elif programName == MUSCLE:
-            output_file = os.path.abspath(self._getPath('muscle.aln'))
-            cline = 'muscle {} {} -output {}'.format(extraArgs, input_file, output_file)
+            outFile = os.path.abspath(self._getPath('muscle.aln'))
 
         elif programName == MAFFT:
-            output_file = os.path.abspath(self._getPath('mafft.aln'))
-            cline = 'mafft {} --clustalout {} > {}'.format(extraArgs, input_file, output_file)
-
+            outFile = os.path.abspath(self._getPath('mafft.aln'))
+        
+        cline = getMultipleAlignmentCline(programName, inFile, outFile, extraArgs=self.getExtraArgs())
         self.runJob(cline, '')
 
         if programName == MUSCLE:
-            outSeqDic = parseFasta(output_file)
+            outSeqDic = parseFasta(outFile)
         else:
-            outSeqDic = parseAlnFile(output_file)
+            outSeqDic = parseAlnFile(outFile)
 
         outSeqs = SetOfSequencesChem.create(outputPath=self._getPath())
         for seqId in outSeqDic:
             outSeqs.append(Sequence(name=seqId, sequence=outSeqDic[seqId], id=seqId))
 
-        outSeqs.setAlignmentFileName(output_file)
+        outSeqs.setAlignmentFileName(os.path.relpath(outFile))
         outSeqs.setAligned(True)
         self._defineOutputs(outputSequences=outSeqs)
 
@@ -115,7 +111,7 @@ class ProtChemMultipleSequenceAlignment(EMProtocol):
         if self.additionalFormat:
             embossSelectedFormat = EMBOSS_FORMATS[self.getEnumText('embossFormats')]
             embossFile = self._getPath('{}.{}'.format(programName.lower(), embossSelectedFormat))
-            embossFile = outSequences.convertEMBOSSformat(embossSelectedFormat, embossFile)
+            embossFile = outSeqs.convertEMBOSSformat(embossSelectedFormat, embossFile)
 
 
     def _validate(self):

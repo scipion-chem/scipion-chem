@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
 # * Authors: Alba Lomas Redondo (albalomasredon@gmail.com)
-# * Authors: Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# *          Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *
 # *
 # * This program is free software; you can redistribute it and/or modify
@@ -12,37 +11,33 @@
 # *
 # * This program is distributed in the hope that it will be useful,
 # * but WITHOUT ANY WARRANTY; without even the implied warranty of
-# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # * GNU General Public License for more details.
 # *
 # * You should have received a copy of the GNU General Public License
 # * along with this program; if not, write to the Free Software
 # * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-# * 02111-1307  USA
+# * 02111-1307 USA
 # *
-# *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# * All comments concerning this program package may be sent to the
+# * e-mail address 'you@yourinstitution.email'
 # *
 # **************************************************************************
 
+# General imports
+import os
 
+# Scipion em imports
 from pyworkflow.protocol import params
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message
-from pwchem.objects import SetOfSmallMolecules
-from pwchem.utils import *
-import os, re
+
+# Plugin imports
 from pwchem import Plugin
-from pyworkflow.utils.path import copyFile
-from pwchem.utils import fillEmptyAttributes
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pyworkflow.protocol.params import PathParam, StringParam, BooleanParam
-import csv
-import glob
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.constants import RDKIT_DIC
 
 scriptName = 'fingerprint_filtering.py'
-
 
 class ProtocolFingerprintFiltering(EMProtocol):
     """
@@ -51,12 +46,10 @@ class ProtocolFingerprintFiltering(EMProtocol):
     Fingerprints are calculated for all compounds (MACCS or Morgan) and
     compared through a similarity coeffciente which ranges from 0 (no similarity) to 1 (top similarity).
     It is possible to choose between Tanimoto and Dice coeffcient as similarity measures
-
     """
     _label = 'Fingerprint filtering'
     _fpChoices = ['Morgan', 'MACCS']
     _coefChoices = ['Tanimoto', 'Dice']
-
 
     ##### -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -98,7 +91,7 @@ class ProtocolFingerprintFiltering(EMProtocol):
         mols = self.inputSmallMolecules.get()
         paramsPath = os.path.abspath(self._getExtraPath('inputParams.txt'))
         self.writeParamsFile(paramsPath, mols)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
     def createOutputStep(self):
         filtered_molecules_dict = self.parseResults(self._getPath("results.tsv"))
@@ -107,16 +100,15 @@ class ProtocolFingerprintFiltering(EMProtocol):
 
         mols = self.inputSmallMolecules.get()
         for mol in mols:
-            file = os.path.abspath(mol.getFileName())
-            if file in filtered_molecules:
-                mol._fingerprintSimilarity = pwobj.String(filtered_molecules_dict[file])
+            molFile = os.path.abspath(mol.getFileName())
+            if molFile in filtered_molecules:
+                mol._fingerprintSimilarity = pwobj.String(filtered_molecules_dict[molFile])
                 newMols.append(mol)
 
         newMols.updateMolClass()
         self._defineOutputs(outputSmallMolecules=newMols)
 
     # --------------- INFO functions -------------------------
-
     def _citations(self):
         return []
 
@@ -134,10 +126,8 @@ class ProtocolFingerprintFiltering(EMProtocol):
         return summary
 
     # --------------------------- UTILS functions -----------------------------------
-
     def writeParamsFile(self, paramsFile, molsScipion):
         molFiles = []
-        file_mol_dict = {}
         f = open(paramsFile, 'w')
         f.write('outputPath: results.tsv\n')
         for mol in molsScipion:
@@ -152,7 +142,6 @@ class ProtocolFingerprintFiltering(EMProtocol):
 
         return paramsFile
 
-
     def getRefFile(self):
         if not hasattr(self, 'refFile'):
             for mol in self.inputRefSmallMolecules.get():
@@ -161,18 +150,13 @@ class ProtocolFingerprintFiltering(EMProtocol):
         return self.refFile
 
     def getCoefficient(self):
-        function = self.getEnumText('coefChoice')
-        return function
+        return self.getEnumText('coefChoice')
 
     def parseResults(self, outputFile):
         molecules = {}
         with open(outputFile) as read_tsv:
             for row in read_tsv:
-                if row[0] == "#":
-                    pass
-                else:
+                if row[0] != "#":
                     row1 = row.split("\t")
                     molecules[row1[0]] = row1[1]
         return molecules
-
-

@@ -71,7 +71,12 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
         outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, outFormat)))
         outObj = pybel.Outputfile(outFormat, outFile, overwrite=overW)
 
-        for mol in mols:
+        for i, mol in enumerate(mols):
+            if outName:
+                if len(mols) == 1:
+                    mol.title = outName
+                else:
+                    mol.title = f'{outName}_{i}'
             outObj.write(mol)
         outObj.close()
         return outFile
@@ -104,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument('--multiFiles', default=False, action='store_true', help='Multiple files to convert')
     parser.add_argument('-iD', '--inputDir', type=str, help='Input molecule files directory if multiFiles')
     parser.add_argument('-pat', '--pattern', type=str, required=False, default='',
-                        help='Input molecule files directory if multiFiles')
+                        help='Input molecule files pattern if multiFiles')
 
     parser.add_argument('-i', '--inputFilename', default='', type=str, help='Input molecule file')
     parser.add_argument('-of', '--outputFormat', type=str, default='mol2', help='Output format')

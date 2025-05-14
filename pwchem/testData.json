@@ -1,0 +1,21 @@
+{
+	"datasets": ["model_building_tutorial", "smallMolecules"],
+	"skippable": {
+		"gpu": [
+
+		],
+		"dependencies": [
+			{
+				"name": "scipion-chem-autodock",
+				"module": "autodock",
+				"tests": [
+					"tests_docking.TestScoreDocking",
+					"tests_docking.TestRankDockingScore",
+					"tests_docking.TestConsensusDocking"
+				]
+			}
+		],
+		"others": [
+		]
+	}
+}

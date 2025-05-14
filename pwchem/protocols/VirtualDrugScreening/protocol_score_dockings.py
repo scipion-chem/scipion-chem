@@ -31,16 +31,16 @@ This protocol is used to score docking positions obtained by several software us
 available in the Open Drug Discovery Toolkit (ODDT, https://github.com/oddt/oddt)
 
 """
+import os, glob, time
+
 from pyworkflow.protocol import params
+from pyworkflow.utils import Message, createLink
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import Message
+
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import os, re
-from scipy.stats import pearsonr, zscore
-
+from pwchem.constants import RDKIT_DIC
 from pwchem import Plugin
-from pwchem.utils import fillEmptyAttributes
 
 scriptName = 'scores_docking_oddt.py'
 VINA, RFSCORE, NNSCORE, PLECSCORE = 0, 1, 2, 3
@@ -56,6 +56,8 @@ class ProtocolScoreDocking(EMProtocol):
     _enumParamNames = ['scoreChoice', 'scoreVersionRF', 'scoreVersionPLEC', 'trainData']
     _defParams = {'scoreChoice': 'Vina', 'scoreVersionRF': '1', 'scoreVersionPLEC': 'linear', 'trainData': '2016',
                   'rfSpr': 0, 'depthProt': 5, 'depthLig': 1, 'fingerSize': 65536, 'isReference': False}
+    _omitParamNames = {}
+
 
     def __init__(self, **args):
         super().__init__(**args)
@@ -122,24 +124,72 @@ class ProtocolScoreDocking(EMProtocol):
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
+    def getnThreads(self):
+        '''Get the number of threads available for each scoring execution'''
+        nPockets = len(self.workFlowSteps.get().strip().split('\n'))
+        nThreads = self.numberOfThreads.get() // nPockets
+        nThreads = 1 if nThreads == 0 else nThreads
+        return nThreads
+
     def _insertAllSteps(self):
-        self.molFiles = []
-        self.createGUISummary()
-        self.getPoseFilesStr()
         sSteps, wSteps = [], []
+        self.createGUISummary()
+
+        cStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
         #Performing every score listed in the form
         for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
             if wStep.strip():
                 if not wStep in wSteps:
-                    sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[]))
+                    sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[cStep]))
                     wSteps.append(wStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
 
+    def convertInputStep(self):
+        #Convert ligands
+        allMols = self.getAllInputMols()
+        outDir = self.getInputMolsDir()
+        os.mkdir(outDir)
+
+        maeMols, otherMols = getMAEMoleculeFiles(allMols)
+        if len(maeMols) > 0:
+            try:
+                from pwchemSchrodinger.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
+            except ImportError:
+                print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+
+        for mol in otherMols:
+            molFile = mol.getPoseFile()
+            molExt = os.path.splitext(molFile)[-1]
+            molBaseFile = os.path.join(outDir, mol.getUniqueName() + molExt)
+            createLink(molFile, molBaseFile)
+
+        #Convert receptor
+        recFile = self.getInputReceptorFile()
+        if recFile.endswith('.mae') or recFile.endswith('.maegz'):
+            outFn = self.getConvertReceptorFile()
+            try:
+                from pwchemSchrodinger.utils.utils import convertReceptor2PDB
+                convertReceptor2PDB(recFile, os.path.abspath(outFn))
+            except ImportError:
+                print(
+                    'Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+        else:
+            createLink(recFile, self.getConvertReceptorFile())
+
+
+    def performScoring(self, molFiles, molLists, it, receptorFile, msjDic, iS):
+        paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}_{}.txt'.format(iS, it)))
+        self.writeParamsFile(paramsPath, receptorFile, molFiles, msjDic, iS, it)
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath(), popen=True)
+
     def scoringStep(self, wStep, i):
         # Perform the scoring using the ODDT package
-        receptorFile = self.getInputReceptorFile()
-        results = self.scoreDockings(receptorFile, eval(wStep), i)
+        nt = self.getnThreads()
+        receptorFile = self.getConvertReceptorFile()
+        performBatchThreading(self.performScoring, self.getInputMolFiles(), nt, cloneItem=False,
+                              receptorFile=receptorFile, msjDic=eval(wStep), iS=i)
 
     def createOutputStep(self):
         self.relabelDic = {}
@@ -149,8 +199,8 @@ class ProtocolScoreDocking(EMProtocol):
         sDic = self.getScoresDic()
         newMols = self.defineOutputSet()
         for mol in consensusMols:
-            inFile = os.path.abspath(mol.getPoseFile())
-            for resIdx, oddtScore in sDic[inFile].items():
+            molName = mol.getUniqueName()
+            for resIdx, oddtScore in sDic[molName].items():
                 setattr(mol, "_oddtScore_{}".format(resIdx), Float(oddtScore))
             newMols.append(mol)
 
@@ -193,8 +243,24 @@ class ProtocolScoreDocking(EMProtocol):
             f.write(self.createSummary())
 
     # --------------------------- UTILS functions -----------------------------------
+    def getInputMolsDir(self):
+        return os.path.abspath(self._getExtraPath('inputMolecules'))
+
+    def getInputMolFiles(self):
+        molDir = self.getInputMolsDir()
+        molFiles = []
+        for molFile in glob.glob(os.path.join(molDir, '*')):
+            if '.mae' not in molFile:
+                molFiles.append(molFile)
+        return molFiles
+
     def getInputReceptorFile(self):
         return self.inputMoleculesSets[0].get().getProteinFile()
+
+    def getConvertReceptorFile(self):
+        recFile = self.getInputReceptorFile()
+        recName = getBaseName(recFile)
+        return self._getExtraPath(f'{recName}.pdb')
 
     def defineOutputSet(self):
         inputProteinFile = self.getInputReceptorFile()
@@ -246,17 +312,13 @@ class ProtocolScoreDocking(EMProtocol):
             for mol in pSet.get():
                 yield mol.clone()
 
-    def scoreDockings(self, receptorFile, msjDic, i):
-        paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(i)))
-        self.writeParamsFile(paramsPath, receptorFile, msjDic, i)
-        Plugin.runScript(self, scriptName, paramsPath, env='rdkit', cwd=self._getPath())
-
     def parseResults(self, resFile):
         resDic = {}
-        resIdx = resFile.split('results_')[1].split('.')[0]
+        resIdx = resFile.split('/')[-1].split('_')[1]
         with open(resFile) as f:
             for line in f:
-                resDic[line.split()[0]] = float(line.split()[1])
+                file = line.split()[0]
+                resDic[getBaseName(file)] = float(line.split()[1])
         return resIdx, resDic
 
     def getResultFiles(self):
@@ -279,11 +341,11 @@ class ProtocolScoreDocking(EMProtocol):
         sDic = {}
         for resFile in self.getResultFiles():
             resIdx, resDic = self.parseResults(resFile)
-            for file in resDic:
-                if file in sDic:
-                    sDic[file][resIdx] = resDic[file]
+            for fileBase in resDic:
+                if fileBase in sDic:
+                    sDic[fileBase][resIdx] = resDic[fileBase]
                 else:
-                    sDic[file] = {resIdx: resDic[file]}
+                    sDic[fileBase] = {resIdx: resDic[fileBase]}
         return sDic
 
     def getScoreFunction(self, msjDic):
@@ -311,11 +373,10 @@ class ProtocolScoreDocking(EMProtocol):
             fName = ''
         return fName
 
-    def getPoseFilesStr(self):
-        poseFilesFile = self._getTmpPath('poseFIles.txt')
-        allMols = self.getAllInputMols()
+    def getPoseFilesStr(self, molFiles, it):
+        poseFilesFile = self._getTmpPath(f'poseFiles_{it}.txt')
         if not os.path.exists(poseFilesFile):
-            poseFilesStr = ' '.join([os.path.abspath(mol.getPoseFile()) for mol in allMols])
+            poseFilesStr = ' '.join([molFile for molFile in molFiles])
             with open(poseFilesFile, 'w') as f:
                 f.write(poseFilesStr)
         else:
@@ -324,12 +385,12 @@ class ProtocolScoreDocking(EMProtocol):
 
         return poseFilesStr
 
-    def writeParamsFile(self, paramsFile, recFile, msjDic, i):
-        poseFilesStr = self.getPoseFilesStr()
+    def writeParamsFile(self, paramsFile, recFile, molFiles, msjDic, iS, it):
+        poseFilesStr = self.getPoseFilesStr(molFiles, it)
         with open(paramsFile, 'w') as f:
             scoreChoice = msjDic['scoreChoice']
 
-            f.write('outputPath: results_{}.tsv\n'.format(i))
+            f.write('outputPath: results_{}_{}.tsv\n'.format(iS, it))
             modelFile = os.path.abspath(Plugin.getODDTModelsPath(self.getModelFileName(msjDic)))
             f.write('function: {}\n'.format(self.getScoreFunction(msjDic)))
             if os.path.exists(modelFile) and scoreChoice != 'Vina':
@@ -362,7 +423,7 @@ class ProtocolScoreDocking(EMProtocol):
         sumStr = ''
         for i, dicLine in enumerate(self.workFlowSteps.get().split('\n')):
             if dicLine.strip():
-                msjDic = eval(dicLine)
+                msjDic = eval(dicLine.strip())
                 msjDic = self.addDefaultForMissing(msjDic)
                 scoreChoice = msjDic['scoreChoice']
                 sumStr += '{}) Score: {}'.format(i+1, scoreChoice)
@@ -398,6 +459,22 @@ class ProtocolScoreDocking(EMProtocol):
             else:
                 print('Something is wrong with parameter ', pName)
         return msjDic
+
+    def getStageParamsDic(self, type='All'):
+        '''Return a dictionary as {paramName: param} of the stage parameters of the formulary.
+        Type'''
+        paramsDic = {}
+        for paramName, param in self._definition.iterAllParams():
+            if not paramName in self._omitParamNames and not isinstance(param, params.Group) and not isinstance(param,
+                                                                                                                params.Line):
+                if type == 'All':
+                    paramsDic[paramName] = param
+                elif type == 'Enum' and isinstance(param, params.EnumParam):
+                    paramsDic[paramName] = param
+                elif type == 'Normal' and not isinstance(param, params.EnumParam):
+                    paramsDic[paramName] = param
+        return paramsDic
+
 
 
 

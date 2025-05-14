@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # Group all non-major updates into a single Pull Request
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+        - "minor"
+        - "patch"

@@ -31,17 +31,16 @@ This protocol is used to manually define structural regions from coordinates, re
 
 """
 import os, json, math, sys
-from sklearn.metrics.pairwise import pairwise_distances
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
-from Bio.PDB.ResidueDepth import ResidueDepth, get_surface, min_dist, residue_depth
+from Bio.PDB.ResidueDepth import get_surface
 from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
-from pyworkflow.object import String
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb
+from pwem.objects import Pointer
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
@@ -58,6 +57,20 @@ class ProtDefineStructROIs(EMProtocol):
     typeChoices = ['Coordinates', 'Residues', 'Ligand', 'Protein-Protein Interface', 'Near Residues']
 
     # -------------------------- DEFINE param functions ----------------------
+    def _defineClusterParams(self, group, condition='True'):
+      group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition=condition,
+                     label='Maximum distance between pocket points (A): ',
+                     help='Maximum distance between two pocket atoms to considered them same pocket')
+
+      group.addParam('surfaceCoords', params.BooleanParam, default=True,
+                     label='Map coordinates to surface? ',
+                     help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
+                          'closest surface coordinates or use them directly.')
+      group.addParam('maxDepth', params.FloatParam, default='3.0',
+                     label='Maximum atom depth (A): ', condition='surfaceCoords',
+                     help='Maximum atom distance to the surface to be considered and mapped')
+      return group
+
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
@@ -72,7 +85,7 @@ class ProtDefineStructROIs(EMProtocol):
                       label='Extract ROIs from: ', choices=self.typeChoices,
                       help='The ROIs will be defined from a set of elements of this type')
 
-        line = group.addLine('coordsROI', condition='origin=={}'.format(COORDS),
+        line = group.addLine('Coordinates: ', condition='origin=={}'.format(COORDS),
                              help='Coordinates of the defiend ROI')
         line.addParam('coordX', params.IntParam, default=10, label='X: ')
         line.addParam('coordY', params.IntParam, default=10, label='Y: ')
@@ -103,6 +116,9 @@ class ProtDefineStructROIs(EMProtocol):
         group.addParam('molName', params.StringParam,
                        condition='origin=={} and not extLig'.format(LIGANDS),
                        label='Molecule name: ', help='Name of the HETATM molecule in the AtomStruct')
+        group.addParam('remMol', params.BooleanParam, default=False, label='Remove molecule from structure: ',
+                       condition='origin=={} and not extLig'.format(LIGANDS),
+                        help='Whether to remove the molecule from the output structure in which the ROIs are defined')
 
         group.addParam('chain_name2', params.StringParam,
                        allowsNull=False, label='Chain of interest 2: ', condition='origin=={}'.format(PPI),
@@ -128,21 +144,8 @@ class ProtDefineStructROIs(EMProtocol):
                             'least one other residue.\nComplete linkage will require all residue pairs to be closer '
                             'than the threshold, which will lead to more "globular" regions')
 
-        group.addParam('addCoordinate', params.LabelParam, label='Add defined coordinate: ',
-                       condition='origin=={}'.format(COORDS),
-                       help='Here you can define a coordinate ROI which will be added to the list of ROIs below.')
-        group.addParam('addResidue', params.LabelParam, label='Add defined residues: ',
-                       condition='origin=={}'.format(RESIDUES),
-                       help='Here you can define a residue ROI which will be added to the list of ROIs below.')
-        group.addParam('addLigand', params.LabelParam, label='Add defined ligand: ',
-                       condition='origin=={}'.format(LIGANDS),
-                       help='Here you can define a ligand ROI which will be added to the list of ROIs below.')
-        group.addParam('addPPI', params.LabelParam, label='Add defined PPI: ',
-                       condition='origin=={}'.format(PPI),
-                       help='Here you can define a PPI ROI which will be added to the list of ROIs below.')
-        group.addParam('addNRes', params.LabelParam, label='Add defined Near Residues: ',
-                       condition='origin=={}'.format(NRES),
-                       help='Here you can define a Near Residues ROI which will be added to the list of ROIs below.')
+        group.addParam('addROI', params.LabelParam, label='Add defined ROI: ',
+                       help='Use this wizard to store the defined ROI in the list')
 
 
         group.addParam('inROIs', params.TextParam, width=70, default='',
@@ -152,21 +155,11 @@ class ProtDefineStructROIs(EMProtocol):
                             'maxDepth and points closer than maxIntraDistance will be considered the same pocket')
 
         group = form.addGroup('Pocket definition')
-        group.addParam('maxIntraDistance', params.FloatParam, default='2.0',
-                       label='Maximum distance between pocket points (A): ',
-                       help='Maximum distance between two pocket atoms to considered them same pocket')
-
-        group.addParam('surfaceCoords', params.BooleanParam, default=True,
-                       label='Map coordinates to surface? ',
-                       help='Whether to map the input coordinates (from the residues, coordinates, or ligand) to the '
-                            'closest surface coordinates or use them directly.')
-        group.addParam('maxDepth', params.FloatParam, default='3.0',
-                      label='Maximum atom depth (A): ', condition='surfaceCoords',
-                      help='Maximum atom distance to the surface to be considered and mapped')
+        group = self._defineClusterParams(group)
 
         form.addSection(label='Input Pointers')
         form.addParam('inputPointerLabels', params.LabelParam, important=True,
-                      label='Records of inputs. Do not modificate manually',
+                      label='Records of inputs. Do not modify manually',
                       help='This is a list of the input pointer to keep track of the inputs received.\n'
                            'It is automatically updated with the first section wizards.\n'
                            'Manual modification (adding inputs from the lens) will have no actual impact on the '
@@ -189,8 +182,8 @@ class ProtDefineStructROIs(EMProtocol):
         parser = PDBParser()
         pdbFile = self.getProteinFileName()
         if self.origin.get() == LIGANDS and not self.extLig:
-            pdbFile = clean_PDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
-                                waters=True, HETATM=True)
+            pdbFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
+                                waters=True, hetatm=True)
 
         structure = parser.get_structure(self.getProteinName(), pdbFile)
         self.structModel = structure[0]
@@ -206,18 +199,20 @@ class ProtDefineStructROIs(EMProtocol):
                 if self.surfaceCoords:
                     pocketCoords = self.mapSurfaceCoords(pocketCoords)
 
-                self.coordsClusters += self.clusterSurfaceCoords(pocketCoords)
+                self.coordsClusters += clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
         pdbFile = self.getProteinFileName()
+        newPDBFile = self._getPath(os.path.basename(pdbFile))
+        newPDBFile = self.checkLigands(pdbFile, newPDBFile)
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
-            pocketFile = self.createPocketFile(clust, i)
-            pocket = StructROI(pocketFile, pdbFile)
+            pocketFile = createPocketFile(clust, i, outDir=self._getExtraPath())
+            pocket = StructROI(pocketFile, newPDBFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-                pocket._maeFile = String(os.path.abspath(inpStruct.getFileName()))
+                pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
             pocket.calculateContacts()
             outPockets.append(pocket)
 
@@ -256,6 +251,21 @@ class ProtDefineStructROIs(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
+    def checkLigands(self, pdbFile, newPDBFile):
+      ligToRem = []
+      for roiStr in self.inROIs.get().split('\n'):
+        if roiStr.strip():
+          jSonStr = ':'.join(roiStr.split(':')[1:]).strip()
+          jDic = json.loads(jSonStr)
+          roiKey = roiStr.split()[1].strip()
+          if roiKey == 'Ligand:' and jDic['remove'] == 'True':
+            ligToRem.append(jDic['molName'])
+
+      if ligToRem:
+        newPDBFile = cleanPDB(pdbFile, newPDBFile, het2rem=ligToRem)
+      else:
+        shutil.copy(pdbFile, newPDBFile)
+      return newPDBFile
 
     def getProteinFileName(self, inProtocol=True):
         inpStruct = self.inputAtomStruct.get()
@@ -275,12 +285,8 @@ class ProtDefineStructROIs(EMProtocol):
           cifToPdb(inpFile, inpPDBFile)
 
         elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            if inProtocol:
-              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
-                                                        replace(inpStruct.getExtension(), '.pdb'))
-            else:
-              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
-                                                        replace(inpStruct.getExtension(), '.pdb'))
+            inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
+                                                      replace(inpStruct.getExtension(), '.pdb'))
             inpStruct.convert2PDB(outPDB=inpPDBFile)
 
         else:
@@ -290,6 +296,55 @@ class ProtDefineStructROIs(EMProtocol):
 
     def getProteinName(self):
       return os.path.splitext(os.path.basename(self.getProteinFileName()))[0]
+
+    def getPrevPointersIds(self, prevPointers):
+      ids = []
+      for p in prevPointers:
+        ids.append(p.get().getObjId())
+      return ids
+
+    def getNewPointers(self):
+      prevPointers = self.inputPointers
+      prevIds = self.getPrevPointersIds(prevPointers)
+      newObj = self.inSmallMols.get()
+      newId = newObj.getObjId()
+      if newId not in prevIds:
+        newIndex = len(prevPointers)
+        prevPointers.append(Pointer(newObj))
+      else:
+        newIndex = prevIds.index(newId)
+      return newIndex, prevPointers
+
+    def getDefinedROILine(self):
+      if self.origin.get() == COORDS:
+        roiDef = f'Coordinate: {{"X": {self.coordX.get()}, "Y": {self.coordY.get()}, "Z": {self.coordZ.get()}}}\n'
+
+      elif self.origin.get() == RESIDUES:
+        chainDic, resDic = json.loads(self.chain_name.get()), json.loads(self.resPosition.get())
+        roiDef = f'Residues: {{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
+                 f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
+
+      elif self.origin.get() == LIGANDS:
+        if not self.extLig.get():
+          roiDef = f'Ligand: {{"molName": "{self.molName.get()}", "remove": "{self.remMol.get()}"}}\n'
+        else:
+          newIndex, _ = self.getNewPointers()
+          roiDef = f'Ext-Ligand: {{"pointerIdx": "{newIndex}", "ligName": "{self.ligName.get()}"}}\n'
+
+      elif self.origin.get() == PPI:
+        chain1Dic, chain2Dic = json.loads(self.chain_name.get()), json.loads(self.chain_name2.get())
+        iDist = self.ppiDistance.get()
+
+        c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
+                 '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
+
+        roiDef = f'PPI: {{"chain1": "{c1}", "chain2": "{c2}", "interDist": "{iDist}"}}\n'
+
+      elif self.origin.get() == NRES:
+        resTypes, resDist = self.resNRes.get(), self.resDistance.get()
+        resLink = self.getEnumText("linkNRes")
+        roiDef = f'Near_Residues: {{"residues": "{resTypes}", "distance": "{resDist}", "linkage": "{resLink}"}}\n'
+      return roiDef
 
     def getOriginCoords(self, roiStr):
         oCoords = []
@@ -345,25 +400,38 @@ class ProtDefineStructROIs(EMProtocol):
                 if res.get_resname() in residueTypes:
                     cMassResidues[res] = res.center_of_mass()
 
-            linked = linkage(list(cMassResidues.values()), resLink.lower())
-            clusterIdxs = fcluster(linked, resDist, 'distance')
+            if len(cMassResidues) > 0:
+                linked = linkage(list(cMassResidues.values()), resLink.lower())
+                clusterIdxs = fcluster(linked, resDist, 'distance')
 
-            clusters = {}
-            for i, res in enumerate(cMassResidues):
-                resIdx = clusterIdxs[i]
-                if resIdx in clusters:
-                    clusters[resIdx] += [res]
-                else:
-                    clusters[resIdx] = [res]
+                clusters = {}
+                for i, res in enumerate(cMassResidues):
+                    resIdx = clusterIdxs[i]
+                    if resIdx in clusters:
+                        clusters[resIdx] += [res]
+                    else:
+                        clusters[resIdx] = [res]
 
-            for _, clust in clusters.items():
-                resNameList = [res.get_resname() for res in clust]
-                if self.isSublist(residueTypes, resNameList):
-                    oCoords += list(a.get_coord() for res in clust for a in res.get_atoms())
-                    for res in clust:
-                        print(res, cMassResidues[res])
+                for _, clust in clusters.items():
+                    resNameList = [res.get_resname() for res in clust]
+                    if self.isSublist(residueTypes, resNameList):
+                        oCoords += list(a.get_coord() for res in clust for a in res.get_atoms())
+                        self.addToPatternFile(clust)
+                        for res in clust:
+                            print(res, cMassResidues[res])
 
         return oCoords
+
+    def getPatternFile(self):
+        return os.path.abspath(self._getExtraPath('patternFile.txt'))
+    def addToPatternFile(self, resList):
+        pFile, openMode = self.getPatternFile(), 'a'
+        if not os.path.exists(pFile):
+            openMode = 'w'
+
+        with open(pFile, openMode) as f:
+            resIds = ['{}_{}'.format(res.get_resname(), res.get_id()[1]) for res in resList]
+            f.write('{}\n'.format(','.join(resIds)))
 
     def mapSurfaceCoords(self, oCoords):
         sCoords = []
@@ -389,28 +457,6 @@ class ProtDefineStructROIs(EMProtocol):
         distances = distance.cdist([coord], self.structSurface)
         closestIndexes = distances < self.maxDepth.get()
         return list(self.structSurface[closestIndexes[0]])
-
-    def clusterSurfaceCoords(self, surfCoords):
-        clusters = []
-        for coord in surfCoords:
-            newClusters = []
-            newClust = [coord]
-            for clust in clusters:
-                merge = False
-                for cCoord in clust:
-                    dist = calculateDistance(coord, cCoord)
-                    if dist < self.maxIntraDistance.get():
-                        merge = True
-                        break
-
-                if merge:
-                    newClust += clust
-                else:
-                    newClusters.append(clust)
-
-            newClusters.append(newClust)
-            clusters = newClusters.copy()
-        return clusters
 
     def createPocketFile(self, clust, i):
         outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))

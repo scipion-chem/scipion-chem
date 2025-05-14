@@ -33,8 +33,11 @@ information such as name and number of residues.
 """
 
 # Imports
+import json
+
 from pwchem.protocols import *
 from pwchem.wizards import VariableWizard
+from pwchem.utils import createMSJDic
 
 class AddElementWizard(VariableWizard):
     """Add the content of a parameter to another"""
@@ -51,34 +54,121 @@ class AddElementWizard(VariableWizard):
         inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
 
-        inParam = getattr(protocol, inputParam[0]).get()
-        if inParam and inParam.strip() != '':
-            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
-            form.setVar(outputParam[0], prevList + '{}\n'.format(inParam.strip()))
+        prevList, newLine = self.curePrevList(getattr(protocol, outputParam[0]).get()), ''
+        if len(inputParam) > 0:
+            inParam = getattr(protocol, inputParam[0]).get()
+            if inParam and inParam.strip() != '':
+                newLine = f'{inParam.strip()}\n'
+        elif hasattr(protocol, 'createElementLine'):
+            newLine = protocol.createElementLine()
 
-class Add_FilterExpression(AddElementWizard):
-    """Add ID or keyword in NCBI fetch protocol to the list"""
+        form.setVar(outputParam[0], prevList + newLine)
+
+AddElementWizard().addTarget(protocol=ProtocolRankDocking,
+                             targets=['defineSummary'],
+                             inputs=[],
+                             outputs=['defineSummary'])
+AddElementWizard().addTarget(protocol=ProtocolRANXFuse,
+                             targets=['addAttr'],
+                             inputs=[],
+                             outputs=['inAttrs'])
+
+
+class AddNumberedElementWizard(AddElementWizard):
+    """Add the content of a parameter to another numbering (and labeling) the elements in the output
+    Input[0]: name of the function in the protocol that builds the summary line
+    Input[1]: optional, parameters to pass to this function
+    """
     _targets, _inputs, _outputs = [], {}, {}
+
+    def getNewElementNumber(self, prevList):
+        return len(prevList.split('\n'))
+
+    def getSumLine(self, protocol, inputParam, outputParam):
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        elemNumber = self.getNewElementNumber(prevList)
+
+        sumLine = ''
+        if hasattr(protocol, inputParam[0]):
+            buildLineFunc = getattr(protocol, inputParam[0])
+            sumLineParams = inputParam[1] if len(inputParam) > 1 else []
+            sumLine = buildLineFunc(*sumLineParams)
+
+        if not sumLine:
+            return ''
+        return f'{elemNumber}) {sumLine}'
 
     def show(self, form, *params):
         inputParam, outputParam = self.getInputOutput(form)
         protocol = form.protocol
 
-        keep = protocol.getEnumText(inputParam[0])
-        subset = protocol.getEnumText(inputParam[1])
+        prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
+        sumLine = self.getSumLine(protocol, inputParam, outputParam)
+        if sumLine.strip():
+            form.setVar(outputParam[0], prevList + sumLine.strip() + '\n')
 
-        if subset and subset.strip() != '':
-            prevList = self.curePrevList(getattr(protocol, outputParam[0]).get())
-            towrite = prevList + '{} if in {}\n'.format(keep, subset)
-            form.setVar(outputParam[0], towrite)
+AddNumberedElementWizard().addTarget(protocol=ProtDefineSeqROI,
+                                      targets=['addROI'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['inROIs'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtChemGenerateVariants,
+                                 targets=['addVariant'],
+                                 inputs=['buildSumLine'],
+                                 outputs=['toMutateList'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                      targets=['addROI'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['multiSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtModifyMultiEpitope,
+                                      targets=['addMod'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['modSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                      targets=['addFilter'],
+                                      inputs=['buildSumLine'],
+                                      outputs=['filtSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                      targets=['addCondFilter'],
+                                      inputs=['buildCondSumLine'],
+                                      outputs=['condSummary'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addScore'],
+                                      inputs=['buildScoreSumLine'],
+                                      outputs=['scoreSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addScoreDef'],
+                                      inputs=['buildScoreSumLineDef'],
+                                      outputs=['scoreSummaryDef'])
+
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addLinker'],
+                                      inputs=['buildLinkerSumLine'],
+                                      outputs=['linkerSummary'])
+AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                      targets=['addEval'],
+                                      inputs=['buildEvalSumLine'],
+                                      outputs=['evalSummary'])
 
 
-subGroups = list(ProtChemZINCFilter.subGroups.keys())
-subChoices = ['subset_{}'.format(sb) for sb in subGroups]
-Add_FilterExpression().addTarget(protocol=ProtChemZINCFilter,
-                                 targets=['addFilter'],
-                                 inputs=['mode', {'subGroup': subChoices}],
-                                 outputs=['filterList'])
+AddElementWizard().addTarget(protocol=ProtChemZINCFilter,
+                             targets=['addFilter'],
+                             inputs=[],
+                             outputs=['filterList'])
+
+AddElementWizard().addTarget(protocol=ProtocolGeneralLigandFiltering,
+                             targets=['addFilter'],
+                             inputs=[],
+                             outputs=['filterList'])
+
+AddElementWizard().addTarget(protocol=ProtocolLibraryFiltering,
+                             targets=['addFilter'],
+                             inputs=[],
+                             outputs=['filterList'])
 
 
 class AddElementSummaryWizard(VariableWizard):
@@ -94,7 +184,7 @@ class AddElementSummaryWizard(VariableWizard):
             index = int(getattr(protocol, inputParam[0]).get())
         else:
             index = numSteps + 1
-        msjDic = protocol.createMSJDic()
+        msjDic = createMSJDic(protocol)
         if index > numSteps:
             prevStr = getattr(protocol, outputParam[0]).get() \
                 if getattr(protocol, outputParam[0]).get() is not None else ''
@@ -134,13 +224,54 @@ class DeleteElementWizard(VariableWizard):
         except:
             print('Incorrect index')
 
+class WatchElementWizard(VariableWizard):
+    """Watch the parameters of the step of the workflow defined by the index"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def show(self, form, *params):
+        protocol = form.protocol
+        try:
+            index = int(protocol.watchStep.get().strip())
+            if protocol.countSteps() >= index > 0:
+                workSteps = protocol.workFlowSteps.get().split('\n')
+                msjDic = eval(workSteps[index - 1])
+                for pName in msjDic:
+                    if pName in protocol.getStageParamsDic(type='Normal').keys():
+                        val = eval(msjDic[pName]) if msjDic[pName] in ['True', 'False'] else msjDic[pName]
+                        form.setVar(pName, val)
+                    elif pName in protocol.getStageParamsDic(type='Enum').keys():
+                        enumParam = protocol.getParam(pName)
+                        idx = enumParam.choices.index(msjDic[pName])
+                        form.setVar(pName, idx)
+        except:
+            print('Incorrect index')
+
 
 AddElementSummaryWizard().addTarget(protocol=ProtocolScoreDocking,
                              targets=['insertStep'],
                              inputs=['insertStep'],
                              outputs=['workFlowSteps', 'summarySteps'])
-
 DeleteElementWizard().addTarget(protocol=ProtocolScoreDocking,
                                 targets=['deleteStep'],
                                 inputs=['deleteStep'],
                                 outputs=['workFlowSteps', 'summarySteps'])
+
+class AddResidueWizard(AddElementWizard):
+  """Adds a selected resiude(s) in a chain+residues congifuration parameters to a list of residues
+  """
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+
+    prevList, newLine = self.curePrevList(getattr(protocol, outputParam[0]).get()), ''
+    if len(inputParam) > 0:
+      inChain, inResidues = getattr(protocol, inputParam[0]).get(), getattr(protocol, inputParam[1]).get()
+      chainDic, resDic = json.loads(inChain), json.loads(inResidues)
+      newLine = f'{{"model": {chainDic["model"]}, "chain": "{chainDic["chain"]}", ' \
+               f'"index": "{resDic["index"]}", "residues": "{resDic["residues"]}"}}\n'
+    elif hasattr(protocol, 'createElementLine'):
+      newLine = protocol.createElementLine()
+
+    form.setVar(outputParam[0], prevList + newLine)
