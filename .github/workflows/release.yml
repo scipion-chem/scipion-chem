@@ -17,7 +17,7 @@ jobs:
     
     - name: Install dependencies
       run: |
-        pip install setuptools wheel twine
+        pip install setuptools wheel twine build
         pip install -r requirements.txt
     
     - name: Get tag name
@@ -34,7 +34,7 @@ jobs:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
-        python setup.py sdist
+        python -m build --no-isolation
         twine upload dist/* -c "${{ secrets.PYPI_COMMENT }}"
     
     - name: Generate tag
