@@ -144,7 +144,7 @@ class ProtocolConsensusDocking(EMProtocol):
             indepClustersDic = self.getIndepClusters(molClusters, molDic)
             for inSetId in indepClustersDic:
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], molDic, minSize=1)
 
 
     def createOutputStep(self):
