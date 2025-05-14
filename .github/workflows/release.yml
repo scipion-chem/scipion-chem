@@ -1,7 +1,6 @@
 name: Generate release (Pypi, tag, & GitHub Release)
 on:
-  push:
-    branches: [ master, main ]
+  workflow_dispatch:
 
 jobs:
   deploy:
