@@ -13,7 +13,7 @@ jobs:
         uses: scipion-chem/.github/.github/composites/install-scipion@main
       
       - name: Checkout repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
   

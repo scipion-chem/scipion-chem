@@ -15,7 +15,7 @@ jobs:
       uses: mpi4py/setup-mpi@master
     
     - name: Set up Python
-      uses: actions/setup-python@main
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     
@@ -49,7 +49,7 @@ jobs:
         custom_tag: ${{ steps.variables.outputs.TAG_NAME }}
     
     - name: Create a GitHub release
-      uses: ncipollo/release-action@main
+      uses: ncipollo/release-action@v1
       with:
         tag: ${{ steps.tag_version.outputs.new_tag }}
         name: ${{ steps.variables.outputs.TAG_NAME }}
