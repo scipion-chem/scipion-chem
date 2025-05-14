@@ -285,12 +285,8 @@ class ProtDefineStructROIs(EMProtocol):
           cifToPdb(inpFile, inpPDBFile)
 
         elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            if inProtocol:
-              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
-                                                        replace(inpStruct.getExtension(), '.pdb'))
-            else:
-              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
-                                                        replace(inpStruct.getExtension(), '.pdb'))
+            inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
+                                                      replace(inpStruct.getExtension(), '.pdb'))
             inpStruct.convert2PDB(outPDB=inpPDBFile)
 
         else:
