@@ -9,10 +9,7 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@main
-    
-    - name: Set up MPI
-      uses: mpi4py/setup-mpi@master
+      uses: actions/checkout@v4
     
     - name: Set up Python
       uses: actions/setup-python@v5
