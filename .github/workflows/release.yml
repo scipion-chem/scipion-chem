@@ -7,6 +7,9 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    - name: Setup enviroment
+      uses: scipion-chem/.github/.github/composites/install-scipion@main
+    
     - name: Checkout repository
       uses: actions/checkout@v4
     
@@ -18,7 +21,10 @@ jobs:
     - name: Install dependencies
       run: |
         pip install setuptools wheel twine build
-        pip install .
+    
+    - name: Install plugin from pull request
+      working-directory: ${{ github.workspace }}
+      run: ../scipion/scipion3 installp -p . --devel
     
     - name: Get tag name
       id: variables
