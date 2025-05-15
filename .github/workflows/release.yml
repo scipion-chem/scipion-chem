@@ -7,9 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Setup enviroment
-      uses: scipion-chem/.github/.github/composites/install-scipion@main
-    
     - name: Checkout repository
       uses: actions/checkout@v4
     
@@ -22,15 +19,14 @@ jobs:
       run: |
         pip install setuptools wheel twine build
     
-    - name: Install plugin from pull request
-      working-directory: ${{ github.workspace }}
-      run: ../scipion/scipion3 installp -p . --devel
-    
     - name: Get tag name
       id: variables
       run: |
-        VERSION=$(python -c "import importlib.metadata; print(importlib.metadata.version(\"${{ vars.FOLDER_WITH_VERSION }}\"))")
+        #VERSION=$(python -c "import importlib.metadata; print(importlib.metadata.version(\"${{ vars.FOLDER_WITH_VERSION }}\"))")
+        VERSION=$(python -c "from .${{ vars.FOLDER_WITH_VERSION }}.version import __version; print(__version__)")
         echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
+        echo "Project version: $VERSION"
+        false
     
     - name: Build and publish
       if: false

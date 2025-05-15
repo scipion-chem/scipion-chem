@@ -23,7 +23,7 @@ Homepage = "https://github.com/scipion-chem/scipion-chem"
 Issues = "https://github.com/scipion-chem/scipion-chem/issues"
 
 [tool.setuptools.dynamic]
-version = {attr = "pwchem.__init__.__version__"}
+version = {attr = "pwchem.version.__version__"}
 dependencies = {file = ["requirements.txt"]}
 
 [project.entry-points."pyworkflow.plugin"]

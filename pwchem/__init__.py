@@ -44,9 +44,10 @@ import pwem
 # Plugin imports
 from .bibtex import _bibtexStr
 from .constants import *
+from . import version
 
 _logo = 'pwchem_logo.png'
-__version__ = DEFAULT_VERSION
+__version__ = version.__version__
 
 class Plugin(pwem.Plugin):
 	@classmethod
