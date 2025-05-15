@@ -21,9 +21,10 @@ jobs:
     
     - name: Get tag name
       id: variables
+      working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
         #VERSION=$(python -c "import importlib.metadata; print(importlib.metadata.version(\"${{ vars.FOLDER_WITH_VERSION }}\"))")
-        VERSION=$(python -c "from .${{ vars.FOLDER_WITH_VERSION }}.version import __version; print(__version__)")
+        VERSION=$(python -c "from .version import __version; print(__version__)")
         echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
         echo "Project version: $VERSION"
         false
