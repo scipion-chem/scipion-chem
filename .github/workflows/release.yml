@@ -24,7 +24,8 @@ jobs:
       working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
         VERSION=$(python -c "from version import __version__; print(__version__)")
-        echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "RELEASE_NAME=v$VERSION" >> $GITHUB_OUTPUT
         echo "Project version: $VERSION"
     
     - name: Build and publish
