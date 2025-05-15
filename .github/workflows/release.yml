@@ -23,12 +23,9 @@ jobs:
       id: variables
       working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
-        pwd
-        #VERSION=$(python -c "import importlib.metadata; print(importlib.metadata.version(\"${{ vars.FOLDER_WITH_VERSION }}\"))")
         VERSION=$(python -c "from version import __version__; print(__version__)")
         echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
         echo "Project version: $VERSION"
-        false
     
     - name: Build and publish
       if: false
