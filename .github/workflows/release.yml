@@ -24,7 +24,7 @@ jobs:
       working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
         VERSION=$(python -c "from version import __version__; print(__version__)")
-        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "TAG_NAME=$VERSION" >> $GITHUB_OUTPUT
         echo "RELEASE_NAME=v$VERSION" >> $GITHUB_OUTPUT
         echo "Project version: $VERSION"
     
@@ -48,4 +48,4 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         tag: ${{ steps.tag_version.outputs.new_tag }}
-        name: ${{ steps.variables.outputs.TAG_NAME }}
+        name: ${{ steps.variables.outputs.RELEASE_NAME }}
