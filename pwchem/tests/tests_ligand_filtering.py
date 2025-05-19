@@ -23,8 +23,8 @@
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
-	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering
-from pwchem.tests.tests_imports import TestImportBase
+	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering, ProtocolLibraryFiltering
+from pwchem.tests.tests_imports import TestImportBase, TestImportSmallMoleculesLibrary
 from pwchem.utils import assertHandle
 
 generalFilter = '''Remove molecule if contains at least 1 atom type B
@@ -139,3 +139,27 @@ class TestFingerprintFiltering(TestImportBase):
 		for p in protsShape:
 			self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
 			assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
+
+
+class TestFilterSmallMoleculesLibrary(TestImportSmallMoleculesLibrary):
+
+		@classmethod
+		def _runFilterLibrary(cls, protLib):
+			filtList = 'Keep molecule if LogP is below threshold 2.0\n'
+
+			protFilterLibrary = cls.newProtocol(ProtocolLibraryFiltering, filterList=filtList)
+			protFilterLibrary.inputLibrary.set(protLib)
+			protFilterLibrary.inputLibrary.setExtended('outputLibrary')
+
+			cls.proj.launchProtocol(protFilterLibrary, wait=False)
+			return protFilterLibrary
+
+		def test(self):
+			protImport1 = self._runImportLibrary(defLib=True)
+			self._waitOutput(protImport1, 'outputLibrary')
+
+			protFilter = self._runFilterLibrary(protImport1)
+			self._waitOutput(protFilter, 'outputLibrary')
+
+			assertHandle(self.assertIsNotNone, getattr(protFilter, 'outputLibrary', None),
+									 cwd=protFilter.getWorkingDir())

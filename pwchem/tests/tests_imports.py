@@ -229,21 +229,29 @@ class TestImportSmallMoleculesLibrary(TestImportBase):
 	@classmethod
 	def _runImportLibrary(cls, defLib=False, libPath=None, nMols=100):
 
-		kwargs = {'defLibraries': defLib, 'choicesLibraries': 0, 'nMols': nMols} if defLib else \
-			{'filePath': libPath}
+		if defLib:
+			kwargs = {'defLibraries': defLib, 'choicesLibraries': 0, 'nMols': nMols,
+								'minSize20': 200, 'maxSize20': 200, 'minLogP20': -1, 'maxLogP20': 5,
+								'reactivity': 5, 'reactExclusive': True, 'purchasability': 4, 'purchExclusive': True}
+		else:
+			kwargs = {'filePath': libPath}
+
 		protImportLibrary = cls.newProtocol(ProtChemImportMoleculesLibrary, **kwargs)
 		cls.proj.launchProtocol(protImportLibrary, wait=False)
-		cls.protImportLibrary = protImportLibrary
+		return protImportLibrary
 
 	def test(self):
 		smiFile = self.createLibLocal()
 		for i in range(2):
 			if i == 0:
-				self._runImportLibrary(defLib=True)
+				protImport0 = self._runImportLibrary(defLib=True)
 			else:
-				self._runImportLibrary(defLib=False, libPath=smiFile)
+				protImport1 = self._runImportLibrary(defLib=False, libPath=smiFile)
 
-		self._waitOutput(self.protImportLibrary, 'outputLibrary')
-		assertHandle(self.assertIsNotNone, getattr(self.protImportLibrary, 'outputLibrary', None),
-								 cwd=self.protImportLibrary.getWorkingDir())
+		self._waitOutput(protImport0, 'outputLibrary')
+		assertHandle(self.assertIsNotNone, getattr(protImport0, 'outputLibrary', None),
+								 cwd=protImport0.getWorkingDir())
+		self._waitOutput(protImport1, 'outputLibrary')
+		assertHandle(self.assertIsNotNone, getattr(protImport1, 'outputLibrary', None),
+								 cwd=protImport1.getWorkingDir())
 		os.remove(smiFile)
