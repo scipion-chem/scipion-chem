@@ -27,6 +27,7 @@
 
 # General imports
 import os
+import pandas as pd
 
 # Scipion em imports
 from pyworkflow.protocol import params
@@ -34,6 +35,18 @@ from pwem.protocols import EMProtocol
 
 # Plugin imports
 from pwchem.utils import concatThreadFiles, splitFile, getBaseFileName, getBaseName
+
+
+def thresholdFunc(threshold, action='over'):
+  """Returns a function that checks if values are above threshold"""
+
+  def filterFunc(value):
+    try:
+      return float(value) < threshold if action == 'over' else float(value) > threshold
+    except (ValueError, TypeError):
+      return False  # or handle invalid values differently
+
+  return filterFunc
 
 class ProtocolLibraryFiltering(EMProtocol):
     """
@@ -135,22 +148,33 @@ class ProtocolLibraryFiltering(EMProtocol):
       attrs = self.inputLibrary.get().getHeaders()
       return attrs
 
-    def performScoreFilter(self, smiFile, filtList):
-      '''Filters the molSet based on score filters.
-      '''
+    def filterChunk(self, chunk, filtList, headers):
+      for action, threshold, scoreName in filtList:
+        print('chunk: ', chunk.shape)
+        scIdx = headers.index(scoreName)
+        filterFunc = thresholdFunc(threshold, action)
+        chunk = chunk[chunk.iloc[:, scIdx].apply(filterFunc)]
+      return chunk
+
+    def performScoreFilter(self, smiFile, filtList, chunksize=100000):
+      """
+      Process a large file in chunks, filtering based on column values
+
+      Args:
+          smiFile: Path to input smi file
+          filtList: List of filters that the elements of the chunks must pass
+          chunksize: Number of rows per chunk
+      """
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
-      with open(oSmiFile, 'w') as f:
-        with open(smiFile) as fIn:
-          for line in fIn:
-            linePass = True
-            sline = line.split()
-            for action, value, scoreName in filtList:
-              scIdx = headers.index(scoreName)
-              if (float(sline[scIdx]) > value and action == 'below') or (float(sline[scIdx]) < value and action == 'over'):
-                linePass = False
 
-            if linePass:
-              f.write(line)
+      chunk_reader = pd.read_csv(smiFile, sep='\t', chunksize=chunksize)
+      first_chunk = True
+      for chunk in chunk_reader:
+        filtered_chunk = self.filterChunk(chunk, filtList, headers)
 
-      return oSmiFile
+        if first_chunk:
+          filtered_chunk.to_csv(oSmiFile, sep='\t', index=False)
+          first_chunk = False
+        else:
+          filtered_chunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
