@@ -42,7 +42,7 @@ def thresholdFunc(threshold, action='over'):
 
   def filterFunc(value):
     try:
-      return float(value) < threshold if action == 'over' else float(value) > threshold
+      return float(value) < threshold if action == 'below' else float(value) > threshold
     except (ValueError, TypeError):
       return False  # or handle invalid values differently
 
@@ -150,7 +150,6 @@ class ProtocolLibraryFiltering(EMProtocol):
 
     def filterChunk(self, chunk, filtList, headers):
       for action, threshold, scoreName in filtList:
-        print('chunk: ', chunk.shape)
         scIdx = headers.index(scoreName)
         filterFunc = thresholdFunc(threshold, action)
         chunk = chunk[chunk.iloc[:, scIdx].apply(filterFunc)]
@@ -168,7 +167,7 @@ class ProtocolLibraryFiltering(EMProtocol):
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
 
-      chunk_reader = pd.read_csv(smiFile, sep='\t', chunksize=chunksize)
+      chunk_reader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize)
       first_chunk = True
       for chunk in chunk_reader:
         filtered_chunk = self.filterChunk(chunk, filtList, headers)
@@ -178,3 +177,5 @@ class ProtocolLibraryFiltering(EMProtocol):
           first_chunk = False
         else:
           filtered_chunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
+
+
