@@ -25,9 +25,6 @@
 # *
 # **************************************************************************
 
-# Versions
-DEFAULT_VERSION = '1.0'
-
 #Constant dictionaries
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
 JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}
@@ -36,7 +33,7 @@ ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALI
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
 RDKIT_DIC =     {'name': 'rdkit',       'version': '2022.09.1', 'home': 'RDKIT_HOME'}
-BIOCONDA_DIC =  {'name': 'bioconda',    'version': DEFAULT_VERSION}
+BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
 DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
 RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',         'home': 'RANKX_HOME'}

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scipion-chem"
+dynamic = ["version", "dependencies"]
+
+authors = [
+    {name = "Daniel Del Hoyo", email = "ddelhoyo@cnb.csic.es"},
+    {name = "Martin Salinas", email = "ssalinasmartin@gmail.com"},
+    {name = "Carlos Oscar Sanchez Sorzano", email = "coss@cnb.csic.es"},
+]
+
+description = "Base Scipion plugin defining objects and protocols for CHEMoinformatics and Virtual Drug Screening."
+readme = "README.rst"
+requires-python = ">=3.8"
+keywords = ["scipion", "pdb", "scipion-3", "drug", "screening", "chemoinformatics"]
+license = {text = "GNU General Public License v3 (GPLv3)"}
+
+[project.urls]
+Homepage = "https://github.com/scipion-chem/scipion-chem"
+Issues = "https://github.com/scipion-chem/scipion-chem/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "pwchem.version.__version__"}
+dependencies = {file = ["requirements.txt"]}
+
+[project.entry-points."pyworkflow.plugin"]
+pwchem = "pwchem"
+
+[tool.setuptools.package-data]
+pwchem = ["protocols.conf", "pwchem_logo.png"]

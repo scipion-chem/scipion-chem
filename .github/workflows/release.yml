@@ -17,24 +17,23 @@ jobs:
     
     - name: Install dependencies
       run: |
-        pip install setuptools wheel twine
-        pip install -r requirements.txt
+        pip install setuptools wheel twine build
     
     - name: Get tag name
       id: variables
-      env:
-        FOLDER_WITH_VERSION: ${{ vars.FOLDER_WITH_VERSION }}
+      working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
       run: |
-        VERSION=$(python -c "import $FOLDER_WITH_VERSION; print('VERSION', 'v'+$FOLDER_WITH_VERSION.__version__)" | grep VERSION | sed "s/VERSION //g") || (echo "Could not import version, check that variables are correctly set!" && exit 1)
-        echo "TAG_NAME=${VERSION#v}" >> $GITHUB_OUTPUT
-        echo "TAG NAME (must not contain version prefix): ${VERSION#v}"
+        VERSION=$(python -c "from version import __version__; print(__version__)")
+        echo "TAG_NAME=$VERSION" >> $GITHUB_OUTPUT
+        echo "RELEASE_NAME=v$VERSION" >> $GITHUB_OUTPUT
+        echo "Project version: $VERSION"
     
     - name: Build and publish
       env:
-        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       run: |
-        python setup.py sdist
+        python -m build --no-isolation
         twine upload dist/* -c "${{ secrets.PYPI_COMMENT }}"
     
     - name: Generate tag
@@ -48,4 +47,4 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         tag: ${{ steps.tag_version.outputs.new_tag }}
-        name: ${{ steps.variables.outputs.TAG_NAME }}
+        name: ${{ steps.variables.outputs.RELEASE_NAME }}
