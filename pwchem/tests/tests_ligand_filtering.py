@@ -23,7 +23,7 @@
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
-	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering, ProtocolLibraryFiltering
+	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering, ProtocolOperateLibrary
 from pwchem.tests.tests_imports import TestImportBase, TestImportSmallMoleculesLibrary
 from pwchem.utils import assertHandle
 
@@ -141,25 +141,45 @@ class TestFingerprintFiltering(TestImportBase):
 			assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 
 
-class TestFilterSmallMoleculesLibrary(TestImportSmallMoleculesLibrary):
+class TestOperateSmallMoleculesLibrary(TestImportSmallMoleculesLibrary):
 
 		@classmethod
-		def _runFilterLibrary(cls, protLib):
-			filtList = 'Keep molecule if LogP is below threshold 2.0\n'
+		def _runOperateSets(cls, protLibs, op=0):
+			protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, refAttribute=1)
+			for protLib in protLibs:
+				protOperateLibrary.inputLibraries.append(protLib)
+				protOperateLibrary.inputLibraries[-1].setExtended('outputLibrary')
+	
+			cls.proj.launchProtocol(protOperateLibrary, wait=False)
+			return protOperateLibrary
 
-			protFilterLibrary = cls.newProtocol(ProtocolLibraryFiltering, filterList=filtList)
-			protFilterLibrary.inputLibrary.set(protLib)
-			protFilterLibrary.inputLibrary.setExtended('outputLibrary')
+		@classmethod
+		def _runOperateLibrary(cls, protLib, op, kwargs):
+			protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, **kwargs)
+			protOperateLibrary.inputLibrary.set(protLib)
+			protOperateLibrary.inputLibrary.setExtended('outputLibrary')
 
-			cls.proj.launchProtocol(protFilterLibrary, wait=False)
-			return protFilterLibrary
+			cls.proj.launchProtocol(protOperateLibrary, wait=False)
+			return protOperateLibrary
+
 
 		def test(self):
-			protImport1 = self._runImportLibrary(defLib=True)
+			protImport1 = self._runImportLibrary(defLib=True, nMols=1000, rSeed=44)
+			protImport2 = self._runImportLibrary(defLib=True, nMols=1000, rSeed=4)
 			self._waitOutput(protImport1, 'outputLibrary')
+			self._waitOutput(protImport2, 'outputLibrary')
+			
+			opProts = []
+			for op in range(3):
+				opProts.append(self._runOperateSets([protImport1, protImport2], op))
 
-			protFilter = self._runFilterLibrary(protImport1)
-			self._waitOutput(protFilter, 'outputLibrary')
+			filtList = 'Keep molecule if LogP is below threshold 2.0\n'
+			kwDic = {3: {"filterList": filtList}, 4: {"filterAttr": 'LogP', "filterValue": '-0.4'},
+							 5: {"removeList": "Reactivity\nPurchasability"}}
+			for op in range(3, 6):
+				opProts.append(self._runOperateLibrary(protImport1, op, kwDic[op]))
 
-			assertHandle(self.assertIsNotNone, getattr(protFilter, 'outputLibrary', None),
-									 cwd=protFilter.getWorkingDir())
+			for opProt in opProts:
+				self._waitOutput(opProt, 'outputLibrary')
+				assertHandle(self.assertIsNotNone, getattr(opProt, 'outputLibrary', None),
+										 cwd=opProt.getWorkingDir())

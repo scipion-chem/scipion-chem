@@ -50,6 +50,7 @@ def thresholdFunc(threshold, action='over'):
 
 UNION, INTER, DIFF, FILT, RANK, REM = 0, 1, 2, 3, 4, 5
 SMI, NAME = 0, 1
+
 class ProtocolOperateLibrary(EMProtocol):
     """
     Operates a set of small molecules libraries.
@@ -147,7 +148,7 @@ class ProtocolOperateLibrary(EMProtocol):
             filList = self.parseFilter()
             self.performScoreFilter(smiFile, filList)
         else:
-            remCols = self.removeList.get().split('\n')
+            remCols = self.removeList.get().strip().split('\n')
             self.performColRemoval(smiFile, remCols)
 
     
@@ -207,6 +208,8 @@ class ProtocolOperateLibrary(EMProtocol):
       if self.operation.get() in [FILT, REM]:
           thFiles = findThreadFiles(self.inputLibrary.get().getFileName(), self._getExtraPath())
           concatFiles(thFiles, oFile, remove=True)
+          if self.operation.get() == REM:
+            [headers.remove(remCol) for remCol in self.removeList.get().strip().split('\n')]
 
       outputLib = SmallMoleculesLibrary(libraryFilename=oFile, headers=['SMI', 'Name']+headers)
       outputLib.calculateLength()
@@ -258,7 +261,6 @@ class ProtocolOperateLibrary(EMProtocol):
         return mapDic, auxDic
 
     def getAllHeaders(self):
-        #todo: dont like the remove part
         if self.operation.get() in [UNION, INTER, DIFF]:
             oHeadFile = self._getTmpPath('headers.txt')
             if os.path.exists(oHeadFile):
@@ -277,17 +279,6 @@ class ProtocolOperateLibrary(EMProtocol):
 
     def getOutputSmiFile(self):
         return self._getPath('outputLibrary.smi')
-
-
-
-
-
-
-
-
-
-
-
 
     def getSmiFile(self, it):
       inFile = self.inputLibrary.get().getFileName()
@@ -330,18 +321,20 @@ class ProtocolOperateLibrary(EMProtocol):
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
 
-      chunk_reader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize)
+      chunk_reader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize, header=None)
       first_chunk = True
       for chunk in chunk_reader:
         filtered_chunk = self.filterChunk(chunk, filtList, headers)
 
         if first_chunk:
-          filtered_chunk.to_csv(oSmiFile, sep='\t', index=False)
+          filtered_chunk.to_csv(oSmiFile, sep='\t', index=False, header=None)
           first_chunk = False
         else:
           filtered_chunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
 
     def removeColumsChunk(self, chunk, remCols, headers):
+        '''Remove the columns of the pandas dataframe corresponding to the headers in the remCols list
+        '''
         remIdxs = [headers.index(scoreName) for scoreName in remCols]
         keepCols = [i for i in range(chunk.shape[1]) if i not in remIdxs]
         return chunk.iloc[:, keepCols]

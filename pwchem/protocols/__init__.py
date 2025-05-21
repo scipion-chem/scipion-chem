@@ -39,7 +39,6 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolA
 from pwchem.protocols.VirtualDrugScreening.protocol_shape_filtering import ProtocolShapeDistancesFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprints import ProtocolFingerprintFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolGeneralLigandFiltering
-from pwchem.protocols.VirtualDrugScreening.protocol_library_filter import ProtocolLibraryFiltering
 
 from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_structROIs import ProtocolConsensusStructROIs
@@ -98,6 +97,7 @@ from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateL
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_pymol import ProtPymolOperate
 from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse
+from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateLibrary
 
 # Molecular dynamics
 from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
