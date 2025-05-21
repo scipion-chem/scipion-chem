@@ -26,7 +26,7 @@
 # **************************************************************************
 
 # General imports
-import os
+import os, sys
 import pandas as pd
 
 # Scipion em imports
@@ -151,32 +151,17 @@ class ProtocolOperateLibrary(EMProtocol):
             remCols = self.removeList.get().strip().split('\n')
             self.performColRemoval(smiFile, remCols)
 
-    
+
     def rankStep(self):
-        import heapq
         inLib = self.inputLibrary.get()
         nMax = self.getRankMax()
         colIdx = inLib.getHeaders().index(self.filterAttr.get())
-        mult = -1 if self.filterValue.get().startswith('-') else 1
-        
-        heap = []
         libFile = os.path.abspath(inLib.getFileName())
-        with open(libFile) as fIn:
-            for line in fIn:
-                parts = line.rstrip('\n').split()
-                try:
-                    mVal = float(parts[colIdx])
-                except (ValueError, IndexError):
-                    continue
-
-                if len(heap) < nMax:
-                    heapq.heappush(heap, (mult * mVal, line))
-                else:
-                    heapq.heappushpop(heap, (mult * mVal, line))
+        rank = self.performRanking(libFile, nMax, colIdx, inLib.getLength())
 
         oFile = self.getOutputSmiFile()
         with open(oFile, 'w') as f:
-            for _, line in heap:
+            for _, line in rank:
                 f.write(line)
         
 
@@ -238,6 +223,29 @@ class ProtocolOperateLibrary(EMProtocol):
         else:
             nMax = nVal
         return nMax
+
+    def performRanking(self, libFile, nMax, colIdx, libLen):
+      import heapq
+      mult = -1 if self.filterValue.get().startswith('-') else 1
+
+      rank = []
+      with open(libFile) as fIn:
+        for i, line in enumerate(fIn):
+          parts = line.rstrip('\n').split()
+          try:
+            mVal = float(parts[colIdx])
+          except (ValueError, IndexError):
+            continue
+
+          if len(rank) < nMax:
+            heapq.heappush(rank, (mult * mVal, line))
+          else:
+            heapq.heappushpop(rank, (mult * mVal, line))
+
+          if (i+1) % 1000 == 0:
+            print(f'Progress: {i+1} / {libLen}')
+            sys.stdout.flush()
+      return rank
 
     def performOperate(self, mapDic, auxDic, k, lDic):
         '''Update the map dictionary depending on the operation selected
