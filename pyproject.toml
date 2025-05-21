@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "scipion-chem"
+name = "scipion_chem"
 dynamic = ["version", "dependencies"]
 
 authors = [
