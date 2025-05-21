@@ -321,16 +321,16 @@ class ProtocolOperateLibrary(EMProtocol):
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
 
-      chunk_reader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize, header=None)
-      first_chunk = True
-      for chunk in chunk_reader:
-        filtered_chunk = self.filterChunk(chunk, filtList, headers)
+      chunkReader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize, header=None)
+      firstChunk = True
+      for chunk in chunkReader:
+        filteredChunk = self.filterChunk(chunk, filtList, headers)
 
-        if first_chunk:
-          filtered_chunk.to_csv(oSmiFile, sep='\t', index=False, header=None)
-          first_chunk = False
+        if firstChunk:
+          filteredChunk.to_csv(oSmiFile, sep='\t', index=False, header=None)
+          firstChunk = False
         else:
-          filtered_chunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
+          filteredChunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
 
     def removeColumsChunk(self, chunk, remCols, headers):
         '''Remove the columns of the pandas dataframe corresponding to the headers in the remCols list
@@ -351,13 +351,13 @@ class ProtocolOperateLibrary(EMProtocol):
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
 
-      chunk_reader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize)
-      first_chunk = True
-      for chunk in chunk_reader:
-        filtered_chunk = self.removeColumsChunk(chunk, remCols, headers)
+      chunkReader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize)
+      firstChunk = True
+      for chunk in chunkReader:
+        filteredChunk = self.removeColumsChunk(chunk, remCols, headers)
 
-        if first_chunk:
-          filtered_chunk.to_csv(oSmiFile, sep='\t', index=False)
-          first_chunk = False
+        if firstChunk:
+          filteredChunk.to_csv(oSmiFile, sep='\t', index=False)
+          firstChunk = False
         else:
-          filtered_chunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
+          filteredChunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
