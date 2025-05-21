@@ -167,6 +167,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
                        'Be aware that for PubChem and ZINC22 subsets other than "Any" and "lead-like", the protocol is '
                        'not prepared for the random download, so the whole dataset will be downloaded and then '
                        'selected number of molecules will be randomly picked. This can take a while.')
+    form.addParam('randomSeed', params.IntParam, default=44, label='Random seed: ', condition='nMols>0',
+                  expertLevel=params.LEVEL_ADVANCED, help='Random seed for the random molecules')
 
     group = form.addGroup('Default libraries', condition='defLibraries')
     group.addParam('choicesLibraries', params.EnumParam, default=ZINC20,
@@ -228,7 +230,7 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
     if libChoice == ZINC20:
       self.getZINC20Range(oFile)
       if nMols > 0:
-        reduceNRandomLines(oFile, nMols, oDir=self._getTmpPath())
+        reduceNRandomLines(oFile, nMols, oDir=self._getTmpPath(), seed=self.randomSeed.get())
 
     elif libChoice == ZINC22:
       if self.checkAvailableRandom():
@@ -238,13 +240,13 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
       else:
         self.getZINC22Ranges(oFile)
         if nMols > 0:
-          reduceNRandomLines(oFile, nMols, oDir=self._getTmpPath())
+          reduceNRandomLines(oFile, nMols, oDir=self._getTmpPath(), seed=self.randomSeed.get())
 
     elif libChoice == PUBCHEM:
       gzFile = downloadUrlFile(pubchemUrl, self._getPath())
       smiFile = gunzipFile(gzFile, oFile=self.getOutLibraryFile(), remove=True)
       if nMols > 0:
-        reduceNRandomLines(smiFile, nMols, oDir=self._getTmpPath())
+        reduceNRandomLines(smiFile, nMols, oDir=self._getTmpPath(), seed=self.randomSeed.get())
       swapColumns(smiFile, oDir=self._getTmpPath())
 
   def createOutputStep(self):
@@ -377,8 +379,10 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
             self.nMols.get() > 0)
 
   def getDecodeZinc20Dics(self):
-    return [flipDic(self.zinc20SizeTranches),  # Size (Daltons)
-            flipDic(self.zinc20LogPTranches),  # LogP
+    sizeDic, logPDic = flipDic(self.zinc20SizeTranches), flipDic(self.zinc20LogPTranches)
+    sizeDic['K'], logPDic['K'] = 600, 6
+    return [sizeDic,  # Size (Daltons)
+            logPDic,  # LogP
             {v[0]: k for k, v in self.reactGroups.items()},  # Reactivity
             {v1: k for k, v in self.purchGroups.items() for v1 in v[0]}  # Purchasability
             ]

@@ -94,6 +94,7 @@ from pwchem.protocols.Databases.protocol_ZINC_filter import ProtChemZINCFilter
 from pwchem.protocols.General.protocol_converter import ConvertStructures
 from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
 from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
+from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateLibrary
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
 from pwchem.protocols.General.protocol_pymol import ProtPymolOperate
 from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse

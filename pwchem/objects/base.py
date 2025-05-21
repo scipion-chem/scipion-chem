@@ -174,6 +174,9 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getInteractMolsPointer(self):
     return self._interactMols
 
+  def hasInteractMols(self):
+    return self.getInteractMolsPointer() != pwobj.Pointer()
+
   def setInteractMols(self, mols=None):
     if mols.isPointer():
       self._interactMols.copy(mols)
@@ -219,6 +222,16 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getInteractMolNames(self):
     intDic = self.getInteractScoresDic()
     return list(set([molName for molDic in intDic.values() for molName in molDic]))
+
+  def getInteractMolsNumber(self):
+    n = 0
+    if self.hasInteractMols():
+      mols = self.getInteractMols()
+      if isinstance(mols, SetOfSmallMolecules):
+        n = len(mols)
+      else:
+        n = mols.getLength()
+    return n
 
 
 class SequenceVariants(data.EMFile):
@@ -724,28 +737,27 @@ class SmallMoleculesLibrary(data.EMObject):
     self.libraryFile.set(value)
     self.calculateLength()
 
-  def getLibraryMap(self, inverted=False, fullLine=False):
+  def getLibraryMap(self, inverted=False, fullLine=False, lineDic=False):
     '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
         '''
     mapDic = {}
-    with open(self.getFileName()) as f:
-      for line in f:
-        smi, name = line.split()[0].strip(), line.split()[1].strip()
-        if inverted:
-          mapDic[name] = smi if not fullLine else line.strip()
-        else:
-          mapDic[smi] = name if not fullLine else line.strip()
+    for key, val in self.yieldLibraryMapItems(inverted, fullLine, lineDic):
+        mapDic[key] = val
     return mapDic
 
-  def yieldLibraryMapItems(self, inverted=False, fullLine=False):
+  def yieldLibraryMapItems(self, inverted=False, fullLine=False, lineDic=False):
     with open(self.getFileName()) as f:
       for line in f:
         smi, name = line.split()[0].strip(), line.split()[1].strip()
-        if inverted:
-          k, v = name, smi if not fullLine else line.strip()
+        key = name if inverted else smi
+        if not fullLine:
+          val = smi if inverted else name
         else:
-          k, v = smi,  name if not fullLine else line.strip()
-        yield k, v
+          if lineDic:
+            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split())}
+          else:
+            val = line.strip()
+        yield key, val
 
   def getHeaders(self):
     hs = [h.get() for h in self.headers]
