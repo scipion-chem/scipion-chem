@@ -299,7 +299,8 @@ class SequenceChemViewer(SequenceGeneralViewer):
 
     def _defineInteractionParams(self, form):
         outSeqs = self.getOutSequences()
-        seqNames, molNames = outSeqs.getSequenceNames(), outSeqs.getInteractMolNames()
+        seqNames = outSeqs.getSequenceNames()
+        molNames = outSeqs.getInteractMolNames() if outSeqs.getInteractMolsNumber() < 1000 else []
 
         form.addSection(label='Interaction viewer')
         sGroup = form.addGroup('Score filter')
@@ -343,8 +344,8 @@ class SequenceChemViewer(SequenceGeneralViewer):
 
     def _viewHeatMap(self, paramName=None):
         outSeqs = self.getOutSequences()
-        seqNames, molNames = outSeqs.getSequenceNames(), outSeqs.getInteractMolNames()
-        if len(seqNames) * len(molNames) > 1000:
+        seqNames, nMols = outSeqs.getSequenceNames(), outSeqs.getInteractMolsNumber()
+        if len(seqNames) * nMols > 1000:
             try:
                 msg = "A heatmap with the scores of the selected sequence-molecule pairs will be displayed.\n" \
                       "Big sets of sequences/molecules might take a while to process and display.\n" \

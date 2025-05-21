@@ -72,6 +72,10 @@ AddElementWizard().addTarget(protocol=ProtocolRANXFuse,
                              targets=['addAttr'],
                              inputs=[],
                              outputs=['inAttrs'])
+AddElementWizard().addTarget(protocol=ProtocolOperateLibrary,
+                             targets=['addAttribute'],
+                             inputs=['filterAttr'],
+                             outputs=['removeList'])
 
 
 class AddNumberedElementWizard(AddElementWizard):
@@ -165,7 +169,7 @@ AddElementWizard().addTarget(protocol=ProtocolGeneralLigandFiltering,
                              inputs=[],
                              outputs=['filterList'])
 
-AddElementWizard().addTarget(protocol=ProtocolLibraryFiltering,
+AddElementWizard().addTarget(protocol=ProtocolOperateLibrary,
                              targets=['addFilter'],
                              inputs=[],
                              outputs=['filterList'])

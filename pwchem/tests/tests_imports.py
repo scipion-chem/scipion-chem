@@ -227,10 +227,10 @@ class TestImportSmallMoleculesLibrary(TestImportBase):
 		return smiFile
 
 	@classmethod
-	def _runImportLibrary(cls, defLib=False, libPath=None, nMols=100):
+	def _runImportLibrary(cls, defLib=False, libPath=None, nMols=100, rSeed=44):
 
 		if defLib:
-			kwargs = {'defLibraries': defLib, 'choicesLibraries': 0, 'nMols': nMols,
+			kwargs = {'defLibraries': defLib, 'choicesLibraries': 0, 'nMols': nMols, 'randomSeed': rSeed,
 								'minSize20': 200, 'maxSize20': 200, 'minLogP20': -1, 'maxLogP20': 5,
 								'reactivity': 5, 'reactExclusive': True, 'purchasability': 4, 'purchExclusive': True}
 		else:

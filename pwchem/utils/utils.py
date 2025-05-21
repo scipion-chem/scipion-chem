@@ -51,6 +51,13 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
+SEED_RANDOM = '''get_seeded_random()
+{
+  seed="$1"
+  openssl enc -aes-256-ctr -pass pass:"$seed" -nosalt \
+    </dev/zero 2>/dev/null
+}'''
+
 def checkNormalResidues(sequence):
   return all([res in RESIDUES1TO3 for res in sequence])
 
@@ -103,9 +110,12 @@ def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
     # If max number of retries was fulfilled, raise exception
     raise exception
 
-def reduceNRandomLines(inFile, n, oDir='/tmp'):
+def reduceNRandomLines(inFile, n, oDir='/tmp', seed=None):
   tFile = os.path.abspath(os.path.join(oDir, 'temp.txt'))
-  subprocess.check_call(f'shuf -n {n} {os.path.abspath(inFile)} > {tFile}', shell=True)
+  precall = '' if seed is None else f'{SEED_RANDOM} && '
+  randomArg = '' if seed is None else f' --random-source=<(get_seeded_random {seed}) '
+  command = f'{precall}shuf -n {n} {os.path.abspath(inFile)}{randomArg}> {tFile}'
+  subprocess.check_call(['bash', '-c', command])
   os.rename(tFile, inFile)
 
 def gunzipFile(gzFile, oFile=None, remove=False):
