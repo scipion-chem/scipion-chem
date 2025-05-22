@@ -242,7 +242,7 @@ class ProtocolOperateLibrary(EMProtocol):
           else:
             heapq.heappushpop(rank, (mult * mVal, line))
 
-          if (i+1) % 1000 == 0:
+          if (i+1) % 10000 == 0:
             print(f'Progress: {i+1} / {libLen}')
             sys.stdout.flush()
       return rank

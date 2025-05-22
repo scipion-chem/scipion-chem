@@ -64,13 +64,18 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       else:
         ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
 
-      inputSubsets = makeSubsets(ligFiles, nt, cloneItem=False)
+      # Subsets made are maximum 1000 ligands long
+      nSubsets = max(nt, int(len(ligFiles)/10000))
+      inputSubsets = makeSubsets(ligFiles, nSubsets, cloneItem=False)
       for it, fileSet in enumerate(inputSubsets):
         with open(self.getInputFile(it), 'w') as f:
           f.write(' '.join(fileSet))
 
+    def getInputDir(self):
+      return self._getExtraPath()
+
     def getInputFile(self, it):
-      return self._getExtraPath(f'inputLigandFiles_{it}.txt')
+      return os.path.join(self.getInputDir(), f'inputLigandFiles_{it}.txt')
 
     def getInputMolFiles(self, it):
       inFile = self.getInputFile(it)
@@ -134,7 +139,7 @@ class ProtocolGeneralLigandFiltering(ProtocolBaseLibraryToSetOfMols):
       if nt <= 1: nt = 2
 
       iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
-      for it in range(nt-1):
+      for it in os.listdir(self.getInputDir()):
         aSteps += [self._insertFunctionStep(self.filterStep, it, prerequisites=[iStep])]
       self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
 
