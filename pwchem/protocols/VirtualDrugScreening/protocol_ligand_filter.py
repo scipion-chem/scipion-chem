@@ -55,6 +55,9 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules', allowsNull=False,
                     condition='not useLibrary', label="Input  Small Molecules: ",
                     help='Select the molecules to be filtered')
+      form.addParam('maxPerStep', params.IntParam, label="Maximum ligands processed per step: ",
+                    expertLevel=params.LEVEL_ADVANCED, default=100,
+                    help='Maximum number ligands processed per step')
       return form
 
     def createInputStep(self, nt):
@@ -64,8 +67,8 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       else:
         ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
 
-      # Subsets made are maximum 1000 ligands long
-      nSubsets = max(nt, int(len(ligFiles)/10000))
+      # Subsets made are maximum 100 ligands long
+      nSubsets = max(nt, int(len(ligFiles)/self.maxPerStep()))
       inputSubsets = makeSubsets(ligFiles, nSubsets, cloneItem=False)
       for it, fileSet in enumerate(inputSubsets):
         with open(self.getInputFile(it), 'w') as f:
