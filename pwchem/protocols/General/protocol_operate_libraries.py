@@ -122,10 +122,16 @@ class ProtocolOperateLibrary(EMProtocol):
       aSteps = []
       if self.operation.get() in [FILT, REM]:
           nt = self.numberOfThreads.get()
-          if nt <= 1: nt = 2
+          inLen = self.inputLibrary.get().getLength()
 
-          iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
-          for it in range(nt-1):
+          # If the number of input mols is so big, make more subsets than threads
+          nSubsets = max(nt - 1, int(inLen / self.maxPerStep.get()))
+
+          # Ensuring there are no more subsets than input molecules
+          nSubsets = min(nSubsets, inLen)
+
+          iStep = self._insertFunctionStep(self.createInputStep, nSubsets, prerequisites=[])
+          for it in range(nSubsets):
             aSteps += [self._insertFunctionStep(self.filterStep, it, prerequisites=[iStep])]
       
       elif self.operation.get() in [RANK]:
@@ -135,10 +141,10 @@ class ProtocolOperateLibrary(EMProtocol):
         aSteps = [self._insertFunctionStep(self.operateStep, prerequisites=[])]
       self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
 
-    def createInputStep(self, nt):
+    def createInputStep(self, nSubsets):
       inDir = self._getTmpPath()
       libFile = os.path.abspath(self.inputLibrary.get().getFileName())
-      splitFile(libFile, n=nt, oDir=inDir, remove=False)
+      splitFile(libFile, n=nSubsets, oDir=inDir, remove=False)
 
     def filterStep(self, it):
         '''Filter the smiFile with the defined filters

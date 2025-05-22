@@ -60,19 +60,42 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
                     help='Maximum number ligands processed per step')
       return form
 
-    def createInputStep(self, nt):
+    def _insertAllSteps(self):
+      aSteps = []
+      nt = self.numberOfThreads.get()
+      inLen = self.getInputLength()
+
+      # If the number of input mols is so big, make more subsets than threads
+      nSubsets = max(nt - 1, int(inLen / self.maxPerStep.get()))
+
+      # Ensuring there are no more subsets than input molecules
+      nSubsets = min(nSubsets, inLen)
+
+      iStep = self._insertFunctionStep(self.createInputStep, nSubsets, prerequisites=[])
+      for it in range(nSubsets):
+        aSteps += [self._insertFunctionStep(self.mainStep, it, prerequisites=[iStep])]
+      self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
+
+    def createInputStep(self, nSubsets):
       if self.useLibrary.get():
         inDir = os.path.abspath(self._getTmpPath())
         ligFiles = self.inputLibrary.get().splitInFiles(inDir)
       else:
         ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
 
-      # Subsets made are maximum 100 ligands long
-      nSubsets = max(nt, int(len(ligFiles)/self.maxPerStep.get()))
       inputSubsets = makeSubsets(ligFiles, nSubsets, cloneItem=False)
       for it, fileSet in enumerate(inputSubsets):
         with open(self.getInputFile(it), 'w') as f:
           f.write(' '.join(fileSet))
+
+    def mainStep(self, it):
+      # Main process of the protocol, to be defined in sons
+      pass
+
+    def createOutputStep(self):
+      # create output step of the protocol, to be defined in sons
+      pass
+
 
     def getInputDir(self):
       return self._getExtraPath()
@@ -85,6 +108,13 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       with open(inFile) as f:
         molFiles = f.read().strip().split()
       return molFiles
+
+    def getInputLength(self):
+      if self.useLibrary.get():
+        n = self.inputLibrary.get().getLength()
+      else:
+        n = len(self.inputSmallMolecules.get())
+      return n
 
     def _validate(self):
         errors = []
@@ -136,17 +166,8 @@ class ProtocolGeneralLigandFiltering(ProtocolBaseLibraryToSetOfMols):
         form.addParallelSection(threads=4, mpi=1)
 
         # --------------------------- INSERT steps functions --------------------
-    def _insertAllSteps(self):
-      aSteps = []
-      nt = self.numberOfThreads.get()
-      if nt <= 1: nt = 2
 
-      iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
-      for it in os.listdir(self.getInputDir()):
-        aSteps += [self._insertFunctionStep(self.filterStep, it, prerequisites=[iStep])]
-      self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
-
-    def filterStep(self, it):
+    def mainStep(self, it):
         '''Filter the Set of Small molecules with the defined filters
         '''
         filDic = self.parseFilter()
