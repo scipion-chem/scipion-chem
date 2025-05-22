@@ -68,7 +68,7 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
         ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
 
       # Subsets made are maximum 100 ligands long
-      nSubsets = max(nt, int(len(ligFiles)/self.maxPerStep()))
+      nSubsets = max(nt, int(len(ligFiles)/self.maxPerStep.get()))
       inputSubsets = makeSubsets(ligFiles, nSubsets, cloneItem=False)
       for it, fileSet in enumerate(inputSubsets):
         with open(self.getInputFile(it), 'w') as f:
