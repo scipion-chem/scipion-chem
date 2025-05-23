@@ -108,96 +108,28 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
     # --------------------------- STEPS functions ------------------------------
 
-    def _insertAllSteps(self):
-        # Insert processing steps
-        aSteps, cSteps = [], []
-        nt = self.numberOfThreads.get()
-        os.makedirs(self.getPrepDir())
-        if nt <= 1: nt = 2
-
-        iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
-        for it in range(nt-1):
-            aSteps += [self._insertFunctionStep(self.addChargesStep, it, prerequisites=[iStep])]
-
-        if self.doConformers.get():
-            for it in range(nt-1):
-                cSteps += [self._insertFunctionStep(self.conformersStep, it, prerequisites=aSteps)]
-            aSteps = cSteps
-        self._insertFunctionStep(self.createOutput, prerequisites=aSteps)
-
-    def addChargesStep(self, it):
-        """ Assign the charges using a method available
-            in the open-access and free program openbabel
+    def mainStep(self, it):
+        """ Assign the charges using a method available in the open-access program openbabel and
+        Generate a number of conformers of the same small molecule with openbabel
         """
-        failedMols = []
+        if not os.path.exists(self.getPrepDir()):
+          os.makedirs(self.getPrepDir())
+
+        failedCharges, failedConfs = [], []
         for fnSmall in self.getInputMolFiles(it):
-            if isinstance(fnSmall, SmallMolecule):
-              fnSmall = fnSmall.getFileName()
-            fnRoot = getBaseName(fnSmall)
-            _, fnFormat = os.path.splitext(fnSmall)
+            oFile, fail = self.performAddCharges(fnSmall, it)
+            if fail is not None:
+              failedCharges.append(fail)
 
-            try:
-                fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
-            except:
-                print('Atom reordering could not be performed in {}, this could lead to errors in ahead protocols'
-                      .format(fnRoot))
+            if self.doConformers.get():
+              failConf = self.performConformers(oFile)
+              if failConf is not None:
+                failedConfs.append(failConf)
 
-            # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
-            # 2. Add and calculate partial charges with different methods
-            index_method = self.method_charges.get()
-            cmethod = self._dic_method[index_method]
-
-            # With a given pH
-            oFile = self.getPrepDir(f"{fnRoot}.mol2")
-            if self.ph.get():
-                args = " -i%s '%s' -p %s --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall),
-                                                                    str(self.phvalue.get()), cmethod, oFile)
-            else:
-                args = " -i%s '%s' -h --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
-
-            if fnFormat == '.smi':
-              args += '--gen3D '
-
-            try:
-              runOpenBabel(protocol=self, args=args, popen=True)
-            except:
-              failedMols.append(fnRoot)
-
-            oFile = relabelAtomsMol2(self.getPrepDir(oFile), it)
-
-        if len(failedMols) > 0:
-          with open(os.path.abspath(self._getExtraPath(f'failedCharges_{it}.txt')), 'w') as f:
-            for molFn in failedMols:
-              f.write(molFn + '\n')
-
+        self.writeErrorFiles(failedCharges, failedConfs, it)
         os.remove(self.getInputFile(it))
 
-    def conformersStep(self, it):
-        """ Generate a number of conformers of the same small molecule in mol2 format with
-            openbabel using two different algorithm
-        """
-        failedMols = []
-        for molFn in os.listdir(self.getPrepDir()):
-          fnSmall = self.getPrepDir(molFn)
-          fnRoot = getBaseName(fnSmall)
-
-          if self.method_conf.get() == 0:  # Genetic algorithm
-              args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" %\
-                     (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
-          else:  # confab
-              args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
-                     (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
-          try:
-              runOpenBabel(protocol=self, args=args, cwd=self.getPrepDir())
-          except:
-              failedMols.append(fnRoot)
-
-        if len(failedMols) > 0:
-          with open(os.path.abspath(self._getExtraPath(f'failedConfomerGeneration_{it}.txt')), 'w') as f:
-            for molFn in failedMols:
-              f.write(molFn + '\n')
-
-    def createOutput(self):
+    def createOutputStep(self):
         """Create a set of Small Molecules as output with the path to:
               - Path to small molecule with H (mol2 format)
               - Path to conformers file (mol2 format)
@@ -244,6 +176,70 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
 
     # --------------------------- UTILS functions ------------------------------
+
+    def performAddCharges(self, fnSmall, it):
+        if isinstance(fnSmall, SmallMolecule):
+          fnSmall = fnSmall.getFileName()
+        fnRoot = getBaseName(fnSmall)
+        _, fnFormat = os.path.splitext(fnSmall)
+
+        try:
+          fnSmall = self.reorderAtoms(fnSmall, self._getExtraPath('{}_ordered{}'.format(fnRoot, fnFormat)))
+        except:
+          print('Atom reordering could not be performed in {}, this could lead to errors in ahead protocols'
+                .format(fnRoot))
+
+        # 1. Add all hydrogens or add hydrogens depending on the desirable pH with babel (-p)
+        # 2. Add and calculate partial charges with different methods
+        index_method = self.method_charges.get()
+        cmethod = self._dic_method[index_method]
+
+        # With a given pH
+        oFile = self.getPrepDir(f"{fnRoot}.mol2")
+        if self.ph.get():
+          args = " -i%s '%s' -p %s --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall),
+                                                                   str(self.phvalue.get()), cmethod, oFile)
+        else:
+          args = " -i%s '%s' -h --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
+
+        if fnFormat == '.smi':
+          args += '--gen3D '
+
+        try:
+          runOpenBabel(protocol=self, args=args, popen=True)
+          oFile = relabelAtomsMol2(self.getPrepDir(oFile), it)
+          fail = None
+        except:
+          fail = fnRoot
+
+        return oFile, fail
+
+    def performConformers(self, fnSmall):
+      fnRoot = getBaseName(fnSmall)
+
+      if self.method_conf.get() == 0:  # Genetic algorithm
+        args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" % \
+               (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
+      else:  # confab
+        args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
+               (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
+      try:
+        runOpenBabel(protocol=self, args=args, cwd=self.getPrepDir())
+        fail = None
+      except:
+        fail = fnRoot
+      return fail
+
+    def writeErrorFiles(self, failedCharges, failedConfs, it):
+      if len(failedCharges) > 0:
+        with open(os.path.abspath(self._getExtraPath(f'failedCharges_{it}.txt')), 'w') as f:
+          for molFn in failedCharges:
+            f.write(molFn + '\n')
+
+      if len(failedConfs) > 0:
+        with open(os.path.abspath(self._getExtraPath(f'failedConfomerGeneration_{it}.txt')), 'w') as f:
+          for molFn in failedConfs:
+            f.write(molFn + '\n')
 
     def mergeErrorFiles(self):
         lines = []

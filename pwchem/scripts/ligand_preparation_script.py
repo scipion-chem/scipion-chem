@@ -50,9 +50,11 @@ if __name__ == "__main__":
         molBase = os.path.splitext(os.path.basename(mols_dict[inmol]))[0]
         outBase = os.path.join(outDir, molBase)
         if 'numAtoms' in paramsDic:
-            inMols = []
-            frags = Chem.GetMolFrags(inmol, asMols=True)
-            frags = filterMolsSize(frags, paramsDic['numAtoms'])
+            try:
+                frags = Chem.GetMolFrags(inmol, asMols=True)
+                frags = filterMolsSize(frags, paramsDic['numAtoms'])
+            except:
+                failedMols.append(outBase)
         else:
             frags = [inmol]
 
