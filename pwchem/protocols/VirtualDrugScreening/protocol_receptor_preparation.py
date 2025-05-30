@@ -86,8 +86,10 @@ class ProtChemPrepareReceptor(EMProtocol):
                              'point out some HETATMS that were originally labeled as ATOM.')
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('preparationStep')
-        self._insertFunctionStep('createOutput')
+        self._insertFunctionStep(self.preparationStep)
+        if self.usePDBFixer.get():
+          self._insertFunctionStep(self.pdbFixerStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def preparationStep(self):
         chain_ids = None
@@ -102,21 +104,22 @@ class ProtChemPrepareReceptor(EMProtocol):
         het2keep = self.het2keep.get().split(', ')
         inFile = self.inputAtomStruct.get().getFileName()
         cleanFile = self.getCleanedFile()
-        cleanFile = cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
+        cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
 
-        if self.usePDBFixer.get():
-          addResStr = ' --add-residues' if self.addRes else ''
-          repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
-          addAtomsStr = self.getEnumText("addAtoms").lower()
+    def pdbFixerStep(self):
+        addResStr = ' --add-residues' if self.addRes else ''
+        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
+        addAtomsStr = self.getEnumText("addAtoms").lower()
 
-          prepFile = self.getPreparedFile()
-          args = f'{cleanFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
-          pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
+        prepFile = self.getPreparedFile()
+        cleanFile = self.getCleanedFile()
+        args = f'{cleanFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
+        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
 
-          if self.extraClean.get():
-            removeStartWithLines(prepFile, 'HETATM')
+        if self.extraClean.get():
+          removeStartWithLines(prepFile, 'HETATM')
 
-    def createOutput(self):
+    def createOutputStep(self):
         fnOut = self.getPreparedFile() if self.usePDBFixer.get() else self.getCleanedFile()
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
