@@ -72,18 +72,16 @@ if __name__ == "__main__":
                 mol = conformer_generation(mol, outBasef, paramsDic['ffMethod'], paramsDic['restrainMethod'],
                                                  paramsDic['numConf'], paramsDic['rmsThres'])
                 if mol:
-                    setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
                     for cid, cMol in enumerate(mol.GetConformers()):
                         outFile = outBasef + '-{}.sdf'.format(cid+1)
-                        writeMol(mol, outFile, cid=cid, setName=setMolName)
+                        writeMol(mol, outFile, cid=cid, setName=True)
                 else:
                     failedMols.append(outBase)
             else:
                 mol = embedAndOptimize(mol)
                 if mol:
-                    setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
                     outFile = outBasef + '.sdf'
-                    writeMol(mol, outFile, setName=setMolName)
+                    writeMol(mol, outFile, setName=True)
                 else:
                     failedMols.append(outBase)
 
