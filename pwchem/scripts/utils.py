@@ -44,12 +44,16 @@ def parseMoleculeFile(molFile):
 
 def writeMol(mol, outFile, cid=-1, setName=False):
   from rdkit import Chem
-  w = Chem.SDWriter(outFile)
-  molName = os.path.split(os.path.splitext(outFile)[0])[-1]
-  if setName:
-    mol.SetProp('_Name', molName)
-  w.write(mol, cid)
-  w.close()
+  try:
+    w = Chem.SDWriter(outFile)
+    molName = os.path.split(os.path.splitext(outFile)[0])[-1]
+    if setName:
+      mol.SetProp('_Name', molName)
+    w.write(mol, cid)
+    w.close()
+    return mol
+  except:
+    return False
 
 def getMolFilesDic(molFiles):
   molsDict = {}
