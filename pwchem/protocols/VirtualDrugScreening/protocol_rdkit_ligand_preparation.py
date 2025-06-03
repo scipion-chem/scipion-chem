@@ -119,7 +119,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         iStep = self._insertFunctionStep(self.createInputStep, nt - 1, prerequisites=[])
         for it in range(nt-1):
             aSteps += [self._insertFunctionStep(self.preparationStep, it, prerequisites=[iStep])]
-        self._insertFunctionStep(self.createOutput, prerequisites=aSteps)
+        self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
 
     def preparationStep(self, it):
         """ Preparate the molecules and generate the conformers as specified
@@ -128,7 +128,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         self.writeParamsFile(paramsPath, it)
         Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath())
 
-    def createOutput(self):
+    def createOutputStep(self):
         """Create a set of Small Molecules as output
         """
         nt = self.numberOfThreads.get()
@@ -195,6 +195,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
             newSmallMol.setFileName(molFile)
             newSmallMol.setConfId(confId)
+            newSmallMol.guessMolName()
 
             outMols.append(newSmallMol)
       molLists[it] = outMols
