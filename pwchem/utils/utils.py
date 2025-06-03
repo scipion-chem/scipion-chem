@@ -199,14 +199,18 @@ def organizeThreads(nTasks, nThreads):
       subsets[i % nTasks] += 1
   return subsets
 
-def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, popen=False, **kwargs):
+def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime=1, popen=False, **kwargs):
+  fullProgram = programPath
+  if envDic:
+    fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {programPath} '
+
   i, finished = 1, False
   while not finished and i <= nMax:
     try:
       if not popen:
-        protocol.runJob(programPath, progArgs, **kwargs)
+        protocol.runJob(fullProgram, progArgs, **kwargs)
       else:
-        subprocess.check_call(programPath + progArgs, shell=True, **kwargs)
+        subprocess.check_call(fullProgram + progArgs, shell=True, **kwargs)
 
       finished = True
     except Exception:
@@ -214,9 +218,9 @@ def insistentRun(protocol, programPath, progArgs, nMax=5, sleepTime=1, popen=Fal
       time.sleep(sleepTime)
 
   if i > 1 and i <= nMax:
-    print('Program {} run without error after {} trials'.format(programPath, i))
+    print('Program {} run without error after {} trials'.format(fullProgram, i))
   elif i > nMax:
-    print('Program {} could not be run without error after {} trials'.format(programPath, nMax))
+    print('Program {} could not be run without error after {} trials'.format(fullProgram, nMax))
 
 def getVarName(var):
   return [i for i, a in locals().items() if a == var][0]
@@ -591,7 +595,8 @@ def getPDBCoords(pdbFile):
 
 ##################################################
 # ADT grids
-def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True):
+def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, znFFfile=None, addLigTypes=True,
+                 allDefAtomTypes=False):
   """
     Build the GPF file that is needed for AUTOGRID to generate the electrostatic grid
     """
@@ -599,18 +604,22 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
   gpfFile = os.path.join(outDir, protName + '.gpf')
   npts = int(round(npts))
 
-  protAtomTypes = parseAtomTypes(protFile)
-
-  if ligandFns == None or not addLigTypes:
-      ligAtomTypes = 'A C HD N NA OA SA'
+  if allDefAtomTypes:
+    ligAtomTypes = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA", "S", "Cl", "Br", "I", "Si", "B"]
+    protAtomTypes = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA", "S", "Cl", "Br", "I", "Mg", "Ca", "Mn", "Fe", "Zn"]
   else:
-      ligAtomTypes = set([])
-      for ligFn in ligandFns:
-          ligAtomTypes = ligAtomTypes | parseAtomTypes(ligFn)
+    protAtomTypes = parseAtomTypes(protFile)
 
-      ligAtomTypes = protAtomTypes.union(ligAtomTypes)
-      ligAtomTypes = ' '.join(sortSet(ligAtomTypes))
+    if ligandFns == None or not addLigTypes:
+        ligAtomTypes = 'A C HD N NA OA SA'
+    else:
+        ligAtomTypes = set([])
+        for ligFn in ligandFns:
+            ligAtomTypes = ligAtomTypes | parseAtomTypes(ligFn)
 
+        ligAtomTypes = protAtomTypes.union(ligAtomTypes)
+
+  ligAtomTypes = ' '.join(sortSet(ligAtomTypes))
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
   with open(os.path.abspath(gpfFile), "w") as file:

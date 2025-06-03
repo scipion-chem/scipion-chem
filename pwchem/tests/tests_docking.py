@@ -290,7 +290,7 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 	def _runImportPDB(cls):
 		protImportPDB = cls.newProtocol(
 			ProtImportPdb,
-			inputPdbData=0, pdbId='4erf')
+			inputPdbData=1, pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
 		cls.launchProtocol(protImportPDB)
 		cls.protImportPDB = protImportPDB
 

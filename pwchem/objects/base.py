@@ -336,8 +336,8 @@ class SmallMolecule(data.EMObject):
     self._mappingFile = pwobj.String(kwargs.get('mappingFile', None))
     self.confId = pwobj.Integer(kwargs.get('confId', None))  # pocketID
     self.molName = pwobj.String(kwargs.get('molName', None))
-    if self.molName.get() and self.molName.get().lower() == 'guess':
-      self.molName.set(self.guessMolName())
+    if not self.molName.get() or (self.molName.get() and self.molName.get().lower() == 'guess'):
+      self.guessMolName()
 
     self.gridId = pwobj.Integer(kwargs.get('gridId', None))  # pocketID
     self.poseId = pwobj.Integer(kwargs.get('poseId', None))
@@ -367,11 +367,16 @@ class SmallMolecule(data.EMObject):
     self.molName.set(value)
 
   def guessMolName(self):
-    fBase = self.getFileName().split('/')[-1].split('.')[0]
-    if self.getConfId():
-      return '-'.join(fBase.split('-')[:-1])
-    else:
-      return fBase
+    molName = None
+    if self.getFileName():
+      fBase = self.getFileName().split('/')[-1].split('.')[0]
+      if self.getConfId():
+        molName = '-'.join(fBase.split('-')[:-1])
+      else:
+        molName = fBase
+
+      self.setMolName(molName)
+    return molName
 
   def getMolBase(self):
     return self.getMolName()

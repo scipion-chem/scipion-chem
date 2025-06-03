@@ -184,6 +184,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
             newSmallMol.setFileName(molFile)
             newSmallMol.setConfId(confId)
+            newSmallMol.guessMolName()
 
             outMols.append(newSmallMol)
       molLists[it] = outMols
