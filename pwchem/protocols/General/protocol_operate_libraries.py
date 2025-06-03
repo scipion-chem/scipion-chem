@@ -102,6 +102,9 @@ class ProtocolOperateLibrary(EMProtocol):
                             '(e.g: "-0.3" or "-30%" for lower values outputs). If the value is positive, best is '
                             'highest; if negative, best are lowest values.'
                             '\nThreshold mode: threshold for the defined filter')
+        group.addParam('maxPerStep', params.IntParam, label="Maximum ligands processed per step: ",
+                       expertLevel=params.LEVEL_ADVANCED, default=100, condition=f'operation in [{FILT}, {REM}]',
+                       help='Maximum number ligands processed per step')
 
         group = form.addGroup('Filter list', condition=f'operation == {FILT}')
         group.addParam('addFilter', params.LabelParam, label='Add filter expression: ',
