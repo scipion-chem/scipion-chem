@@ -32,6 +32,7 @@ OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPE
 ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
+# Trial 2023
 RDKIT_DIC =     {'name': 'rdkit',       'version': '2023.09.1',     'home': 'RDKIT_HOME'}
 BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
