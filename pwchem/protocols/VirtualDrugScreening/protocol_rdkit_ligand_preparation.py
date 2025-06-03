@@ -110,18 +110,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
     # --------------------------- STEPS functions ------------------------------
 
-    def _insertAllSteps(self):
-        # Insert processing steps
-        aSteps = []
-        nt = self.numberOfThreads.get()
-        if nt <= 1: nt = 2
-
-        iStep = self._insertFunctionStep(self.createInputStep, nt - 1, prerequisites=[])
-        for it in range(nt-1):
-            aSteps += [self._insertFunctionStep(self.preparationStep, it, prerequisites=[iStep])]
-        self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
-
-    def preparationStep(self, it):
+    def mainStep(self, it):
         """ Preparate the molecules and generate the conformers as specified
         """
         paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}.txt'.format(it)))

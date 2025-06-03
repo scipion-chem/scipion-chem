@@ -59,7 +59,8 @@ def getMolFilesDic(molFiles):
   molsDict = {}
   for molFile in molFiles:
     m = parseMoleculeFile(molFile)
-    molsDict[m] = molFile
+    if m:
+      molsDict[m] = molFile
 
   mols = list(molsDict.keys())
   return molsDict, mols

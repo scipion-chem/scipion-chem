@@ -102,6 +102,9 @@ class ProtocolOperateLibrary(EMProtocol):
                             '(e.g: "-0.3" or "-30%" for lower values outputs). If the value is positive, best is '
                             'highest; if negative, best are lowest values.'
                             '\nThreshold mode: threshold for the defined filter')
+        group.addParam('maxPerStep', params.IntParam, label="Maximum ligands processed per step: ",
+                       expertLevel=params.LEVEL_ADVANCED, default=100, condition=f'operation in [{FILT}, {REM}]',
+                       help='Maximum number ligands processed per step')
 
         group = form.addGroup('Filter list', condition=f'operation == {FILT}')
         group.addParam('addFilter', params.LabelParam, label='Add filter expression: ',
@@ -122,10 +125,16 @@ class ProtocolOperateLibrary(EMProtocol):
       aSteps = []
       if self.operation.get() in [FILT, REM]:
           nt = self.numberOfThreads.get()
-          if nt <= 1: nt = 2
+          inLen = self.inputLibrary.get().getLength()
 
-          iStep = self._insertFunctionStep(self.createInputStep, nt-1, prerequisites=[])
-          for it in range(nt-1):
+          # If the number of input mols is so big, make more subsets than threads
+          nSubsets = max(nt - 1, int(inLen / self.maxPerStep.get()))
+
+          # Ensuring there are no more subsets than input molecules
+          nSubsets = min(nSubsets, inLen)
+
+          iStep = self._insertFunctionStep(self.createInputStep, nSubsets, prerequisites=[])
+          for it in range(nSubsets):
             aSteps += [self._insertFunctionStep(self.filterStep, it, prerequisites=[iStep])]
       
       elif self.operation.get() in [RANK]:
@@ -135,10 +144,10 @@ class ProtocolOperateLibrary(EMProtocol):
         aSteps = [self._insertFunctionStep(self.operateStep, prerequisites=[])]
       self._insertFunctionStep(self.createOutputStep, prerequisites=aSteps)
 
-    def createInputStep(self, nt):
+    def createInputStep(self, nSubsets):
       inDir = self._getTmpPath()
       libFile = os.path.abspath(self.inputLibrary.get().getFileName())
-      splitFile(libFile, n=nt, oDir=inDir, remove=False)
+      splitFile(libFile, n=nSubsets, oDir=inDir, remove=False)
 
     def filterStep(self, it):
         '''Filter the smiFile with the defined filters
@@ -242,7 +251,7 @@ class ProtocolOperateLibrary(EMProtocol):
           else:
             heapq.heappushpop(rank, (mult * mVal, line))
 
-          if (i+1) % 1000 == 0:
+          if (i+1) % 10000 == 0:
             print(f'Progress: {i+1} / {libLen}')
             sys.stdout.flush()
       return rank
