@@ -52,7 +52,7 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
                     label='Input library: ', condition='useLibrary',
                     help="Input Small molecules library to predict")
-      form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules', allowsNull=False,
+      form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
                     condition='not useLibrary', label="Input  Small Molecules: ",
                     help='Select the molecules to be filtered')
       form.addParam('maxPerStep', params.IntParam, label="Maximum ligands processed per step: ",
