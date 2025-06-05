@@ -50,10 +50,10 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
                     help='Whether to use a SMI library SmallMoleculesLibrary object as input')
 
       form.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
-                    label='Input library: ', condition='useLibrary',
+                    label='Input library: ', condition='useLibrary', allowsNull=True,
                     help="Input Small molecules library to predict")
       form.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                    condition='not useLibrary', label="Input  Small Molecules: ",
+                    condition='not useLibrary', label="Input  Small Molecules: ", allowsNull=True,
                     help='Select the molecules to be filtered')
       form.addParam('maxPerStep', params.IntParam, label="Maximum ligands processed per step: ",
                     expertLevel=params.LEVEL_ADVANCED, default=100,
@@ -120,6 +120,9 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
         errors = []
         if self.useLibrary.get() and not self.inputLibrary.get().validateSplit():
             errors.append(WARNLIBBIG)
+
+        if (self.useLibrary.get() and not self.inputLibrary.get()) or (not self.useLibrary.get() and not self.inputSmallMolecules.get()):
+            errors.append('No input was specified')
         return errors
 
 class ProtocolGeneralLigandFiltering(ProtocolBaseLibraryToSetOfMols):
