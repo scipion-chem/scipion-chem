@@ -30,6 +30,7 @@ import os, glob
 
 # Scipion em imports
 from pyworkflow.protocol import params
+import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 
 # Plugin imports
@@ -115,6 +116,14 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       else:
         n = len(self.inputSmallMolecules.get())
       return n
+
+    def addLibAttributes(self, smallMol, molLine):
+      heads = self.inputLibrary.get().getHeaders()
+      attrs = molLine.split()
+      for i, h in enumerate(heads):
+        if h != 'Name':
+          smallMol.__setattr__(h, pwobj.String(attrs[i]))
+      return smallMol
 
     def _validate(self):
         errors = []

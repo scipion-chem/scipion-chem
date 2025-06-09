@@ -123,9 +123,9 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         nt = self.numberOfThreads.get()
         outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='')
 
-        getBasenames = self.getOriginalBasenames()
+        bNames = self.getOriginalBasenames()
 
-        outputMols = performBatchThreading(self.generateOutput, getBasenames, nt, cloneItem=False)
+        outputMols = performBatchThreading(self.generateOutput, bNames, nt, cloneItem=False)
         for newSmallMol in outputMols:
           outputSmallMolecules.append(newSmallMol)
 
@@ -158,7 +158,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         inLib = self.inputLibrary.get()
         with open(inLib.getFileName()) as f:
           for line in f:
-            baseNames.append([line.split()[1], None])
+            baseNames.append([line.split()[1], line])
       else:
         for mol in self.inputSmallMolecules.get():
             fnSmall = mol.getFileName()
@@ -181,6 +181,8 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
             if not self.useLibrary.get():
               newSmallMol.copy(mol, copyId=False)
               newSmallMol.setMappingFile(pwobj.String(mapFile))
+            else:
+              newSmallMol = self.addLibAttributes(newSmallMol, mol)
 
             newSmallMol.setFileName(molFile)
             newSmallMol.setConfId(confId)

@@ -156,6 +156,8 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
                         if not self.useLibrary.get():
                           newSmallMol.copy(mol, copyId=False)
                           newSmallMol.setMappingFile(pwobj.String(mapFile))
+                        else:
+                          newSmallMol = self.addLibAttributes(newSmallMol, mol)
 
                         newSmallMol.setFileName(molFile)
                         newSmallMol.setConfId(confId)
@@ -164,7 +166,10 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
                 else:
                     newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
                     if not self.useLibrary.get():
+                      newSmallMol.copy(mol, copyId=False)
                       newSmallMol.setMappingFile(pwobj.String(mapFile))
+                    else:
+                      newSmallMol = self.addLibAttributes(newSmallMol, mol)
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:
@@ -319,7 +324,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         inLib = self.inputLibrary.get()
         with open(inLib.getFileName()) as f:
           for line in f:
-            baseNames[line.split()[1]] = None
+            baseNames[line.split()[1]] = line
       else:
         for mol in self.inputSmallMolecules.get():
             fnSmall = mol.getFileName()

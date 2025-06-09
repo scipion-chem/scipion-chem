@@ -774,8 +774,8 @@ class SmallMoleculesLibrary(data.EMObject):
       self.headers.append(pwobj.String(head))
 
   def validateSplit(self):
-    maxMols = pwchemPlugin.getVar(MAX_MOLS_SET)
-    return self.length <= maxMols
+    maxMols = int(pwchemPlugin.getVar(MAX_MOLS_SET))
+    return self.length.get() <= maxMols
 
   def splitInFiles(self, outDir, col=1):
     assert self.validateSplit(), WARNLIBBIG
