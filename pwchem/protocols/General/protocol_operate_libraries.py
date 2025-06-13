@@ -227,7 +227,7 @@ class ProtocolOperateLibrary(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def createElementLine(self):
       overlow = self.getEnumText('mode').lower()
-      post = 'threshold' if overlow in ['over', 'low'] else 'than'
+      post = 'threshold' if overlow in ['over', 'below'] else 'than'
       fAttribute, fValue = self.filterAttr.get(), self.filterValue.get()
 
       towrite = f"Keep molecule if {fAttribute} is {overlow} {post} {fValue}\n"
@@ -321,7 +321,7 @@ class ProtocolOperateLibrary(EMProtocol):
         filterStr = self.filterList.get().strip()
         for fil in filterStr.split('\n'):
             fAction = self.getStringBetween(fil, ' is ', ' th')
-            post = 'threshold' if fAction in ['over', 'low'] else 'than'
+            post = 'threshold' if fAction in ['over', 'below'] else 'than'
             fVal = self.getStringBetween(fil, f' {post} ', '\n')
             fAttr = self.getStringBetween(fil, ' if ', ' is ')
 
