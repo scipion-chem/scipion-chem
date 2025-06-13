@@ -1475,6 +1475,19 @@ class SetOfStructROIs(data.EMSet):
           seqDic[chain] = str(handler.getSequenceFromChain(0, chain))
       return seqDic
 
+  def getProteinSequencesResIdsDic(self):
+      '''Returns the chains residue IDs mapped to their index in the sequence:
+      {'A': {101: 0, 102: 1, 103: 2, ...}}
+      '''
+      seqDic = {}
+      from pwem.convert.atom_struct import AtomicStructHandler
+      handler = AtomicStructHandler(self.getProteinFile())
+      listChains, listRes = handler.getModelsChains()
+      for chain, reses in listRes[0].items():
+          seqDic[chain] = {resID[0]: i for i, resID in enumerate(reses)}
+
+      return seqDic
+
   def getProteinHetatmFile(self):
       return self._hetatmFile.get()
 
