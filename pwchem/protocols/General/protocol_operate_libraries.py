@@ -42,18 +42,18 @@ def thresholdFunc(threshold, action='over'):
 
   def filterFunc(value):
     try:
-      value, threshold_float = float(value), float(threshold)
+      value, thresholdFloat = float(value), float(threshold)
     except (ValueError, TypeError):
-      value, threshold_float = value, threshold
+      value, thresholdFloat = value, threshold
 
     if action == 'below':
-      res = value < threshold_float
+      res = value < thresholdFloat
     elif action == 'over':
-      res = value > threshold_float
+      res = value > thresholdFloat
     elif action == 'equal':
-      res = value == threshold_float
+      res = value == thresholdFloat
     elif action == 'different':
-      res = value != threshold_float
+      res = value != thresholdFloat
 
     return res
 
