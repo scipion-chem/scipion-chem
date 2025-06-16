@@ -48,6 +48,21 @@ def normalizeToRange(iterable, normRange=[0, 1]):
   maxIt, minIt = max(iterable), min(iterable)
   return [((normRange[1] - normRange[0]) * (i - minIt)) / (maxIt - minIt) + normRange[0] for i in iterable]
 
+
+def normalizeDictValues(d):
+  values = d.values()
+  minVal, maxVal = min(values), max(values)
+
+  # Handle case where all values are the same (avoid division by zero)
+  if minVal == maxVal:
+    return {k: 0.5 for k in d}  # or {k: 1.0 for k in d}, depending on your preference
+
+  nDict = {
+    k: (v - minVal) / (maxVal - minVal)
+    for k, v in d.items()
+  }
+  return nDict
+
 class ProtocolRankDocking(EMProtocol):
     """
     Executes the rank scoring to combine different origin docked molecules scores.
@@ -143,6 +158,7 @@ class ProtocolRankDocking(EMProtocol):
                 else:
                     self.voteDic[molName] = score * inpDic['Weight']
 
+        self.voteDic = normalizeDictValues(self.voteDic)
         with open(self.getResultsFile(), 'w') as f:
             for molName, score in self.voteDic.items():
                 f.write(f'{molName}\t{score}\n')
