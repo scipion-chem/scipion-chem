@@ -42,9 +42,20 @@ def thresholdFunc(threshold, action='over'):
 
   def filterFunc(value):
     try:
-      return float(value) < threshold if action == 'below' else float(value) > threshold
+      value, thresholdFloat = float(value), float(threshold)
     except (ValueError, TypeError):
-      return False  # or handle invalid values differently
+      value, thresholdFloat = value, threshold
+
+    if action == 'below':
+      res = value < thresholdFloat
+    elif action == 'over':
+      res = value > thresholdFloat
+    elif action == 'equal':
+      res = value == thresholdFloat
+    elif action == 'different':
+      res = value != thresholdFloat
+
+    return res
 
   return filterFunc
 
@@ -86,12 +97,12 @@ class ProtocolOperateLibrary(EMProtocol):
                        condition=f'operation not in [{UNION}, {INTER}, {DIFF}]', allowsNull=True,
                        label='Input library: ', help="Input Small molecules library to filter")
         
-        group = form.addGroup('Define filter', condition=f'operation in [{FILT}, {RANK}, {REM}]')
+        group = form.addGroup('Define to keep filter', condition=f'operation in [{FILT}, {RANK}, {REM}]')
         group.addParam('filterAttr', params.StringParam, label='Filter attribute: ', default='',
                        condition=f'operation in [{FILT}, {RANK}, {REM}]',
                        help='Attribute to use as filter or to remove')
-        group.addParam('mode', params.EnumParam, choices=["Over", "Below"], label='Mode: ', default=0,
-                       display=params.EnumParam.DISPLAY_HLIST, condition=f'operation == {FILT}',
+        group.addParam('mode', params.EnumParam, choices=["Over", "Below", "Equal", "Different"], label='Mode: ',
+                       display=params.EnumParam.DISPLAY_HLIST, condition=f'operation == {FILT}', default=0,
                        help='Whether to keep the molecule if the values of the selected attribute are below/over '
                             'the determined threshold')
 
@@ -216,9 +227,10 @@ class ProtocolOperateLibrary(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def createElementLine(self):
       overlow = self.getEnumText('mode').lower()
+      post = 'threshold' if overlow in ['over', 'below'] else 'than'
       fAttribute, fValue = self.filterAttr.get(), self.filterValue.get()
 
-      towrite = f"Keep molecule if {fAttribute} is {overlow} threshold {fValue}\n"
+      towrite = f"Keep molecule if {fAttribute} is {overlow} {post} {fValue}\n"
       return towrite
 
     def getRankMax(self):
@@ -308,8 +320,9 @@ class ProtocolOperateLibrary(EMProtocol):
         filList = []
         filterStr = self.filterList.get().strip()
         for fil in filterStr.split('\n'):
-            fAction = self.getStringBetween(fil, ' is ', ' threshold ')
-            fVal = float(self.getStringBetween(fil, ' threshold ', '\n'))
+            fAction = self.getStringBetween(fil, ' is ', ' th')
+            post = 'threshold' if fAction in ['over', 'below'] else 'than'
+            fVal = self.getStringBetween(fil, f' {post} ', '\n')
             fAttr = self.getStringBetween(fil, ' if ', ' is ')
 
             filList.append([fAction, fVal, fAttr])
