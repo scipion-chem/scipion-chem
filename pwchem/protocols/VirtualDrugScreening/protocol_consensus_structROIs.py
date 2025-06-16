@@ -58,8 +58,8 @@ def mapMsaResidues(alFile):
         align2Ori[seqIdx] = {}
         for i, residue in enumerate(record.seq):
             if residue != "-":
-                oriPos += 1
                 align2Ori[seqIdx][oriPos] = i
+                oriPos += 1
     return align2Ori
 
 
@@ -113,6 +113,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         if self.checkDifferentInput():
             self.chainsMapDic = self.buildChainsMapDic()
             self.residuesMapDic = self.buildResiduesMapDic()
+            self.resPositionMapDic = self.buildResPositionMapDic()
             self.doMap = True
 
         self.pocketDic = self.buildPocketDic()
@@ -264,6 +265,16 @@ class ProtocolConsensusStructROIs(EMProtocol):
             alignFile = self.performMSA(inpChainDic, group, refChain)
             resMap[refChain] = mapMsaResidues(alignFile)
         return resMap
+
+    def buildResPositionMapDic(self):
+        '''Builds a dictionary that maps the ID of each residue in the inputs to their position index in the sequence
+        {seqIdx: {chainID: {resId: resPos}}}
+        '''
+        dic = {}
+        for i, pPointer in enumerate(self.inputStructROIsSets):
+            pSet = pPointer.get()
+            dic[i] = pSet.getProteinSequencesResIdsDic()
+        return dic
 
     def performMSA(self, inpChainDic, group, refChain):
         iFile, oFile = self._getTmpPath(f'chains_{refChain}.fa'), \
@@ -475,8 +486,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
         mapResList = []
         for resId in resList:
             chain, res = resId.split('_')
+            resIdx = self.resPositionMapDic[setId][chain][int(res)]
             refChain = self.chainsMapDic[setId][chain]
-            refRes = self.residuesMapDic[refChain][setId][int(res)]
+            refRes = self.residuesMapDic[refChain][setId][resIdx]
             mapResList.append(f'{refChain}_{refRes}')
         return mapResList
 
