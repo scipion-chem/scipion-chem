@@ -241,7 +241,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
             else:
                 mDic = flipDic(protDic)
                 for group in chainGroups:
-                    group.append(mDic[group[0]])
+                    if group[0] in mDic:
+                        group.append(mDic[group[0]])
         return chainGroups
 
     def buildResiduesMapDic(self):
@@ -487,8 +488,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
         for resId in resList:
             chain, res = resId.split('_')
             resIdx = self.resPositionMapDic[setId][chain][int(res)]
-            refChain = self.chainsMapDic[setId][chain]
-            refRes = self.residuesMapDic[refChain][setId][resIdx]
+            if chain in self.chainsMapDic[setId]:
+                refChain = self.chainsMapDic[setId][chain]
+                refRes = self.residuesMapDic[refChain][setId][resIdx]
+            else:
+                refChain, refRes = setId, setId
             mapResList.append(f'{refChain}_{refRes}')
         return mapResList
 
