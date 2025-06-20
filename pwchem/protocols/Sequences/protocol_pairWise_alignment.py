@@ -111,9 +111,7 @@ class ProtChemPairWiseAlignment(EMProtocol):
         else:
             inputObj = getattr(self, 'inputSequence{}'.format(idx)).get()
             seq = inputObj.getSequence()
-            seq_name = inputObj.getId()
-            if not seq_name:
-                seq_name = inputObj.getSeqName()
+            seq_name = inputObj.getSeqName()
         return seq, seq_name
 
     def parseSequences(self, alignFile):
