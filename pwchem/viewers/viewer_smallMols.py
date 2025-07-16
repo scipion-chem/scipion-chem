@@ -212,32 +212,23 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         outputMolSets[oAttr[0]] = getattr(self.protocolObject, oAttr[0])
     return outputMolSets
 
-  def index2MolDic(self, molSets, groupDic):
-    '''From the sets of molecules selected in the output, return a dictionary with the index dictionaries
-    of form {groupLabel: [mols]}
+  def index2MolDic(self, molSets, groupDic, sLabel):
+    '''From the sets of molecules selected in the output, return the mols from the groupDic specified in the sLabel
     '''
-    molDic = {}
+    mols = []
     for molSetLabel, molSet in molSets.items():
       indexDic = groupDic[molSetLabel]
       for groupLabel, indexes in indexDic.items():
-        if groupLabel in molDic:
-          molDic[groupLabel] += molSet.getMolsFromIds(indexes)
-        else:
-          molDic[groupLabel] = molSet.getMolsFromIds(indexes)
-    return molDic
+        if sLabel in ['All', groupLabel]:
+            mols += molSet.getMolsFromIds(indexes)
+    return mols
 
   def getGroupMols(self, groupDic, sLabel):
     '''Return the molecules determined by the sLabel in the dictionary of index (groupDic)
     '''
     molSets = self.getOutputMolSets()
-    molDic = self.index2MolDic(molSets, groupDic)
-    if sLabel != 'All':
-        mols = sortMolsByUnique(molDic[sLabel])
-    else:
-        mols = []
-        for sLab in self.setLabels:
-          if sLab != 'All':
-              mols += sortMolsByUnique(molDic[sLab])
+    mols = self.index2MolDic(molSets, groupDic, sLabel)
+    mols = sortMolsByUnique(mols)
     if len(mols) > 1000:
       res = askYesNoCancel('Slow display',
                   f'Trying to display a high number of molecules ({len(mols)}) might be slow, do you want to continue?',
