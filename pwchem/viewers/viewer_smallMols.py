@@ -105,13 +105,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                        label='Display docking poses in ROI: ',
                        help='Display all conformers and positions docked on this ROI')
 
-        group.addParam('displayMoleculeDock', params.EnumParam,
-                       choices=self.moleculeLabels, default=0,
+        group.addParam('displayMoleculeDock', params.StringParam, default='',
                        label='Display docking poses of molecule: ',
                        help='Display all conformers and positions of this molecule')
 
-        group.addParam('displaySingleDock', params.EnumParam,
-                       choices=self.singleLabels, default=0,
+        group.addParam('displaySingleDock', params.StringParam, default='',
                        label='Display docking pose of ligand: ',
                        help='Display this single ligand with the target')
 
@@ -341,7 +339,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
 
   def _viewMoleculeDock(self, e=None):
-    ligandLabel = self.getEnumText('displayMoleculeDock')
+    ligandLabel = self.displayMoleculeDock.get()
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
     if len(mols) > 0:
@@ -353,7 +351,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewSingleDock(self, e=None):
-    ligandLabel = self.getEnumText('displaySingleDock')
+    ligandLabel = self.displaySingleDock.get()
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
     if len(mols) > 0:

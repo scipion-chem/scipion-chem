@@ -44,10 +44,11 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
 
-from pwchem.objects import SequenceVariants, SetOfStructROIs, SetOfSmallMolecules
 from pwchem.viewers.viewers_sequences import SequenceAliView
 from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
+
+from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
 
 class SelectLigandAtom(VariableWizard):
@@ -574,7 +575,10 @@ class SelectElementWizard(VariableWizard):
   def displayDialog(self, form, inputParam):
     protocol = form.protocol
     try:
-      scipionSet = getattr(protocol, inputParam[0]).get()
+      scipionSet = getattr(protocol, inputParam[0])
+      if isinstance(scipionSet, Pointer):
+        scipionSet = scipionSet.get()
+
       listOfElements = self.getListOfElements(protocol, scipionSet)
     except Exception as e:
       print("ERROR: ", e)
@@ -597,6 +601,16 @@ SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
                                targets=['inputLigand'],
                                inputs=['inputSmallMolecules'],
                                outputs=['inputLigand'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayMoleculeDock'],
+                               inputs=['moleculeLabels'],
+                               outputs=['displayMoleculeDock'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displaySingleDock'],
+                               inputs=['singleLabels'],
+                               outputs=['displaySingleDock'])
 
 
 class SelectElementMultiPointWizard(SelectElementWizard):
