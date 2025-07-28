@@ -17,6 +17,18 @@ def parseParams(paramsFile, listParams=[], evalParams=[], sep=':'):
         paramsDic[key.strip()] = value.strip()
   return paramsDic
 
+def typeParamsDic(paramsDic, typeDic):
+  '''Return a paramsDic with the values typed as determined in the typeDic.
+  paramsDic: {parkey: parValue}
+  typeDic: {parTypeFunc: [parKeys]}
+
+  returns: {parkey: parTypeFunc(parValue)}
+  '''
+  for typeFunc, parKeys in typeDic.items():
+    for parKey in parKeys:
+      if parKey in paramsDic:
+        paramsDic[parKey] = typeFunc(paramsDic[parKey])
+  return paramsDic
 
 # RDKIT utils
 def parseMoleculeFile(molFile):

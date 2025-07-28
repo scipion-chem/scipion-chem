@@ -470,6 +470,19 @@ def pdbqt2other(protocol, pdbqtFile, otherFile):
   runOpenBabel(protocol=protocol, args=args, popen=True)
   return os.path.abspath(otherFile)
 
+def molsPDBQT2PDB(protocol, oriFiles, oDir):
+  molFiles = []
+  for molFile in oriFiles:
+    molFile = os.path.abspath(molFile)
+    if molFile.endswith('.pdbqt'):
+      inpPDBFile = os.path.abspath(os.path.join(oDir, os.path.basename(molFile).split('.')[0] + '.pdb'))
+      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(molFile), inpPDBFile)
+      runOpenBabel(protocol=protocol, args=args, cwd=oDir)
+      molFile = inpPDBFile
+
+    molFiles.append(molFile)
+  return molFiles
+
 def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=False):
   '''Convert molecule files to sdf using openbabel'''
   def writeAddHParamsFile(outDir, molFn):

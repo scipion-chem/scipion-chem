@@ -183,3 +183,44 @@ class TestOperateSmallMoleculesLibrary(TestImportSmallMoleculesLibrary):
 				self._waitOutput(opProt, 'outputLibrary')
 				assertHandle(self.assertIsNotNone, getattr(opProt, 'outputLibrary', None),
 										 cwd=opProt.getWorkingDir())
+
+class TestClusterMolecules(TestImportSmallMoleculesLibrary):
+	@classmethod
+	def _runOperateSets(cls, protLibs, op=0):
+		protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, refAttribute=1)
+		for protLib in protLibs:
+			protOperateLibrary.inputLibraries.append(protLib)
+			protOperateLibrary.inputLibraries[-1].setExtended('outputLibrary')
+
+		cls.proj.launchProtocol(protOperateLibrary, wait=False)
+		return protOperateLibrary
+
+	@classmethod
+	def _runClusterMolecules(cls, protIn, useLib, kwargs):
+		protClusterMols = cls.newProtocol(ProtocolOperateLibrary, **kwargs)
+		if useLib:
+			protClusterMols.inputLibrary.set(protIn)
+			protClusterMols.inputLibrary.setExtended('outputLibrary')
+		else:
+			protClusterMols.inputSmallMolecules.set(protIn)
+			protClusterMols.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(protClusterMols, wait=False)
+		return protClusterMols
+
+	def test(self):
+		protImportLib = self._runImportLibrary(defLib=True, nMols=1000, rSeed=44)
+		self._waitOutput(protImportLib, 'outputLibrary')
+
+		clProts = []
+		for i in range(2):
+			protIn = protImportLib if i == 0 else self.protImportSmallMols 
+			clProts.append(self._runClusterMolecules(protIn, useLib=i==0))
+
+		for i, clProt in enumerate(clProts):
+			outName = 'outputLibrary' if i == 0 else 'outputSmallMolecules'
+			self._waitOutput(clProt, outName)
+			assertHandle(self.assertIsNotNone, getattr(clProt, outName, None),
+									 cwd=clProt.getWorkingDir())
+			assertHandle(self.assertIsNotNone, getattr(clProt, 'outputRepSmallMolecules', None),
+									 cwd=clProt.getWorkingDir())
