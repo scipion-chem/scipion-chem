@@ -24,9 +24,9 @@ distDic = {'tanimoto': DataStructs.cDataStructs.BulkTanimotoSimilarity,
            'cosine': DataStructs.cDataStructs.BulkCosineSimilarity}
 
 def labelsToClusterIndex(labels):
-    unique_labels = np.unique(labels)
-    cluster_groups = {label: np.where(labels == label)[0].tolist() for label in unique_labels if label != -1}
-    return list(cluster_groups.values())
+    uniqueLabels = np.unique(labels)
+    clusterGroups = {label: np.where(labels == label)[0].tolist() for label in uniqueLabels if label != -1}
+    return list(clusterGroups.values())
 
 def assignPointsToClusters(picks, fps, mols, distType='tanimoto'):
     clusters = defaultdict(list)
@@ -92,40 +92,40 @@ def calculateDistances(fingerprints, distType='Tanimoto'):
     dists = []
     for i in range(1, len(fingerprints)):
         dist = distFunc(fps[i], fps[:i], returnDistance=True)
-        dists.extend([x for x in dist])
+        dists.extend(dist)
 
     return dists
 
-def getMedoidsFromMatrix(cluster_indices, distance_matrix):
+def getMedoidsFromMatrix(clusterIndices, distanceMatrix):
     medoids = []
     # Get indices of points in the current cluster
-    for clIndex in cluster_indices:
+    for clIndex in clusterIndices:
         # Subset the distance matrix for the current cluster
-        cluster_distances = distance_matrix[np.ix_(clIndex, clIndex)]
+        clusterDistances = distanceMatrix[np.ix_(clIndex, clIndex)]
 
         # Sum of distances for each point in the cluster
-        sum_distances = cluster_distances.sum(axis=1)
+        sumDistances = clusterDistances.sum(axis=1)
 
         # The medoid is the point with the smallest sum of distances
-        medoid_index = clIndex[np.argmin(sum_distances)]
-        medoids.append(medoid_index)
+        medoidIndex = clIndex[np.argmin(sumDistances)]
+        medoids.append(medoidIndex)
 
     return medoids
 
 
-def getMedoidsFromCluster(fps, cluster_indices, distance='jaccard'):
+def getMedoidsFromCluster(fps, clusterIndices, distance='jaccard'):
     distance = 'jaccard' if distance.lower() == 'tanimoto' else distance
     medoids = []
-    for clIndex in cluster_indices:
+    for clIndex in clusterIndices:
         # Get indices of points in this cluster
-        cluster_points = fps[clIndex]
+        clusterPoints = fps[clIndex]
         # Compute pairwise distances within the cluster
-        distances = pairwise_distances(cluster_points, metric=distance)
+        distances = pairwise_distances(clusterPoints, metric=distance)
 
         # Sum of distances for each point (smallest = medoid)
-        sum_distances = distances.sum(axis=1)
-        medoid_idx = clIndex[np.argmin(sum_distances)]
-        medoids.append(medoid_idx)
+        sumDistances = distances.sum(axis=1)
+        medoidIdx = clIndex[np.argmin(sumDistances)]
+        medoids.append(medoidIdx)
 
     return medoids
 
@@ -138,30 +138,30 @@ def buildClusters(fps, mols, clustType, paramsDic):
             distMatrix = squareform(dists)
 
         if clustType == 'butina':
-            cluster_indices = Butina.ClusterData(dists, len(mols), paramsDic['cutoff'], isDistData=True)
+            clusterIndices = Butina.ClusterData(dists, len(mols), paramsDic['cutoff'], isDistData=True)
 
         elif clustType == 'dbscan':
             db = DBSCAN(eps=paramsDic['cutoff'], min_samples=paramsDic['minSamples'], metric='precomputed')
             db.fit(distMatrix)
-            cluster_indices = labelsToClusterIndex(db.labels_)
+            clusterIndices = labelsToClusterIndex(db.labels_)
 
         elif clustType == 'hdbscan':
             hdb = HDBSCAN(min_cluster_size=paramsDic['minClusterSize'], metric='precomputed')
             hdb.fit(distMatrix)
-            cluster_indices = labelsToClusterIndex(hdb.labels_)
+            clusterIndices = labelsToClusterIndex(hdb.labels_)
 
         elif clustType == 'kmedoids':
             from sklearn_extra.cluster import KMedoids
 
             kmed = KMedoids(n_clusters=paramsDic['nClusters'], metric='precomputed')
             kmed.fit(distMatrix)
-            cluster_indices = labelsToClusterIndex(kmed.labels_)
+            clusterIndices = labelsToClusterIndex(kmed.labels_)
 
         if clustType == 'birch':
             bir = Birch(threshold=paramsDic['cutoff'], branching_factor=paramsDic['branchingFactor'], 
                         n_clusters=paramsDic['nClusters'])
             bir.fit(np.array(fps))
-            cluster_indices = labelsToClusterIndex(bir.labels_)
+            clusterIndices = labelsToClusterIndex(bir.labels_)
 
         elif clustType == 'bitbirch':
             import bitbirch.bitbirch as bb
@@ -170,14 +170,14 @@ def buildClusters(fps, mols, clustType, paramsDic):
             bb.set_merge('diameter')
             brc = bb.BitBirch(threshold=paramsDic['cutoff'], branching_factor=paramsDic['branchingFactor'])
             brc.fit(fps)
-            cluster_indices = brc.get_cluster_mol_ids()
+            clusterIndices = brc.get_cluster_mol_ids()
 
-        cluster_mols = [operator.itemgetter(*cluster)(mols) for cluster in cluster_indices]
+        clusterMols = [operator.itemgetter(*cluster)(mols) for cluster in clusterIndices]
 
         if clustType in ['butina', 'dbscan', 'hdbscan']:
-            reps = getMedoidsFromMatrix(cluster_indices, distMatrix)
+            reps = getMedoidsFromMatrix(clusterIndices, distMatrix)
         elif clustType in ['birch', 'bitbirch']:
-            reps = getMedoidsFromCluster(fps, cluster_indices, paramsDic['distance'])
+            reps = getMedoidsFromCluster(fps, clusterIndices, paramsDic['distance'])
         elif clustType == 'kmedoids':
             reps = kmed.medoid_indices_
 
@@ -185,21 +185,19 @@ def buildClusters(fps, mols, clustType, paramsDic):
         # this pickers do not create clusters, directly pick the representatives
         if clustType == 'leaderpick':
             lp = rdSimDivPickers.LeaderPicker()
-            picks = lp.LazyBitVectorPick(fps, len(fps), paramsDic['cutoff'])
+            reps = lp.LazyBitVectorPick(fps, len(fps), paramsDic['cutoff'])
 
-            cluster_mols = assignPointsToClusters(picks, fps, mols, paramsDic['distance'])
+            clusterMols = assignPointsToClusters(reps, fps, mols, paramsDic['distance'])
 
         elif clustType == 'maxminpick':
             lp = rdSimDivPickers.MaxMinPicker()
-            picks = lp.LazyBitVectorPick(fps, len(fps), paramsDic['nClusters'])
+            reps = lp.LazyBitVectorPick(fps, len(fps), paramsDic['nClusters'])
 
-            cluster_mols = assignPointsToClusters(picks, fps, mols, paramsDic['distance'])
+            clusterMols = assignPointsToClusters(reps, fps, mols, paramsDic['distance'])
 
-        reps = [p for p in picks]
-
-    rep_mols = [mols[i] for i in reps]
-    cluster_mols = [[c] if isinstance(c, Chem.rdchem.Mol) else c for c in cluster_mols]
-    return cluster_mols, rep_mols
+    repMols = [mols[i] for i in reps]
+    clusterMols = [[c] if isinstance(c, Chem.rdchem.Mol) else c for c in clusterMols]
+    return clusterMols, repMols
 
 ###################################################################################################################
 if __name__ == "__main__":
@@ -216,15 +214,15 @@ if __name__ == "__main__":
                bool: ['useChiralty', 'useHs', 'use2D']}
     paramsDic = typeParamsDic(paramsDic, typeDic)
 
-    mols_dict, mols = getMolFilesDic(molFiles)
+    molsDict, mols = getMolFilesDic(molFiles)
     fps = makeFingerprints(mols, paramsDic['finger'], paramsDic)
 
-    cluster_mols, rep_mols = buildClusters(fps, mols, paramsDic['cluster'], paramsDic)
-    sizeClusters = [len(c) for c in cluster_mols]
-    #print(f'n clusters: {len(cluster_mols)}, mean size: {sum(sizeClusters)/len(sizeClusters)}')
+    clusterMols, repMols = buildClusters(fps, mols, paramsDic['cluster'], paramsDic)
+    sizeClusters = [len(c) for c in clusterMols]
+    #print(f'n clusters: {len(clusterMols)}, mean size: {sum(sizeClusters)/len(sizeClusters)}')
 
     with open(outputPath, 'w') as f:
-        for i, cluster in enumerate(cluster_mols):
+        for i, cluster in enumerate(clusterMols):
             for mol in cluster:
-                isRep = mol in rep_mols
-                f.write(f'{mols_dict[mol]}\t{i}\t{isRep}\n')
+                isRep = mol in repMols
+                f.write(f'{molsDict[mol]}\t{i}\t{isRep}\n')

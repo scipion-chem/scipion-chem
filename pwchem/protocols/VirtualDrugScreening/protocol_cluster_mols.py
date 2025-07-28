@@ -47,6 +47,8 @@ CLUSTERING = ['Butina', 'DBSCAN', 'HDBSCAN', 'KMedoids', 'Birch', 'BitBirch', 'L
 DISTANCES = ['Tanimoto', 'Dice', 'Cosine']
 
 scriptName = 'cluster_molecules.py'
+RDKIT_FINGER, ATOMPAIR_FINGER = 'finger == 1', 'finger == 2'
+
 
 class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
   """
@@ -76,18 +78,18 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
                    help='Whether to use or not the chiralty of the molecules')
     group.addParam('radius', params.IntParam, label="Circular radius: ", default=2, condition='finger == 0',
                    expertLevel=params.LEVEL_ADVANCED, help='Radius of the circular Morgan fingerprint')
-    group.addParam('minPath', params.IntParam, label="Min. distance: ", default=1, condition='finger == 1',
+    group.addParam('minPath', params.IntParam, label="Min. distance: ", default=1, condition=RDKIT_FINGER,
                    help='Minimum path distance for the RDKit fingerprints')
-    group.addParam('maxPath', params.IntParam, label="Max. distance: ", default=7, condition='finger == 1',
+    group.addParam('maxPath', params.IntParam, label="Max. distance: ", default=7, condition=RDKIT_FINGER,
                    help='Maximum path distance for the RDKit fingerprints')
-    group.addParam('useHs', params.BooleanParam, label="Use H: ", default=True, condition='finger == 1',
+    group.addParam('useHs', params.BooleanParam, label="Use H: ", default=True, condition=RDKIT_FINGER,
                    expertLevel=params.LEVEL_ADVANCED,
                    help='Whether to use or not the Hydrogen info of the molecules')
-    group.addParam('minDistance', params.IntParam, label="Min. distance: ", default=1, condition='finger == 2',
+    group.addParam('minDistance', params.IntParam, label="Min. distance: ", default=1, condition=ATOMPAIR_FINGER,
                    help='Minimum distance for the AtomPair fingerprints')
-    group.addParam('maxDistance', params.IntParam, label="Max. distance: ", default=-1, condition='finger == 2',
+    group.addParam('maxDistance', params.IntParam, label="Max. distance: ", default=-1, condition=ATOMPAIR_FINGER,
                    help='Maximum distance for the AtomPair fingerprints. Not set if -1.')
-    group.addParam('use2D', params.BooleanParam, label="Use 2D: ", default=True, condition='finger == 2',
+    group.addParam('use2D', params.BooleanParam, label="Use 2D: ", default=True, condition=ATOMPAIR_FINGER,
                    expertLevel=params.LEVEL_ADVANCED, help='Whether to use or not the 2D info of the molecules')
 
     group = form.addGroup('Clustering')
