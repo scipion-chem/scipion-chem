@@ -23,7 +23,7 @@
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
-	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering, ProtocolOperateLibrary
+	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering, ProtocolOperateLibrary, ProtClusterMolecules
 from pwchem.tests.tests_imports import TestImportBase, TestImportSmallMoleculesLibrary
 from pwchem.utils import assertHandle
 
@@ -197,7 +197,7 @@ class TestClusterMolecules(TestImportSmallMoleculesLibrary):
 
 	@classmethod
 	def _runClusterMolecules(cls, protIn, useLib, kwargs):
-		protClusterMols = cls.newProtocol(ProtocolOperateLibrary, **kwargs)
+		protClusterMols = cls.newProtocol(ProtClusterMolecules, useLibrary=useLib, outputOnlyReps=False, **kwargs)
 		if useLib:
 			protClusterMols.inputLibrary.set(protIn)
 			protClusterMols.inputLibrary.setExtended('outputLibrary')
@@ -209,13 +209,16 @@ class TestClusterMolecules(TestImportSmallMoleculesLibrary):
 		return protClusterMols
 
 	def test(self):
+		self._runImportSmallMols()
 		protImportLib = self._runImportLibrary(defLib=True, nMols=1000, rSeed=44)
 		self._waitOutput(protImportLib, 'outputLibrary')
+		self._waitOutput(self.protImportSmallMols, 'outputSmallMolecules')
+		kwargs = {}
 
 		clProts = []
 		for i in range(2):
 			protIn = protImportLib if i == 0 else self.protImportSmallMols 
-			clProts.append(self._runClusterMolecules(protIn, useLib=i==0))
+			clProts.append(self._runClusterMolecules(protIn, i==0, kwargs))
 
 		for i, clProt in enumerate(clProts):
 			outName = 'outputLibrary' if i == 0 else 'outputSmallMolecules'
@@ -224,3 +227,4 @@ class TestClusterMolecules(TestImportSmallMoleculesLibrary):
 									 cwd=clProt.getWorkingDir())
 			assertHandle(self.assertIsNotNone, getattr(clProt, 'outputRepSmallMolecules', None),
 									 cwd=clProt.getWorkingDir())
+

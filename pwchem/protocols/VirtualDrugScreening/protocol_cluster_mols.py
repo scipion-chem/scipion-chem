@@ -181,6 +181,7 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
   def defineMolsOutput(self, molDic, reps):
     repMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(),
                                              prefix='representatives', copyInfo=True)
+    outMols = None
     if not self.outputOnlyReps.get():
       outMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(),
                                                prefix='clusters', copyInfo=True)

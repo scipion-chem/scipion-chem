@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
     cluster_mols, rep_mols = buildClusters(fps, mols, paramsDic['cluster'], paramsDic)
     sizeClusters = [len(c) for c in cluster_mols]
-    print(f'n clusters: {len(cluster_mols)}, mean size: {sum(sizeClusters)/len(sizeClusters)}')
+    #print(f'n clusters: {len(cluster_mols)}, mean size: {sum(sizeClusters)/len(sizeClusters)}')
 
     with open(outputPath, 'w') as f:
         for i, cluster in enumerate(cluster_mols):
