@@ -399,11 +399,10 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 ################### MOLECULES VIEWS #################
 
   def _viewSet(self, e=None):
-    if self.checkIfProtocol():
-      ligandLabel = self.getEnumText('displaySet')
-      sLabel = ligandLabel
-    else:
-      ligandLabel, sLabel = 'All', 'allSetMolecules'
+    ligandLabel = self.getEnumText('displaySet')
+    sLabel = ligandLabel
+
+    print('labels: ', ligandLabel, sLabel)
 
     mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
     if len(mols) > 0:
