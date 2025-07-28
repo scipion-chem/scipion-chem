@@ -160,7 +160,8 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
       with open(oLibFile, 'w') as f:
         for smiName, line in mapDic.items():
           molFile = os.path.abspath(self._getTmpPath(f'{smiName}.smi'))
-          f.write(f'{line}\t{molDic[molFile]}\n')
+          if molFile in molDic:
+            f.write(f'{line}\t{molDic[molFile]}\n')
 
       prevHeaders = inLib.getHeaders()
       outputLib = inLib.clone()
@@ -192,8 +193,9 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
       molFile = os.path.abspath(mol.getFileName())
 
       if not self.outputOnlyReps.get():
-        mol.cluster = pwobj.String(molDic[molFile])
-        outMols.append(mol)
+        if molFile in molDic:
+          mol.cluster = pwobj.String(molDic[molFile])
+          outMols.append(mol)
 
       if molFile in reps:
         repMols.append(mol)
