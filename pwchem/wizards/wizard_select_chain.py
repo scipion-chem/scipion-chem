@@ -580,9 +580,13 @@ class SelectElementWizard(VariableWizard):
         scipionSet = scipionSet.get()
 
       listOfElements = self.getListOfElements(protocol, scipionSet)
-    except Exception as e:
-      print("ERROR: ", e)
-      return
+    except:
+      try:
+        if callable(getattr(protocol, inputParam[0])):
+          listOfElements = getattr(protocol, inputParam[0])()
+      except Exception as e:
+        print("ERROR: ", e)
+        return
 
     finalList = []
     for i in listOfElements:
