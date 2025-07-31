@@ -32,7 +32,8 @@ if __name__ == "__main__":
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
 
-    molsDict, _ = getMolFilesDic(molFiles)
+    sanitize = eval(paramsDic['sanitize']) if 'sanitize' in paramsDic else True
+    molsDict, _ = getMolFilesDic(molFiles, sanitize)
     for mol in molsDict:
         molBase = getBaseName(molsDict[mol])
         outBase = os.path.join(outDir, molBase)

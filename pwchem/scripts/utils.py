@@ -31,7 +31,7 @@ def typeParamsDic(paramsDic, typeDic):
   return paramsDic
 
 # RDKIT utils
-def parseMoleculeFile(molFile):
+def parseMoleculeFile(molFile, sanitize=True):
   from rdkit import Chem
   if molFile.endswith('.mol2'):
     mol = Chem.MolFromMol2File(molFile)
@@ -46,7 +46,7 @@ def parseMoleculeFile(molFile):
         line = f.readline()
       mol = Chem.MolFromSmiles(line)
   elif molFile.endswith('.sdf'):
-    suppl = Chem.SDMolSupplier(molFile)
+    suppl = Chem.SDMolSupplier(molFile, sanitize=sanitize)
     for mol in suppl:
       break
   else:
@@ -67,10 +67,10 @@ def writeMol(mol, outFile, cid=-1, setName=False):
   except:
     return False
 
-def getMolFilesDic(molFiles):
+def getMolFilesDic(molFiles, sanitize=True):
   molsDict = {}
   for molFile in molFiles:
-    m = parseMoleculeFile(molFile)
+    m = parseMoleculeFile(molFile, sanitize=sanitize)
     if m:
       molsDict[m] = molFile
 
