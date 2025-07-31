@@ -31,10 +31,12 @@ This protocol is used to score docking positions obtained by several software us
 available in the Open Drug Discovery Toolkit (ODDT, https://github.com/oddt/oddt)
 
 """
-import os, glob, time
+import os, glob
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message, createLink
+import pyworkflow.object as pwobj
+
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
@@ -201,7 +203,7 @@ class ProtocolScoreDocking(EMProtocol):
         for mol in consensusMols:
             molName = mol.getUniqueName()
             for resIdx, oddtScore in sDic[molName].items():
-                setattr(mol, "_oddtScore_{}".format(resIdx), Float(oddtScore))
+                setattr(mol, "_oddtScore_{}".format(resIdx), pwobj.Float(oddtScore))
             newMols.append(mol)
 
         newMols.updateMolClass()
