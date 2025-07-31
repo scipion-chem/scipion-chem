@@ -162,14 +162,14 @@ class ProtChemSmallMolIdentify(EMProtocol):
         return os.path.abspath(self._getExtraPath(f'inputSMI_{it}.smi'))
 
     def getOutputSMIDir(self):
-        oDir = os.path.abspath(self._getExtraPath(f'identification'))
+        oDir = os.path.abspath(self._getExtraPath('identification'))
         return oDir
 
     def getOutputSMIFile(self, it):
         return os.path.join(self.getOutputSMIDir(), f'identification_{it}.txt')
 
     def getSimilarSMIDir(self):
-        oDir = os.path.abspath(self._getExtraPath(f'similarIds'))
+        oDir = os.path.abspath(self._getExtraPath('similarIds'))
         return oDir
 
     def getSimilarSMIFile(self, it):

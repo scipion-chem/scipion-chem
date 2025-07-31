@@ -152,11 +152,11 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
-		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
-											packageVersion=OPENBABEL_DIC['version'])
+		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
+																			 packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabel_installer.getCondaEnvCommand()\
+		openbabelInstaller.getCondaEnvCommand()\
 			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge') \
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
 			.addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC) } && '

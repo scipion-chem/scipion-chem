@@ -192,13 +192,12 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
     for mol in self.inputSmallMolecules.get():
       molFile = os.path.abspath(mol.getFileName())
 
-      if not self.outputOnlyReps.get():
-        if molFile in molDic:
+      if not self.outputOnlyReps.get() and molFile in molDic:
           mol.cluster = pwobj.String(molDic[molFile])
           outMols.append(mol)
 
       if molFile in reps:
-        repMols.append(mol)
+          repMols.append(mol)
     return repMols, outMols
 
 
