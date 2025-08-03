@@ -12,13 +12,13 @@ jobs:
         shell: bash -l {0}
 
     steps:
-      - name: Setup enviroment
-        uses: scipion-chem/.github/.github/composites/install-scipion@main
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+
+      - name: Setup enviroment
+        uses: scipion-chem/.github/.github/composites/install-scipion@main
 
       - name: Install plugin from pull request
         working-directory: ${{ github.workspace }}
