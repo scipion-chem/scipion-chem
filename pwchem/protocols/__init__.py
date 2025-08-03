@@ -103,4 +103,3 @@ from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateL
 
 # Molecular dynamics
 from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
-

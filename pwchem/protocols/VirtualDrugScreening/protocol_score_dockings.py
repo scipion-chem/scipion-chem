@@ -476,11 +476,3 @@ class ProtocolScoreDocking(EMProtocol):
                 elif type == 'Normal' and not isinstance(param, params.EnumParam):
                     paramsDic[paramName] = param
         return paramsDic
-
-
-
-
-
-
-
-

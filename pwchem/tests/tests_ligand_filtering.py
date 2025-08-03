@@ -227,4 +227,3 @@ class TestClusterMolecules(TestImportSmallMoleculesLibrary):
 									 cwd=clProt.getWorkingDir())
 			assertHandle(self.assertIsNotNone, getattr(clProt, 'outputRepSmallMolecules', None),
 									 cwd=clProt.getWorkingDir())
-
