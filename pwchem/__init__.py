@@ -155,9 +155,12 @@ class Plugin(pwem.Plugin):
 
 		# Generating installation commands
 		openbabelInstaller.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge') \
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
-			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
+			.addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
+						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
+						'BITBIRCH_INSTALLED')\
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
 		
 		# # Instantiating shape it install helper
 		# shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
