@@ -27,6 +27,5 @@ jobs:
       - name: Run tests
         working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
         run: |
-          ../../scipion/scipion3 tests --grep pwchem
           pip install --user scipion-testrunner
           scipion_testrunner ${{ github.workspace }}/../scipion/scipion3 ${{ vars.FOLDER_WITH_VERSION }} --noGpu --testData=testData.json
