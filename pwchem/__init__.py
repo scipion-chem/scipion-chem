@@ -151,10 +151,10 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
-		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
+		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabel_installer.getCondaEnvCommand()\
+		openbabelInstaller.getCondaEnvCommand()\
 			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge') \
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
@@ -163,7 +163,7 @@ class Plugin(pwem.Plugin):
 		# shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
 		#
 		# # Importing commands from openbabel and rdkit installers
-		# shape_it_installer.importCommandList(openbabel_installer.getCommandList())
+		# shape_it_installer.importCommandList(openbabelInstaller.getCommandList())
 		#
 		# # Defining binaries folder name
 		# binaries_directory = SHAPEIT_DIC['name']
