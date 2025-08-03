@@ -59,7 +59,7 @@ class Plugin(pwem.Plugin):
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
-		cls.addDEAPPackage(env)
+		cls.addDEAPPackage(env, default=False)
 		cls.addRanxPackage(env)
 
 	@classmethod
