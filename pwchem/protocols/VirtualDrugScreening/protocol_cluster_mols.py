@@ -78,17 +78,17 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
                    help='Whether to use or not the chiralty of the molecules')
     group.addParam('radius', params.IntParam, label="Circular radius: ", default=2, condition='finger == 0',
                    expertLevel=params.LEVEL_ADVANCED, help='Radius of the circular Morgan fingerprint')
-    group.addParam('minPath', params.IntParam, label="Min. distance: ", default=1, condition=RDKIT_FINGER,
-                   help='Minimum path distance for the RDKit fingerprints')
-    group.addParam('maxPath', params.IntParam, label="Max. distance: ", default=7, condition=RDKIT_FINGER,
-                   help='Maximum path distance for the RDKit fingerprints')
+    line = group.addLine('Path distances: ', condition=RDKIT_FINGER,
+                         help='Minimum and maximum path distance for the RDKit fingerprints')
+    line.addParam('minPath', params.IntParam, label="Minimum: ", default=1)
+    line.addParam('maxPath', params.IntParam, label="Maximum: ", default=7)
     group.addParam('useHs', params.BooleanParam, label="Use H: ", default=True, condition=RDKIT_FINGER,
                    expertLevel=params.LEVEL_ADVANCED,
                    help='Whether to use or not the Hydrogen info of the molecules')
-    group.addParam('minDistance', params.IntParam, label="Min. distance: ", default=1, condition=ATOMPAIR_FINGER,
-                   help='Minimum distance for the AtomPair fingerprints')
-    group.addParam('maxDistance', params.IntParam, label="Max. distance: ", default=-1, condition=ATOMPAIR_FINGER,
-                   help='Maximum distance for the AtomPair fingerprints. Not set if -1.')
+    line = group.addLine('Atom pair distances: ', condition=ATOMPAIR_FINGER,
+                         help='Minimum and maximum distance for the AtomPair fingerprints. Maximum not set if -1.')
+    line.addParam('minDistance', params.IntParam, label="Minimum: ", default=1)
+    line.addParam('maxDistance', params.IntParam, label="Maximum: ", default=-1)
     group.addParam('use2D', params.BooleanParam, label="Use 2D: ", default=True, condition=ATOMPAIR_FINGER,
                    expertLevel=params.LEVEL_ADVANCED, help='Whether to use or not the 2D info of the molecules')
 
@@ -97,10 +97,17 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
                    help='Clustering method to use for grouping the molecules')
     group.addParam('distance', params.EnumParam, label="Distance to use: ", choices=DISTANCES, default=0,
                    help='Distance method to use in the clustering')
-    group.addParam('cutoff', params.FloatParam, label="Cutoff: ", default=0.8, condition='cluster in [0, 1, 4, 5, 6]',
-                   help='Cutoff to use in the clustering method to check if two items are clustered together')
+
+    line = group.addLine('Cutoffs: ', condition='cluster in [0, 1, 4, 5, 6]',
+                         help='Cutoff to use in the clustering method to check if two items are clustered together.'
+                              'In BitBirch, you can set a min, max and step values to optimize the threshold in order '
+                              'to obtain the desired number of clusters.')
+    line.addParam('cutoff', params.FloatParam, label="Cutoff: ", default=0.7)
+    line.addParam('cutoffLow', params.FloatParam, label="Lowest: ", default=0.2, condition='cluster in [5]')
+    line.addParam('cutoffStep', params.FloatParam, label="Step: ", default=0.05, condition='cluster in [5]')
+    
     group.addParam('nClusters', params.IntParam, label="Number of clusters: ", default=10,
-                   condition='cluster in [3, 4, 7]',
+                   condition='cluster in [3, 4, 5, 7]',
                    help='Number of clusters (and therefore, output molecules) to generate.')
 
     group.addParam('minSamples', params.IntParam, label="Min. samples: ", default=5, condition='finger in [1, 2]',
@@ -110,7 +117,7 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
                    condition='cluster in [1, 2]',
                    help='The minimum number of samples in a group for that group to be considered a cluster')
     group.addParam('branchingFactor', params.IntParam, label="Branching factor: ", default=50,
-                   condition='cluster in [4, 5]',
+                   condition='cluster in [4, 5]', expertLevel=params.LEVEL_ADVANCED,
                    help='Maximum number of CF subclusters in each node. If a new samples enters such that the '
                         'number of subclusters exceed the branching_factor then that node is split into two nodes '
                         'with the subclusters redistributed in each')
@@ -270,7 +277,10 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
 
     if self.cluster.get() in [0, 1, 4, 5, 6]:
       s += f'cutoff: {self.cutoff.get()}\n'
-    if self.cluster.get() in [3, 4, 7]:
+      if self.cluster.get() == 5:
+          s += f'cutoffLow: {self.cutoffLow.get()}\n'
+          s += f'cutoffStep: {self.cutoffStep.get()}\n'
+    if self.cluster.get() in [3, 4, 5, 7]:
       s += f'nClusters: {self.nClusters.get()}\n'
     if self.cluster.get() in [1, 2]:
       s += f'minSamples: {self.minSamples.get()}\n'

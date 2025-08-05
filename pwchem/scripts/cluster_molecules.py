@@ -129,6 +129,68 @@ def getMedoidsFromCluster(fps, clusterIndices, distance='jaccard'):
 
     return medoids
 
+def optimizeParameter(
+        bb, fps,  # Function to optimize (returns a value based on param)
+        paramLow,  # Lowest possible parameter value
+        paramHigh,  # Highest possible parameter value
+        targetValue,  # Desired output of `func`
+        step,  # Initial step size
+        tolerance=1e-6,  # Stopping condition (how close to `targetValue`)
+        maxIter=100,  # Prevent infinite recursion
+        increasing=True,  # Whether `func` increases with parameter (True/False)
+        verbose=False  # Print debug info
+):
+    """
+    Recursively optimizes a parameter until `func(param)` approximates `targetValue`.
+    Returns the best parameter value found.
+    """
+    bestParam = None
+    bestDiff = float('inf')
+
+    step = abs(step) if increasing else -abs(step)
+
+    # Iterate through parameter values
+    param = paramLow
+    while (increasing and param <= paramHigh+1e-6) or (not increasing and param >= paramHigh-1e-6):
+        brc = bb.BitBirch(threshold=param, branching_factor=paramsDic['branchingFactor'])
+        brc.fit(fps)
+        currentValue = len(brc.get_centroids())
+        currentDiff = abs(currentValue - targetValue)
+
+        if verbose:
+            print(f"Trying param={param:.10f}, value={currentValue:.6f}, diff={currentDiff:.6f}")
+
+        # Update best parameter if closer to target
+        if currentDiff < bestDiff:
+            bestDiff = currentDiff
+            bestParam = param
+
+        # Early exit if within tolerance or maxIter
+        if currentDiff <= tolerance:
+            return brc, bestParam, currentValue
+
+        # Check if we passed the target (crossing point)
+        if (increasing and currentValue > targetValue) or (not increasing and currentValue < targetValue):
+            newLow = param - step
+            newHigh = param
+            newStep = step / 2  # Halve step
+
+            if step <= 1e-6 or maxIter <= 1:
+                return brc, bestParam, currentValue
+            else:
+                if verbose:
+                    print(f"Crossed target! Refining between {newLow:.10f} and {newHigh:.10f} with step={newStep:.10f}")
+                return optimizeParameter(
+                    bb, fps, newLow, newHigh, targetValue, newStep,
+                    tolerance, maxIter - 1, increasing, verbose
+                )
+
+        param += step
+
+    # If no crossing found, return best param
+    return brc, bestParam, currentValue
+
+
 def buildClusters(fps, mols, clustType, paramsDic):
     clustType = clustType.lower()
 
@@ -168,8 +230,12 @@ def buildClusters(fps, mols, clustType, paramsDic):
             fps = np.array(fps)
 
             bb.set_merge('diameter')
-            brc = bb.BitBirch(threshold=paramsDic['cutoff'], branching_factor=paramsDic['branchingFactor'])
-            brc.fit(fps)
+            highCutoff, lowCutoff = paramsDic['cutoff'], paramsDic['cutoffLow']
+            objNClust, thStep = paramsDic['nClusters'], paramsDic['cutoffStep']
+
+            brc, th, curClust = optimizeParameter(bb, fps, lowCutoff, highCutoff, objNClust, thStep, 1, 100, True, True)
+
+            brc.reassign(fps, curClust)
             clusterIndices = brc.get_cluster_mol_ids()
 
         clusterMols = [operator.itemgetter(*cluster)(mols) for cluster in clusterIndices]
@@ -210,7 +276,7 @@ if __name__ == "__main__":
 
     typeDic = {int: ['fingerSize', 'radius', 'minPath', 'maxPath', 'minDistance', 'maxDistance', 'branchingFactor',
                      'nClusters', 'minSamples', 'minClusterSize'],
-               float: ['cutoff'],
+               float: ['cutoff', 'cutoffLow', 'cutoffStep'],
                bool: ['useChiralty', 'useHs', 'use2D']}
     paramsDic = typeParamsDic(paramsDic, typeDic)
 
