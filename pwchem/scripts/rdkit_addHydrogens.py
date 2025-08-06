@@ -31,6 +31,8 @@ if __name__ == "__main__":
     paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
+    outFormat = paramsDic['outputFormat'] if 'outputFormat' in paramsDic else '.sdf'
+    outFormat = '.' + outFormat if not outFormat.startswith('.') else outFormat
 
     sanitize = eval(paramsDic['sanitize']) if 'sanitize' in paramsDic else True
     molsDict, _ = getMolFilesDic(molFiles, sanitize)
@@ -45,5 +47,5 @@ if __name__ == "__main__":
 
         setMolName = not mol.HasProp('_Name') or not mol.GetProp('_Name')
         if mol:
-            outFile = outBase + '.sdf'
+            outFile = outBase + outFormat
             writeMol(mol, outFile, setName=setMolName)

@@ -37,7 +37,7 @@ from pwem.viewers.mdviewer.viewer import MDViewer
 from pwchem.objects import SetOfSmallMolecules, SmallMoleculesLibrary
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
-from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort
+from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort, addHydrogensToMol, relabelAtomsPDB
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
@@ -492,8 +492,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     auxPath = '/tmp/{}.pdb'.format(os.path.basename(outBase))
     if not molFile.endswith('.pdb'):
       outFile = os.path.abspath(outBase + '.pdb')
-      runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], molFile, outFile),
-                   popen=True)
+      runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], molFile, outFile), popen=True)
+      relabelAtomsPDB(outFile, atomType='ATOM')
+      if molFile.endswith('.pdbqt'):
+        oDir = os.path.dirname(outFile)
+        addHydrogensToMol(self.protocolObject, oDir, outFile, outFormat='.pdb', restIdx=True, popen=True)
       molFile = outFile
 
     if not receptorFile.endswith('.pdb'):

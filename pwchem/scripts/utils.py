@@ -57,7 +57,12 @@ def parseMoleculeFile(molFile, sanitize=True):
 def writeMol(mol, outFile, cid=-1, setName=False):
   from rdkit import Chem
   try:
-    w = Chem.SDWriter(outFile)
+    outFormat = os.path.splitext(outFile)[-1]
+    if outFormat == '.pdb':
+      w = Chem.PDBWriter(outFile)
+    else:
+      w = Chem.SDWriter(outFile)
+
     molName = os.path.split(os.path.splitext(outFile)[0])[-1]
     if setName:
       mol.SetProp('_Name', molName)

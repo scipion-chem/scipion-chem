@@ -483,9 +483,8 @@ def molsPDBQT2PDB(protocol, oriFiles, oDir):
     molFiles.append(molFile)
   return molFiles
 
-def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=False):
-  '''Convert molecule files to sdf using openbabel'''
-  def writeAddHParamsFile(outDir, molFn):
+def addHydrogensToMol(protocol, outDir, outFile, outFormat='.sdf', restIdx=False, popen=False):
+  def writeAddHParamsFile(outDir, molFn, outFormat, restIdx):
     oFile = os.path.join(outDir, 'addHydrogensParams.txt')
     with open(oFile, 'w') as f:
       f.write(f"ligandFiles: {molFn}\n")
@@ -493,7 +492,17 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
       f.write(f'outputDir: {outDir}\n')
       f.write(f'doHydrogens: True\n')
       f.write(f'doGasteiger: True\n')
+      f.write(f'outputFormat: {outFormat}\n')
+      f.write(f'restoreIdx: {restIdx}\n')
     return oFile
+
+  paramFile = writeAddHParamsFile(outDir, outFile, outFormat, restIdx)
+  pwchemPlugin.runScript(protocol, 'rdkit_addHydrogens.py', paramFile, env=RDKIT_DIC, cwd=outDir, popen=popen)
+  return outFile
+
+
+def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=False):
+  '''Convert molecule files to sdf using openbabel'''
 
   if molFile.endswith('.sdf'):
     if sdfFile:
@@ -514,8 +523,8 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
     pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
 
   if addHydrogens:
-    paramFile = writeAddHParamsFile(outDir, sdfFile)
-    pwchemPlugin.runScript(protocol, 'rdkit_addHydrogens.py', paramFile, env=RDKIT_DIC, cwd=outDir)
+    addHydrogensToMol(protocol, outDir, sdfFile)
+
 
   return sdfFile
 
@@ -779,6 +788,34 @@ def relabelAtomsMol2(atomFile, i=''):
         if line.startswith('@<TRIPOS>ATOM'):
           atomLines = True
 
+        fOut.write(line)
+
+  shutil.move(auxFile, atomFile)
+  return atomFile
+
+def relabelAtomsPDB(atomFile, i='', atomType=''):
+  '''Relabel the atom names so each atom type goes from 1 to x, so if there is only one oxygen named O7,
+    it will be renamed to O1'''
+  atomCount = {}
+  auxFile = os.path.join(os.path.dirname(atomFile), f'{getBaseName(atomFile)}_aux{i}.pdb')
+  with open(auxFile, 'w') as fOut:
+    with open(atomFile) as fIn:
+      for line in fIn:
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+          sLine = splitPDBLine(line)
+          if atomType:
+            sLine[0] = atomType
+
+          atomName = sLine[2]
+          atomSymbol = removeNumberFromStr(atomName)
+
+          if atomSymbol not in atomCount:
+            atomCount[atomSymbol] = 0
+          atomCount[atomSymbol] += 1
+
+          atomName = f'{atomSymbol}{atomCount[atomSymbol]}'
+          sLine[2] = atomName
+          line = writePDBLine(sLine)
         fOut.write(line)
 
   shutil.move(auxFile, atomFile)
