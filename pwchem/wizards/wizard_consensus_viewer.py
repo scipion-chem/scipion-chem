@@ -46,6 +46,3 @@ class SetOutputClass(EmWizard):
         outSetClass = outSet.getPocketsClass()
 
         form.setVar('setClass', outSetClass)
-
-
-
