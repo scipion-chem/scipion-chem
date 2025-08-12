@@ -37,7 +37,7 @@ from pwem.viewers.mdviewer.viewer import MDViewer
 from pwchem.objects import SetOfSmallMolecules, SmallMoleculesLibrary
 from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
-from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort
+from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort, addHydrogensToMol, relabelAtomsPDB
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
@@ -105,13 +105,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                        label='Display docking poses in ROI: ',
                        help='Display all conformers and positions docked on this ROI')
 
-        group.addParam('displayMoleculeDock', params.EnumParam,
-                       choices=self.moleculeLabels, default=0,
+        group.addParam('displayMoleculeDock', params.StringParam, default='',
                        label='Display docking poses of molecule: ',
                        help='Display all conformers and positions of this molecule')
 
-        group.addParam('displaySingleDock', params.EnumParam,
-                       choices=self.singleLabels, default=0,
+        group.addParam('displaySingleDock', params.StringParam, default='',
                        label='Display docking pose of ligand: ',
                        help='Display this single ligand with the target')
 
@@ -341,7 +339,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
 
   def _viewMoleculeDock(self, e=None):
-    ligandLabel = self.getEnumText('displayMoleculeDock')
+    ligandLabel = self.displayMoleculeDock.get()
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
     if len(mols) > 0:
@@ -353,7 +351,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewSingleDock(self, e=None):
-    ligandLabel = self.getEnumText('displaySingleDock')
+    ligandLabel = self.displaySingleDock.get()
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
     if len(mols) > 0:
@@ -401,11 +399,10 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 ################### MOLECULES VIEWS #################
 
   def _viewSet(self, e=None):
-    if self.checkIfProtocol():
-      ligandLabel = self.getEnumText('displaySet')
-      sLabel = ligandLabel
-    else:
-      ligandLabel, sLabel = 'All', 'allSetMolecules'
+    ligandLabel = self.getEnumText('displaySet')
+    sLabel = ligandLabel
+
+    print('labels: ', ligandLabel, sLabel)
 
     mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
     if len(mols) > 0:
@@ -495,8 +492,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     auxPath = '/tmp/{}.pdb'.format(os.path.basename(outBase))
     if not molFile.endswith('.pdb'):
       outFile = os.path.abspath(outBase + '.pdb')
-      runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], molFile, outFile),
-                   popen=True)
+      runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], molFile, outFile), popen=True)
+      relabelAtomsPDB(outFile, atomType='ATOM')
+      if molFile.endswith('.pdbqt'):
+        oDir = os.path.dirname(outFile)
+        addHydrogensToMol(self.protocolObject, oDir, outFile, outFormat='.pdb', restIdx=True, popen=True)
       molFile = outFile
 
     if not receptorFile.endswith('.pdb'):

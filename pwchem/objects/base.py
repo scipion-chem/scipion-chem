@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import enum, io, subprocess, pickle
+import enum, io, subprocess, pickle, os
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
@@ -616,6 +616,7 @@ class SetOfSmallMolecules(data.EMSet):
     return '/'.join(self.getSetPath().split('/')[:-1])
 
   def setProteinFile(self, value):
+    value = os.path.relpath(value)
     self.proteinFile.set(value)
 
   def getProteinFile(self):
@@ -1492,6 +1493,7 @@ class SetOfStructROIs(data.EMSet):
       return self._hetatmFile.get()
 
   def setProteinHetatmFile(self, value):
+    value = os.path.relpath(value)
     self._hetatmFile.set(value)
 
   def getPocketsClass(self):
@@ -1705,7 +1707,6 @@ class MDSystem(data.EMFile):
 
   def __init__(self, filename=None, **kwargs):
     super().__init__(filename=filename, **kwargs)
-    self._oriStructFile = pwobj.String(kwargs.get('oriStructFile', None))
     self._topoFile = pwobj.String(kwargs.get('topoFile', None))
     self._trjFile = pwobj.String(kwargs.get('trjFile', None))
     self._ff = pwobj.String(kwargs.get('ff', None))
@@ -1761,13 +1762,8 @@ class MDSystem(data.EMFile):
     return self._trjFile.get()
 
   def setTrajectoryFile(self, value):
+    value = os.path.relpath(value)
     self._trjFile.set(value)
-
-  def getOriStructFile(self):
-    return self._oriStructFile.get()
-
-  def setOriStructFile(self, value):
-    self._oriStructFile.set(value)
 
   def getForceField(self):
     return self._ff.get()

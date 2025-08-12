@@ -137,9 +137,9 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       system = self.getMDSystem()
 
       outTcl = os.path.join(os.path.dirname(system.getTrajectoryFile()), 'vmdSimulation.tcl')
-      sysExt = os.path.splitext(system.getOriStructFile())[1][1:]
+      sysExt = os.path.splitext(system.getFileName())[1][1:]
       trjExt = os.path.splitext(system.getTrajectoryFile())[1][1:]
-      self.writeTCL(outTcl, system.getOriStructFile(), sysExt, system.getTrajectoryFile(), trjExt)
+      self.writeTCL(outTcl, system.getFileName(), sysExt, system.getTrajectoryFile(), trjExt)
 
       args = '-e {}'.format(outTcl)
       return [VmdViewPopen(args)]
@@ -148,7 +148,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       system = self.getMDSystem()
       selAtoms = self.getEnumText("selAtoms")
 
-      args = f'-i {system.getOriStructFile()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
+      args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
              f'-{self.getEnumText("mdAnalChoices").lower()} -sa {selAtoms} '
       if self.heavyAtoms.get():
         args += '-ha '

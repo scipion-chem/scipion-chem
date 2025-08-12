@@ -118,7 +118,8 @@ class Plugin(pwem.Plugin):
 		# Installing package
 		rdkitEnvName = cls.getEnvName(RDKIT_DIC)
 		installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
-												 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
+							 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
+			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
 			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
@@ -151,19 +152,22 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
-		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
+		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabel_installer.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge') \
+		openbabelInstaller.getCondaEnvCommand()\
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
-			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
+			.addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
+						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
+						'BITBIRCH_INSTALLED')\
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
 		
 		# # Instantiating shape it install helper
 		# shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
 		#
 		# # Importing commands from openbabel and rdkit installers
-		# shape_it_installer.importCommandList(openbabel_installer.getCommandList())
+		# shape_it_installer.importCommandList(openbabelInstaller.getCommandList())
 		#
 		# # Defining binaries folder name
 		# binaries_directory = SHAPEIT_DIC['name']
@@ -205,7 +209,7 @@ class Plugin(pwem.Plugin):
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	@classmethod
-	def addDEAPPackage(cls, env, default=True):
+	def addDEAPPackage(cls, env, default=False):
 		# Instantiating install helper
 		installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
 															packageVersion=DEAP_DIC['version'])

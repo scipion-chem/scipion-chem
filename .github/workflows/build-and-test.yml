@@ -5,22 +5,25 @@ on:
   pull_request:
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
 
     steps:
-      - name: Setup enviroment
-        uses: scipion-chem/.github/.github/composites/install-scipion@main
-      
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
           ref: ${{ github.head_ref }}
-  
+
+      - name: Setup enviroment
+        uses: scipion-chem/.github/.github/composites/install-scipion@main
+
       - name: Install plugin from pull request
         working-directory: ${{ github.workspace }}
         run: ../scipion/scipion3 installp -p . --devel
-      
+
       - name: Run tests
         working-directory: ${{ github.workspace }}/${{ vars.FOLDER_WITH_VERSION }}
         run: |
