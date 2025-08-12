@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import enum, io, subprocess, pickle
+import enum, io, subprocess, pickle, os
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
@@ -616,6 +616,7 @@ class SetOfSmallMolecules(data.EMSet):
     return '/'.join(self.getSetPath().split('/')[:-1])
 
   def setProteinFile(self, value):
+    value = os.path.relpath(value)
     self.proteinFile.set(value)
 
   def getProteinFile(self):
@@ -1492,6 +1493,7 @@ class SetOfStructROIs(data.EMSet):
       return self._hetatmFile.get()
 
   def setProteinHetatmFile(self, value):
+    value = os.path.relpath(value)
     self._hetatmFile.set(value)
 
   def getPocketsClass(self):
@@ -1761,6 +1763,7 @@ class MDSystem(data.EMFile):
     return self._trjFile.get()
 
   def setTrajectoryFile(self, value):
+    value = os.path.relpath(value)
     self._trjFile.set(value)
 
   def getOriStructFile(self):

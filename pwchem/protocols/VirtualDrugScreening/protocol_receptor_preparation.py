@@ -121,6 +121,7 @@ class ProtChemPrepareReceptor(EMProtocol):
 
     def createOutputStep(self):
         fnOut = self.getPreparedFile() if self.usePDBFixer.get() else self.getCleanedFile()
+        fnOut = os.path.relpath(fnOut)
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
