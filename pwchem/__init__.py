@@ -209,7 +209,7 @@ class Plugin(pwem.Plugin):
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	@classmethod
-	def addDEAPPackage(cls, env, default=False):
+	def addDEAPPackage(cls, env, default=True):
 		# Instantiating install helper
 		installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
 															packageVersion=DEAP_DIC['version'])
