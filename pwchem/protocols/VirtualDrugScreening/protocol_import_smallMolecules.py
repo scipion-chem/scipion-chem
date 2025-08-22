@@ -189,7 +189,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
                    help='Choose the predefined library you want to download.\n'
                         'ZINC: https://zinc.docking.org/substances/subsets/')
 
-    group.addParam('fromSmiles', params.BooleanParam, default=False,
+    group.addParam('fromSmiles', params.BooleanParam, default=True,
                    condition=f'defLibraries and choicesLibraries == {ZINC}',
                    label='Format molecule from Smiles: ', expertLevel=params.LEVEL_ADVANCED,
                    help='Download just the smiles from ZINC and then optimize their structure using '
