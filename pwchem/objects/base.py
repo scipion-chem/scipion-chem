@@ -1712,7 +1712,7 @@ class MDSystem(data.EMFile):
     self._ff = pwobj.String(kwargs.get('ff', None))
     self._wff = pwobj.String(kwargs.get('wff', None))
 
-    self._ligName = pwobj.String(kwargs.get('ligName', None))
+    self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
     self._topoLigFile = pwobj.String(kwargs.get('topoLigFile', None))
 
   def __str__(self):
@@ -1731,20 +1731,11 @@ class MDSystem(data.EMFile):
   def setTopologyFile(self, value):
     self._topoFile.set(value)
 
-  def getLigandName(self):
+  def getLigandID(self):
     return self._ligName.get()
 
-  def setLigandName(self, value):
+  def setLigandID(self, value):
     self._ligName.set(value)
-
-  def getLigandID(self):
-    return 'LIG'
-
-  def getLigandTopologyFile(self):
-    return self._topoLigFile.get()
-
-  def setLigandTopologyFile(self, value):
-    self._topoLigFile.set(value)
 
   def hasTopology(self):
     if self.getTopologyFile():
