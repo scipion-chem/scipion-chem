@@ -182,7 +182,14 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
       newSmallMol = self.addLibAttributes(newSmallMol, mapDic[repName])
       molFile = os.path.abspath(self._getTmpPath(f'{repName}.smi'))
       newFile = self._getPath(f'{repName}.smi')
-      os.rename(molFile, newFile)
+
+      tryMove = 0
+      while tryMove < 5:
+        try:
+          os.rename(molFile, newFile)
+          tryMove = 10
+        except:
+          tryMove += 1
 
       newSmallMol.setFileName(newFile)
       repMols.append(newSmallMol)
