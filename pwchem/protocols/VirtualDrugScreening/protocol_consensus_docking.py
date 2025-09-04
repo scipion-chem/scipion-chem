@@ -43,6 +43,7 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 
+MIN, MAX = 0, 1
 
 class ProtocolConsensusDocking(EMProtocol):
     """
@@ -96,9 +97,9 @@ class ProtocolConsensusDocking(EMProtocol):
                       help='Criteria to follow on docking clusters to choose a representative. '
                            'It will extract the representative as the pose with max/min (next argument) value '
                            'of this attribute')
-        group.addParam('maxmin', params.BooleanParam, default=True,
-                      label='Keep maximum values: ',
-                      help='True to keep the maximum values. False to get the minimum')
+        group.addParam('maxmin', params.EnumParam, default=MAX, choices=['Minimum', 'Maximum'], label='Keep values: ',
+                       help='Whether to keep the minimum or maximum values of the criteria attribute to select the '
+                            'representative')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -280,8 +281,8 @@ class ProtocolConsensusDocking(EMProtocol):
                     # If the RMSD threshold is passed
                     if repRMSD <= self.maxRMSD.get():
                         repScore, newScore = getattr(repMol, self.repAttr.get()), getattr(newMol, self.repAttr.get())
-                        if (newScore > repScore and self.maxmin.get()) or \
-                                (newScore < repScore and not self.maxmin.get()):
+                        if (newScore > repScore and self.maxmin.get() == MAX) or \
+                                (newScore < repScore and self.maxmin.get() == MIN):
                             # Becomes new representative (first position)
                             newClust += clust
                         else:
@@ -384,11 +385,11 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
-        maxScore = -10e15 if self.maxmin.get() else 10e15
+        maxScore = -10e15 if self.maxmin.get() == MAX else 10e15
         for mol in cluster:
             molScore = getattr(mol, self.repAttr.get())
-            if (molScore > maxScore and self.maxmin.get()) or \
-                    (molScore < maxScore and not self.maxmin.get()):
+            if (molScore > maxScore and self.maxmin.get() == MAX) or \
+                    (molScore < maxScore and self.maxmin.get() == MIN):
                 maxScore = molScore
                 outMol = mol.clone()
         return outMol
