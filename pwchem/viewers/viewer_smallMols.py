@@ -42,6 +42,7 @@ from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
 PYMOL, CHIMERAX, VIEWDOCKX = 0, 1, 2
+PYMOL_LAB, CHIMERAX_LAB, VIEWDOCKX_LAB = 'PyMol', 'ChimeraX', 'ViewDockX'
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
 
 def chimeraInstalled():
@@ -55,7 +56,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'
   _targets = [ProtocolConsensusDocking, ProtocolLigandsFetching, SetOfSmallMolecules]
   _environments = [pwviewer.DESKTOP_TKINTER]
-  _viewerOptions = ['PyMol', 'ChimeraX', 'ViewDockX']
+  _viewerOptions = [PYMOL_LAB, CHIMERAX_LAB, VIEWDOCKX_LAB]
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
@@ -65,10 +66,29 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     self.pocketLabels, self.pocketLigandsDic = self.getChoices(vType=POCKET)
     self.setLabels, self.setLigandsDic = self.getChoices(vType=SET)
 
+  def checkAnyMaeMol(self, mols):
+    anyMae = False
+    for mol in mols:
+      if mol.getPoseFile().endswith('.mae'):
+        anyMae = True
+        break
+    return anyMae
+
+  def anyMaeMols(self):
+    return self.protocol.getMolClass() == 'Schrodinger' or \
+           (self.protocol.getMolClass() == 'Mixed' and self.checkAnyMaeMol(self.protocol))
+
   def getViewerOptions(self):
-    if type(self.protocol).__name__ == 'ProtChemVinaDocking':
+    # Vina can use all 3 viewers
+    if type(self.protocol).__name__ == 'ProtChemVinaDocking' or \
+            (isinstance(self.protocol, SetOfSmallMolecules) and self.protocol.getMolClass() == 'AutodockVina'):
       return self._viewerOptions
-    return self._viewerOptions[:-1]
+    # MAE can only use ChimeraX
+    elif isinstance(self.protocol, SetOfSmallMolecules) and self.anyMaeMols():
+      return [self._viewerOptions[1]]
+    # The rest can use PyMol or ChimeraX
+    else:
+      return self._viewerOptions[:-1]
 
   def defineParamsTable(self, form):
       form.addParam('displayTable', params.EnumParam,
@@ -318,11 +338,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
       mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
       if len(mols) > 0:
-        if self.displaySoftware.get() == PYMOL:
+        if self.getEnumText('displaySoftware') == PYMOL_LAB:
             return self.viewPymolMols(mols, sLabel)
-        elif self.displaySoftware.get() == CHIMERAX:
+        elif self.getEnumText('displaySoftware') == CHIMERAX_LAB:
             return self.viewChimeraXMols(mols, sLabel)
-        elif self.displaySoftware.get() == VIEWDOCKX:
+        elif self.getEnumText('displaySoftware') == VIEWDOCKX_LAB:
             return self.viewChimeraXMols(mols, sLabel, vinaDock=True)
 
   def _viewROIDock(self, e=None):
@@ -330,11 +350,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     mols = self.getGroupMols(self.pocketLigandsDic, ligandLabel)
     if len(mols) > 0:
-      if self.displaySoftware.get() == PYMOL:
+      if self.getEnumText('displaySoftware') == PYMOL_LAB:
           return self.viewPymolMols(mols, ligandLabel)
-      elif self.displaySoftware.get() == CHIMERAX:
+      elif self.getEnumText('displaySoftware') == CHIMERAX_LAB:
           return self.viewChimeraXMols(mols, ligandLabel)
-      elif self.displaySoftware.get() == VIEWDOCKX:
+      elif self.getEnumText('displaySoftware') == VIEWDOCKX_LAB:
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
 
@@ -343,11 +363,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
     if len(mols) > 0:
-      if self.displaySoftware.get() == PYMOL:
+      if self.getEnumText('displaySoftware') == PYMOL_LAB:
           return self.viewPymolMols(mols, ligandLabel)
-      elif self.displaySoftware.get() == CHIMERAX:
+      elif self.getEnumText('displaySoftware') == CHIMERAX_LAB:
           return self.viewChimeraXMols(mols, ligandLabel)
-      elif self.displaySoftware.get() == VIEWDOCKX:
+      elif self.getEnumText('displaySoftware') == VIEWDOCKX_LAB:
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewSingleDock(self, e=None):
@@ -355,11 +375,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
     if len(mols) > 0:
-      if self.displaySoftware.get() == PYMOL:
+      if self.getEnumText('displaySoftware') == PYMOL_LAB:
           return self.viewPymolMols(mols, ligandLabel, disable=False)
-      elif self.displaySoftware.get() == CHIMERAX:
+      elif self.getEnumText('displaySoftware') == CHIMERAX_LAB:
           return self.viewChimeraXMols(mols, ligandLabel, disable=False)
-      elif self.displaySoftware.get() == VIEWDOCKX:
+      elif self.getEnumText('displaySoftware') == VIEWDOCKX_LAB:
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
   def _viewPymolPLIP(self, e=None):
