@@ -1713,7 +1713,7 @@ class MDSystem(data.EMFile):
     self._wff = pwobj.String(kwargs.get('wff', None))
 
     self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
-    self._topoLigFile = pwobj.String(kwargs.get('topoLigFile', None))
+    self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
 
   def __str__(self):
     return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
@@ -1770,6 +1770,12 @@ class MDSystem(data.EMFile):
 
   def getSystemName(self):
     return getBaseName(self.getSystemFile())
+
+  def getLigTopologyFile(self):
+    return self._ligTopFile.get()
+
+  def setLigTopologyFile(self, value):
+    self._ligTopFile.set(value)
 
 
 class PharmFeature(data.EMObject):
