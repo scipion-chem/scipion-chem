@@ -76,7 +76,7 @@ class ProtocolScoreDocking(EMProtocol):
 
         group = form.addGroup('Scoring function')
         group.addParam('scoreChoice', params.EnumParam, default=VINA, label='Score to calculate: ',
-                       choices=['Vina', 'RFScore', 'NNScore', 'PLECscore'],
+                       choices=['Vina', 'RFScore', 'NNScore'],
                        help="Name of the score to calculate. \nIf the model has been trained previously, it is loaded "
                             "from {}".format(Plugin.getODDTModelsPath()))
 
@@ -128,21 +128,26 @@ class ProtocolScoreDocking(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
         '''Get the number of threads available for each scoring execution'''
-        nPockets = len(self.workFlowSteps.get().strip().split('\n'))
-        nThreads = self.numberOfThreads.get() // nPockets
+        nScores = len(self.workFlowSteps.get().strip().split('\n'))
+        nThreads = (self.numberOfThreads.get() - 1) // nScores
+        if nThreads < (self.numberOfThreads.get() - 1) / nScores:
+            nThreads += 1
+
         nThreads = 1 if nThreads == 0 else nThreads
         return nThreads
 
     def _insertAllSteps(self):
         sSteps, wSteps = [], []
         self.createGUISummary()
+        nThreads = self.getnThreads()
 
-        cStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
+        cStep = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
+        spStep = self._insertFunctionStep(self.splitMolsStep, nThreads, prerequisites=[cStep])
         #Performing every score listed in the form
         for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-            if wStep.strip():
-                if not wStep in wSteps:
-                    sSteps.append(self._insertFunctionStep('scoringStep', wStep, i+1, prerequisites=[cStep]))
+            if wStep.strip() and not wStep in wSteps:
+                for it in range(nThreads):
+                    sSteps.append(self._insertFunctionStep(self.scoringStep, wStep, i+1, it, prerequisites=[spStep]))
                     wSteps.append(wStep)
 
         self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
@@ -180,18 +185,22 @@ class ProtocolScoreDocking(EMProtocol):
         else:
             createLink(recFile, self.getConvertReceptorFile())
 
+    def getInMolFiles(self, it):
+        return self._getTmpPath(f'inMolFiles_{it}.txt')
 
-    def performScoring(self, molFiles, molLists, it, receptorFile, msjDic, iS):
-        paramsPath = os.path.abspath(self._getExtraPath('inputParams_{}_{}.txt'.format(iS, it)))
-        self.writeParamsFile(paramsPath, receptorFile, molFiles, msjDic, iS, it)
-        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getPath(), popen=True)
+    def splitMolsStep(self, nThreads):
+        allMols = self.getInputMolFiles()
+        molSubSets = makeSubsets(allMols, nThreads, False)
+        for i, subset in enumerate(molSubSets):
+            with open(self.getInMolFiles(i), 'w') as f:
+                poseFilesStr = ' '.join([molFile for molFile in subset])
+                f.write(poseFilesStr)
 
-    def scoringStep(self, wStep, i):
-        # Perform the scoring using the ODDT package
-        nt = self.getnThreads()
-        receptorFile = self.getConvertReceptorFile()
-        performBatchThreading(self.performScoring, self.getInputMolFiles(), nt, cloneItem=False,
-                              receptorFile=receptorFile, msjDic=eval(wStep), iS=i)
+    def scoringStep(self, wStep, iScore, it):
+        paramsPath = os.path.abspath(self._getExtraPath(f'inputParams_{iScore}_{it}.txt'))
+        self.writeParamsFile(paramsPath, eval(wStep), iScore, it)
+        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getExtraPath(), popen=True)
+
 
     def createOutputStep(self):
         self.relabelDic = {}
@@ -325,9 +334,9 @@ class ProtocolScoreDocking(EMProtocol):
 
     def getResultFiles(self):
         rFiles = []
-        for file in os.listdir(self._getPath()):
+        for file in os.listdir(self._getExtraPath()):
             if file.startswith('results'):
-                rFiles.append(self._getPath(file))
+                rFiles.append(self._getExtraPath(file))
         rFiles = natural_sort(rFiles)
         return rFiles
 
@@ -387,8 +396,11 @@ class ProtocolScoreDocking(EMProtocol):
 
         return poseFilesStr
 
-    def writeParamsFile(self, paramsFile, recFile, molFiles, msjDic, iS, it):
-        poseFilesStr = self.getPoseFilesStr(molFiles, it)
+    def writeParamsFile(self, paramsFile, msjDic, iS, it):
+        recFile = self.getConvertReceptorFile()
+        with open(self.getInMolFiles(it)) as f:
+            poseFilesStr = f.read().strip()
+
         with open(paramsFile, 'w') as f:
             scoreChoice = msjDic['scoreChoice']
 
