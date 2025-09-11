@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
 from pwchem import Plugin
-from pwchem.utils import performBatchThreading, makeSubsets, concatThreadFiles
+from pwchem.utils import insistentRun, makeSubsets, concatThreadFiles
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
 RDKIT, OPENBABEL = 0, 1
@@ -251,22 +251,20 @@ class ProtChemSmallMolIdentify(EMProtocol):
             formatWith = RDKIT
             if self.useManager.get() == RDKIT:
                 if fnSmall.endswith(".pdbqt"):
-                    formatWith = OPENBABEL
+                    envDic, scriptName = OPENBABEL_DIC, 'obabel_IO.py'
                 else:
-                    formatWith = RDKIT
+                    envDic, scriptName = RDKIT_DIC, 'rdkit_IO.py'
 
             if self.useManager.get() == OPENBABEL:
                 if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
-                    formatWith = RDKIT
+                    envDic, scriptName = RDKIT_DIC, 'rdkit_IO.py'
                 else:
-                    formatWith = OPENBABEL
+                    envDic, scriptName = OPENBABEL_DIC, 'obabel_IO.py'
 
-
-
-            if formatWith == RDKIT:
-                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
-            else:
-                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
+            fullProgram = f'{Plugin.getEnvActivationCommand(envDic)} && python {Plugin.getScriptsDir(scriptName)} '
+            insistentRun(self, fullProgram, args, envDic=envDic, cwd=outDir)
+        else:
+            fnOut = fnSmall
 
         return self.parseSMI(fnOut)
 
