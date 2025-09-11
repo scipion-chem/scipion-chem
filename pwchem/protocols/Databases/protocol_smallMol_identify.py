@@ -176,8 +176,7 @@ class ProtChemSmallMolIdentify(EMProtocol):
         return os.path.join(self.getSimilarSMIDir(), f'similarIds_{it}.txt')
 
     def identifySMI(self, smis, it):
-        '''Function to run in performBatchThreading.
-        Executes the smi identification and returns a dictionary as:
+        '''Executes the smi identification and returns a dictionary as:
         {molSMI: {'PubChemID': cid, 'PubChemName': pubChemName, 'ZINC_ID': zincID, 'ChEMBL_ID': chemblID}}
         '''
         for molSMI in smis:
@@ -249,11 +248,24 @@ class ProtChemSmallMolIdentify(EMProtocol):
             fnOut = os.path.abspath(self._getExtraPath(fnRoot + '.smi'))
             args = ' -i "{}" -of smi -o {} --outputDir {}'.format(fnSmall, fnOut, outDir)
 
-            if self.useManager.get() == RDKIT or fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
-                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
+            formatWith = RDKIT
+            if self.useManager.get() == RDKIT:
+                if fnSmall.endswith(".pdbqt"):
+                    formatWith = OPENBABEL
+                else:
+                    formatWith = RDKIT
 
-            # Formatting with OpenBabel
-            elif self.useManager.get() == OPENBABEL:
+            if self.useManager.get() == OPENBABEL:
+                if fnSmall.endswith(".mae") or fnSmall.endswith(".maegz"):
+                    formatWith = RDKIT
+                else:
+                    formatWith = OPENBABEL
+
+
+
+            if formatWith == RDKIT:
+                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
+            else:
                 Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
 
         return self.parseSMI(fnOut)
@@ -291,14 +303,16 @@ class ProtChemSmallMolIdentify(EMProtocol):
     def getSimilarIds(self, listKey):
         url = f'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/listkey/{listKey}/cids/txt'
         cids = []
-        while len(cids) == 0:
-            time.sleep(2)
-            with urlopen(url) as response:
+        time.sleep(2)
+        try:
+            with urlopen(url, timeout=10) as response:
                 r = response.read().decode('utf-8')
                 if not 'Your request is running' in r:
                     for line in r.split('\n'):
                         if line.strip():
                             cids.append(line.strip())
+        except:
+            pass
         return cids
 
     def getNamesFromCID(self, cid):
