@@ -168,9 +168,9 @@ class ConvertStructures(EMProtocol):
                 outDir = os.path.abspath(self._getExtraPath())
                 fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                 outFormat = self.getEnumText('outputSysFormat').lower()
-                fnOut = os.path.join(outDir, fnRoot + outFormat)
+                fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                args = ' -s {} -o {}'.format(sysFile, fnOut) # no traj so convert system
+                args = ' -s {} -o {}'.format(os.path.abspath(sysFile), fnOut) # no traj so convert system
                 Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
                 sysFile = fnOut
 
