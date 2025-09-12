@@ -187,8 +187,8 @@ class ConvertStructures(EMProtocol):
                         parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
 
                     top = parmed.load_file(topFile)
-                    topFile = self._getPath('{}.{}'.format(getBaseName(topFile),
-                                                            self.getEnumText('outputTopFormat').lower()))
+                    topFile = self._getExtraPath('{}.{}'.format(getBaseName(topFile),
+                                                                self.getEnumText('outputTopFormat').lower()))
                     top.save(topFile)
                 outSystem.setTopologyFile(topFile)
             
