@@ -90,7 +90,7 @@ class ConvertStructures(EMProtocol):
         
         group.addParam('convTopFile', BooleanParam, default=True, label='Convert topology file: ',
                        condition=f'{inputTypeCondition}MDSystem)', help="Convert topology file from the MDSystem")
-        group.addParam('outputTopFormat', EnumParam, default=0, label='Trajectory output format: ',
+        group.addParam('outputTopFormat', EnumParam, default=0, label='Topology output format: ',
                        condition=f'{inputTypeCondition}MDSystem) and convTopFile', choices=['PSF', 'TOP', 'PRMTOP'],
                        help="Output format for the topology.")
 
