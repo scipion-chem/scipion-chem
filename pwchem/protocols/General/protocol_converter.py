@@ -27,7 +27,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, parmed
+import os, shutil, parmed, importlib
 
 # Scipion chem imports
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, LEVEL_ADVANCED
@@ -181,6 +181,11 @@ class ConvertStructures(EMProtocol):
                 topFile = inSystem.getTopologyFile()
                 
                 if self.convTopFile.get():
+                    if topFile.endswith('.top') and importlib.util.find_spec('gromacs'):
+                        from gromacs import Plugin as gromacsPlugin
+                        from gromacs.constants import GROMACS_DIC
+                        parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
+
                     top = parmed.load_file(topFile)
                     topFile = self._getPath('{}.{}'.format(getBaseName(topFile),
                                                             self.getEnumText('outputTopFormat').lower()))
