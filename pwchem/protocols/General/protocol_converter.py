@@ -27,7 +27,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, parmed
+import os, shutil, parmed, importlib
 
 # Scipion chem imports
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, LEVEL_ADVANCED
@@ -90,7 +90,7 @@ class ConvertStructures(EMProtocol):
         
         group.addParam('convTopFile', BooleanParam, default=True, label='Convert topology file: ',
                        condition=f'{inputTypeCondition}MDSystem)', help="Convert topology file from the MDSystem")
-        group.addParam('outputTopFormat', EnumParam, default=0, label='Trajectory output format: ',
+        group.addParam('outputTopFormat', EnumParam, default=0, label='Topology output format: ',
                        condition=f'{inputTypeCondition}MDSystem) and convTopFile', choices=['PSF', 'TOP', 'PRMTOP'],
                        help="Output format for the topology.")
 
@@ -168,9 +168,9 @@ class ConvertStructures(EMProtocol):
                 outDir = os.path.abspath(self._getExtraPath())
                 fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                 outFormat = self.getEnumText('outputSysFormat').lower()
-                fnOut = os.path.join(outDir, fnRoot + outFormat)
+                fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                args = ' -s {} -o {}'.format(sysFile, fnOut) # no traj so convert system
+                args = ' -s {} -o {}'.format(os.path.abspath(sysFile), fnOut) # no traj so convert system
                 Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
                 sysFile = fnOut
 
@@ -181,9 +181,14 @@ class ConvertStructures(EMProtocol):
                 topFile = inSystem.getTopologyFile()
                 
                 if self.convTopFile.get():
+                    if topFile.endswith('.top') and importlib.util.find_spec('gromacs'):
+                        from gromacs import Plugin as gromacsPlugin
+                        from gromacs.constants import GROMACS_DIC
+                        parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
+
                     top = parmed.load_file(topFile)
-                    topFile = self._getPath('{}.{}'.format(getBaseName(topFile),
-                                                            self.getEnumText('outputTopFormat').lower()))
+                    topFile = self._getExtraPath('{}.{}'.format(getBaseName(topFile),
+                                                                self.getEnumText('outputTopFormat').lower()))
                     top.save(topFile)
                 outSystem.setTopologyFile(topFile)
             
