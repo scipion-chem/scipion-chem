@@ -277,13 +277,13 @@ def assignChains(parmedSystem, topPath):
     according to the number of residues in each .itp inclusion.
     """
     proteinITPs = [itp for itp in parmedSystem.itps if "Protein" in itp]
-    chain_ids = [fn.split("_")[-1].split(".")[0] for fn in proteinITPs]
+    chainIDs = [fn.split("_")[-1].split(".")[0] for fn in proteinITPs]
     counts = [len(parmed.load_file(os.path.join(topPath, itp), parametrize=False).residues)
               for itp in proteinITPs]
 
     residues = parmedSystem.residues
     idx = 0
-    for cid, numRes in zip(chain_ids, counts):
+    for cid, numRes in zip(chainIDs, counts):
         chainResidues = residues[idx: idx + numRes]
         for res in chainResidues:
             res.chain = cid
