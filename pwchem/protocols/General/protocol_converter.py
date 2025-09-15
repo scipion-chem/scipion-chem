@@ -208,8 +208,8 @@ class ConvertStructures(EMProtocol):
                     outFormat = self.getEnumText('outputTrjFormat').lower()
                     fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                    trj = parmed.load_file(trjFile, structure=sysFile)
-                    trj.save(fnOut)
+                    args = ' -s {} -o {} -t {}'.format(os.path.abspath(sysFile), fnOut, os.path.abspath(trjFile))
+                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
                     trjFile = fnOut
 
                 outSystem.setTrajectoryFile(trjFile)
