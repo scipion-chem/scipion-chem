@@ -177,7 +177,7 @@ class ConvertStructures(EMProtocol):
                 parmedSystem = parmed.load_file(topFile, xyz=sysFile)
 
                 if hasattr(parmedSystem, 'itps') and parmedSystem.itps:
-                    assign_chains(parmedSystem, topPath)
+                    assignChains(parmedSystem, topPath)
             else:
                 parmedSystem = parmed.load_file(sysFile)
 
@@ -271,20 +271,20 @@ class ConvertStructures(EMProtocol):
         return summary
 
 # --------------------------- Helper functions --------------------
-def assign_chains(parmedSystem, topPath):
+def assignChains(parmedSystem, topPath):
     """
     Assign chain IDs to residues in a parmed.Structure object
     according to the number of residues in each .itp inclusion.
     """
-    protein_itps = [itp for itp in parmedSystem.itps if "Protein" in itp]
-    chain_ids = [fn.split("_")[-1].split(".")[0] for fn in protein_itps]
+    proteinITPs = [itp for itp in parmedSystem.itps if "Protein" in itp]
+    chain_ids = [fn.split("_")[-1].split(".")[0] for fn in proteinITPs]
     counts = [len(parmed.load_file(os.path.join(topPath, itp), parametrize=False).residues)
-              for itp in protein_itps]
+              for itp in proteinITPs]
 
     residues = parmedSystem.residues
     idx = 0
-    for cid, n_res in zip(chain_ids, counts):
-        chain_residues = residues[idx: idx + n_res]
-        for res in chain_residues:
+    for cid, numRes in zip(chain_ids, counts):
+        chainResidues = residues[idx: idx + numRes]
+        for res in chainResidues:
             res.chain = cid
-        idx += n_res
+        idx += numRes
