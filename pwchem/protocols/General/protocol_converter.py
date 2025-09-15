@@ -193,11 +193,10 @@ class ConvertStructures(EMProtocol):
             outSystem.setSystemFile(sysFile)
             
             if inSystem.hasTopology() and self.convTopFile.get():
-                top = parmed.load_file(topFile)
                 topFile = os.path.abspath(self._getExtraPath(
                     '{}.{}'.format(getBaseName(topFile),
                                    self.getEnumText('outputTopFormat').lower())))
-                top.save(topFile)
+                parmedSystem.save(topFile)
             outSystem.setTopologyFile(topFile)
             
             if inSystem.hasTrajectory():
