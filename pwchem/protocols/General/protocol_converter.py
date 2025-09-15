@@ -163,34 +163,42 @@ class ConvertStructures(EMProtocol):
         elif isinstance(self.inputObject.get(), MDSystem):
             inSystem = self.inputObject.get()
             sysFile = inSystem.getSystemFile()
+            topFile = inSystem.getTopologyFile() # may be None
+            topPath = os.path.split(topFile)[0]
+
+            # Load system with ParmEd: topology + coordinates if available
+            # Set GROMACS_TOPDIR if using a .top file
+            if topFile is not None and topFile.endswith('.top') and importlib.util.find_spec('gromacs'):
+                from gromacs import Plugin as gromacsPlugin
+                from gromacs.constants import GROMACS_DIC
+                parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(
+                    GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
+
+                parmedSystem = parmed.load_file(topFile, xyz=sysFile)
+
+                if hasattr(parmedSystem, 'itps') and parmedSystem.itps:
+                    assign_chains(parmedSystem, topPath)
+            else:
+                parmedSystem = parmed.load_file(sysFile)
 
             if self.convSysFile.get():
                 outDir = os.path.abspath(self._getExtraPath())
                 fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                 outFormat = self.getEnumText('outputSysFormat').lower()
                 fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
-
-                args = ' -s {} -o {}'.format(os.path.abspath(sysFile), fnOut) # no traj so convert system
-                Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                parmedSystem.save(fnOut)
                 sysFile = fnOut
 
             outSystem = MDSystem(filename=sysFile)
             outSystem.setSystemFile(sysFile)
             
-            if inSystem.hasTopology():
-                topFile = inSystem.getTopologyFile()
-                
-                if self.convTopFile.get():
-                    if topFile.endswith('.top') and importlib.util.find_spec('gromacs'):
-                        from gromacs import Plugin as gromacsPlugin
-                        from gromacs.constants import GROMACS_DIC
-                        parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
-
-                    top = parmed.load_file(topFile)
-                    topFile = self._getExtraPath('{}.{}'.format(getBaseName(topFile),
-                                                                self.getEnumText('outputTopFormat').lower()))
-                    top.save(topFile)
-                outSystem.setTopologyFile(topFile)
+            if inSystem.hasTopology() and self.convTopFile.get():
+                top = parmed.load_file(topFile)
+                topFile = os.path.abspath(self._getExtraPath(
+                    '{}.{}'.format(getBaseName(topFile),
+                                   self.getEnumText('outputTopFormat').lower())))
+                top.save(topFile)
+            outSystem.setTopologyFile(topFile)
             
             if inSystem.hasTrajectory():
                 trjFile = inSystem.getTrajectoryFile()
@@ -201,8 +209,8 @@ class ConvertStructures(EMProtocol):
                     outFormat = self.getEnumText('outputTrjFormat').lower()
                     fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                    args = ' -s {} -o {} -t {}'.format(os.path.abspath(sysFile), fnOut, os.path.abspath(trjFile))
-                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                    trj = parmed.load_file(trjFile, structure=sysFile)
+                    trj.save(fnOut)
                     trjFile = fnOut
 
                 outSystem.setTrajectoryFile(trjFile)
@@ -262,4 +270,22 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatTarget.get() == 2:
                 summary.append('Converted to Mol2')
         return summary
-    
+
+# --------------------------- Helper functions --------------------
+def assign_chains(parmedSystem, topPath):
+    """
+    Assign chain IDs to residues in a parmed.Structure object
+    according to the number of residues in each .itp inclusion.
+    """
+    protein_itps = [itp for itp in parmedSystem.itps if "Protein" in itp]
+    chain_ids = [fn.split("_")[-1].split(".")[0] for fn in protein_itps]
+    counts = [len(parmed.load_file(os.path.join(topPath, itp), parametrize=False).residues)
+              for itp in protein_itps]
+
+    residues = parmedSystem.residues
+    idx = 0
+    for cid, n_res in zip(chain_ids, counts):
+        chain_residues = residues[idx: idx + n_res]
+        for res in chain_residues:
+            res.chain = cid
+        idx += n_res
