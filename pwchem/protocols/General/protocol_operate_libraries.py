@@ -363,20 +363,16 @@ class ProtocolOperateLibrary(EMProtocol):
         '''
         remIdxs = [headers.index(scoreName) for scoreName in remCols]
         keepCols = [i for i in range(chunk.shape[1]) if i not in remIdxs]
-        keepHeaders = [scoreName for scoreName in headers if scoreName not in remCols]
-        return chunk[:, keepCols], keepHeaders
+        return chunk[:, keepCols]
 
-    def parseSMIChunks(self, filename, chunksize, header=True):
+    def parseSMIChunks(self, filename, chunksize):
         with open(filename, 'r') as f:
-          if header:
-            f.readline()
-
-          chunk = []
+          chunk, lChunk = [], 0
           for line in f:
             chunk.append(np.array(line.strip().split()))
-            if len(chunk) == chunksize:
+            if lChunk == chunksize:
               yield np.array(chunk)
-              chunk = []
+              chunk, lChunk = [], 0
 
           if chunk:
             yield np.array(chunk)
@@ -395,5 +391,5 @@ class ProtocolOperateLibrary(EMProtocol):
 
       with open(oSmiFile, 'w') as fo:
         for chunk in self.parseSMIChunks(smiFile, chunksize):
-          filteredChunk, filtHeaders = self.removeColumsChunk(chunk, remCols, headers)
+          filteredChunk = self.removeColumsChunk(chunk, remCols, headers)
           np.savetxt(fo, filteredChunk, delimiter='\t', fmt='%s')
