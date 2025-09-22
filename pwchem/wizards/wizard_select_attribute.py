@@ -127,10 +127,7 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       targets=['defineScore'],
                                       inputs=['inputMoleculesSets', 'defineInput'],
                                       outputs=['defineScore'])
-SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
-                                      targets=['inScore'],
-                                      inputs=['inputROISets', 'inSet'],
-                                      outputs=['inScore'])
+
 
 class SelectMultiPointerAttributeWizard(VariableWizard):
   # todo: generalize in  SelectAttributeWizardChem
@@ -149,10 +146,18 @@ class SelectMultiPointerAttributeWizard(VariableWizard):
                             SELECT_STR)
     form.setVar(outputParam[0], dlg.values[0].get())
 
-SelectMultiPointerAttributeWizard().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
-                                              targets=['inScoreDef'],
-                                              inputs=['inputROISets'],
-                                              outputs=['inScoreDef'])
+try:
+    SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
+                                          targets=['inScore'],
+                                          inputs=['inputROISets', 'inSet'],
+                                          outputs=['inScore'])
+
+    SelectMultiPointerAttributeWizard().addTarget(protocol=chemprot.ProtOptimizeMultiEpitope,
+                                                  targets=['inScoreDef'],
+                                                  inputs=['inputROISets'],
+                                                  outputs=['inScoreDef'])
+except:
+  pass
 
 SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRANXFuse,
                                       targets=['inAttrName'],
