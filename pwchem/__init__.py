@@ -120,7 +120,7 @@ class Plugin(pwem.Plugin):
 		installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
 							 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
 			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
-			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
+			.addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 			
 	@classmethod
