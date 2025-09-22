@@ -140,23 +140,27 @@ AddNumberedElementWizard().addTarget(protocol=ProtCombineScoresSeqROI,
                                       inputs=['buildCondSumLine'],
                                       outputs=['condSummary'])
 
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                      targets=['addScore'],
-                                      inputs=['buildScoreSumLine'],
-                                      outputs=['scoreSummary'])
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                      targets=['addScoreDef'],
-                                      inputs=['buildScoreSumLineDef'],
-                                      outputs=['scoreSummaryDef'])
+try:
+    # Import just if DEAP is installed
+    AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                          targets=['addScore'],
+                                          inputs=['buildScoreSumLine'],
+                                          outputs=['scoreSummary'])
+    AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                          targets=['addScoreDef'],
+                                          inputs=['buildScoreSumLineDef'],
+                                          outputs=['scoreSummaryDef'])
 
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                      targets=['addLinker'],
-                                      inputs=['buildLinkerSumLine'],
-                                      outputs=['linkerSummary'])
-AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                      targets=['addEval'],
-                                      inputs=['buildEvalSumLine'],
-                                      outputs=['evalSummary'])
+    AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                          targets=['addLinker'],
+                                          inputs=['buildLinkerSumLine'],
+                                          outputs=['linkerSummary'])
+    AddNumberedElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                          targets=['addEval'],
+                                          inputs=['buildEvalSumLine'],
+                                          outputs=['evalSummary'])
+except:
+  pass
 
 
 AddElementWizard().addTarget(protocol=ProtChemZINCFilter,

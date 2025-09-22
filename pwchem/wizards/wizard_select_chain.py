@@ -707,11 +707,6 @@ class SelectMultiElementWizard(SelectElementWizard):
     values = [val.get().strip() for val in dlg.values]
     form.setVar(outputParam[0], ', '.join(values))
 
-SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                     targets=['seleLinker'],
-                                     inputs=['inLinkerSet'],
-                                     outputs=['seleLinker'])
-
 class SelectMultiSeqWizard(SelectMultiElementWizard):
   """Lists the items in a SetOfSequences and choose several"""
   _targets, _inputs, _outputs = [], {}, {}
@@ -791,20 +786,28 @@ SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRankDocking,
                                         inputs=['inputMoleculesSets'],
                                         outputs=['defineInput'])
 
-SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                        targets=['inSet'],
-                                        inputs=['inputROISets'],
-                                        outputs=['inSet'])
-SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
-                                        targets=['linkProtSet'],
-                                        inputs=['inputROISets'],
-                                        outputs=['linkProtSet'])
-
-
 SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRANXFuse,
                                         targets=['inSetID'],
                                         inputs=['inputSets'],
                                         outputs=['inSetID'])
+
+try:
+    SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                         targets=['seleLinker'],
+                                         inputs=['inLinkerSet'],
+                                         outputs=['seleLinker'])
+
+    SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                            targets=['inSet'],
+                                            inputs=['inputROISets'],
+                                            outputs=['inSet'])
+    SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                            targets=['linkProtSet'],
+                                            inputs=['inputROISets'],
+                                            outputs=['linkProtSet'])
+except:
+    pass
+
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""

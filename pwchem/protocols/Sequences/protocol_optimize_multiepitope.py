@@ -325,9 +325,10 @@ class ProtOptimizeMultiEpitope(EMProtocol):
 
     form.addSection(label='Multiepitope evaluations')
     group = form.addGroup('Multiepitope evaluations')
-    group.addParam('multiEval', params.EnumParam, label='Select evaluation origin: ', default=0,
+    group.addParam('multiEval', params.EnumParam, label='Select evaluation origin: ',
                    choices=self.getEvaluationOrigins(),
-                   help='Select the multiepitope evaluation to add')
+                   help='Select the multiepitope evaluation to add.\n'
+                        'If no options are given, you should try installing IEDB or Immuno Scipion-chem plugins')
     self._defineEvalParams(group, originParam='multiEval')
 
     group.addParam('evalWeight', params.FloatParam, label='Evaluation weight: ', default=1,
