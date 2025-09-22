@@ -27,7 +27,7 @@
 
 # General imports
 import os, sys
-import pandas as pd
+import numpy as np
 
 # Scipion em imports
 from pyworkflow.protocol import params
@@ -336,7 +336,9 @@ class ProtocolOperateLibrary(EMProtocol):
       for action, threshold, scoreName in filtList:
         scIdx = headers.index(scoreName)
         filterFunc = thresholdFunc(threshold, action)
-        chunk = chunk[chunk.iloc[:, scIdx].apply(filterFunc)]
+
+        mask = np.array([filterFunc(val) for val in chunk[:, scIdx]])
+        chunk = chunk[mask]
       return chunk
 
     def performScoreFilter(self, smiFile, filtList, chunksize=100000):
@@ -351,23 +353,33 @@ class ProtocolOperateLibrary(EMProtocol):
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
 
-      chunkReader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize, header=None)
-      firstChunk = True
-      for chunk in chunkReader:
-        filteredChunk = self.filterChunk(chunk, filtList, headers)
-
-        if firstChunk:
-          filteredChunk.to_csv(oSmiFile, sep='\t', index=False, header=None)
-          firstChunk = False
-        else:
-          filteredChunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
+      with open(oSmiFile, 'w') as fo:
+        for chunk in self.parseSMIChunks(smiFile, chunksize):
+          filteredChunk = self.filterChunk(chunk, filtList, headers)
+          np.savetxt(fo, filteredChunk, delimiter='\t', fmt='%s')
 
     def removeColumsChunk(self, chunk, remCols, headers):
         '''Remove the columns of the pandas dataframe corresponding to the headers in the remCols list
         '''
         remIdxs = [headers.index(scoreName) for scoreName in remCols]
         keepCols = [i for i in range(chunk.shape[1]) if i not in remIdxs]
-        return chunk.iloc[:, keepCols]
+        keepHeaders = [scoreName for scoreName in headers if scoreName not in remCols]
+        return chunk[:, keepCols], keepHeaders
+
+    def parseSMIChunks(self, filename, chunksize, header=True):
+        with open(filename, 'r') as f:
+          if header:
+            f.readline()
+
+          chunk = []
+          for line in f:
+            chunk.append(np.array(line.strip().split()))
+            if len(chunk) == chunksize:
+              yield np.array(chunk)
+              chunk = []
+
+          if chunk:
+            yield np.array(chunk)
 
     def performColRemoval(self, smiFile, remCols, chunksize=100000):
       """
@@ -381,13 +393,7 @@ class ProtocolOperateLibrary(EMProtocol):
       headers = self.inputLibrary.get().getHeaders()
       oSmiFile = self._getExtraPath(getBaseFileName(smiFile))
 
-      chunkReader = pd.read_csv(smiFile, sep='\s+', chunksize=chunksize)
-      firstChunk = True
-      for chunk in chunkReader:
-        filteredChunk = self.removeColumsChunk(chunk, remCols, headers)
-
-        if firstChunk:
-          filteredChunk.to_csv(oSmiFile, sep='\t', index=False)
-          firstChunk = False
-        else:
-          filteredChunk.to_csv(oSmiFile, mode='a', sep='\t', header=False, index=False)
+      with open(oSmiFile, 'w') as fo:
+        for chunk in self.parseSMIChunks(smiFile, chunksize):
+          filteredChunk, filtHeaders = self.removeColumsChunk(chunk, remCols, headers)
+          np.savetxt(fo, filteredChunk, delimiter='\t', fmt='%s')
