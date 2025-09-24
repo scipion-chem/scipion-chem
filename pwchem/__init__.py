@@ -61,6 +61,7 @@ class Plugin(pwem.Plugin):
 		cls.addMDTrajPackage(env)
 		cls.addDEAPPackage(env)
 		cls.addRanxPackage(env)
+		cls.addShapeItPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
@@ -71,6 +72,7 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
 		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
 		cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
+		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -162,21 +164,23 @@ class Plugin(pwem.Plugin):
 						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
 						'BITBIRCH_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
-		
+
+	@classmethod
+	def addShapeItPackage(cls, env, default=True):
 		# # Instantiating shape it install helper
-		# shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
-		#
-		# # Importing commands from openbabel and rdkit installers
-		# shape_it_installer.importCommandList(openbabelInstaller.getCommandList())
-		#
-		# # Defining binaries folder name
-		# binaries_directory = SHAPEIT_DIC['name']
-		#
-		# # Installing package
-		# shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
-		# 	.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
-		# 	.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
-		# 	.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
+		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
+																		 packageVersion=SHAPEIT_DIC['version'])
+
+		# Defining binaries folder name
+		binaries_directory = SHAPEIT_DIC['name']
+
+		# Installing package
+		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
+		shapeItInstaller.getCloneCommand('https://github.com/silicos-it/shape-it', binaryFolderName=binaries_directory)\
+			.addCommand(f'cd {binaries_directory} && mkdir build && cd build && '
+									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} .. && make && make install', 'MAKEFILES_BUILT') \
+			.addCommand(f'cp {binaries_directory}/build/shape-it bin/shape-it', 'BIN_ENABLED')\
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
 	def addAliViewPackage(cls, env, default=True):
