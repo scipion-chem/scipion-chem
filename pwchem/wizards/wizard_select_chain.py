@@ -846,7 +846,7 @@ SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                inputs=['inSmallMols'],
                                outputs=['ligName'])
 
-SelectElementWizard().addTarget(protocol=ProtocolShapeDistancesFiltering,
+SelectElementWizard().addTarget(protocol=ProtocolShapeDistances,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])

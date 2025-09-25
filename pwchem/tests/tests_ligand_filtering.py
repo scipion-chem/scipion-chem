@@ -23,7 +23,7 @@
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
-	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering, ProtocolOperateLibrary, ProtClusterMolecules
+	ProtocolShapeDistances, ProtocolFingerprintFiltering, ProtocolOperateLibrary, ProtClusterMolecules
 from pwchem.tests.tests_imports import TestImportBase, TestImportSmallMoleculesLibrary
 from pwchem.utils import assertHandle
 
@@ -92,10 +92,10 @@ class TestPAINSFiltering(TestImportBase):
 
 class TestShapeFiltering(TestImportBase):
 	@classmethod
-	def _runShapeFilter(cls, inProt, mode=0):
+	def _runShapeFilter(cls, inProt, program, mode=0):
 		protShape = cls.newProtocol(
-			ProtocolShapeDistancesFiltering,
-			distanceType=mode, inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
+			ProtocolShapeDistances,
+			program=program, distanceType=mode, inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
 		)
 		protShape.inputSmallMolecules.set(inProt)
 		protShape.inputSmallMolecules.setExtended('outputSmallMolecules')
@@ -108,8 +108,9 @@ class TestShapeFiltering(TestImportBase):
 
 	def test(self):
 		protsShape = []
-		for i in range(3):
-			protsShape.append(self._runShapeFilter(inProt=self.protImportSmallMols, mode=i))
+		for program in range(2):
+			for i in range(3):
+				protsShape.append(self._runShapeFilter(inProt=self.protImportSmallMols, program=program, mode=i))
 
 		for p in protsShape:
 			self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)

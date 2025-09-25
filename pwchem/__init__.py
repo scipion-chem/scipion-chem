@@ -262,13 +262,10 @@ class Plugin(pwem.Plugin):
 			run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
 
 	@classmethod
-	def runShapeIt(cls, protocol, program, args, cwd=None):
+	def runShapeIt(cls, protocol, args, cwd=None):
 		""" Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
-		progDir = cls.getProgramHome(SHAPEIT_DIC)
-		progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
-		outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
-		protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
-		os.rename(progFile, outFile)
+		binFile = os.path.join(cls.getProgramHome(SHAPEIT_DIC), 'bin/shape-it')
+		protocol.runJob(binFile, args, env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
 	def runJChemPaint(cls, protocol, cwd=None):
