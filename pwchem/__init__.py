@@ -154,7 +154,8 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
-		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
+		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(OPENBABEL_DIC['home']),
+																			 packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
 		openbabelInstaller.getCondaEnvCommand()\
@@ -172,14 +173,14 @@ class Plugin(pwem.Plugin):
 																		 packageVersion=SHAPEIT_DIC['version'])
 
 		# Defining binaries folder name
-		binaries_directory = SHAPEIT_DIC['name']
+		binariesDirectory = SHAPEIT_DIC['name']
 
 		# Installing package
 		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
-		shapeItInstaller.getCloneCommand('https://github.com/silicos-it/shape-it', binaryFolderName=binaries_directory)\
-			.addCommand(f'cd {binaries_directory} && mkdir build && cd build && '
+		shapeItInstaller.getCloneCommand('https://github.com/silicos-it/shape-it', binaryFolderName=binariesDirectory)\
+			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
 									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} .. && make && make install', 'MAKEFILES_BUILT') \
-			.addCommand(f'cp {binaries_directory}/build/shape-it bin/shape-it', 'BIN_ENABLED')\
+			.addCommand(f'cp {binariesDirectory}/build/shape-it bin/shape-it', 'BIN_ENABLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
