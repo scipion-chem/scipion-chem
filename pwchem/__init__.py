@@ -177,7 +177,7 @@ class Plugin(pwem.Plugin):
 			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
 									f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
 									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 '
-									f'-DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild . .. && '
+									f'-DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so .. && '
 									f'make && make install', 'MAKEFILES_BUILT') \
 			.addCommand(f'cp {binariesDirectory}/build/shape-it bin/shape-it', 'BIN_ENABLED') \
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
