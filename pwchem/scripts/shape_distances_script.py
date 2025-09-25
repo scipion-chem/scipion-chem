@@ -20,10 +20,10 @@ def distanceCalculation(molsDict, ref, distance, ignore, prealign, permuts):
                 rmsd = 1000
                 print('No substructure found for ', molFile)
 
-        if distance == "Tanimoto Distance":
+        if distance == "Tanimoto":
             tanimoto = rdShapeHelpers.ShapeTanimotoDist(ref, mol, ignoreHs=ignore)
             distanceDic[molFile] = tanimoto
-        elif distance == "Protrude Distance":
+        elif distance == "Protrude":
             protude = rdShapeHelpers.ShapeProtrudeDist(ref, mol, ignoreHs=ignore)
             distanceDic[molFile] = protude
 
@@ -32,9 +32,9 @@ def distanceCalculation(molsDict, ref, distance, ignore, prealign, permuts):
 
     return distanceDic
 
-def writeFinalfile(filename, final_dict):
+def writeFinalfile(filename, final_dict, distance):
     with open(filename, 'w') as f:
-        f.write("# Molecules that have passed the shape filtering: \n")
+        f.write(f'MoleculeName\t{distance}\n')
         for molecule, coefficient in final_dict.items():
             f.write(str(molecule) + "\t" + str(coefficient) + "\n")
 
@@ -54,5 +54,5 @@ if __name__ == "__main__":
     ignore = eval(paramsDic["ignoreHydrogen"])
 
     distanceDic = distanceCalculation(molsDict, objective, distance, ignore, prealign, permuts)
-    writeFinalfile(paramsDic['outputPath'], distanceDic)
+    writeFinalfile(paramsDic['outputPath'], distanceDic, distance)
 

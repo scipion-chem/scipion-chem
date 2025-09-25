@@ -851,7 +851,7 @@ SelectElementWizard().addTarget(protocol=ProtocolShapeDistances,
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
 
-SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
+SelectElementWizard().addTarget(protocol=ProtocolFingerprintDistance,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])

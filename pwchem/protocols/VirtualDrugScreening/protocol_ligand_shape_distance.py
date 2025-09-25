@@ -40,7 +40,37 @@ from pwchem.utils import natural_sort, getBaseName
 
 scriptName = 'shape_distances_script.py'
 shapePrograms = ['RDKit', 'Shape-it']
+RDKIT, SHAPEIT = 0, 1
 
+def parseResults(outputFile):
+  scores = {}
+  with open(outputFile) as f:
+      heads = f.readline().strip().split('\t')
+      for h in heads[1:]:
+        scores[h] = []
+
+      for line in f:
+        sline = line.split("\t")
+        for i, h in enumerate(scores):
+          dist = float(sline[i + 1])
+          scores[h].append(dist)
+
+  return scores
+
+def parseResultsShapeit(resultsFile, scoreName):
+  scores = {}
+  with open(resultsFile) as f:
+      heads = f.readline().strip().split('\t')
+      for h in heads[2:5]:
+          if h == 'Shape-it::'+scoreName:
+            scores[h] = []
+
+      for line in f:
+          sline = line.split("\t")
+          for i, h in enumerate(scores):
+              simil = float(sline[i + 2])
+              scores[h].append(1 - simil)
+  return scores
 
 class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
     """
@@ -48,8 +78,8 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
     """
 
     _label = 'Shape Distance calculation'
-    _distanceType = ['Tanimoto Distance', 'Protrude Distance', 'RMSD']
-    _shapeitScore = ['TANIMOTO', 'TVERSKY_REF', 'TVERSKY_DB']
+    _distanceType = ['Tanimoto', 'Protrude', 'RMSD']
+    _shapeitScore = ['Tanimoto', 'Tversky_Ref', 'Tversky_Db']
     stepsExecutionMode = params.STEPS_PARALLEL
 
     def _defineParams(self, form):
@@ -69,13 +99,13 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
 
         group = form.addGroup('Descriptors')
         group.addParam('program', params.EnumParam,
-                       choices=shapePrograms, default=1,
+                       choices=shapePrograms, default=SHAPEIT,
                        label='Program to calculate distance: ')
         group.addParam('distanceType', params.EnumParam, default=0, label='Distance type: ',
-                       choices=self._distanceType, condition='program==0',
+                       choices=self._distanceType, condition=f'program=={RDKIT}',
                        help="Chosen distance type to perform the calculation")
         group.addParam('distanceTypeShapeit', params.EnumParam, default=0, label='Shape-it score: ',
-                       choices=self._shapeitScore, condition='program==1',
+                       choices=self._shapeitScore, condition=f'program=={SHAPEIT}',
                        help="Shape-it score to take into account"
                             "\nTanimoto: V(overlap) / (V(ref) + V(db) - V(overlap))"
                             "\nTversky_ref: V(overlap) / V(ref)"
@@ -83,19 +113,19 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
                             "\n(https://www.sciencedirect.com/science/article/pii/S109332630800048X?via%3Dihub)")
 
         group.addParam('prealign', params.BooleanParam, default=True,
-                       label='Prealign molecules: ', condition='program==0 and distanceType in [0, 1]',
+                       label='Prealign molecules: ', condition=f'program=={RDKIT} and distanceType in [0, 1]',
                        help='Tries to prealign the molecules before the distance calculation by using substructure '
                             'matching. If no substructure matching is found, molecules will be left as they are')
         group.addParam('prealignOrder', params.BooleanParam, default=False,
-                       label='Try every atom reordering: ', condition='program==0 and prealign',
+                       label='Try every atom reordering: ', condition=f'program=={RDKIT} and prealign',
                        help='Tries every permutation in the atom order for the molecule alignment. As specified by '
                             'RDKit, for some molecules it will lead to combinatorial explosion, especially if hydrogens'
                             ' are present.')
 
-        form.addParam('hydrogen', params.BooleanParam, default=True, condition='program==0',
+        form.addParam('hydrogen', params.BooleanParam, default=True, condition=f'program=={RDKIT}',
                       label='Do you want to ignore the hydrogens in the calculation?')
 
-        form.addParallelSection(threads=4, mpi=1)
+        form.addParallelSection(threads=4)
 
     # --------------------------- STEPS functions ------------------------------
     def mainStep(self, it):
@@ -105,7 +135,8 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
             self.runShapeItDistance(it)
 
     def createOutputStep(self):
-        scoreDic = self.getOutputScoreDic()
+        parseFunc, args = self.getParseFunc()
+        scoreDic = self.getOutputScoreDic(parseFunc, args)
         if self.useLibrary.get():
           self.defineLibraryOutput(scoreDic)
         else:
@@ -117,8 +148,9 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
       nSubsets = self.getNSubsets()
 
       for i, mol in enumerate(mols):
-        score = scoreDic[i % nSubsets].pop(0)
-        mol._shapeDistance = pwobj.Float(score)
+        for scoreName, scores in scoreDic[i % nSubsets].items():
+          score = scores.pop(0)
+          setattr(mol, scoreName+'_distance', pwobj.Float(score))
         newMols.append(mol)
 
       newMols.updateMolClass()
@@ -132,31 +164,34 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
 
       with open(oLibFile, 'w') as f:
           for i, (smi, line) in enumerate(mapDic.items()):
-              score = scoreDic[i % nSubsets].pop(0)
-              f.write(f'{line}\t{score}\n')
+              molScores = [str(scores.pop(0)) for h, scores in scoreDic[i % nSubsets].items()]
+              scoresLine = "\t".join(molScores)
+              f.write(f'{line}\t{scoresLine}\n')
 
+      hs = [scoreName+'_distance' for scoreName in scoreDic[0]]
       prevHeaders = inLib.getHeaders()
       outputLib = inLib.clone()
       outputLib.setFileName(oLibFile)
-      outputLib.setHeaders(prevHeaders + ['Shape_distance'])
+      outputLib.setHeaders(prevHeaders + hs)
       self._defineOutputs(outputLibrary=outputLib)
 
-
-
     # --------------------------- UTILS functions -----------------------------------
-    def getOutputScoreDic(self):
+    def getOutputScoreDic(self, parseFunc, args):
         '''Return a dictionary as {it: [scores]} with the scores of each thread
         '''
         scoresDic = {}
         for file in os.listdir(self._getPath()):
           if file.startswith('results_'):
             it = int(getBaseName(file).split('_')[-1])
-            if self.program.get() == 1:
-              scoresDic[it] = self.parseResultsShapeit(self._getPath(file))
-            else:
-              scoresDic[it] = self.parseResults(self._getPath(file))
+            scoresDic[it] = parseFunc(self._getPath(file), *args)
         return scoresDic
 
+    def getParseFunc(self):
+        if self.program.get() == RDKIT:
+          parseFunc, args = parseResults, []
+        else:
+          parseFunc, args = parseResultsShapeit, [self.getEnumText('distanceTypeShapeit')]
+        return parseFunc, args
 
     def runRDKitDistance(self, it):
         paramsPath = self.writeParamsFile(it)
@@ -164,7 +199,6 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
 
     def runShapeItDistance(self, i):
         allMolsFile = self.buildMolsFile(i)
-
         paramsPath = f' -r {self.getRefFile()} -d {allMolsFile} -s results_{i}.tsv --noRef'
         try:
             Plugin.runShapeIt(self, paramsPath, cwd=self._getPath())
@@ -174,13 +208,10 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
                   'as "SHAPEIT_HOME=<path_to_shape-it>" in the scipion.conf file')
 
     def writeParamsFile(self, it):
-        molFiles = []
         paramsFile = os.path.abspath(self._getExtraPath(f'inputParams_{it}.txt'))
         f = open(paramsFile, 'w')
         f.write(f'outputPath: results_{it}.tsv\n')
         itMolFiles = self.getInputMolFiles(it)
-        for molFile in itMolFiles:
-            molFiles.append(os.path.abspath(molFile))
 
         f.write('distanceType: {}\n'.format(self.getDistance()))
         f.write('prealign: {}\n'.format(self.prealign.get()))
@@ -188,7 +219,7 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
         f.write('ignoreHydrogen: {}\n'.format(self.hydrogen.get()))
 
         f.write('referenceFile: {}\n'.format(self.getRefFile()))
-        f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
+        f.write('ligandFiles: {}\n'.format(' '.join(itMolFiles)))
 
         return paramsFile
     # --------------- INFO functions -------------------------
@@ -230,21 +261,3 @@ class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
     def getDistance(self):
         return self.getEnumText('distanceType')
 
-    def parseResults(self, outputFile):
-        scores = []
-        with open(outputFile) as read_tsv:
-            for row in read_tsv:
-                if row[0] != "#":
-                    row1 = row.split("\t")
-                    scores.append(row1[1])
-
-        return scores
-
-    def parseResultsShapeit(self, resultsFile):
-        scores = []
-        with open(resultsFile) as f:
-            f.readline()
-            for line in f:
-                simil = float(line.split()[2 + self.distanceTypeShapeit.get()])
-                scores.append(1-simil)
-        return scores

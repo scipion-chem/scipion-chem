@@ -23,7 +23,7 @@
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
-	ProtocolShapeDistances, ProtocolFingerprintFiltering, ProtocolOperateLibrary, ProtClusterMolecules
+	ProtocolShapeDistances, ProtocolFingerprintDistance, ProtocolOperateLibrary, ProtClusterMolecules
 from pwchem.tests.tests_imports import TestImportBase, TestImportSmallMoleculesLibrary
 from pwchem.utils import assertHandle
 
@@ -120,7 +120,7 @@ class TestFingerprintFiltering(TestImportBase):
 	@classmethod
 	def _runFingerprintFilter(cls, inProt, mode=0):
 		protFinger = cls.newProtocol(
-			ProtocolFingerprintFiltering,
+			ProtocolFingerprintDistance,
 			fpChoice=mode, inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
 		)
 		protFinger.inputSmallMolecules.set(inProt)
