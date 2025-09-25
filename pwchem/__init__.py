@@ -124,21 +124,7 @@ class Plugin(pwem.Plugin):
 			.addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 
-		# # Instantiating shape it install helper
-		binariesDirectory = SHAPEIT_DIC['name']
-		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
-																		 packageVersion=SHAPEIT_DIC['version'])
 
-		# Installing package
-		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
-		shapeItInstaller.getCloneCommand('https://github.com/silicos-it/shape-it', binaryFolderName=binariesDirectory) \
-			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
-									f'{cls.getEnvActivationCommand(RDKIT_DIC)} && '
-									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so .. && '
-									f'make && make install', 'MAKEFILES_BUILT') \
-			.addCommand(f'cp {binariesDirectory}/build/shape-it bin/shape-it', 'BIN_ENABLED') \
-			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
-			
 	@classmethod
 	def addMGLToolsPackage(cls, env, default=True):
 		# Instantiating install helper
@@ -179,6 +165,21 @@ class Plugin(pwem.Plugin):
 						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
 						'BITBIRCH_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
+
+		# # Instantiating shape it install helper
+		binariesDirectory = SHAPEIT_DIC['name']
+		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
+																		 packageVersion=SHAPEIT_DIC['version'])
+
+		# Installing package
+		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
+		shapeItInstaller.getCloneCommand('https://github.com/silicos-it/shape-it', binaryFolderName=binariesDirectory) \
+			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
+									f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
+									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so .. && '
+									f'make && make install', 'MAKEFILES_BUILT') \
+			.addCommand(f'cp {binariesDirectory}/build/shape-it bin/shape-it', 'BIN_ENABLED') \
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
 	def addAliViewPackage(cls, env, default=True):
