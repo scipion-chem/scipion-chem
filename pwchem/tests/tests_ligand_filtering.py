@@ -95,7 +95,8 @@ class TestShapeFiltering(TestImportBase):
 	def _runShapeFilter(cls, inProt, program, mode=0):
 		protShape = cls.newProtocol(
 			ProtocolShapeDistances,
-			program=program, distanceType=mode, inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
+			program=program, distanceType=mode, distanceTypeShapeit=mode,
+			inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
 		)
 		protShape.inputSmallMolecules.set(inProt)
 		protShape.inputSmallMolecules.setExtended('outputSmallMolecules')
