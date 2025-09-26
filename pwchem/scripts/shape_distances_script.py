@@ -1,17 +1,15 @@
-from rdkit import Chem, RDConfig
+from rdkit import Chem
 from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
 import sys
 
 from utils import getMolFilesDic, parseParams, parseMoleculeFile
 
 #################################################################################################################
-def distanceFilter(molsDict, objective, distance, ignore, prealign, permuts):
-    distance_dict = {}
-    ref = Chem.AddHs(objective)
-    AllChem.EmbedMolecule(ref)
+def distanceCalculation(molsDict, ref, distance, ignore, prealign, permuts):
+    distanceDic = {}
     for mol, molFile in molsDict.items():
-        mol = Chem.AddHs(mol)
-        AllChem.EmbedMolecule(mol)
+        if molFile.split('.')[-1] in ['smi', 'smile', 'smiles']:
+            AllChem.EmbedMolecule(mol)
         if prealign:
             try:
                 if permuts:
@@ -22,29 +20,22 @@ def distanceFilter(molsDict, objective, distance, ignore, prealign, permuts):
                 rmsd = 1000
                 print('No substructure found for ', molFile)
 
-        if distance == "Tanimoto Distance":
+        if distance == "Tanimoto":
             tanimoto = rdShapeHelpers.ShapeTanimotoDist(ref, mol, ignoreHs=ignore)
-            distance_dict[molFile] = tanimoto
-        elif distance == "Protrude Distance":
+            distanceDic[molFile] = tanimoto
+        elif distance == "Protrude":
             protude = rdShapeHelpers.ShapeProtrudeDist(ref, mol, ignoreHs=ignore)
-            distance_dict[molFile] = protude
+            distanceDic[molFile] = protude
 
         elif distance == "RMSD":
-            distance_dict[molFile] = rmsd
+            distanceDic[molFile] = rmsd
 
-    return(distance_dict)
+    return distanceDic
 
-def filter(distance_dict, cut):
-    final_dict = {}
-    for chembl, number in distance_dict.items():
-        if float(number) <= cut:
-            final_dict[chembl] = number
-    return(final_dict)
-
-def writeFinalfile(filename, final_dict):
+def writeFinalfile(filename, finalDict, distance):
     with open(filename, 'w') as f:
-        f.write("# Molecules that have passed the shape filtering: \n")
-        for molecule, coefficient in final_dict.items():
+        f.write(f'MoleculeName\t{distance}\n')
+        for molecule, coefficient in finalDict.items():
             f.write(str(molecule) + "\t" + str(coefficient) + "\n")
 
 
@@ -59,12 +50,9 @@ if __name__ == "__main__":
     objectiveFile = str(paramsDic["referenceFile"])
     objective = parseMoleculeFile(objectiveFile)
     distance = paramsDic["distanceType"]
-    prealign, permuts = bool(paramsDic["prealign"]), bool(paramsDic["prealignOrder"])
-    ignore = bool(paramsDic["ignoreHydrogen"])
-    cut = float(paramsDic["cut-off"])
+    prealign, permuts = eval(paramsDic["prealign"]) if distance != "RMSD" else True, eval(paramsDic["prealignOrder"])
+    ignore = eval(paramsDic["ignoreHydrogen"])
 
-    distance_dict = distanceFilter(molsDict, objective, distance, ignore, prealign, permuts)
-    final_dict = filter(distance_dict, cut)
-
-    writeFinalfile(paramsDic['outputPath'], final_dict)
+    distanceDic = distanceCalculation(molsDict, objective, distance, ignore, prealign, permuts)
+    writeFinalfile(paramsDic['outputPath'], distanceDic, distance)
 
