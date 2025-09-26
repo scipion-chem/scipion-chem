@@ -173,7 +173,7 @@ class Plugin(pwem.Plugin):
 
 		# Installing package
 		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
-		shapeItInstaller.getCloneCommand('https://github.com/silicos-it/shape-it', binaryFolderName=binariesDirectory) \
+		shapeItInstaller.getCloneCommand('https://github.com/rdkit/shape-it', binaryFolderName=binariesDirectory) \
 			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
 									f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
 									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 '
