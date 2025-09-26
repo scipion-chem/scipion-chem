@@ -32,10 +32,10 @@ def distanceCalculation(molsDict, ref, distance, ignore, prealign, permuts):
 
     return distanceDic
 
-def writeFinalfile(filename, final_dict, distance):
+def writeFinalfile(filename, finalDict, distance):
     with open(filename, 'w') as f:
         f.write(f'MoleculeName\t{distance}\n')
-        for molecule, coefficient in final_dict.items():
+        for molecule, coefficient in finalDict.items():
             f.write(str(molecule) + "\t" + str(coefficient) + "\n")
 
 
