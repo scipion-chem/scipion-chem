@@ -173,7 +173,7 @@ class Plugin(pwem.Plugin):
 
 		# Installing package
 		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
-		shapeItInstaller.getCloneCommand('https://github.com/rdkit/shape-it', binaryFolderName=binariesDirectory) \
+		shapeItInstaller.getCloneCommand(cls.getShapeItGithub(), binaryFolderName=binariesDirectory) \
 			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
 									f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
 									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 '
@@ -338,6 +338,10 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def getAliviewUrl(cls, version='1.28'):
 		return f'http://www.ormbunkar.se/aliview/downloads/linux/linux-versions-all/linux-version-{version}/aliview.tgz'
+
+	@classmethod
+	def getShapeItGithub(cls):
+		return 'https://github.com/DaniDelHoyo/shape-it.git'
 
 DataSet(name='smallMolecules', folder='smallMolecules',
 					files={
