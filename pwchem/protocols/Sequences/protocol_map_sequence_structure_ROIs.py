@@ -128,7 +128,7 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         coordsClusters = self.readCoordClusters()
         if coordsClusters:
-            for i, clust in self.coordsClusters.items():
+            for i, clust in coordsClusters.items():
                 if clust:
                     pocketFile = createPocketFile(clust, i, self._getExtraPath())
                     pocket = StructROI(pocketFile, self.getASFileName())
