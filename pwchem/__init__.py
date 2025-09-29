@@ -341,7 +341,7 @@ class Plugin(pwem.Plugin):
 
 	@classmethod
 	def getShapeItGithub(cls):
-		return 'https://github.com/DaniDelHoyo/shape-it.git'
+		return 'https://github.com/rdkit/shape-it'
 
 DataSet(name='smallMolecules', folder='smallMolecules',
 					files={
