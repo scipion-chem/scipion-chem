@@ -624,7 +624,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     """
   protName = os.path.splitext(os.path.basename(protFile))[0]
   gpfFile = os.path.join(outDir, protName + '.gpf')
-  npts = int(round(npts))
+  npts = [int(round(n)) for n in npts]
 
   if allDefAtomTypes:
     ligAtomTypes = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA", "S", "Cl", "Br", "I", "Si", "B"]
@@ -645,7 +645,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
   with open(os.path.abspath(gpfFile), "w") as file:
-    file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
+    file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts[0], npts[1], npts[2]))
     if znFFfile:
         file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
