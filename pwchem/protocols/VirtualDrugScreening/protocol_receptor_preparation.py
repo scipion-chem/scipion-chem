@@ -92,19 +92,18 @@ class ProtChemPrepareReceptor(EMProtocol):
         self._insertFunctionStep(self.createOutputStep)
 
     def preparationStep(self):
-        chain_ids = None
+        chainModelIds = None
         if self.rchains.get():
             chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
             if 'chain' in chainJson:
-                chain_ids = [chainJson["chain"].upper().strip()]
+                chainModelIds = [f'{chainJson["model"]}-{chainJson["chain"].upper().strip()}']
             elif 'model-chain' in chainJson:
-                modelChains = chainJson["model-chain"].upper().strip()
-                chain_ids = [x.split('-')[1] for x in modelChains.split(',')]
+                chainModelIds = [mChain.strip() for mChain in chainJson["model-chain"].upper().split(',')]
 
         het2keep = self.het2keep.get().split(', ')
         inFile = self.inputAtomStruct.get().getFileName()
         cleanFile = self.getCleanedFile()
-        cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chain_ids, het2keep)
+        cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep)
 
     def pdbFixerStep(self):
         addResStr = ' --add-residues' if self.addRes else ''
