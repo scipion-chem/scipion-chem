@@ -115,7 +115,7 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
             if self.doCluster:
                 allCoords = self.mergeCoords(pocketCoords)
                 coordsClusters = clusterSurfaceCoords(allCoords, self.maxIntraDistance.get())
-                coordsClusters = {i: coords for i, coords in enumerate(coordsClusters)}
+                coordsClusters = dict(enumerate(coordsClusters))
             else:
                 coordsClusters = pocketCoords
 
