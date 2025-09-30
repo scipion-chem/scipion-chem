@@ -684,6 +684,33 @@ def calculate_centerMass(atomStructFile):
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
     return
 
+def calculateCoordLimits(atomStructFile):
+  """
+    Returns the coordinate limits of an Entity (anything with a get_atoms function in biopython).
+    """
+
+  asH = AtomicStructHandler()
+  asH.read(atomStructFile)
+  struct = asH.getStructure()
+
+  xmin = ymin = zmin = 100000
+  xmax = ymax = zmax = -100000
+  for atom in struct.get_atoms():
+      (x, y, z) = atom.get_coord()
+      if x < xmin: xmin = x
+      if x > xmax: xmax = x
+
+      if y < ymin: ymin = y
+      if y > ymax: ymax = y
+
+      if z < zmin: zmin = z
+      if z > zmax: zmax = z
+
+  limitCoords = [(xmin, xmax), (ymin, ymax),  (zmin, zmax)]
+
+  return limitCoords
+
+
 def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
