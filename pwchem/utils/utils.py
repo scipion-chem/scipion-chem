@@ -711,12 +711,14 @@ def sortSet(seti):
 
 class CleanStructureSelect(Select):
   def __init__(self, chainIds, remHETATM, remWATER, het2keep=[], het2rem=[]):
-    self.chain_ids = chainIds
+    self.chainIds = chainIds
     self.remHETATM, self.remWATER = remHETATM, remWATER
     self.het2keep, self.het2rem = het2keep, het2rem
 
   def accept_chain(self, chain):
-    return not self.chain_ids or chain.id in self.chain_ids
+    model = chain.get_parent()
+    modelChain = f'{model.id}-{chain.id}'
+    return not self.chainIds or chain.id in self.chainIds or modelChain in self.chainIds
 
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
