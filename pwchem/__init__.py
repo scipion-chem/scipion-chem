@@ -71,6 +71,7 @@ class Plugin(pwem.Plugin):
 		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
 		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
 		cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
+		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -122,7 +123,8 @@ class Plugin(pwem.Plugin):
 			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
 			.addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
-			
+
+
 	@classmethod
 	def addMGLToolsPackage(cls, env, default=True):
 		# Instantiating install helper
@@ -152,7 +154,8 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
-		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
+		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(OPENBABEL_DIC['home']),
+																			 packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
 		openbabelInstaller.getCondaEnvCommand()\
@@ -162,21 +165,22 @@ class Plugin(pwem.Plugin):
 						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
 						'BITBIRCH_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
-		
+
 		# # Instantiating shape it install helper
-		# shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
-		#
-		# # Importing commands from openbabel and rdkit installers
-		# shape_it_installer.importCommandList(openbabelInstaller.getCommandList())
-		#
-		# # Defining binaries folder name
-		# binaries_directory = SHAPEIT_DIC['name']
-		#
-		# # Installing package
-		# shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
-		# 	.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
-		# 	.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
-		# 	.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
+		binariesDirectory = SHAPEIT_DIC['name']
+		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
+																		 packageVersion=SHAPEIT_DIC['version'])
+
+		# Installing package
+		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
+		shapeItInstaller.getCloneCommand(cls.getShapeItGithub(), binaryFolderName=binariesDirectory) \
+			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
+									f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
+									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 '
+									f'-DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so .. && '
+									f'make && make install', 'MAKEFILES_BUILT') \
+			.addCommand(f'cp {binariesDirectory}/build/shape-it bin/shape-it', 'BIN_ENABLED') \
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
 	def addAliViewPackage(cls, env, default=True):
@@ -258,13 +262,10 @@ class Plugin(pwem.Plugin):
 			run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
 
 	@classmethod
-	def runShapeIt(cls, protocol, program, args, cwd=None):
+	def runShapeIt(cls, protocol, args, cwd=None):
 		""" Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
-		progDir = cls.getProgramHome(SHAPEIT_DIC)
-		progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
-		outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
-		protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
-		os.rename(progFile, outFile)
+		binFile = os.path.join(cls.getProgramHome(SHAPEIT_DIC), 'bin/shape-it')
+		protocol.runJob(binFile, args, env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
 	def runJChemPaint(cls, protocol, cwd=None):
@@ -337,6 +338,10 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def getAliviewUrl(cls, version='1.28'):
 		return f'http://www.ormbunkar.se/aliview/downloads/linux/linux-versions-all/linux-version-{version}/aliview.tgz'
+
+	@classmethod
+	def getShapeItGithub(cls):
+		return 'https://github.com/rdkit/shape-it'
 
 DataSet(name='smallMolecules', folder='smallMolecules',
 					files={

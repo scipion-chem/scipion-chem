@@ -192,6 +192,7 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
           tryMove += 1
 
       newSmallMol.setFileName(newFile)
+      newSmallMol.guessMolName()
       repMols.append(newSmallMol)
     return repMols, outputLib
 
@@ -208,9 +209,11 @@ class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
 
       if not self.outputOnlyReps.get() and molFile in molDic:
           mol.cluster = pwobj.String(molDic[molFile])
+          mol.guessMolName()
           outMols.append(mol)
 
       if molFile in reps:
+          mol.guessMolName()
           repMols.append(mol)
     return repMols, outMols
 

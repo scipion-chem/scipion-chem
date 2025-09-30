@@ -30,6 +30,7 @@
 This protocol maps a set of sequence ROIs to structure ROIs for an AtomStruct
 
 """
+import json
 from scipy.spatial import distance
 from Bio.PDB.ResidueDepth import get_surface
 
@@ -113,18 +114,21 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
 
             if self.doCluster:
                 allCoords = self.mergeCoords(pocketCoords)
-                self.coordsClusters = clusterSurfaceCoords(allCoords, self.maxIntraDistance.get())
-                self.coordsClusters = {i: coords for i, coords in enumerate(self.coordsClusters)}
+                coordsClusters = clusterSurfaceCoords(allCoords, self.maxIntraDistance.get())
+                coordsClusters = dict(enumerate(coordsClusters))
             else:
-                self.coordsClusters = pocketCoords
+                coordsClusters = pocketCoords
+
+            self.saveCoordClusters(coordsClusters)
         else:
             print(self._mapWarning)
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
-        if self.coordsClusters:
-            outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
-            for i, clust in self.coordsClusters.items():
+        outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
+        coordsClusters = self.readCoordClusters()
+        if coordsClusters:
+            for i, clust in coordsClusters.items():
                 if clust:
                     pocketFile = createPocketFile(clust, i, self._getExtraPath())
                     pocket = StructROI(pocketFile, self.getASFileName())
@@ -296,6 +300,19 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         for res in chain:
             resIdxs.append(res.get_id()[1])
         return resIdxs
+
+    def getCoordsFile(self):
+        return self._getExtraPath('coordClusters.txt')
+
+    def saveCoordClusters(self, coordClusters):
+        with open(self.getCoordsFile(), "w") as f:
+            json.dump(coordClusters, f)
+
+    def readCoordClusters(self):
+        with open(self.getCoordsFile(), "r") as f:
+            coordClusters = json.load(f)
+        return coordClusters
+
 
 
 
