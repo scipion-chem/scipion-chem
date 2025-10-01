@@ -1149,6 +1149,13 @@ class StructROI(data.EMFile):
 
     return distMat[i, j]
 
+  def getLimits(self):
+    '''Returns the min and max coordinates for the 3 axis [(minX, maxX), (minY, maxY), (minZ, maxZ)]
+    '''
+    coords = np.array(self.getPointsCoords())
+    minMax = [(np.min(coords[:, i]), np.max(coords[:, i])) for i in range(3)]
+    return minMax
+
   def addRadius(self, dMat, radius):
     '''Add the radius of each alpha sphere to their corresponding row and column in the distances
         matrix'''
@@ -1539,9 +1546,9 @@ class SetOfStructROIs(data.EMSet):
       if bBox:
         toWrite = FUNCTION_BOUNDING_BOX
         for pocket in self:
-          pDia = pocket.getDiameter()
-          toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(),
-                                              [pDia * bBox] * 3,
+          minMaxCoords = pocket.getLimits()
+          radius = [(minMax[1] - minMax[0]) * bBox for minMax in minMaxCoords]
+          toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(), radius,
                                               'BoundingBox_' + str(pocket.getObjId()))
         f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, idList, toWrite))
       else:

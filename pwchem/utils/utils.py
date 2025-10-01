@@ -624,7 +624,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     """
   protName = os.path.splitext(os.path.basename(protFile))[0]
   gpfFile = os.path.join(outDir, protName + '.gpf')
-  npts = int(round(npts))
+  npts = [int(round(n)) for n in npts]
 
   if allDefAtomTypes:
     ligAtomTypes = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA", "S", "Cl", "Br", "I", "Si", "B"]
@@ -645,7 +645,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
   with open(os.path.abspath(gpfFile), "w") as file:
-    file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
+    file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts[0], npts[1], npts[2]))
     if znFFfile:
         file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
@@ -683,6 +683,33 @@ def calculate_centerMass(atomStructFile):
   except Exception as e:
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
     return
+
+def calculateCoordLimits(atomStructFile):
+  """
+    Returns the coordinate limits of an Entity (anything with a get_atoms function in biopython).
+    """
+
+  asH = AtomicStructHandler()
+  asH.read(atomStructFile)
+  struct = asH.getStructure()
+
+  xmin = ymin = zmin = 100000
+  xmax = ymax = zmax = -100000
+  for atom in struct.get_atoms():
+      (x, y, z) = atom.get_coord()
+      if x < xmin: xmin = x
+      if x > xmax: xmax = x
+
+      if y < ymin: ymin = y
+      if y > ymax: ymax = y
+
+      if z < zmin: zmin = z
+      if z > zmax: zmax = z
+
+  limitCoords = [(xmin, xmax), (ymin, ymax),  (zmin, zmax)]
+
+  return limitCoords
+
 
 def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
