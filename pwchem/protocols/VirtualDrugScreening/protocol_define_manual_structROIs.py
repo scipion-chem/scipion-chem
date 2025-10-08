@@ -59,7 +59,7 @@ class ProtDefineStructROIs(EMProtocol):
     # -------------------------- DEFINE param functions ----------------------
     def _defineClusterParams(self, group, condition='True'):
       group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition=condition,
-                     label='Maximum distance between pocket points (A): ',
+                     label='Maximum distance between ROI points (A): ',
                      help='Maximum distance between two pocket atoms to considered them same pocket')
 
       group.addParam('surfaceCoords', params.BooleanParam, default=True,
@@ -154,7 +154,7 @@ class ProtDefineStructROIs(EMProtocol):
                             'The coordinates of the interface atoms will be mapped to surface points closer than '
                             'maxDepth and points closer than maxIntraDistance will be considered the same pocket')
 
-        group = form.addGroup('Pocket definition')
+        group = form.addGroup('ROI definition')
         group = self._defineClusterParams(group)
 
         form.addSection(label='Input Pointers')
