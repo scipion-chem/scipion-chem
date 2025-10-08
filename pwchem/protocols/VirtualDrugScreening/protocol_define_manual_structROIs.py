@@ -390,6 +390,9 @@ class ProtDefineStructROIs(EMProtocol):
                     if dist <= ppiDist:
                         oCoords.append(coord1)
                         oCoords.append(coord2)
+                        res_num1 = atom1.get_parent().get_id()[1]
+                        res_num2 = atom2.get_parent().get_id()[1]
+                        print(f'{chain1Id}:{res_num1} -- {chain2Id}:{res_num2}')
                         break
 
         elif roiKey == 'Near_Residues:':
