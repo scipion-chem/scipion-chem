@@ -79,6 +79,11 @@ SelectFromListWizard().addTarget(protocol=chemprot.ProtocolOperateLibrary,
                                  inputs=['getInputAttributes'],
                                  outputs=['filterAttr'])
 
+SelectFromListWizard().addTarget(protocol=chemprot.ProtDefineSeqROI,
+                                 targets=['whichToAdd'],
+                                 inputs=['getROIOptions'],
+                                 outputs=['whichToAdd'])
+
 class SelectAttributeWizardChem(SelectAttributeWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
