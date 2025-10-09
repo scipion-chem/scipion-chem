@@ -32,6 +32,8 @@ This protocol is used to manually define structural regions from coordinates, re
 """
 import csv
 import os, json, math, sys
+from collections import defaultdict
+
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
 from Bio.PDB.ResidueDepth import get_surface
@@ -385,39 +387,44 @@ class ProtDefineStructROIs(EMProtocol):
             ppiDist = float(jDic['interDist'])
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
-            interactions_file = self._getExtraPath("interacting_residues.csv") #todo residues or atoms?
+            interactions_file = self._getExtraPath("interacting_residues.csv")
 
             print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
             sys.stdout.flush()
+
+            residue_pairs = defaultdict(list)
+
+            for atom1 in chain1.get_atoms():
+                for atom2 in chain2.get_atoms():
+                    coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
+                    dist = math.dist(coord1, coord2)
+                    if dist <= ppiDist:
+                        oCoords.append(coord1)
+                        oCoords.append(coord2)
+                        res_num1 = atom1.get_parent().get_id()[1]
+                        res_num2 = atom2.get_parent().get_id()[1]
+                        res_name1 = atom1.get_parent().get_resname()
+                        res_name2 = atom2.get_parent().get_resname()
+
+                        key = (chain1Id, f'{res_name1}:{res_num1}', chain2Id, f'{res_name2}:{res_num2}')
+                        residue_pairs[key].append(dist)
+
+                        break
 
             with open(interactions_file, mode='a', newline='') as f:
                 writer = csv.writer(f)
                 if f.tell() == 0:
                     writer.writerow([
-                        'Chain1', 'Residue1', 'Atom1',
-                        'Chain2', 'Residue2', 'Atom2',
-                        'Distance'
+                        'Chain1', 'Residue1',
+                        'Chain2', 'Residue2',
+                        'Mean distance'
                     ])
 
-                for atom1 in chain1.get_atoms():
-                    for atom2 in chain2.get_atoms():
-                        coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
-                        dist = math.dist(coord1, coord2)
-                        if dist <= ppiDist:
-                            oCoords.append(coord1)
-                            oCoords.append(coord2)
-                            res_num1 = atom1.get_parent().get_id()[1]
-                            res_num2 = atom2.get_parent().get_id()[1]
-                            res_name1 = atom1.get_parent().get_resname()
-                            res_name2 = atom2.get_parent().get_resname()
-                            print(f'{chain1Id}:{res_num1} -- {chain2Id}:{res_num2}')
+                for (ch1, res1, ch2, res2), dists in residue_pairs.items():
+                    mean_dist = sum(dists) / len(dists)
+                    print(f'{ch1}:{res1} -- {ch2}:{res2} | mean distance = {mean_dist:.2f} Å')
+                    writer.writerow([ch1, res1, ch2, res2, f'{mean_dist:.2f}'])
 
-                            writer.writerow([
-                                chain1Id, f'{res_name1}:{res_num1}', atom1.get_name(),
-                                chain2Id, f'{res_name2}:{res_num2}', atom2.get_name(),
-                                f'{dist:.2f}'
-                            ])
-                            break
 
         elif roiKey == 'Near_Residues:':
             residueTypes, resDist, resLink = jDic['residues'].split(','), jDic['distance'], jDic['linkage']
