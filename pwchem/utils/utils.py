@@ -460,6 +460,25 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
+def pdbFromAS(AS, oFile):
+  inpStruct = AS
+  name, ext = os.path.splitext(inpStruct.getFileName())
+  if ext == '.cif':
+      cifFile = inpStruct.getFileName()
+      toPdb(cifFile, oFile)
+
+  elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+      inpStruct.convert2PDB(outPDB=oFile)
+
+  elif ext == '.pdbqt':
+      pdbFile = os.path.abspath(oFile)
+      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpStruct.getFileName()), pdbFile)
+      runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
+
+  else:
+      shutil.copy(inpStruct.getFileName(), oFile)
+  return oFile
+
 def pdbqt2other(protocol, pdbqtFile, otherFile):
   '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
   inExt = os.path.splitext(os.path.basename(otherFile))[1]
