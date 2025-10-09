@@ -56,6 +56,8 @@ class ProtExtractInteractingMols(EMProtocol):
                     default='All', expertLevel=params.LEVEL_ADVANCED,
                     help='Extract the only interacting molecules for the selected protein sequence in this subset. '
                          'Use the wizard to get a list of the interacting molecules in the input')
+    mGroup.addParam('chooseScore', params.StringParam, label='Filter by this score: ', default='All',
+                    help='Choose to filter by the score provided by a specific tool.') #todo get the path to the inputsetofseqs and from that go to extra and get json file
     mGroup.addParam('scThres', params.FloatParam, label='Score threshold: ', default=0.3,
                     help='Score threshold to filter interacting molecules below it for the selected protein sequences')
 

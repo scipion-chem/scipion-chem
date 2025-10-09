@@ -734,6 +734,11 @@ SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  targets=['chooseMol'],
                                  inputs=['inputSequences'],
                                  outputs=['chooseMol'])
+SelectElementWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                     targets=['chooseScore'],
+                                     inputs=['inputSequences'],
+                                     outputs=['chooseScore'])
+#todo add one of these for the score
 
 class SelectMultiEpitopeElementWizard(SelectElementWizard):
   """Lists the items in a MultiEpitope and choose several"""
