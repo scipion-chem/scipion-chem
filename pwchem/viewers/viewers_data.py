@@ -26,18 +26,20 @@ import os
 from subprocess import Popen
 
 import pyworkflow.viewer as pwviewer
-from pyworkflow.protocol.params import EnumParam
+from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
 import pwem.viewers.views as pwemViews
 from pwem.viewers import Chimera, ChimeraView
 import pwem.viewers.showj as showj
+from pwem.viewers.mdviewer.viewer import MDViewer
 from pwem.protocols import EMProtocol
 from pwem.objects import SetOfSequences, AtomStruct, SetOfAtomStructs
 
 import pwchem.objects
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import *
+from pwchem.utils import getBaseName
 
 class PyMol:
   """ Help class to run PyMol and manage its environment. """
@@ -96,7 +98,7 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
     def _defineParams(self, form):
       form.addSection(label='Visualization of AtomStruct')
       group = form.addGroup('AtomStruct General Viewer')
-      group.addParam('displaySoftware', EnumParam,
+      group.addParam('displaySoftware', params.EnumParam,
                      choices=self._viewerOptions, default=0,
                      label='Display AtomStruct with: ',
                      help='Display the AtomStruct object with which software.\nAvailable: PyMol, ChimeraX')
@@ -161,6 +163,98 @@ class AtomStructPymolViewer(PyMolViewer):
       return pymolV._visualize(obj.getFileName())
 
 
+class SetOfAtomStructViewer(AtomStructViewer):
+  _label = 'Viewer Set Of AtomStruct'
+  _targets = [SetOfAtomStructs]
+
+  def __init__(self, **kwargs):
+    pwviewer.ProtocolViewer.__init__(self, **kwargs)
+    self.protocolObject = self.protocol
+
+  def _defineParams(self, form):
+    form.addSection(label='Structures view')
+    form.addParam('displaySoftware', params.EnumParam, choices=self._viewerOptions, default=0,
+                   label='Display atom structures with: ',
+                   help='Display the atom structures with this software')
+    form.addParam('alignStructures', params.BooleanParam, default=True,
+                  label='Align the structures: ',
+                  help='Whether to align the structures in the viewer')
+
+    form.addSection(label='Table view')
+    form.addParam('displayTable', params.LabelParam,
+                  label='Display Atom Struct set in table format: ',
+                  help='Display the Atom Struct set in the set in table format with their respective attributes')
+
+  def _getVisualizeDict(self):
+    return {
+      # Structures
+      'displaySoftware': self._viewSetStructure,
+      # Table
+      'displayTable': self._viewTable,
+    }
+
+  def _viewSetStructure(self, e=None):
+    if self.displaySoftware.get() == 0:
+      pymolViewer = PyMolViewer(project=self.getProject())
+      pmlFile = self.buildPMLFile(align=self.alignStructures.get())
+      return pymolViewer._visualize(pmlFile)
+    elif self.displaySoftware.get() == 1:
+      view = ChimeraView(self.buildCXCFile(align=self.alignStructures.get()))
+      return [view]
+
+  def _viewTable(self, e=None):
+    ASs = self.getAtomStructs()
+
+    setV = MDViewer(project=self.getProject())
+    views = setV._visualize(ASs)
+    return views
+
+  def getAtomStructs(self):
+      obj = self.protocol
+      if issubclass(type(obj), EMProtocol):
+        for output in self.protocol.iterOutputAttributes(outputClass=SetOfAtomStructs):
+          obj = output[1]
+      return obj
+
+  def buildPMLFile(self, align=False):
+      ASs = self.getAtomStructs()
+      oDir = os.path.dirname(ASs.getFileName())
+      oFile = os.path.join(oDir, 'visualization.pml')
+
+      fAS = ASs.getFirstItem()
+      fFile, fName = fAS.getFileName(), getBaseName(fAS.getFileName())
+      oStr = f'load {fFile}, {fName}\n\n'
+      for struct in ASs:
+          sName = getBaseName(struct.getFileName())
+          oStr += f'load {struct.getFileName()}, {sName}\n'
+          if align:
+            oStr += f'align {sName}, {fName}\n'
+          oStr += '\n'
+      oStr += 'zoom'
+
+      with open(oFile, 'w') as f:
+        f.write(oStr)
+      return oFile
+
+  def buildCXCFile(self, align=False):
+    ASs = self.getAtomStructs()
+    oDir = os.path.dirname(ASs.getFileName())
+    oFile = os.path.join(oDir, 'visualization.cxc')
+
+    oStr = ''
+    for struct in ASs:
+      oStr += f'open {os.path.abspath(struct.getFileName())}\n\n'
+
+    if align:
+      for i in range(len(ASs)-1):
+        oStr += f'matchmaker #{i+2} to #1\n'
+    oStr += 'view'
+
+    with open(oFile, 'w') as f:
+      f.write(oStr)
+    return oFile
+
+
 class SetOfDatabaseIDView(pwemViews.ObjectView):
     """ Customized ObjectView for SetOfDatabaseID. """
     def __init__(self, project, inputid, path, other='',
@@ -194,19 +288,14 @@ class BioinformaticsDataViewer(pwviewer.Viewer):
     def _visualize(self, obj, **kwargs):
         views = []
         cls = type(obj)
+        objectViews = (SetOfSequences, pwchem.objects.SetOfSmallMolecules, 
+                       pwchem.objects.SetOfStructROIs, pwchem.objects.SetOfSequenceROIs)
 
-        # For now handle both types of SetOfTiltSeries together
         if issubclass(cls, pwchem.objects.SetOfDatabaseID):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, SetOfSequences):
-            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, pwchem.objects.SetOfSmallMolecules):
-            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
         elif issubclass(cls, pwchem.objects.SetOfBindingSites):
             views.append(SetOfDatabaseIDView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, pwchem.objects.SetOfStructROIs):
-            views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
-        elif issubclass(cls, pwchem.objects.SetOfSequenceROIs):
+        elif issubclass(cls, objectViews):
             views.append(pwemViews.ObjectView(self._project, obj.strId(), obj.getFileName()))
 
         return views
