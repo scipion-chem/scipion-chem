@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pandas as pd
 from matplotlib import pyplot as plt, cm
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Patch
 from pyworkflow.protocol.params import *
 import pyworkflow.viewer as pwviewer
 
@@ -44,7 +44,11 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
 
     def _defineParams(self, form):
         form.addSection(label='Residue interaction view')
-        form.addParam('distanceThreshold', FloatParam,
+        form.addParam('distanceMinThreshold', FloatParam,
+                      label='Min distance to display (Å)',
+                      default=0.0,
+                      help='Only show residue pairs with mean distance above this threshold.')
+        form.addParam('distanceMaxThreshold', FloatParam,
                       label='Max distance to display (Å)',
                       default=5.0,
                       help='Only show residue pairs with mean distance below this threshold.')
@@ -57,7 +61,7 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
         return {'labelDistances': self._viewResidueInteractions}
 
     def _viewResidueInteractions(self, paramName=None):
-        df = self.load_interaction_data(self.distanceThreshold.get())
+        df = self.load_interaction_data(self.distanceMinThreshold.get(), self.distanceMaxThreshold.get())
         if df is None:
             return []
 
@@ -72,6 +76,11 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
         node_artists, text_artists, chain_colors = self.create_nodes(ax, residues_by_chain, x_positions, y_positions_by_chain)
         connections = self.create_connections(ax, df, node_artists, self.labelDistances.get())
 
+        legend_handles = [Patch(facecolor=color, edgecolor='black', label=f'Chain {chain}')
+                          for chain, color in chain_colors.items()]
+
+        ax.legend(handles=legend_handles, title='Chains', loc='upper right', frameon=True)
+
         ax.set_xlim(-1, len(all_chains))
         ax.set_ylim(-1, max(len(v) for v in residues_by_chain.values()) + 1)
         ax.set_aspect('auto')
@@ -84,7 +93,7 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
 
 
 #----------------UTILS-----------------
-    def load_interaction_data(self, max_distance):
+    def load_interaction_data(self, min_distance, max_distance):
         """Load and filter interacting residues."""
         csv_path = Path(self.protocol._getExtraPath("interacting_residues.csv"))
         if not os.path.exists(csv_path):
@@ -92,6 +101,7 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
 
         df = pd.read_csv(csv_path)
         df['Mean distance'] = df['Mean distance'].astype(float)
+        df = df[df['Mean distance'] >= min_distance]
         df = df[df['Mean distance'] <= max_distance]
 
         if df.empty:
