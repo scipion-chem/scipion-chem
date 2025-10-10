@@ -5,3 +5,4 @@ from .viewers_sequences import SequenceAliViewer, SequenceChemViewer, SequenceGe
 from .viewer_pharmacophore import *
 from .viewer_structure_attributes import ConservationViewer, SASAStructureViewer
 from .viewers_MD import *
+from .viewer_interacting_residues import *
