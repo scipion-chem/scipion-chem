@@ -100,7 +100,9 @@ class ProtExtractInteractingMols(EMProtocol):
       seqName = filtSeqNames[0].strip()
 
     intMols = self.getInputMols()
-    intDic = inSeqs.getInteractScoresDic()
+    data = inSeqs.getInteractScoresDic() #todo changed
+    intDic = {entry["sequence"]: entry["molecules"] for entry in data.get("entries", [])}
+
     if isinstance(intMols, SetOfSmallMolecules):
       self.defineMolsOutput(intDic, molNames, seqName)
 

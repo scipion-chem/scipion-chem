@@ -1191,16 +1191,24 @@ def createMSJDic(protocol):
   return msjDic
 
 ########### SEQUENCE INTERACTING MOL UTILS ########
-def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres):
+def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres): #todo changed
   '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
   The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
-  intDic = inSeqs.getInteractScoresDic()
+  data = inSeqs.getInteractScoresDic()
+  #data = {"entries": [ {"sequence": "...", "molecules": {...}}, ... ]}
+
+  intDic = {}
+  for entry in data.get("entries", []):
+      seqName = entry.get("sequence")
+      mols = entry.get("molecules", {})
+      intDic[seqName] = mols
 
   seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
   seqNames, molNames = filterNames(seqNames, molNames, filtSeqNames, filtMolNames)
 
   intAr = formatInteractionsArray(intDic, seqNames, molNames)
   intAr, seqNames, molNames = filterScores(intAr, seqNames, molNames, scThres)
+
   return intAr, seqNames, molNames
 
 def filterNames(seqNames, molNames, filtSeqNames, filtMolNames):

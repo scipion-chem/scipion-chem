@@ -256,9 +256,12 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getSequenceNames(self):
     return [seq.getSeqName() for seq in self]
 
-  def getInteractMolNames(self):
-    intDic = self.getInteractScoresDic()
-    return list(set([molName for molDic in intDic.values() for molName in molDic]))
+  def getInteractMolNames(self): #todo changed
+      data = self.getInteractScoresDic()
+      molNames = set()
+      for entry in data.get("entries", []):
+          molNames.update(entry.get("molecules", {}).keys())
+      return list(molNames)
 
   def getInteractMolsNumber(self):
     n = 0
