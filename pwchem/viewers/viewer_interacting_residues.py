@@ -114,7 +114,6 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
     def build_positions(self, df):
         """Compute x/y positions for residues grouped by chain."""
         all_chains = sorted(set(df['Chain1']).union(df['Chain2']))
-        n_chains = len(all_chains)
         x_positions = {chain: i for i, chain in enumerate(all_chains)}
 
         residues_by_chain = {}
@@ -134,7 +133,7 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
 
 
     def create_nodes(self, ax, residues_by_chain, x_positions, y_positions_by_chain):
-        """Draw residue nodes (as circles) and labels. Color by chain."""
+        """Draw residue nodes and labels. Colored by chain."""
         colors = cm.get_cmap('Set2', len(residues_by_chain))
         chain_colors = {}
 
@@ -163,6 +162,7 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
 
 
     def create_connections(self, ax, df, node_artists, label_distances):
+        """Establish connections between residues. Labels with distances if selected."""
         connections = []
         for _, row in df.iterrows():
             ch1, ch2 = row['Chain1'], row['Chain2']
@@ -174,7 +174,6 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
             x2, y2 = node_artists[(ch2, res2)].center
             line, = ax.plot([x1, x2], [y1, y2], linestyle=':', color='gray', alpha=0.6, zorder=1)
 
-            # NEW: attach label as object so we can update it later
             label_obj = None
             if label_distances:
                 label_obj = ax.text((x1 + x2) / 2, (y1 + y2) / 2,
@@ -213,7 +212,6 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
 
         def on_press(event):
             if event.inaxes != ax:
-                # Click outside axes resets highlights
                 highlighted_node.update({'chain': None, 'res': None})
                 reset_highlights()
                 fig.canvas.draw_idle()
@@ -242,7 +240,6 @@ class InteractingResViewer(pwviewer.ProtocolViewer):
                 })
 
             else:
-                # Clicked on background ? reset highlights
                 highlighted_node.update({'chain': None, 'res': None})
                 reset_highlights()
                 fig.canvas.draw_idle()
