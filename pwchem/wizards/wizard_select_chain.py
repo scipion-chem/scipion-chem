@@ -616,6 +616,11 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                inputs=['singleLabels'],
                                outputs=['displaySingleDock'])
 
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayPymolPLIP'],
+                               inputs=['singleLabels'],
+                               outputs=['displayPymolPLIP'])
+
 
 class SelectElementMultiPointWizard(SelectElementWizard):
   """Lists the items in a SetOfX selected from a multipointer"""
