@@ -31,20 +31,17 @@ This protocol is used to manually define structural regions from coordinates, re
 
 """
 import csv
-import os, json, math, sys
+import math
 from collections import defaultdict
 
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
 from Bio.PDB.ResidueDepth import get_surface
-from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb
-from pwem.objects import Pointer
-
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
 from pwchem import Plugin
@@ -228,8 +225,8 @@ class ProtDefineStructROIs(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
-        interacting_residues = self._getExtraPath("interacting_residues.csv")
-        if os.path.exists(interacting_residues):
+        interactingResidues = self._getExtraPath("interacting_residues.csv")
+        if os.path.exists(interactingResidues):
             summary.append("A file with the information of the interacting residues was created in 'extra'; interacting_residues.csv")
         return summary
 
@@ -387,12 +384,12 @@ class ProtDefineStructROIs(EMProtocol):
             ppiDist = float(jDic['interDist'])
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
-            interactions_file = self._getExtraPath("interacting_residues.csv")
+            interactionsFile = self._getExtraPath("interacting_residues.csv")
 
             print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
             sys.stdout.flush()
 
-            residue_pairs = defaultdict(list)
+            residuePairs = defaultdict(list)
 
             for atom1 in chain1.get_atoms():
                 for atom2 in chain2.get_atoms():
@@ -401,17 +398,17 @@ class ProtDefineStructROIs(EMProtocol):
                     if dist <= ppiDist:
                         oCoords.append(coord1)
                         oCoords.append(coord2)
-                        res_num1 = atom1.get_parent().get_id()[1]
-                        res_num2 = atom2.get_parent().get_id()[1]
-                        res_name1 = atom1.get_parent().get_resname()
-                        res_name2 = atom2.get_parent().get_resname()
+                        resNum1 = atom1.get_parent().get_id()[1]
+                        resNum2 = atom2.get_parent().get_id()[1]
+                        resName1 = atom1.get_parent().get_resname()
+                        resName2 = atom2.get_parent().get_resname()
 
-                        key = (chain1Id, f'{res_name1}:{res_num1}', chain2Id, f'{res_name2}:{res_num2}')
-                        residue_pairs[key].append(dist)
+                        key = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
+                        residuePairs[key].append(dist)
 
                         break
 
-            with open(interactions_file, mode='a', newline='') as f:
+            with open(interactionsFile, mode='a', newline='') as f:
                 writer = csv.writer(f)
                 if f.tell() == 0:
                     writer.writerow([
@@ -420,10 +417,10 @@ class ProtDefineStructROIs(EMProtocol):
                         'Mean distance'
                     ])
 
-                for (ch1, res1, ch2, res2), dists in residue_pairs.items():
-                    mean_dist = sum(dists) / len(dists)
-                    print(f'{ch1}:{res1} -- {ch2}:{res2} | mean distance = {mean_dist:.2f} Å')
-                    writer.writerow([ch1, res1, ch2, res2, f'{mean_dist:.2f}'])
+                for (ch1, res1, ch2, res2), dists in residuePairs.items():
+                    meanDist = sum(dists) / len(dists)
+                    print(f'{ch1}:{res1} -- {ch2}:{res2} | mean distance = {meanDist:.2f} Å')
+                    writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
 
 
         elif roiKey == 'Near_Residues:':

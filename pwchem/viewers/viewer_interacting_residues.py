@@ -34,10 +34,10 @@ from pyworkflow.protocol.params import *
 import pyworkflow.viewer as pwviewer
 
 from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
+from pwchem.viewers import ViewerGeneralStructROIs
 
 
-
-class InteractingResViewer(pwviewer.ProtocolViewer):
+class InteractingResViewer(ViewerGeneralStructROIs):
     _label = 'Viewer interacting residues'
     _targets = [ProtDefineStructROIs]
     _environments = [pwviewer.DESKTOP_TKINTER]
