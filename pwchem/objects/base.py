@@ -209,6 +209,7 @@ class SetOfSequencesChem(data.SetOfSequences):
     if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
       #with open(self.getInteractScoresFile(), 'rb') as f:
       #  intDic = pickle.load(f)
+      print("hola")
       try:
           with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
               data = json.load(f)
