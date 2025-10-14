@@ -33,6 +33,7 @@ This protocol is used to manually define structural regions from coordinates, re
 import csv
 import math
 from collections import defaultdict
+from pathlib import Path
 
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
@@ -218,6 +219,10 @@ class ProtDefineStructROIs(EMProtocol):
 
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
+            #check if there are interacting residues (option PPIs)
+            interactionsFile = Path(self._getExtraPath("interacting_residues.csv"))
+            if interactionsFile.exists():
+                outPockets.setInteractingResiduesFile(interactionsFile)
             self._defineOutputs(outputStructROIs=outPockets)
 
 

@@ -75,7 +75,7 @@ VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
 class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
   _label = 'Viewer structural ROIs'
-  _targets = [SetOfStructROIs, ProtDefineStructROIs]
+  _targets = [SetOfStructROIs]
 
   def __init__(self, **kwargs):
     pwviewer.ProtocolViewer.__init__(self, **kwargs)
@@ -180,7 +180,7 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
   def load_interaction_data(self, minDistance, maxDistance):
     """Load and filter interacting residues."""
-    csvPath = Path(self._targets[1]._getExtraPath("interacting_residues.csv")) #todo how do i access the csv
+    csvPath = Path(self.protocol.getInteractingResiduesFile()) #todo how do i access the csv
     if not os.path.exists(csvPath):
         raise FileNotFoundError(f"Interactions file not found: {csvPath}")
 
