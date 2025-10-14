@@ -49,6 +49,7 @@ from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
 COORDS, RESIDUES, LIGANDS, PPI, NRES = 0, 1, 2, 3, 4
+INTERACTIONSFILENAME = "interacting_residues.csv"
 
 class ProtDefineStructROIs(EMProtocol):
     """
@@ -220,7 +221,7 @@ class ProtDefineStructROIs(EMProtocol):
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
             #check if there are interacting residues (option PPIs)
-            interactionsFile = Path(self._getExtraPath("interacting_residues.csv"))
+            interactionsFile = Path(self._getExtraPath(self.INTERACTIONSFILENAME))
             if interactionsFile.exists():
                 outPockets.setInteractingResiduesFile(interactionsFile)
             self._defineOutputs(outputStructROIs=outPockets)
@@ -230,7 +231,7 @@ class ProtDefineStructROIs(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
-        interactingResidues = self._getExtraPath("interacting_residues.csv")
+        interactingResidues = self._getExtraPath(self.INTERACTIONSFILENAME)
         if os.path.exists(interactingResidues):
             summary.append("A file with the information of the interacting residues was created in 'extra'; interacting_residues.csv")
         return summary
@@ -389,7 +390,7 @@ class ProtDefineStructROIs(EMProtocol):
             ppiDist = float(jDic['interDist'])
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
-            interactionsFile = self._getExtraPath("interacting_residues.csv")
+            interactionsFile = self._getExtraPath(self.INTERACTIONSFILENAME)
 
             print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
             sys.stdout.flush()

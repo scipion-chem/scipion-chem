@@ -171,7 +171,7 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
       ax.set_aspect('auto')
       plt.tight_layout()
 
-      self.enable_interactivity(fig, ax, nodeArtists, textArtists, connections)
+      self.enableInteractivity(fig, ax, nodeArtists, textArtists, connections)
 
       plt.show()
       return []
@@ -180,7 +180,7 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
   def load_interaction_data(self, minDistance, maxDistance):
     """Load and filter interacting residues."""
-    csvPath = Path(self.protocol.getInteractingResiduesFile()) #todo how do i access the csv
+    csvPath = Path(self.protocol.getInteractingResiduesFile())
     if not os.path.exists(csvPath):
         raise FileNotFoundError(f"Interactions file not found: {csvPath}")
 
@@ -202,9 +202,9 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
     reisudesByChain = {}
     for chain in allChains:
-        res_chain1 = df[df['Chain1'] == chain]['Residue1'].unique()
-        res_chain2 = df[df['Chain2'] == chain]['Residue2'].unique()
-        residues = sorted(set(res_chain1).union(res_chain2),
+        resChain1 = df[df['Chain1'] == chain]['Residue1'].unique()
+        resChain2 = df[df['Chain2'] == chain]['Residue2'].unique()
+        residues = sorted(set(resChain1).union(resChain2),
                           key=lambda r: int(''.join([c for c in r if c.isdigit()]) or 0))
         reisudesByChain[chain] = residues
 
@@ -236,8 +236,8 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
                 picker=True
             )
             ax.add_patch(circle)
-            res_id = res.split(':')[-1]
-            label = f"{chain}:{res_id}"
+            resId = res.split(':')[-1]
+            label = f"{chain}:{resId}"
             text = ax.text(
                 x, y, label,
                 ha='center', va='center',
@@ -249,124 +249,124 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
     return nodeArtists, textArtists, chainColors
 
-  def create_connections(self, ax, df, nodeArtists, label_distances):
+  def create_connections(self, ax, df, nodeArtists, labelDistances):
     """Establish connections between residues. Labels with distances if selected."""
     connections = []
     for _, row in df.iterrows():
         ch1, ch2 = row['Chain1'], row['Chain2']
         res1, res2 = row['Residue1'], row['Residue2']
-        mean_dist = row['Mean distance']
+        meanDist = row['Mean distance']
         if (ch1, res1) not in nodeArtists or (ch2, res2) not in nodeArtists:
             continue
         x1, y1 = nodeArtists[(ch1, res1)].center
         x2, y2 = nodeArtists[(ch2, res2)].center
         line, = ax.plot([x1, x2], [y1, y2], linestyle=':', color='gray', alpha=0.6, zorder=1)
 
-        label_obj = None
-        if label_distances:
-            label_obj = ax.text((x1 + x2) / 2, (y1 + y2) / 2,
-                                f'{mean_dist:.1f}Å',
+        labelObj = None
+        if labelDistances:
+            labelObj = ax.text((x1 + x2) / 2, (y1 + y2) / 2,
+                                f'{meanDist:.1f}Å',
                                 fontsize=8, color='black',
                                 ha='center', va='center', zorder=2)
 
-        connections.append((line, ch1, res1, ch2, res2, mean_dist, label_obj))
+        connections.append((line, ch1, res1, ch2, res2, meanDist, labelObj))
     return connections
 
-  def enable_interactivity(self, fig, ax, nodeArtists, textArtists, connections):
-    dragged_node = {'artist': None, 'chain': None, 'res': None, 'press': None}
-    highlighted_node = {'chain': None, 'res': None}
+  def enableInteractivity(self, fig, ax, nodeArtists, textArtists, connections):
+    draggedNode = {'artist': None, 'chain': None, 'res': None, 'press': None}
+    highlightedNode = {'chain': None, 'res': None}
 
-    def reset_highlights():
+    def resetHighlights():
         """Reset all connection lines and labels to default style."""
-        for line, ch1, res1, ch2, res2, mean_dist, label_obj in connections:
+        for line, ch1, res1, ch2, res2, meanDist, labelObj in connections:
             line.set_color('gray')
             line.set_linewidth(1)
             line.set_alpha(0.6)
-            if label_obj:
-                label_obj.set_fontweight('normal')
+            if labelObj:
+                labelObj.set_fontweight('normal')
 
-    def highlight_connections(chain, res):
+    def highlightConnections(chain, res):
         """Highlight lines (and labels) connected to a specific residue."""
-        reset_highlights()
-        for line, ch1, res1, ch2, res2, mean_dist, label_obj in connections:
+        resetHighlights()
+        for line, ch1, res1, ch2, res2, meanDist, labelObj in connections:
             if (ch1, res1) == (chain, res) or (ch2, res2) == (chain, res):
                 line.set_color('black')
                 line.set_linewidth(2.5)
                 line.set_alpha(1.0)
-                if label_obj:
-                    label_obj.set_fontweight('bold')
+                if labelObj:
+                    labelObj.set_fontweight('bold')
         fig.canvas.draw_idle()
 
-    def on_press(event):
+    def onPress(event):
         if event.inaxes != ax:
-            highlighted_node.update({'chain': None, 'res': None})
-            reset_highlights()
+            highlightedNode.update({'chain': None, 'res': None})
+            resetHighlights()
             fig.canvas.draw_idle()
             return
 
-        clicked_node = None
+        clickedNode = None
         for (chain, res), circ in nodeArtists.items():
             contains, _ = circ.contains(event)
             if contains:
-                clicked_node = (chain, res)
+                clickedNode = (chain, res)
                 break
 
-        if clicked_node:
-            ch, rs = clicked_node
-            if highlighted_node['chain'] == ch and highlighted_node['res'] == rs:
+        if clickedNode:
+            ch, rs = clickedNode
+            if highlightedNode['chain'] == ch and highlightedNode['res'] == rs:
                 # Clicking same node deselects it
-                highlighted_node.update({'chain': None, 'res': None})
-                reset_highlights()
+                highlightedNode.update({'chain': None, 'res': None})
+                resetHighlights()
             else:
-                highlighted_node.update({'chain': ch, 'res': rs})
-                highlight_connections(ch, rs)
+                highlightedNode.update({'chain': ch, 'res': rs})
+                highlightConnections(ch, rs)
 
             # Prepare dragging
-            dragged_node.update({
+            draggedNode.update({
                 'artist': nodeArtists[(ch, rs)], 'chain': ch, 'res': rs, 'press': (event.xdata, event.ydata)
             })
 
         else:
-            highlighted_node.update({'chain': None, 'res': None})
-            reset_highlights()
+            highlightedNode.update({'chain': None, 'res': None})
+            resetHighlights()
             fig.canvas.draw_idle()
 
-    def on_motion(event):
-        if dragged_node['artist'] is None or event.inaxes != ax:
+    def onMotion(event):
+        if draggedNode['artist'] is None or event.inaxes != ax:
             return
 
-        circ = dragged_node['artist']
-        dx = event.xdata - dragged_node['press'][0]
-        dy = event.ydata - dragged_node['press'][1]
+        circ = draggedNode['artist']
+        dx = event.xdata - draggedNode['press'][0]
+        dy = event.ydata - draggedNode['press'][1]
         x0, y0 = circ.center
         circ.center = (x0 + dx, y0 + dy)
-        dragged_node['press'] = (event.xdata, event.ydata)
+        draggedNode['press'] = (event.xdata, event.ydata)
 
         # Move text label with node
-        textArtists[(dragged_node['chain'], dragged_node['res'])].set_position(circ.center)
+        textArtists[(draggedNode['chain'], draggedNode['res'])].set_position(circ.center)
 
         # Update connected lines and distance labels
-        for line, ch1, res1, ch2, res2, mean_dist, label_obj in connections:
-            if (ch1, res1) == (dragged_node['chain'], dragged_node['res']):
+        for line, ch1, res1, ch2, res2, meanDist, labelObj in connections:
+            if (ch1, res1) == (draggedNode['chain'], draggedNode['res']):
                 x2, y2 = nodeArtists[(ch2, res2)].center
                 line.set_data([circ.center[0], x2], [circ.center[1], y2])
-                if label_obj:
-                    label_obj.set_position(((circ.center[0] + x2) / 2, (circ.center[1] + y2) / 2))
-            elif (ch2, res2) == (dragged_node['chain'], dragged_node['res']):
+                if labelObj:
+                    labelObj.set_position(((circ.center[0] + x2) / 2, (circ.center[1] + y2) / 2))
+            elif (ch2, res2) == (draggedNode['chain'], draggedNode['res']):
                 x1, y1 = nodeArtists[(ch1, res1)].center
                 line.set_data([x1, circ.center[0]], [y1, circ.center[1]])
-                if label_obj:
-                    label_obj.set_position(((x1 + circ.center[0]) / 2, (y1 + circ.center[1]) / 2))
+                if labelObj:
+                    labelObj.set_position(((x1 + circ.center[0]) / 2, (y1 + circ.center[1]) / 2))
 
         fig.canvas.draw_idle()
 
-    def on_release(event):
-        dragged_node.update({'artist': None, 'press': None})
+    def onRelease(event):
+        draggedNode.update({'artist': None, 'press': None})
 
     # Connect events
-    fig.canvas.mpl_connect('button_press_event', on_press)
-    fig.canvas.mpl_connect('motion_notify_event', on_motion)
-    fig.canvas.mpl_connect('button_release_event', on_release)
+    fig.canvas.mpl_connect('button_press_event', onPress)
+    fig.canvas.mpl_connect('motion_notify_event', onMotion)
+    fig.canvas.mpl_connect('button_release_event', onRelease)
 
   # =========================================================================
   # ShowAtomStructs
