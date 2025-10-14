@@ -102,19 +102,20 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
                   label='Display ROIs set and attributes in table format: ',
                   help='Display the ROIs set in the set in table format with their respective attributes')
 
-    form.addSection(label='Residue interaction view')
-    form.addParam('distanceMinThreshold', params.FloatParam,
-                  label='Min distance to display (Å)',
-                  default=0.0,
-                  help='Only show residue pairs with mean distance above this threshold.')
-    form.addParam('distanceMaxThreshold', params.FloatParam,
-                  label='Max distance to display (Å)',
-                  default=5.0,
-                  help='Only show residue pairs with mean distance below this threshold.')
-    form.addParam('labelDistances', params.BooleanParam,
-                  label='Label distances',
-                  default=True,
-                  help='Display mean distance labels on the connecting lines.')
+    if (self.checkIfPPIs):
+        form.addSection(label='Residue interaction view')
+        form.addParam('distanceMinThreshold', params.FloatParam,
+                      label='Min distance to display (Å)',
+                      default=0.0,
+                      help='Only show residue pairs with mean distance above this threshold.')
+        form.addParam('distanceMaxThreshold', params.FloatParam,
+                      label='Max distance to display (Å)',
+                      default=5.0,
+                      help='Only show residue pairs with mean distance below this threshold.')
+        form.addParam('labelDistances', params.BooleanParam,
+                      label='Label distances',
+                      default=True,
+                      help='Display mean distance labels on the connecting lines.')
 
   def _getVisualizeDict(self):
     return {
@@ -143,6 +144,11 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
   # =========================================================================
   # Display interacting residues
   # =========================================================================
+
+  def checkIfPPIs(self):
+      if (self.protocol.getInteractingResiduesFile() is None):
+          return False
+      return True
 
   def _viewResidueInteractions(self, paramName=None):
       df = self.load_interaction_data(self.distanceMinThreshold.get(), self.distanceMaxThreshold.get())
