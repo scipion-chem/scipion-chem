@@ -221,7 +221,7 @@ class ProtDefineStructROIs(EMProtocol):
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
             #check if there are interacting residues (option PPIs)
-            interactionsFile = Path(self._getExtraPath(self.INTERACTIONSFILENAME))
+            interactionsFile = Path(self._getExtraPath(INTERACTIONSFILENAME))
             if interactionsFile.exists():
                 outPockets.setInteractingResiduesFile(interactionsFile)
             self._defineOutputs(outputStructROIs=outPockets)
@@ -231,9 +231,10 @@ class ProtDefineStructROIs(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
-        interactingResidues = self._getExtraPath(self.INTERACTIONSFILENAME)
+        interactingResidues = self._getExtraPath(INTERACTIONSFILENAME)
         if os.path.exists(interactingResidues):
-            summary.append("A file with the information of the interacting residues was created in 'extra'; interacting_residues.csv")
+            summary.append(f"A file with the information of the PPI interacting residues "
+                           f"was created in {interactingResidues}")
         return summary
 
     def _methods(self):
@@ -390,7 +391,7 @@ class ProtDefineStructROIs(EMProtocol):
             ppiDist = float(jDic['interDist'])
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
-            interactionsFile = self._getExtraPath(self.INTERACTIONSFILENAME)
+            interactionsFile = self._getExtraPath(INTERACTIONSFILENAME)
 
             print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
             sys.stdout.flush()
