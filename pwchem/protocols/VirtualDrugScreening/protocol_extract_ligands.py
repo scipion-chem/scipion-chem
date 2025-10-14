@@ -56,32 +56,17 @@ class ResidueSelect(Select):
 class ProtExtractLigands(EMProtocol):
     _label = 'Extract Ligand from structure'
 
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
-
     def _cleanStructureParams(self, form):
         clean = form.addGroup("Clean atomic structure")
-        clean.addParam('cleanPDB', params.BooleanParam, default=False, label='Clean PDB: ')
-        clean.addParam("waters", params.BooleanParam,
-                       label='Remove waters', condition='cleanPDB',
-                       default=True, important=True,
-                       help='Remove all waters molecules from a pdb file')
+        clean.addParam('cleanPDB', params.BooleanParam, default=False, label='Clean structure: ')
+        clean.addParam("waters", params.BooleanParam, label='Remove waters: ', condition='cleanPDB', default=True,
+                       help='Remove all waters molecules from the structure')
 
-        clean.addParam("rchains", params.BooleanParam,
-                       label='Remove redundant chains',
-                       default=False, important=True, condition='cleanPDB',
-                       help='Remove redundant chains in the proteins')
+        clean.addParam("rchains", params.BooleanParam, label='Remove chains: ', default=False, condition='cleanPDB',
+                       help='Remove specific chains in the proteins')
 
-        clean.addParam("chain_name", params.StringParam,
-                       label="Conserved chain",
-                       important=True,
-                       condition="cleanPDB and rchains==True",
-                       help="Select the chain on which you want to carry out the "
-                            "molecular docking. You must know the protein and structure "
-                            "file that you loaded. \n\nFor example, the protein mdm2 "
-                            "(4ERF) has a C1 symmetry, which indicates that its chains "
-                            "are at least 95% equal, so you would write A, C or E "
-                            "(names of the chains).")
+        clean.addParam("chainName", params.StringParam, label="Chains to keep: ", condition="cleanPDB and rchains",
+                       help="Select the chain(s) you want to keep in your structure")
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -111,7 +96,7 @@ class ProtExtractLigands(EMProtocol):
             exit()
 
         if self.rchains.get():
-            chain = json.loads(self.chain_name.get())  # From wizard dictionary
+            chain = json.loads(self.chainName.get())  # From wizard dictionary
             chain_id = chain["chain"].upper().strip()
         else:
             chain_id = None
