@@ -264,17 +264,12 @@ class Plugin(pwem.Plugin):
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "cd scorchModels && "
-            # Download archive
             f"wget -O SCORCH2_models.xz {model_url} && "
-            # Decompress (produces folder SCORCH2_models/)
             "xz -d SCORCH2_models.xz && "
-            # Move model files up from nested folder
-            "mv SCORCH2_models/models/* . && "
-            # Clean up the extracted folder
-            "rm -rf SCORCH2_models && "
-            # Verify expected files exist
-            "[ -f sc2_ps.xgb ] && [ -f sc2_pb.xgb ] && [ -f sc2_ps_scaler ] && [ -f sc2_pb_scaler ] && "
-            "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/'",
+            "tar -xf SCORCH2_models && "
+            "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
+            "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
+            "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
             'SCORCH_MODELS_DOWNLOADED'
         )
 

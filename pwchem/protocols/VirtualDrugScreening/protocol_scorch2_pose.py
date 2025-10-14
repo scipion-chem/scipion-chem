@@ -105,7 +105,7 @@ class ProtocolSCORCH2(EMProtocol):
         output_file = self._getExtraPath('scorch2_results.tsv')
         output_file_full = project_dir / output_file
 
-        models_dir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/SCORCH2_models/models'))
+        models_dir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/models'))
 
         sc2_ps_model = os.path.abspath(os.path.join(models_dir, 'sc2_ps.xgb'))
         sc2_pb_model = os.path.abspath(os.path.join(models_dir, 'sc2_pb.xgb'))
