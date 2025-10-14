@@ -141,6 +141,7 @@ class SequenceChem(data.Sequence):
     return self._interactScoresFile.get()
 
   def setInteractScoresFile(self, intFile):
+    print("hola")
     self._interactScoresFile.set(intFile)
 
 
