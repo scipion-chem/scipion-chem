@@ -252,7 +252,24 @@ class Plugin(pwem.Plugin):
             "fonttools contourpy pyparsing python-dateutil pytz packaging typing-extensions "
             "freetype-py reportlab shap pip -c conda-forge -y",
             'SCORCH2_ENV_CREATED'
-        ).addPackage(env, dependencies=['mamba', 'conda'], default=default)
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && mkdir -p scorchModels",
+            'SCORCH_MODELS_FOLDER_CREATED'
+        )
+
+        #download and extract models from Zenodo
+        model_url = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            f"wget -O scorchModels/SCORCH2_models.xz {model_url} && "
+            f"xz -d scorchModels/SCORCH2_models.xz",
+            'SCORCH_MODELS_DOWNLOADED'
+        )
+
+        installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
+
 
     ##################### RUN CALLS ######################
     @classmethod
