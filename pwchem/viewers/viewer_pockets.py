@@ -102,7 +102,7 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
                   label='Display ROIs set and attributes in table format: ',
                   help='Display the ROIs set in the set in table format with their respective attributes')
 
-    if (self.checkIfPPIs):
+    if self.checkIfPPIs():
         form.addSection(label='Residue interaction view')
         form.addParam('distanceMinThreshold', params.FloatParam,
                       label='Min distance to display (Å)',
