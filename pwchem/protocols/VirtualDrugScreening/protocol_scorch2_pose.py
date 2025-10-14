@@ -45,10 +45,6 @@ from pwchem.utils import fillEmptyAttributes
 
 current_dir = Path(__file__).parent.resolve()
 scriptRescoring = current_dir.parent.parent/'scripts'/'scorch2_rescoring.py'
-sc2_ps_model = current_dir.parent.parent/'models'/'scorch2'/'sc2_ps.xgb'
-sc2_pb_model = current_dir.parent.parent/'models'/'scorch2'/'sc2_pb.xgb'
-ps_scaler = current_dir.parent.parent/'models'/'scorch2'/'sc2_ps_scaler'
-pb_scaler = current_dir.parent.parent/'models'/'scorch2'/'sc2_pb_scaler'
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -108,6 +104,13 @@ class ProtocolSCORCH2(EMProtocol):
 
         output_file = self._getExtraPath('scorch2_results.tsv')
         output_file_full = project_dir / output_file
+
+        models_dir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/SCORCH2_models/models'))
+
+        sc2_ps_model = os.path.abspath(os.path.join(models_dir, 'sc2_ps.xgb'))
+        sc2_pb_model = os.path.abspath(os.path.join(models_dir, 'sc2_pb.xgb'))
+        ps_scaler = os.path.abspath(os.path.join(models_dir, 'sc2_ps_scaler'))
+        pb_scaler = os.path.abspath(os.path.join(models_dir, 'sc2_pb_scaler'))
 
         pre_extracted = self.useFeatures.get()
         if not pre_extracted:

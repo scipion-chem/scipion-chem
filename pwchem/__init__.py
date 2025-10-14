@@ -263,8 +263,18 @@ class Plugin(pwem.Plugin):
         model_url = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
-            f"wget -O scorchModels/SCORCH2_models.xz {model_url} && "
-            f"xz -d scorchModels/SCORCH2_models.xz",
+            "cd scorchModels && "
+            # Download archive
+            f"wget -O SCORCH2_models.xz {model_url} && "
+            # Decompress (produces folder SCORCH2_models/)
+            "xz -d SCORCH2_models.xz && "
+            # Move model files up from nested folder
+            "mv SCORCH2_models/models/* . && "
+            # Clean up the extracted folder
+            "rm -rf SCORCH2_models && "
+            # Verify expected files exist
+            "[ -f sc2_ps.xgb ] && [ -f sc2_pb.xgb ] && [ -f sc2_ps_scaler ] && [ -f sc2_pb_scaler ] && "
+            "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/'",
             'SCORCH_MODELS_DOWNLOADED'
         )
 
