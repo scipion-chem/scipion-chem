@@ -65,7 +65,7 @@ class ProtExtractLigands(EMProtocol):
         clean.addParam("rchains", params.BooleanParam, label='Remove chains: ', default=False, condition='cleanPDB',
                        help='Remove specific chains in the proteins')
 
-        clean.addParam("chainName", params.StringParam, label="Chains to keep: ", condition="cleanPDB and rchains",
+        clean.addParam("chain_name", params.StringParam, label="Chains to keep: ", condition="cleanPDB and rchains",
                        help="Select the chain(s) you want to keep in your structure")
 
     def _defineParams(self, form):
@@ -96,7 +96,7 @@ class ProtExtractLigands(EMProtocol):
             exit()
 
         if self.rchains.get():
-            chain = json.loads(self.chainName.get())  # From wizard dictionary
+            chain = json.loads(self.chain_name.get())  # From wizard dictionary
             chain_id = chain["chain"].upper().strip()
         else:
             chain_id = None
