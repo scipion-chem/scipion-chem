@@ -94,6 +94,7 @@ class ProtExtractInteractingMols(EMProtocol):
     inSeqs = self.inputSequences.get()
     filtSeqNames, filtMolNames = self.chooseSeq.get().strip().split(','), self.chooseMol.get().strip().split(',')
     molNames = getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, self.scThres.get())[-1]
+    scores = self.chooseScore.get().strip().split(',')
 
     seqName = None
     if len(filtSeqNames) == 1 and filtSeqNames[0].strip() != 'All':
@@ -113,4 +114,7 @@ class ProtExtractInteractingMols(EMProtocol):
   ############## UTILS ########################
   def getInputMols(self):
     return self.inputSequences.get().getInteractMols()
+
+  def getScoreTypes(self):
+      return self.inputSequences.get().getScoreTypes() #todo create method that stracts score types from json
 

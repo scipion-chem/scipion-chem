@@ -141,7 +141,7 @@ class SequenceChem(data.Sequence):
     return self._interactScoresFile.get()
 
   def setInteractScoresFile(self, intFile):
-    self._interactScoresFile.set(intFile)
+    self._interactScoresFile.set(intFile) #todo this does not put the path int the ddbb
 
 
 class SetOfSequencesChem(data.SetOfSequences):
