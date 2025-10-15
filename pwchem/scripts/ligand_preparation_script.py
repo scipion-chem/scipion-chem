@@ -67,7 +67,7 @@ if __name__ == "__main__":
             else:
                 outBasef = outBase
 
-            if len(eval(paramsDic['removeSalts'])):
+            if eval(paramsDic['removeSalts']) != ['']:
                 saltStr = paramsDic['removeSalts'].replace("'", "")
                 remover = SaltRemover.SaltRemover(defnData=saltStr)
                 mol = remover.StripMol(mol)
