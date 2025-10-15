@@ -41,7 +41,7 @@ from pyworkflow.utils import Message
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreading, clusterSurfaceCoords,\
     numberSort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr, \
-    getMAEMoleculeFiles
+    getMAEMoleculeFiles, cleanPDB
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 from pwchem.protocols import ProtDefineStructROIs
@@ -79,6 +79,11 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
                        condition="selectionType!=0", default='', label='Use ligands in group: ',
                        help='Only use the following subset of ligands to calculate the residue contacts')
 
+        group.addParam('addSelection', params.LabelParam, label='Add ligand selection: ',
+                       help='Add ligand selection to list')
+        group.addParam('selectionList', params.TextParam, label='Selection list: ',
+                       help='List of molecule selections to use as input.')
+
         group = form.addGroup('Contacts definition')
         group.addParam('threshold', params.FloatParam, default=4.0, label='Distance threshold (A): ',
                       help="Distance threshold where atoms of ligand-residue will be considered in contact")
@@ -94,16 +99,19 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
         group = form.addGroup('ROI definition')
         group = self._defineClusterParams(group)
 
+        form.addParam('filterChains', params.BooleanParam, label='Keep only chains in contact: ', default=False,
+                      help='Keep only the chains in contact with the selected ligands.')
+
         form.addParallelSection(threads=4, mpi=1)
 
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('getContactsStep')
-        self._insertFunctionStep('definePocketsStep')
-        self._insertFunctionStep('defineOutputStep')
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.getContactsStep)
+        self._insertFunctionStep(self.definePocketsStep)
+        self._insertFunctionStep(self.defineOutputStep)
 
     def convertInputStep(self):
         inMols = self.getSelectedInputMols()
@@ -148,10 +156,15 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
           nConStrs, areRes = self.parseContacts(os.path.join(cDir, contFile))
           conStrs += nConStrs
 
+        recFile = self.getReceptorPDB()
         conStrs = numberSort(list(set(conStrs)))
+        if self.filterChains.get():
+          chains = list(set([res.split('_')[0] for res in conStrs]))
+          tmpFile = self._getTmpPath('receptor_filter.pdb')
+          cleanPDB(recFile, tmpFile, False, False, chains)
+          os.rename(tmpFile, recFile)
 
         coordsClusters = []
-        recFile = self.getReceptorPDB()
         pocketCoords = self.getContactCoords(conStrs, recFile, areRes)
         if self.surfaceCoords:
             surfStruct = self.getInputSurfaceStructure()
@@ -205,8 +218,7 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
 
     def getReceptorPDB(self):
-        outDir = self.getInputMolsDir()
-        return os.path.abspath(os.path.join(outDir, 'receptor.pdb'))
+        return os.path.abspath(self._getExtraPath('receptor.pdb'))
 
     def getContactsDir(self):
         return os.path.abspath(self._getExtraPath('contacts'))
@@ -222,7 +234,10 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
 
       groupDic = molSet.getGroupIndexes()[vType]
       if vType != 'set':
-        indexes = groupDic[self.ligandSelection.get()]
+        indexes = []
+        for selLine in self.selectionList.get().split('\n'):
+          if selLine.strip():
+            indexes += groupDic[selLine.strip()]
       else:
         indexes = list(groupDic.values())[0]
       return molSet.getMolsFromIds(indexes)
@@ -346,7 +361,8 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
         if contactLevel == ATOM:
             name = f'{removeNumberFromStr(atom.name)}{atom.serial_number}'
         else:
-            name = f'{atom.get_parent().resname}{atom.get_parent().id[1]}'
+            res = atom.get_parent()
+            name = f'{res.get_parent().id}_{res.id[1]}'
         return name
 
     def getRecContactReps(self, cDic, ligDic, ligRep):
@@ -384,7 +400,7 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
       for model in structure:
         if areResidues:
           for res in model.get_residues():
-            resName = f'{res.resname}{res.id[1]}'
+            resName = f'{res.get_parent().id}_{res.id[1]}'
             if resName in conStrs:
               coords += [atom.get_coord() for atom in res]
         else:
