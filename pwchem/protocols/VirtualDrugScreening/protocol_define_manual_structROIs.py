@@ -30,24 +30,26 @@
 This protocol is used to manually define structural regions from coordinates, residues or docked small molecules
 
 """
-import os, json, math, sys
+import csv
+import math
+from collections import defaultdict
+from pathlib import Path
+
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
 from Bio.PDB.ResidueDepth import get_surface
-from Bio.PDB.PDBParser import PDBParser
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.convert import cifToPdb
-from pwem.objects import Pointer
-
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 
 COORDS, RESIDUES, LIGANDS, PPI, NRES = 0, 1, 2, 3, 4
+INTERACTIONSFILENAME = "interacting_residues.csv"
 
 class ProtDefineStructROIs(EMProtocol):
     """
@@ -59,7 +61,7 @@ class ProtDefineStructROIs(EMProtocol):
     # -------------------------- DEFINE param functions ----------------------
     def _defineClusterParams(self, group, condition='True'):
       group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition=condition,
-                     label='Maximum distance between pocket points (A): ',
+                     label='Maximum distance between ROI points (A): ',
                      help='Maximum distance between two pocket atoms to considered them same pocket')
 
       group.addParam('surfaceCoords', params.BooleanParam, default=True,
@@ -154,7 +156,7 @@ class ProtDefineStructROIs(EMProtocol):
                             'The coordinates of the interface atoms will be mapped to surface points closer than '
                             'maxDepth and points closer than maxIntraDistance will be considered the same pocket')
 
-        group = form.addGroup('Pocket definition')
+        group = form.addGroup('ROI definition')
         group = self._defineClusterParams(group)
 
         form.addSection(label='Input Pointers')
@@ -218,6 +220,10 @@ class ProtDefineStructROIs(EMProtocol):
 
         if len(outPockets) > 0:
             outPockets.buildPDBhetatmFile()
+            #check if there are interacting residues (option PPIs)
+            interactionsFile = Path(self._getExtraPath(INTERACTIONSFILENAME))
+            if interactionsFile.exists():
+                outPockets.setInteractingResiduesFile(interactionsFile)
             self._defineOutputs(outputStructROIs=outPockets)
 
 
@@ -225,6 +231,10 @@ class ProtDefineStructROIs(EMProtocol):
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
         summary = []
+        interactingResidues = self._getExtraPath(INTERACTIONSFILENAME)
+        if os.path.exists(interactingResidues):
+            summary.append(f"A file with the information of the PPI interacting residues "
+                           f"was created in {interactingResidues}")
         return summary
 
     def _methods(self):
@@ -381,8 +391,13 @@ class ProtDefineStructROIs(EMProtocol):
             ppiDist = float(jDic['interDist'])
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
+            interactionsFile = self._getExtraPath(INTERACTIONSFILENAME)
+
             print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
             sys.stdout.flush()
+
+            residuePairs = defaultdict(list)
+
             for atom1 in chain1.get_atoms():
                 for atom2 in chain2.get_atoms():
                     coord1, coord2 = list(atom1.get_coord()), list(atom2.get_coord())
@@ -390,7 +405,30 @@ class ProtDefineStructROIs(EMProtocol):
                     if dist <= ppiDist:
                         oCoords.append(coord1)
                         oCoords.append(coord2)
+                        resNum1 = atom1.get_parent().get_id()[1]
+                        resNum2 = atom2.get_parent().get_id()[1]
+                        resName1 = atom1.get_parent().get_resname()
+                        resName2 = atom2.get_parent().get_resname()
+
+                        key = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
+                        residuePairs[key].append(dist)
+
                         break
+
+            with open(interactionsFile, mode='a', newline='') as f:
+                writer = csv.writer(f)
+                if f.tell() == 0:
+                    writer.writerow([
+                        'Chain1', 'Residue1',
+                        'Chain2', 'Residue2',
+                        'Mean distance'
+                    ])
+
+                for (ch1, res1, ch2, res2), dists in residuePairs.items():
+                    meanDist = sum(dists) / len(dists)
+                    print(f'{ch1}:{res1} -- {ch2}:{res2} | mean distance = {meanDist:.2f} Å')
+                    writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
+
 
         elif roiKey == 'Near_Residues:':
             residueTypes, resDist, resLink = jDic['residues'].split(','), jDic['distance'], jDic['linkage']
