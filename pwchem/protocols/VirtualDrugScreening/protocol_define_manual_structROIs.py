@@ -60,6 +60,10 @@ class ProtDefineStructROIs(EMProtocol):
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineClusterParams(self, group, condition='True'):
+      group.addParam('clusterDiff', params.BooleanParam, default=False,
+                     label='Cluster ROIs from different definitions: ',
+                     help='Whether to cluster the ROIs from the different lines defined.')
+
       group.addParam('maxIntraDistance', params.FloatParam, default='2.0', condition=condition,
                      label='Maximum distance between ROI points (A): ',
                      help='Maximum distance between two pocket atoms to considered them same pocket')
@@ -194,14 +198,20 @@ class ProtDefineStructROIs(EMProtocol):
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
     def definePocketsStep(self):
-        self.coordsClusters = []
+        coordsDefined = []
         for roiStr in self.inROIs.get().split('\n'):
             if roiStr.strip():
                 pocketCoords = self.getOriginCoords(roiStr)
                 if self.surfaceCoords:
                     pocketCoords = self.mapSurfaceCoords(pocketCoords)
 
-                self.coordsClusters += clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
+                coordsDefined += clusterSurfaceCoords(pocketCoords, self.maxIntraDistance.get())
+
+        if self.clusterDiff.get():
+            coordsDefined = [item for sublist in coordsDefined for item in sublist]
+            self.coordsClusters = clusterSurfaceCoords(coordsDefined, self.maxIntraDistance.get())
+        else:
+            self.coordsClusters = coordsDefined
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
