@@ -297,7 +297,7 @@ class TestImportExport(TestImportBase):
 		return protImport
 
 	@classmethod
-	def findExportDirectory(self, inProt):
+	def findExportDirectory(cls, inProt):
 		for file in os.listdir(inProt._getPath()):
 			if 'exportedObject' in file:
 				return inProt._getPath(file)
@@ -307,6 +307,5 @@ class TestImportExport(TestImportBase):
 				protExp = self._runExportObject(inProt, inName)
 				protImp = self._runImportObject(protExp)
 
-				oName = 'importedObject' if inName is 'outputPdb' else 'importedSet'
-				assertHandle(self.assertIsNotNone, getattr(protImp, oName, None),
-										 cwd=protImp.getWorkingDir())
+				oName = 'importedObject' if inName == 'outputPdb' else 'importedSet'
+				assertHandle(self.assertIsNotNone, getattr(protImp, oName, None), cwd=protImp.getWorkingDir())
