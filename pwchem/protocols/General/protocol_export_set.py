@@ -110,7 +110,7 @@ class ProtChemImportExportSet(EMProtocol):
     def parseItems(self, itemFile):
         with open(itemFile) as f:
             attrKeys = [k.strip() for k in f.readline().strip().split(';')]
-            attrTypes = [t for t in f.readline().strip().split(';')]
+            attrTypes = list(f.readline().strip().split(';'))
 
             attributeValues, outObjs = [], []
             for line in f:
@@ -131,7 +131,7 @@ class ProtChemImportExportSet(EMProtocol):
         with open(attrFile) as f:
             keys = f.readline().strip().split(';')
             values = f.readline().strip().split(';')
-        return {key: val for key, val in zip(keys, values)}
+        return dict(zip(keys, values))
 
     def importObjectType(self, pathString):
         # Parse the class path from the string
@@ -164,7 +164,7 @@ class ProtChemImportExportSet(EMProtocol):
                     line += str(value.get())
                 if i == 0:
                     fh.write(lineHdr + f"; {TYPE_STR}\n")
-                    fh.write(lineTypes + f"; ...\n")
+                    fh.write(lineTypes + "; ...\n")
                 fh.write(line + f"; {type(entry)}\n")
 
     def exportObjectInfo(self, oDir):
