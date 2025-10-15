@@ -27,19 +27,16 @@
 import os
 from pathlib import Path
 
-import pandas as pd
+import numpy as np
 import pyworkflow.protocol.params as params
 import pyworkflow.viewer as pwviewer
 from matplotlib import pyplot as plt, cm
 from matplotlib.patches import Circle, Patch
 
 from pwem.viewers.mdviewer.viewer import MDViewer
-from pyworkflow.protocol import Protocol
 
 from pwchem.objects import SetOfStructROIs
-from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
-from pwchem.constants import *
 from pwchem.protocols import ProtocolConsensusStructROIs
 
 
@@ -185,21 +182,40 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
       # ----------------UTILS-----------------
 
   def load_interaction_data(self, minDistance, maxDistance):
-    """Load and filter interacting residues."""
-    csvPath = Path(self.protocol.getInteractingResiduesFile())
-    if not os.path.exists(csvPath):
-        raise FileNotFoundError(f"Interactions file not found: {csvPath}")
+      """Load and filter interacting residues without pandas."""
+      csvPath = Path(self.protocol.getInteractingResiduesFile())
+      if not os.path.exists(csvPath):
+          raise FileNotFoundError(f"Interactions file not found: {csvPath}")
 
-    df = pd.read_csv(csvPath)
-    df['Mean distance'] = df['Mean distance'].astype(float)
-    df = df[df['Mean distance'] >= minDistance]
-    df = df[df['Mean distance'] <= maxDistance]
+      with open(csvPath, 'r', encoding='utf-8') as f:
+          first_line = f.readline()
+          delimiter = '\t' if '\t' in first_line else ','
 
-    if df.empty:
-        print("No interactions within the specified distance threshold.")
-        return None
+      data = np.genfromtxt(
+          csvPath,
+          delimiter=delimiter,
+          names=True,
+          dtype=None,
+          encoding='utf-8',
+          autostrip=True
+      )
 
-    return df
+      data.dtype.names = tuple(n.strip().replace(' ', '_') for n in data.dtype.names)
+
+      required_cols = {'Chain1', 'Residue1', 'Chain2', 'Residue2', 'Mean_distance'}
+      missing = required_cols - set(data.dtype.names)
+      if missing:
+          raise ValueError(f"Missing expected columns in CSV: {missing}")
+
+      distances = data['Mean_distance'].astype(float)
+      mask = (distances >= minDistance) & (distances <= maxDistance)
+      filtered = data[mask]
+
+      if len(filtered) == 0:
+          print("No interactions within the specified distance threshold.")
+          return None
+
+      return filtered
 
   def build_positions(self, df):
     """Compute x/y positions for residues grouped by chain."""
@@ -208,8 +224,8 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
     reisudesByChain = {}
     for chain in allChains:
-        resChain1 = df[df['Chain1'] == chain]['Residue1'].unique()
-        resChain2 = df[df['Chain2'] == chain]['Residue2'].unique()
+        resChain1 = np.unique(df['Residue1'][df['Chain1'] == chain])
+        resChain2 = np.unique(df['Residue2'][df['Chain2'] == chain])
         residues = sorted(set(resChain1).union(resChain2),
                           key=lambda r: int(''.join([c for c in r if c.isdigit()]) or 0))
         reisudesByChain[chain] = residues
@@ -258,22 +274,31 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
   def create_connections(self, ax, df, nodeArtists, labelDistances):
     """Establish connections between residues. Labels with distances if selected."""
     connections = []
-    for _, row in df.iterrows():
-        ch1, ch2 = row['Chain1'], row['Chain2']
-        res1, res2 = row['Residue1'], row['Residue2']
-        meanDist = row['Mean distance']
+    for row in df:
+        ch1 = row['Chain1']
+        ch2 = row['Chain2']
+        res1 = row['Residue1']
+        res2 = row['Residue2']
+
+        if 'Mean distance' in df.dtype.names:
+            meanDist = float(row['Mean distance'])
+        else:
+            meanDist = float(row['Mean_distance'])
+
         if (ch1, res1) not in nodeArtists or (ch2, res2) not in nodeArtists:
             continue
+
         x1, y1 = nodeArtists[(ch1, res1)].center
         x2, y2 = nodeArtists[(ch2, res2)].center
-        line, = ax.plot([x1, x2], [y1, y2], linestyle=':', color='gray', alpha=0.6, zorder=1)
+        line, = ax.plot([x1, x2], [y1, y2],
+                        linestyle=':', color='gray', alpha=0.6, zorder=1)
 
         labelObj = None
         if labelDistances:
             labelObj = ax.text((x1 + x2) / 2, (y1 + y2) / 2,
-                                f'{meanDist:.1f}Å',
-                                fontsize=8, color='black',
-                                ha='center', va='center', zorder=2)
+                               f'{meanDist:.1f}Å',
+                               fontsize=8, color='black',
+                               ha='center', va='center', zorder=2)
 
         connections.append((line, ch1, res1, ch2, res2, meanDist, labelObj))
     return connections
