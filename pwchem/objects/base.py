@@ -102,7 +102,7 @@ class SequenceChem(data.Sequence):
         attrDic[key.strip()] = eval(values.strip())
     return attrDic
 
-  def getInteractScoresDic(self): #todo changed
+  def getInteractScoresDic(self):
     '''Returns data from the files where the interaction scores are stored.'''
     try:
         with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
@@ -114,7 +114,7 @@ class SequenceChem(data.Sequence):
 
     return data
 
-  def setInteractScoresDic(self, new_entries, data, output_file): #todo changed
+  def setInteractScoresDic(self, new_entries, data, output_file):
     '''From a list of 'entries' writes the output file with the new entries of scores'''
     for new_entry in new_entries:
         seqName = new_entry["sequence"]
@@ -152,6 +152,8 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     self._interactMols = pwobj.Pointer()
     self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
+
+    self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', None))
 
   def copyInfo(self, other):
     """ Copy basic information from other set of classes to current one"""
@@ -204,7 +206,23 @@ class SetOfSequencesChem(data.SetOfSequences):
     else:
       self._interactMols.set(mols)
 
-  def getInteractScoresDic(self, calculate=False): #todo changed
+  def getScoreTypes(self):
+      if self._scoreTypes is None:
+        return []
+      return self._scoreTypes.get().split(",")
+
+  def hasScoreTypes(self):
+      return bool(self._scoreTypes)
+
+  def setScoreTypes(self, scores=None):
+      if scores is None:
+          self._scoreTypes.set("")
+      elif isinstance(scores, str):
+          self._scoreTypes.set(scores)
+      else:
+          self._scoreTypes.set(",".join(map(str, scores)))
+
+  def getInteractScoresDic(self, calculate=False):
     '''Returns data from the files where the interaction scores are stored.'''
     if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
       #with open(self.getInteractScoresFile(), 'rb') as f:
@@ -224,7 +242,7 @@ class SetOfSequencesChem(data.SetOfSequences):
       data = {"entries": []}
     return data
 
-  def setInteractScoresDic(self, new_entries, data, output_file): #todo changed
+  def setInteractScoresDic(self, new_entries, data, output_file):
     '''From a list of 'entries' writes the output file with the new entries of scores'''
     for new_entry in new_entries:
         seqName = new_entry["sequence"]
@@ -256,7 +274,7 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getSequenceNames(self):
     return [seq.getSeqName() for seq in self]
 
-  def getInteractMolNames(self): #todo changed
+  def getInteractMolNames(self):
       data = self.getInteractScoresDic()
       molNames = set()
       for entry in data.get("entries", []):

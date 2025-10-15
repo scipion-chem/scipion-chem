@@ -1211,7 +1211,7 @@ def createMSJDic(protocol):
   return msjDic
 
 ########### SEQUENCE INTERACTING MOL UTILS ########
-def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres): #todo changed
+def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, filtScoreType, scThres): #todo changed
   '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
   The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
   data = inSeqs.getInteractScoresDic()
@@ -1222,23 +1222,31 @@ def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres): #todo change
       seqName = entry.get("sequence")
       mols = entry.get("molecules", {})
       intDic[seqName] = mols
+  #returns dic {seq:mol {...}}
 
-  seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
-  seqNames, molNames = filterNames(seqNames, molNames, filtSeqNames, filtMolNames)
+  seqNames, molNames, scoreTypes = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames(), inSeqs.getScoreTypes()
+  seqNames, molNames, scoreType = filterNames(seqNames, molNames, filtSeqNames, filtMolNames, scoreTypes, filtScoreType)
 
-  intAr = formatInteractionsArray(intDic, seqNames, molNames)
-  intAr, seqNames, molNames = filterScores(intAr, seqNames, molNames, scThres)
+  intAr = formatInteractionsArray(intDic, seqNames, molNames, scoreType)
+  intAr, seqNames, molNames= filterScores(intAr, seqNames, molNames, scThres)
 
-  return intAr, seqNames, molNames
+  print(f'---{intAr}---{seqNames}---{molNames}')
+  return intAr, seqNames, molNames, scoreType
 
-def filterNames(seqNames, molNames, filtSeqNames, filtMolNames):
+def filterNames(seqNames, molNames, filtSeqNames, filtMolNames, scoreTypes, filtScoreType):
   if 'All' not in filtSeqNames:
     seqNames = [seqName for seqName in seqNames if seqName in filtSeqNames]
 
   if 'All' not in filtMolNames:
     molNames = [molName for molName in molNames if molName in filtMolNames]
 
-  return seqNames, molNames
+  for scType in scoreTypes:
+      if scType == filtScoreType:
+          scoreType = filtScoreType
+      else:
+          scoreType = None
+
+  return seqNames, molNames, scoreType
 
 def filterScores(intAr, seqNames, molNames, scThres):
   ips, ims = [], []
@@ -1258,14 +1266,20 @@ def filterScores(intAr, seqNames, molNames, scThres):
   if len(molNames) != len(ims):
     molNames = list(np.array(molNames)[ims])
     intAr = intAr[:, ims]
-
   return intAr, seqNames, molNames
 
-def formatInteractionsArray(intDic, seqNames, molNames):
+def formatInteractionsArray(intDic, seqNames, molNames, scoreType):
+  score_key = f"score_{scoreType}"
   intAr = np.zeros((len(seqNames), len(molNames)))
   for i, seqName in enumerate(seqNames):
     for j, molName in enumerate(molNames):
-      intAr[i, j] = intDic[seqName][molName]
+            try:
+                # get the numeric value for that score type
+                value = intDic[seqName][molName][score_key]
+            except KeyError:
+                # if missing, assign NaN
+                value = np.nan
+            intAr[i, j] = value
   return intAr
   
 def normalizeToRange(iterable, normRange=[0, 1]):

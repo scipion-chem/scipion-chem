@@ -732,6 +732,11 @@ class SelectMultiMolWizard(SelectMultiElementWizard):
 
 class SelectScoreWizard(SelectElementWizard):
     """List the available scores in a SetOfSequences and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, seqSet):
+        print(seqSet.getScoreTypes())
+        return seqSet.getScoreTypes()
 
 
 SelectMultiSeqWizard().addTarget(protocol=ProtExtractInteractingMols,
