@@ -76,6 +76,10 @@ AddElementWizard().addTarget(protocol=ProtocolOperateLibrary,
                              targets=['addAttribute'],
                              inputs=['filterAttr'],
                              outputs=['removeList'])
+AddElementWizard().addTarget(protocol=ProtDefineContactStructROIs,
+                             targets=['addSelection'],
+                             inputs=['ligandSelection'],
+                             outputs=['selectionList'])
 
 
 class AddNumberedElementWizard(AddElementWizard):

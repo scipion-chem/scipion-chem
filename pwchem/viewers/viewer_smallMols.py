@@ -134,8 +134,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                        help='Display this single ligand with the target')
 
         group = form.addGroup('Visualize with PLIP')
-        group.addParam('displayPymolPLIP', params.EnumParam,
-                       choices=self.singleLabels, default=0,
+        group.addParam('displayPymolPLIP', params.StringParam, default='',
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
 
@@ -385,7 +384,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   def _viewPymolPLIP(self, e=None):
     pmlsDir = self.getPmlsDir()
 
-    ligandLabel = self.getEnumText('displayPymolPLIP')
+    ligandLabel = self.displayPymolPLIP.get()
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
     if len(mols) > 0:
       mol = mols[0].clone()
