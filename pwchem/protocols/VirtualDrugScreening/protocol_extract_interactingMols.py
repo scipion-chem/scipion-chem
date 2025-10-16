@@ -66,12 +66,14 @@ class ProtExtractInteractingMols(EMProtocol):
 
   def defineMolsOutput(self, intDic, molNames, seqName):
     outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+    scoreType = self.chooseScore.get()
+    score = f'score_{scoreType}'
+
     for mol in self.getInputMols():
       molName = mol.getMolName()
       if molName in molNames:
         if seqName:
-          #score = #todo filte through dic and get the corresponding score value
-          mol._interactScore = pwobj.Float(intDic[seqName][molName]) #todo this needs a float not a dic
+          mol._interactScore = pwobj.Float(intDic[seqName][molName][score])
         outMols.append(mol)
 
     self._defineOutputs(outputSmallMolecules=outMols)
@@ -105,7 +107,7 @@ class ProtExtractInteractingMols(EMProtocol):
 
     intMols = self.getInputMols()
     data = inSeqs.getInteractScoresDic()
-    intDic = {entry["sequence"]: entry["molecules"] for entry in data.get("entries", [])} # todo creo q esto es lo q peta
+    intDic = {entry["sequence"]: entry["molecules"] for entry in data.get("entries", [])}
 
     if isinstance(intMols, SetOfSmallMolecules):
       self.defineMolsOutput(intDic, molNames, seqName)

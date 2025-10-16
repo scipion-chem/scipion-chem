@@ -313,9 +313,8 @@ class SequenceChemViewer(SequenceGeneralViewer):
                         help='Display the selected results only for the specific molecule')
         sGroup.addParam('scThres', params.FloatParam, label='Score threshold: ', default=0,
                         help='Display the interaction results over the selected score threshold')
-        #todo added scoreType
         sGroup.addParam('chooseScore', params.EnumParam, label='Display results for a specific score type: ',
-                        choices=['All'] + scoreTypes, default=0,
+                        choices=scoreTypes, default=0,
                         help='Display the selected results only for the specific score type')
 
         hGroup = form.addGroup('Scores View')
@@ -362,34 +361,35 @@ class SequenceChemViewer(SequenceGeneralViewer):
             answer = True
 
         if answer:
-            #todo change inputs and add scoreTypes
-            filtSeqNames, filtMolNames, filtScoreTypes = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
-            intAr, seqNames, molNames, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
+            filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
+            intAr, seqNames, molNames, scoreType = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
 
             fig, ax = plt.subplots()
             im, _ = heatmap(intAr, seqNames, molNames, ax=ax,
-                               cmap="YlGn", cbarLabel="ConPLex interaction score")
+                               cmap="YlGn", cbarLabel=f"{scoreType} interaction score")
             annotateHeatmap(im, valfmt="{x:.2f}")
             fig.tight_layout()
             plt.show()
 
     def _viewHistogram(self, paramName=None):
       outSeqs = self.getOutSequences()
-      filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
+      filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
       if filtMolNames == 'All':
-        intAr, seqNames, molNames, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
+        intAr, seqNames, molNames, scoreType = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
         scoreList = intAr.flatten()
 
-        self.plotter = EmPlotter(x=1, y=1, windowTitle='Score distribution')
+        self.plotter = EmPlotter(x=1, y=1, windowTitle=f'{scoreType} score distribution')
         outName = f'{filtSeqNames}'
         a = self.plotter.createSubPlot(f"{outName} distribution", f'{outName} scores', f"Score counts")
         low, high = min(scoreList), max(scoreList)
+        epsilon = (high - low) * 1e-6 if high != low else 1e-6
         a.set_xlim([low, high])
 
         n = 5
         mult = 10 ** n
         stepSize = int(round((high - low) / self.intervals.get(), n) * mult)
-        bins = [i / mult for i in range(int(low * mult), int(high * mult), stepSize)]
+        #bins = [i / mult for i in range(int(low * mult), int(high * mult), stepSize)]
+        bins = np.linspace(low, high + epsilon, self.intervals.get() + 1)
         _, _, bars = a.hist(scoreList, bins=bins, linewidth=1, label="Map", rwidth=0.9)
 
         a.grid(True)
@@ -398,8 +398,8 @@ class SequenceChemViewer(SequenceGeneralViewer):
     def _generateProts(self, paramName=None):
         project = self.getProject()
         outSeqs = self.getOutSequences()
-        filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
-        _, seqNames, _, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
+        filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
+        _, seqNames, _, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
 
         objIds = []
         for seq in self.getOutSequences():
@@ -424,8 +424,8 @@ class SequenceChemViewer(SequenceGeneralViewer):
     def _generateMols(self, paramName=None):
         project = self.getProject()
         outSeqs = self.getOutSequences()
-        filtSeqNames, filtMolNames = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol')
-        _, _, filtMolNames, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, self.scThres.get())
+        filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
+        _, _, filtMolNames, _ = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
 
         try:
             msg = f"An output of the following {len(filtMolNames)} molecules will be generated:\n{','.join(filtMolNames)}"
