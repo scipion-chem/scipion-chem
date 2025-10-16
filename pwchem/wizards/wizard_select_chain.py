@@ -53,6 +53,7 @@ from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
 class SelectLigandAtom(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
+  # todo: check why some ligand atoms are not numbered
 
   def extract_atoms(self, molFile, protocol):
     """ Extraction of the atoms in a ligand file """
@@ -66,10 +67,14 @@ class SelectLigandAtom(VariableWizard):
         runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
         molFile = oFile
 
+    # todo: ensure PDB atoms are numbered by type
     parser = PDBParser().get_structure(molFile, molFile)
+    print('molFile: ', molFile)
     atomNames = []
     for model in parser:
-      for atom in model.get_atoms():
+      for i, atom in enumerate(model.get_atoms()):
+        if i == 0:
+          print(dir(atom))
         atomNames.append(atom.get_name())
     atomNames = natural_sort(atomNames)
     return atomNames
