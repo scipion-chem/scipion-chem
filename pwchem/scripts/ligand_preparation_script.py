@@ -1,5 +1,5 @@
 from rdkit import Chem, RDConfig
-from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
+from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom, SaltRemover
 import sys, os
 
 from utils import getMolFilesDic, parseParams, writeMol
@@ -67,6 +67,11 @@ if __name__ == "__main__":
             else:
                 outBasef = outBase
 
+            if eval(paramsDic['removeSalts']) != ['']:
+                saltStr = paramsDic['removeSalts'].replace("'", "")
+                remover = SaltRemover.SaltRemover(defnData=saltStr)
+                mol = remover.StripMol(mol)
+
             if paramsDic['doHydrogens']:
                 mol = Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
 
@@ -85,6 +90,10 @@ if __name__ == "__main__":
                     failedMols.append(outBase)
             else:
                 mol = embedAndOptimize(mol)
+                try:
+                    AllChem.UFFOptimizeMolecule(mol)
+                except:
+                    pass
                 if mol:
                     outFile = outBasef + '.sdf'
                     mol = writeMol(mol, outFile, setName=True)
