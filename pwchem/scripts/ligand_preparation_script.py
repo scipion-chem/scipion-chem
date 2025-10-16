@@ -90,6 +90,10 @@ if __name__ == "__main__":
                     failedMols.append(outBase)
             else:
                 mol = embedAndOptimize(mol)
+                try:
+                    AllChem.UFFOptimizeMolecule(mol)
+                except:
+                    pass
                 if mol:
                     outFile = outBasef + '.sdf'
                     mol = writeMol(mol, outFile, setName=True)
