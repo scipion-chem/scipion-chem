@@ -183,16 +183,33 @@ class ProtocolSCORCH2(EMProtocol):
         moleculeDir.mkdir(parents=True, exist_ok=True)
 
         protein = self.inputPDBproteinFile.get()
+        print(protein)
         protein_path = Path(protein.getFileName())
         pdb_id = protein_path.stem
         protein_file = proteinDir / f"{pdb_id}_protein.pdbqt"
         shutil.copy(protein_path, protein_file)
 
-        ligands: SetOfSmallMolecules = self.inputPDBligandFiles.get()
+        ligands = self.inputPDBligandFiles.get()
         ligandOutDir = moleculeDir / pdb_id
         ligandOutDir.mkdir(parents=True, exist_ok=True)
 
-        for ligand in ligands:
+        # Regex for valid ligand naming pattern
+        valid_pattern = re.compile(rf"^{re.escape(pdb_id)}_[A-Za-z0-9]+_pose.*\.pdbqt$")
+
+        for i, ligand in enumerate(ligands, start=1):
             ligand_path = Path(ligand.getFileName())
-            dest = ligandOutDir / ligand_path.name
+            orig_name = ligand_path.name
+
+            if valid_pattern.match(orig_name):
+                new_name = orig_name
+            else:
+                # Extract numeric ID from ligand filename
+                match = re.match(r"(\d+)", ligand_path.stem)
+                number = match.group(1) if match else str(i)
+
+                # Generate new standardized name: {protein_pdbid}_{number}_pose{i}.pdbqt
+                new_name = f"{pdb_id}_{number}_pose{i}.pdbqt"
+                print(f"Renaming ligand '{orig_name}' ? '{new_name}'")
+
+            dest = ligandOutDir / new_name
             shutil.copy(ligand_path, dest)
