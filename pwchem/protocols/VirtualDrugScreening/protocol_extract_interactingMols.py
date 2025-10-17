@@ -56,6 +56,8 @@ class ProtExtractInteractingMols(EMProtocol):
                     default='All', expertLevel=params.LEVEL_ADVANCED,
                     help='Extract the only interacting molecules for the selected protein sequence in this subset. '
                          'Use the wizard to get a list of the interacting molecules in the input')
+    mGroup.addParam('chooseScore', params.StringParam, label='Filter by this score: ', default='',
+                    help='Choose to filter by the score provided by a specific tool.')
     mGroup.addParam('scThres', params.FloatParam, label='Score threshold: ', default=0.3,
                     help='Score threshold to filter interacting molecules below it for the selected protein sequences')
 
@@ -64,11 +66,14 @@ class ProtExtractInteractingMols(EMProtocol):
 
   def defineMolsOutput(self, intDic, molNames, seqName):
     outMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+    scoreType = self.chooseScore.get()
+    score = f'score_{scoreType}'
+
     for mol in self.getInputMols():
       molName = mol.getMolName()
       if molName in molNames:
         if seqName:
-          mol._interactScore = pwobj.Float(intDic[seqName][molName])
+          mol._interactScore = pwobj.Float(intDic[seqName][molName][score])
         outMols.append(mol)
 
     self._defineOutputs(outputSmallMolecules=outMols)
@@ -90,15 +95,20 @@ class ProtExtractInteractingMols(EMProtocol):
 
   def createOutputStep(self):
     inSeqs = self.inputSequences.get()
+
     filtSeqNames, filtMolNames = self.chooseSeq.get().strip().split(','), self.chooseMol.get().strip().split(',')
-    molNames = getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, self.scThres.get())[-1]
+    filtScoreType = self.chooseScore.get()
+
+    molNames = getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())[2]
 
     seqName = None
     if len(filtSeqNames) == 1 and filtSeqNames[0].strip() != 'All':
       seqName = filtSeqNames[0].strip()
 
     intMols = self.getInputMols()
-    intDic = inSeqs.getInteractScoresDic()
+    data = inSeqs.getInteractScoresDic()
+    intDic = {entry["sequence"]: entry["molecules"] for entry in data.get("entries", [])}
+
     if isinstance(intMols, SetOfSmallMolecules):
       self.defineMolsOutput(intDic, molNames, seqName)
 
@@ -109,4 +119,7 @@ class ProtExtractInteractingMols(EMProtocol):
   ############## UTILS ########################
   def getInputMols(self):
     return self.inputSequences.get().getInteractMols()
+
+  def getScoreOptions(self):
+      return self.inputSequences.get().getScoreTypes()
 

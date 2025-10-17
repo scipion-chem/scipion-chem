@@ -103,24 +103,45 @@ class SequenceChem(data.Sequence):
     return attrDic
 
   def getInteractScoresDic(self):
-    '''Returns a dictionary of the form {molName: score}, from the file where the interaction scores are stored.
-        '''
-    with open(self.getInteractScoresFile(), 'rb') as f:
-      intDic = pickle.load(f)
-    return intDic
+    '''Returns data from the files where the interaction scores are stored.'''
+    try:
+        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if "entries" not in data:
+            data["entries"] = []
+    except (json.JSONDecodeError, FileNotFoundError):
+        data = {"entries": []}
 
-  def setInteractScoresDic(self, intDic, outFile):
-    '''From a dictionary of the form {molName: score}, writes a file in outFile
-        containing that information to be stored in the object'''
-    with open(outFile, 'wb') as f:
-      pickle.dump(intDic, f)
-    self.setInteractScoresFile(outFile)
+    return data
+
+  def setInteractScoresDic(self, new_entries, data, output_file):
+    '''From a list of 'entries' writes the output file with the new entries of scores'''
+    for new_entry in new_entries:
+        seqName = new_entry["sequence"]
+        mols_dict = new_entry["molecules"]
+
+        existing_seq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
+
+        if existing_seq:
+            for mol, new_scores in mols_dict.items():
+                if mol in existing_seq["molecules"]:
+                    for score_name, score_val in new_scores.items():
+                        if score_name not in existing_seq["molecules"][mol]:
+                            existing_seq["molecules"][mol][score_name] = score_val
+                else:
+                    existing_seq["molecules"][mol] = new_scores
+        else:
+            data["entries"].append(new_entry)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+    self.setInteractScoresFile(output_file)
 
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
 
   def setInteractScoresFile(self, intFile):
-    self._interactScoresFile.set(intFile)
+    self._interactScoresFile.set(intFile) #todo this does not put the path int the ddbb
 
 
 class SetOfSequencesChem(data.SetOfSequences):
@@ -131,6 +152,8 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     self._interactMols = pwobj.Pointer()
     self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
+
+    self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', None))
 
   def copyInfo(self, other):
     """ Copy basic information from other set of classes to current one"""
@@ -183,32 +206,64 @@ class SetOfSequencesChem(data.SetOfSequences):
     else:
       self._interactMols.set(mols)
 
-  def getInteractScoresDic(self, calculate=False):
-    '''Returns a dictionary of the form {seqName: {molName: score}},
-        from the files where the interaction scores are stored.
-        '''
-    if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
-      with open(self.getInteractScoresFile(), 'rb') as f:
-        intDic = pickle.load(f)
-    else:
-      intDic = {}
-      for seq in self:
-        with open(seq.getInteractScoresFile(), 'rb') as f:
-          intDic[seq.getSeqName()] = pickle.load(f)
-    return intDic
+  def getScoreTypes(self):
+      if self._scoreTypes is None:
+        return []
+      return self._scoreTypes.get().split(",")
 
-  def setInteractScoresDic(self, intDic=None, outFile=None):
-    '''From a dictionary of the form {seqName: {molName: score}}, writes a file in outFile
-        containing that information to be stored in the object.
-        If intDic=None, it is build from the elements of the set
-        If outFile=None, the file is saved in the same directory as the set mapper'''
-    if not intDic:
-      intDic = self.getInteractScoresDic()
-    if not outFile:
-      outFile = os.path.join(self.getSetDir(), f'{super().__str__()}_interactions.pickle')
-    with open(outFile, 'wb') as f:
-      pickle.dump(intDic, f)
-    self.setInteractScoresFile(outFile)
+  def hasScoreTypes(self):
+      return bool(self._scoreTypes)
+
+  def setScoreTypes(self, scores=None):
+      if scores is None:
+          self._scoreTypes.set("")
+      elif isinstance(scores, str):
+          self._scoreTypes.set(scores)
+      else:
+          self._scoreTypes.set(",".join(map(str, scores)))
+
+  def getInteractScoresDic(self, calculate=False):
+    '''Returns data from the files where the interaction scores are stored.'''
+    if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
+      #with open(self.getInteractScoresFile(), 'rb') as f:
+      #  intDic = pickle.load(f)
+      try:
+          with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
+              data = json.load(f)
+          if "entries" not in data:
+              data["entries"] = []
+      except (json.JSONDecodeError, FileNotFoundError):
+          data = {"entries": []}
+    else:
+      #intDic = {}
+      #for seq in self:
+      #  with open(seq.getInteractScoresFile(), 'rb') as f:
+      #    intDic[seq.getSeqName()] = pickle.load(f)
+      data = {"entries": []}
+    return data
+
+  def setInteractScoresDic(self, new_entries, data, output_file):
+    '''From a list of 'entries' writes the output file with the new entries of scores'''
+    for new_entry in new_entries:
+        seqName = new_entry["sequence"]
+        mols_dict = new_entry["molecules"]
+
+        existing_seq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
+
+        if existing_seq:
+            for mol, new_scores in mols_dict.items():
+                if mol in existing_seq["molecules"]:
+                    for score_name, score_val in new_scores.items():
+                        if score_name not in existing_seq["molecules"][mol]:
+                            existing_seq["molecules"][mol][score_name] = score_val
+                else:
+                    existing_seq["molecules"][mol] = new_scores
+        else:
+            data["entries"].append(new_entry)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+    self.setInteractScoresFile(output_file)
 
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
@@ -220,8 +275,11 @@ class SetOfSequencesChem(data.SetOfSequences):
     return [seq.getSeqName() for seq in self]
 
   def getInteractMolNames(self):
-    intDic = self.getInteractScoresDic()
-    return list(set([molName for molDic in intDic.values() for molName in molDic]))
+      data = self.getInteractScoresDic()
+      molNames = set()
+      for entry in data.get("entries", []):
+          molNames.update(entry.get("molecules", {}).keys())
+      return list(molNames)
 
   def getInteractMolsNumber(self):
     n = 0
