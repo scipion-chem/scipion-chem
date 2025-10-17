@@ -1451,6 +1451,7 @@ class SetOfStructROIs(data.EMSet):
     data.EMSet.__init__(self, **kwargs)
     self._pocketsClass = String(kwargs.get('pocketsClass', None))
     self._hetatmFile = String(kwargs.get('hetatmFile', None))
+    self._interactingResiduesFile = String(kwargs.get('interactingResiduesFile', None))
 
   def __str__(self):
     s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
@@ -1502,6 +1503,13 @@ class SetOfStructROIs(data.EMSet):
   def setProteinHetatmFile(self, value):
     value = os.path.relpath(value)
     self._hetatmFile.set(value)
+
+  def getInteractingResiduesFile(self):
+      return self._interactingResiduesFile.get()
+
+  def setInteractingResiduesFile(self, value):
+    value = os.path.relpath(value)
+    self._interactingResiduesFile.set(value)
 
   def getPocketsClass(self):
     return self._pocketsClass.get()

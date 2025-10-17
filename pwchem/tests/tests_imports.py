@@ -30,6 +30,7 @@ import os
 
 # Scipion em imports
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
+from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
 from pwchem.protocols import *
@@ -255,3 +256,56 @@ class TestImportSmallMoleculesLibrary(TestImportBase):
 		assertHandle(self.assertIsNotNone, getattr(protImport1, 'outputLibrary', None),
 								 cwd=protImport1.getWorkingDir())
 		os.remove(smiFile)
+
+
+class TestImportExport(TestImportBase):
+	@classmethod
+	def setUpClass(cls):
+		cls.dsLig = DataSet.getDataSet("smallMolecules")
+		cls.ds = DataSet.getDataSet('model_building_tutorial')
+		setupTestProject(cls)
+
+		cls._runImportSmallMols()
+		cls._runImportPDB()
+		cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules', sleepTime=5)
+
+	@classmethod
+	def _runImportPDB(cls):
+		cls.protImportPDB = cls.newProtocol(
+			ProtImportPdb, inputPdbData=1,
+			pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
+		cls.proj.launchProtocol(cls.protImportPDB, wait=True)
+
+	@classmethod
+	def _runExportObject(cls, inProt, inName):
+		protExport = cls.newProtocol(
+			ProtChemImportExportSet, mode=1)
+
+		protExport.input.set(inProt)
+		protExport.input.setExtended(inName)
+
+		cls.launchProtocol(protExport)
+		return protExport
+
+	@classmethod
+	def _runImportObject(cls, inProt):
+		protImport = cls.newProtocol(
+			ProtChemImportExportSet, mode=0,
+			directory=cls.findExportDirectory(inProt)
+		)
+		cls.launchProtocol(protImport)
+		return protImport
+
+	@classmethod
+	def findExportDirectory(cls, inProt):
+		for file in os.listdir(inProt._getPath()):
+			if 'exportedObject' in file:
+				return inProt._getPath(file)
+
+	def test(self):
+		for inProt, inName in {self.protImportPDB: 'outputPdb', self.protImportSmallMols: 'outputSmallMolecules'}.items():
+				protExp = self._runExportObject(inProt, inName)
+				protImp = self._runImportObject(protExp)
+
+				oName = 'importedObject' if inName == 'outputPdb' else 'importedSet'
+				assertHandle(self.assertIsNotNone, getattr(protImp, oName, None), cwd=protImp.getWorkingDir())
