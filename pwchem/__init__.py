@@ -260,11 +260,11 @@ class Plugin(pwem.Plugin):
         )
 
         #download and extract models from Zenodo
-        model_url = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
+        modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "cd scorchModels && "
-            f"wget -O SCORCH2_models.xz {model_url} && "
+            f"wget -O SCORCH2_models.xz {modelUrl} && "
             "xz -d SCORCH2_models.xz && "
             "tar -xf SCORCH2_models && "
             "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "

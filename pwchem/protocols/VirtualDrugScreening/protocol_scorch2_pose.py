@@ -32,17 +32,10 @@ SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-bas
 """
 from pathlib import Path
 
-from pwem.objects import AtomStruct
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
-from Bio.PDB import MMCIFParser, PDBIO
-from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-import subprocess
-
 from pwchem import Plugin, SCORCH2_DIC
-from pwchem.utils import fillEmptyAttributes
-
 currentDir = Path(__file__).parent.resolve()
 scriptRescoring = currentDir.parent.parent/'scripts'/'scorch2_rescoring.py'
 
@@ -77,7 +70,6 @@ class ProtocolSCORCH2(EMProtocol):
         # Aggregate
         iGroup.addParam('aggregate', params.BooleanParam, default=False,
                         label="Aggregate results: ",
-                        #condition='not useFeatures',
                         help='If Yes, the best pose will be selected per compound with aggregation metadata. If No, all poses will be scored individually and ranked by SC2 score.')
 
         iGroup.addParam('psWeight', params.FloatParam, default=0.7, expertLevel=params.LEVEL_ADVANCED,
@@ -112,8 +104,8 @@ class ProtocolSCORCH2(EMProtocol):
         psScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_ps_scaler'))
         pbScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_pb_scaler'))
 
-        pre_extracted = self.useFeatures.get()
-        if not pre_extracted:
+        preExtracted = self.useFeatures.get()
+        if not preExtracted:
             args = [
                 str(scriptRescoring),
                 "--protein-dir", str(proteinFull),
@@ -152,7 +144,7 @@ class ProtocolSCORCH2(EMProtocol):
             cwd=str(currentDir.parent.parent)
         )
         #move results folder to scipion outputs, idk why it is created in the dir where the script is called
-        if not pre_extracted:
+        if not preExtracted:
             resDir = Path(self._getExtraPath()) / "results"
             shutil.move(currentDir.parent.parent/'results', resDir)
 

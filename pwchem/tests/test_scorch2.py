@@ -118,9 +118,9 @@ class TestSCORCH2(TestImportSequences):
     def test(self):
         protSCORCH2 = self._runSCORCH2()
         self._waitOutput(protSCORCH2, '', sleepTime=10)
-        extra_path = Path(protSCORCH2._getExtraPath())
-        expected_csv = extra_path / "scorch2_results.tsv"
+        extraPath = Path(protSCORCH2._getExtraPath())
+        expectedCsv = extraPath / "scorch2_results.tsv"
 
-        self.assertTrue(expected_csv.exists(), f"Expected output TSV not found at: {expected_csv}")
-        self.assertGreater(expected_csv.stat().st_size, 0, "Output TSV is empty")
+        self.assertTrue(expectedCsv.exists(), f"Expected output TSV not found at: {expectedCsv}")
+        self.assertGreater(expectedCsv.stat().st_size, 0, "Output TSV is empty")
 
