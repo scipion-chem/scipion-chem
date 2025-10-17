@@ -45,7 +45,7 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 from pwchem.protocols import *
 
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct
+from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
@@ -53,7 +53,6 @@ from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
 class SelectLigandAtom(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
-  # todo: check why some ligand atoms are not numbered
 
   def extract_atoms(self, molFile, protocol):
     """ Extraction of the atoms in a ligand file """
@@ -67,9 +66,8 @@ class SelectLigandAtom(VariableWizard):
         runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
         molFile = oFile
 
-    # todo: ensure PDB atoms are numbered by type
+    molFile = relabelAtomsPDB(molFile)
     parser = PDBParser().get_structure(molFile, molFile)
-    print('molFile: ', molFile)
     atomNames = []
     for model in parser:
       for i, atom in enumerate(model.get_atoms()):
