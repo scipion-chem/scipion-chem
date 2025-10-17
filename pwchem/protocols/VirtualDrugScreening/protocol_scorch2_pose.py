@@ -49,7 +49,7 @@ scriptRescoring = currentDir.parent.parent/'scripts'/'scorch2_rescoring.py'
 
 class ProtocolSCORCH2(EMProtocol):
     """
-    Computes the best poses of protein-ligand interactions
+    Computes the best poses of protein-ligand interactions using SCORCH2: https://github.com/LinCompbio/SCORCH2
     """
     _label = 'SCORCH2 rescoring'
 
@@ -159,7 +159,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = []
+        summary = ["The results have been saved in the extra folder as scorch2.results.tsv.", "Features and normalized features have been saved in the extra/results folder, along with the aggregated results and target results."]
         return summary
 
     def _methods(self):
