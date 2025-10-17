@@ -1128,19 +1128,22 @@ def runInParallel(func, *args, paramList, jobs):
   # Apply the given function to the given param list using the pool
   results = [pool.apply_async(func, args=(param, *args,)) for param in paramList]
 
+  pool.close()
+  pool.join()
+
   # Initializing list of failed commands
   failedCommands = []
 
   # Check if any process encountered an error
   for result in results:
-    if result.get():
-      failedCommands.append(result.get())
+      if result.get():
+          failedCommands.append(result.get())
 
   # Close the pool to release resources
-  pool.close()
+  # pool.close()
 
   # Join the pool, waiting for all processes to complete
-  pool.join()
+  # pool.join()
 
   # Return list of failed commands
   return failedCommands
