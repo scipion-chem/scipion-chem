@@ -36,44 +36,44 @@ import sys
 # Mute all RDKit warnings
 RDLogger.logger().setLevel(RDLogger.ERROR)
 
-ob_log_handler = pybel.ob.OBMessageHandler()
-ob_log_handler.SetOutputLevel(0)
+obLogHandler = pybel.ob.OBMessageHandler()
+obLogHandler.SetOutputLevel(0)
 pybel.ob.obErrorLog.StopLogging()
 
 
-def calculate_ecifs(ligand_pdbqt_block, receptor_content):
+def calculateEcifs(ligandPdbtBlock, receptorContent):
     """
     Calculate Extended Connectivity Interaction Features (ECIF) for a ligand-receptor pair.
     
     Args:
-        ligand_pdbqt_block: Ligand structure in PDBQT format
-        receptor_content: Receptor structure path or content
+        ligandPdbtBlock: Ligand structure in PDBQT format
+        receptorContent: Receptor structure path or content
         
     Returns:
         DataFrame containing ECIF features
     """
     try:
-        ECIF_data = ecif.GetECIF(receptor_content, ligand_pdbqt_block, distance_cutoff=6.0)
+        ECIFData = ecif.GetECIF(receptorContent, ligandPdbtBlock, distance_cutoff=6.0)
         ECIFHeaders = [header.replace(';', '') for header in ecif.PossibleECIF]
-        ECIF_data = dict(zip(ECIFHeaders, ECIF_data))
-        return pd.DataFrame(ECIF_data, index=[0])
+        ECIFData = dict(zip(ECIFHeaders, ECIFData))
+        return pd.DataFrame(ECIFData, index=[0])
     except Exception as e:
         print(f"Error calculating ECIF features: {e}")
         # Return empty DataFrame with expected columns
         return pd.DataFrame({header.replace(';', ''): [0] for header in ecif.PossibleECIF})
 
-def kier_flexibility(ligand_pdbqt_block):
+def kierFlexibility(ligandPdbtBlock):
     """
     Calculate Kier flexibility index and other rdkit molecular descriptors.
     
     Args:
-        ligand_pdbqt_block: Ligand structure in PDBQT format
+        ligandPdbtBlock: Ligand structure in PDBQT format
         
     Returns:
         Tuple containing (Kier flexibility index, dictionary of required rdkit descriptors)
     """
     # List of rdkit descriptors to calculate
-    invariant_rdkit_descriptors = [
+    invariantRdkitDescriptors = [
         'HeavyAtomMolWt','HeavyAtomCount','NumRotatableBonds', 'RingCount', 'NumAromaticRings', 'NumAliphaticRings',
         'NumSaturatedRings', 'NumAromaticHeterocycles',
         'NumAliphaticHeterocycles', 'NumSaturatedHeterocycles', 'FractionCSP3',
@@ -92,21 +92,21 @@ def kier_flexibility(ligand_pdbqt_block):
 
     try:
         # Get all available descriptor names
-        descriptor_names = [desc[0] for desc in Descriptors._descList]
+        descriptorNames = [desc[0] for desc in Descriptors._descList]
 
         # Prepare molecule
-        mol = kier.SmilePrep(ligand_pdbqt_block)
+        mol = kier.SmilePrep(ligandPdbtBlock)
         mol.GetRingInfo()
-        mol_without_H = Chem.RemoveHs(mol)
+        molWithoutH = Chem.RemoveHs(mol)
 
         # Calculate all descriptors
-        calculator = MoleculeDescriptors.MolecularDescriptorCalculator(descriptor_names)
-        descriptors = calculator.CalcDescriptors(mol_without_H)
+        calculator = MoleculeDescriptors.MolecularDescriptorCalculator(descriptorNames)
+        descriptors = calculator.CalcDescriptors(molWithoutH)
 
         # Filter to get only the descriptors we need
         features = {}
-        for name, value in zip(descriptor_names, descriptors):
-            if name in invariant_rdkit_descriptors:
+        for name, value in zip(descriptorNames, descriptors):
+            if name in invariantRdkitDescriptors:
                 features[name] = value
 
         # Return Kier flexibility and other descriptors
@@ -115,24 +115,24 @@ def kier_flexibility(ligand_pdbqt_block):
     except Exception as e:
         print(f"Error calculating Kier flexibility: {e}")
         # Return default values
-        return 0, {name: 0 for name in invariant_rdkit_descriptors}
+        return 0, {name: 0 for name in invariantRdkitDescriptors}
 
-def run_binana(ligand_pdbqt_block, receptor_content):
+def runBinana(ligandPdbtBlock, receptorContent):
     """
     Calculate BINANA (BINding ANAlyzer) features for a ligand-receptor pair.
     
     Args:
-        ligand_pdbqt_block: Ligand structure in PDBQT format
-        receptor_content: Receptor structure from binana PDB object
+        ligandPdbtBlock: Ligand structure in PDBQT format
+        receptorContent: Receptor structure from binana PDB object
         
     Returns:
         Dictionary containing BINANA interaction features
     """
-    binana_features = {}
-    main_binana_out = binana.Binana(ligand_pdbqt_block, receptor_content).out
+    binanaFeatures = {}
+    mainBinanaOut = binana.Binana(ligandPdbtBlock, receptorContent).out
 
     # define the features we want
-    keep_closest_contacts = ["2.5 (HD, OA)",
+    keepClosestContacts = ["2.5 (HD, OA)",
                             "2.5 (HD, HD)",
                             "2.5 (HD, N)",
                             "2.5 (C, HD)",
@@ -140,7 +140,7 @@ def run_binana(ligand_pdbqt_block, receptor_content):
                             "2.5 (HD, ZN)",
                             "2.5 (A, HD)"]
 
-    keep_close_contacts = ["4.0 (C, C)",
+    keepCloseContacts = ["4.0 (C, C)",
                            "4.0 (HD, OA)",
                            "4.0 (C, HD)",
                            "4.0 (C, N)",
@@ -178,10 +178,10 @@ def run_binana(ligand_pdbqt_block, receptor_content):
                            "4.0 (C, CL)",
                            "4.0 (CL, HD)"]
 
-    keep_ligand_atoms = ["LA N",
+    keepLigandAtoms = ["LA N",
                          "LA HD"]
 
-    keep_elsums = ["ElSum (C, C)",
+    keepElsums = ["ElSum (C, C)",
                    "ElSum (HD, OA)",
                    "ElSum (C, HD)",
                    "ElSum (C, N)",
@@ -220,81 +220,81 @@ def run_binana(ligand_pdbqt_block, receptor_content):
                    "ElSum (CL, N)",
                    "ElSum (A, CL)"]
 
-    # add closest contacts to binana_features dict
-    for contact in keep_closest_contacts:
-        binana_name = contact.split('(')[-1].split(')')[0].replace(', ', '_')
-        binana_features[contact] = main_binana_out['closest'].get(binana_name)
+    # add closest contacts to binanaFeatures dict
+    for contact in keepClosestContacts:
+        binanaName = contact.split('(')[-1].split(')')[0].replace(', ', '_')
+        binanaFeatures[contact] = mainBinanaOut['closest'].get(binanaName)
 
-    # add close contacts to binana_features dict
-    for contact in keep_close_contacts:
-        binana_name = contact.split('(')[-1].split(')')[0].replace(', ', '_')
-        binana_features[contact] = main_binana_out['close'].get(binana_name)
+    # add close contacts to binanaFeatures dict
+    for contact in keepCloseContacts:
+        binanaName = contact.split('(')[-1].split(')')[0].replace(', ', '_')
+        binanaFeatures[contact] = mainBinanaOut['close'].get(binanaName)
 
-    # add ligand atoms to binana_features dict as binary tallies
-    for atom in keep_ligand_atoms:
-        binana_name = atom.split()[-1]
-        if main_binana_out['ligand_atoms'].get(binana_name) is None:
-            binana_features[atom] = 0
+    # add ligand atoms to binanaFeatures dict as binary tallies
+    for atom in keepLigandAtoms:
+        binanaName = atom.split()[-1]
+        if mainBinanaOut['ligand_atoms'].get(binanaName) is None:
+            binanaFeatures[atom] = 0
         else:
-            binana_features[atom] = 1
+            binanaFeatures[atom] = 1
 
-    # add electrostatics to binana_features dict
-    for elsum in keep_elsums:
-        binana_name = elsum.split('(')[-1].split(')')[0].replace(', ', '_')
-        binana_features[elsum] = main_binana_out['elsums'].get(binana_name)
+    # add electrostatics to binanaFeatures dict
+    for elsum in keepElsums:
+        binanaName = elsum.split('(')[-1].split(')')[0].replace(', ', '_')
+        binanaFeatures[elsum] = mainBinanaOut['elsums'].get(binanaName)
 
-    # add active site flexibility features to binana_features
-    binana_features["BPF ALPHA SIDECHAIN"] = main_binana_out['bpfs'].get("SIDECHAIN_ALPHA")
-    binana_features["BPF ALPHA BACKBONE"] = main_binana_out['bpfs'].get("BACKBONE_ALPHA")
-    binana_features["BPF BETA SIDECHAIN"] = main_binana_out['bpfs'].get("SIDECHAIN_BETA")
-    binana_features["BPF BETA BACKBONE"] = main_binana_out['bpfs'].get("BACKBONE_BETA")
-    binana_features["BPF OTHER SIDECHAIN"] = main_binana_out['bpfs'].get("SIDECHAIN_OTHER")
-    binana_features["BPF OTHER BACKBONE"] = main_binana_out['bpfs'].get("BACKBONE_OTHER")
+    # add active site flexibility features to binanaFeatures
+    binanaFeatures["BPF ALPHA SIDECHAIN"] = mainBinanaOut['bpfs'].get("SIDECHAIN_ALPHA")
+    binanaFeatures["BPF ALPHA BACKBONE"] = mainBinanaOut['bpfs'].get("BACKBONE_ALPHA")
+    binanaFeatures["BPF BETA SIDECHAIN"] = mainBinanaOut['bpfs'].get("SIDECHAIN_BETA")
+    binanaFeatures["BPF BETA BACKBONE"] = mainBinanaOut['bpfs'].get("BACKBONE_BETA")
+    binanaFeatures["BPF OTHER SIDECHAIN"] = mainBinanaOut['bpfs'].get("SIDECHAIN_OTHER")
+    binanaFeatures["BPF OTHER BACKBONE"] = mainBinanaOut['bpfs'].get("BACKBONE_OTHER")
 
-    # add hydrophobic features to binana_features
-    binana_features["HC ALPHA SIDECHAIN"] = main_binana_out['hydrophobics'].get("SIDECHAIN_ALPHA")
-    binana_features["HC ALPHA BACKBONE"] = main_binana_out['hydrophobics'].get("BACKBONE_ALPHA")
-    binana_features["HC BETA SIDECHAIN"] = main_binana_out['hydrophobics'].get("SIDECHAIN_BETA")
-    binana_features["HC BETA BACKBONE"] = main_binana_out['hydrophobics'].get("BACKBONE_BETA")
-    binana_features["HC OTHER SIDECHAIN"] = main_binana_out['hydrophobics'].get("SIDECHAIN_OTHER")
-    binana_features["HC OTHER BACKBONE"] = main_binana_out['hydrophobics'].get("BACKBONE_OTHER")
+    # add hydrophobic features to binanaFeatures
+    binanaFeatures["HC ALPHA SIDECHAIN"] = mainBinanaOut['hydrophobics'].get("SIDECHAIN_ALPHA")
+    binanaFeatures["HC ALPHA BACKBONE"] = mainBinanaOut['hydrophobics'].get("BACKBONE_ALPHA")
+    binanaFeatures["HC BETA SIDECHAIN"] = mainBinanaOut['hydrophobics'].get("SIDECHAIN_BETA")
+    binanaFeatures["HC BETA BACKBONE"] = mainBinanaOut['hydrophobics'].get("BACKBONE_BETA")
+    binanaFeatures["HC OTHER SIDECHAIN"] = mainBinanaOut['hydrophobics'].get("SIDECHAIN_OTHER")
+    binanaFeatures["HC OTHER BACKBONE"] = mainBinanaOut['hydrophobics'].get("BACKBONE_OTHER")
 
-    # add hydrogen bond features to binana_features
-    binana_features["HB ALPHA SIDECHAIN LIGAND"] = main_binana_out['hbonds'].get("HDONOR_LIGAND_SIDECHAIN_ALPHA")
-    binana_features["HB BETA SIDECHAIN LIGAND"] = main_binana_out['hbonds'].get("HDONOR_LIGAND_SIDECHAIN_BETA")
-    binana_features["HB BETA BACKBONE LIGAND"] = main_binana_out['hbonds'].get("HDONOR_LIGAND_BACKBONE_BETA")
-    binana_features["HB OTHER SIDECHAIN LIGAND"] = main_binana_out['hbonds'].get("HDONOR_LIGAND_SIDECHAIN_OTHER")
-    binana_features["HB OTHER BACKBONE LIGAND"] = main_binana_out['hbonds'].get("HDONOR_LIGAND_BACKBONE_OTHER")
-    binana_features["HB ALPHA SIDECHAIN RECEPTOR"] = main_binana_out['hbonds'].get("HDONOR_RECEPTOR_SIDECHAIN_ALPHA")
-    binana_features["HB ALPHA BACKBONE RECEPTOR"] = main_binana_out['hbonds'].get("HDONOR_RECEPTOR_BACKBONE_ALPHA")
-    binana_features["HB BETA SIDECHAIN RECEPTOR"] = main_binana_out['hbonds'].get("HDONOR_RECEPTOR_SIDECHAIN_BETA")
-    binana_features["HB BETA BACKBONE RECEPTOR"] = main_binana_out['hbonds'].get("HDONOR_RECEPTOR_BACKBONE_BETA")
-    binana_features["HB OTHER SIDECHAIN RECEPTOR"] = main_binana_out['hbonds'].get("HDONOR_RECEPTOR_SIDECHAIN_OTHER")
-    binana_features["HB OTHER BACKBONE RECEPTOR"] = main_binana_out['hbonds'].get("HDONOR_RECEPTOR_BACKBONE_OTHER")
+    # add hydrogen bond features to binanaFeatures
+    binanaFeatures["HB ALPHA SIDECHAIN LIGAND"] = mainBinanaOut['hbonds'].get("HDONOR_LIGAND_SIDECHAIN_ALPHA")
+    binanaFeatures["HB BETA SIDECHAIN LIGAND"] = mainBinanaOut['hbonds'].get("HDONOR_LIGAND_SIDECHAIN_BETA")
+    binanaFeatures["HB BETA BACKBONE LIGAND"] = mainBinanaOut['hbonds'].get("HDONOR_LIGAND_BACKBONE_BETA")
+    binanaFeatures["HB OTHER SIDECHAIN LIGAND"] = mainBinanaOut['hbonds'].get("HDONOR_LIGAND_SIDECHAIN_OTHER")
+    binanaFeatures["HB OTHER BACKBONE LIGAND"] = mainBinanaOut['hbonds'].get("HDONOR_LIGAND_BACKBONE_OTHER")
+    binanaFeatures["HB ALPHA SIDECHAIN RECEPTOR"] = mainBinanaOut['hbonds'].get("HDONOR_RECEPTOR_SIDECHAIN_ALPHA")
+    binanaFeatures["HB ALPHA BACKBONE RECEPTOR"] = mainBinanaOut['hbonds'].get("HDONOR_RECEPTOR_BACKBONE_ALPHA")
+    binanaFeatures["HB BETA SIDECHAIN RECEPTOR"] = mainBinanaOut['hbonds'].get("HDONOR_RECEPTOR_SIDECHAIN_BETA")
+    binanaFeatures["HB BETA BACKBONE RECEPTOR"] = mainBinanaOut['hbonds'].get("HDONOR_RECEPTOR_BACKBONE_BETA")
+    binanaFeatures["HB OTHER SIDECHAIN RECEPTOR"] = mainBinanaOut['hbonds'].get("HDONOR_RECEPTOR_SIDECHAIN_OTHER")
+    binanaFeatures["HB OTHER BACKBONE RECEPTOR"] = mainBinanaOut['hbonds'].get("HDONOR_RECEPTOR_BACKBONE_OTHER")
 
-    # add salt bridge features to binana_features
-    binana_features["SB ALPHA"] = main_binana_out['salt_bridges'].get("SALT-BRIDGE_ALPHA")
-    binana_features["SB BETA"] = main_binana_out['salt_bridges'].get("SALT-BRIDGE_BETA")
-    binana_features["SB OTHER"] = main_binana_out['salt_bridges'].get("SALT-BRIDGE_OTHER")
+    # add salt bridge features to binanaFeatures
+    binanaFeatures["SB ALPHA"] = mainBinanaOut['salt_bridges'].get("SALT-BRIDGE_ALPHA")
+    binanaFeatures["SB BETA"] = mainBinanaOut['salt_bridges'].get("SALT-BRIDGE_BETA")
+    binanaFeatures["SB OTHER"] = mainBinanaOut['salt_bridges'].get("SALT-BRIDGE_OTHER")
 
-    # add aromatic stacking features to binana_features
-    binana_features["piStack ALPHA"] = main_binana_out['stacking'].get("STACKING ALPHA")
-    binana_features["piStack BETA"] = main_binana_out['stacking'].get("STACKING BETA")
-    binana_features["piStack OTHER"] = main_binana_out['stacking'].get("STACKING OTHER")
-    binana_features["tStack ALPHA"] = main_binana_out['t_stacking'].get("T-SHAPED_ALPHA")
-    binana_features["tStack BETA"] = main_binana_out['t_stacking'].get("T-SHAPED_BETA")
-    binana_features["tStack OTHER"] = main_binana_out['t_stacking'].get("T-SHAPED_OTHER")
+    # add aromatic stacking features to binanaFeatures
+    binanaFeatures["piStack ALPHA"] = mainBinanaOut['stacking'].get("STACKING ALPHA")
+    binanaFeatures["piStack BETA"] = mainBinanaOut['stacking'].get("STACKING BETA")
+    binanaFeatures["piStack OTHER"] = mainBinanaOut['stacking'].get("STACKING OTHER")
+    binanaFeatures["tStack ALPHA"] = mainBinanaOut['t_stacking'].get("T-SHAPED_ALPHA")
+    binanaFeatures["tStack BETA"] = mainBinanaOut['t_stacking'].get("T-SHAPED_BETA")
+    binanaFeatures["tStack OTHER"] = mainBinanaOut['t_stacking'].get("T-SHAPED_OTHER")
 
-    # add cation pi features to binana_features
-    binana_features["catPi BETA LIGAND"] = main_binana_out['pi_cation'].get("PI-CATION_LIGAND-CHARGED_BETA")
-    binana_features["catPi OTHER LIGAND"] = main_binana_out['pi_cation'].get("PI-CATION_LIGAND-CHARGED_OTHER")
+    # add cation pi features to binanaFeatures
+    binanaFeatures["catPi BETA LIGAND"] = mainBinanaOut['pi_cation'].get("PI-CATION_LIGAND-CHARGED_BETA")
+    binanaFeatures["catPi OTHER LIGAND"] = mainBinanaOut['pi_cation'].get("PI-CATION_LIGAND-CHARGED_OTHER")
 
     # add rotatable bond count to binana features
-    binana_features["nRot"] = main_binana_out['nrot']
+    binanaFeatures["nRot"] = mainBinanaOut['nrot']
 
-    return binana_features
+    return binanaFeatures
 
-def prune_df_headers(df):
+def pruneDfHeaders(df):
     """
     Filter DataFrame to include only the required feature columns defined in SC1_features.json.
     
@@ -306,21 +306,21 @@ def prune_df_headers(df):
     """
     try:
         # Get path to the features JSON file (in the same directory as this script)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        json_path = os.path.join(script_dir, 'SC1_features.json')
+        scriptDir = os.path.dirname(os.path.abspath(__file__))
+        jsonPath = os.path.join(scriptDir, 'SC1_features.json')
         
-        with open(json_path, 'r') as f:
-            reference_headers = json.load(f)
-            headers_58 = reference_headers.get('492_models_58')
+        with open(jsonPath, 'r') as f:
+            referenceHeaders = json.load(f)
+            headers58 = referenceHeaders.get('492_models_58')
             
             # Check which columns exist in the DataFrame
-            missing_cols = [col for col in headers_58 if col not in df.columns]
-            if missing_cols:
-                print(f"Warning: Missing {len(missing_cols)} columns: {', '.join(missing_cols[:5])}{'...' if len(missing_cols) > 5 else ''}")
+            missingCols = [col for col in headers58 if col not in df.columns]
+            if missingCols:
+                print(f"Warning: Missing {len(missingCols)} columns: {', '.join(missingCols[:5])}{'...' if len(missingCols) > 5 else ''}")
                 
             # Only include columns that exist in the DataFrame
-            available_cols = [col for col in headers_58 if col in df.columns]
-            return df[available_cols]
+            availableCols = [col for col in headers58 if col in df.columns]
+            return df[availableCols]
     except Exception as e:
         print(f"Error pruning DataFrame headers: {e}")
         # Return original DataFrame if there's an error
@@ -329,70 +329,70 @@ def prune_df_headers(df):
 
 
 
-def process_molecule(molecule, ligand_path, pdbid, protein_path):
+def processMolecule(molecule, ligandPath, pdbid, proteinPath):
     """
     Process a single ligand molecule file and extract features from all poses.
 
     Args:
         molecule: Filename of the ligand file
-        ligand_path: Path to the directory containing ligand files
+        ligandPath: Path to the directory containing ligand files
         pdbid: PDB ID being processed
-        protein_path: Path to the protein file
+        proteinPath: Path to the protein file
 
     Returns:
         DataFrame containing features for all poses in the ligand file
     """
     try:
         # Read the ligand file
-        ligand_file = os.path.join(ligand_path, molecule)
-        with open(ligand_file, 'r') as f:
-            lig_text = f.read()
+        ligandFile = os.path.join(ligandPath, molecule)
+        with open(ligandFile, 'r') as f:
+            ligText = f.read()
 
         # Split into individual poses (models)
-        lig_poses = lig_text.split('MODEL')
+        ligPoses = ligText.split('MODEL')
         results = []
 
         # Process each pose
-        for i, pose in enumerate(lig_poses):
+        for i, pose in enumerate(ligPoses):
             try:
                 # Clean up the pose content
                 lines = pose.split('\n')
-                clean_lines = [line for line in lines if not line.strip().lstrip().isnumeric() and 'ENDMDL' not in line]
+                cleanLines = [line for line in lines if not line.strip().lstrip().isnumeric() and 'ENDMDL' not in line]
 
                 # Skip if not enough content
-                if len(clean_lines) < 3:
+                if len(cleanLines) < 3:
                     continue
 
                 # Join cleaned lines back into a string
-                pose_text = '\n'.join(clean_lines)
+                poseText = '\n'.join(cleanLines)
 
                 # Calculate Kier flexibility and RDKit descriptors
-                k, rdkit_descriptors = kier_flexibility(pose_text)
-                entropy_df = pd.DataFrame([rdkit_descriptors])
+                k, rdkitDescriptors = kierFlexibility(poseText)
+                entropyDf = pd.DataFrame([rdkitDescriptors])
 
                 # Calculate BINANA features
-                binana_features = run_binana(clean_lines, global_protein_object)
-                binana_df = pd.DataFrame([binana_features])
+                binanaFeatures = runBinana(cleanLines, globalProteinObject)
+                binanaDf = pd.DataFrame([binanaFeatures])
 
                 # Calculate ECIF features
-                ecif_df = calculate_ecifs(pose_text, protein_path)
+                ecifDf = calculateEcifs(poseText, proteinPath)
 
                 # Combine all features
-                df = pd.concat([ecif_df, binana_df], axis=1)
+                df = pd.concat([ecifDf, binanaDf], axis=1)
                 df['Kier Flexibility'] = k
 
                 try:
                     # Prune to required columns and add identifier
-                    pruned_df = prune_df_headers(df)
-                    combined_df = pd.concat([entropy_df, pruned_df], axis=1)
-                    combined_df['Id'] = molecule
-                    results.append(combined_df)
+                    prunedDf = pruneDfHeaders(df)
+                    combinedDf = pd.concat([entropyDf, prunedDf], axis=1)
+                    combinedDf['Id'] = molecule
+                    results.append(combinedDf)
                 except Exception as e:
                     print(f"Error in pruning/combining dataframes for {molecule}: {e}")
                     # Create a basic fallback dataframe to avoid losing computation
-                    basic_df = pd.concat([entropy_df, df], axis=1)
-                    basic_df['Id'] = molecule
-                    results.append(basic_df)
+                    basicDf = pd.concat([entropyDf, df], axis=1)
+                    basicDf['Id'] = molecule
+                    results.append(basicDf)
 
             except Exception as e:
                 print(f"Error processing pose {i} in {molecule}: {e}")
@@ -417,62 +417,62 @@ def process_molecule(molecule, ligand_path, pdbid, protein_path):
 
 
 
-def process_pdbid(pdbid, protein_base_path, molecule_path, des_path, num_cores=None):
+def processPdbid(pdbid, proteinBasePath, moleculePath, desPath, numCores=None):
     """
     Process a single PDB ID by extracting features from complex.
 
     Args:
         pdbid: The PDB ID to process
-        protein_base_path: Path to directory containing protein PDBQT files
-        molecule_path: Path to directory containing molecule PDBQT files
-        des_path: Directory to save output files
-        num_cores: Number of CPU cores to use (defaults to all available cores minus 1)
+        proteinBasePath: Path to directory containing protein PDBQT files
+        moleculePath: Path to directory containing molecule PDBQT files
+        desPath: Directory to save output files
+        numCores: Number of CPU cores to use (defaults to all available cores minus 1)
     """
     # Find the protein file
-    protein_path = glob.glob(f'{protein_base_path}/{pdbid}*.pdbqt')
-    if not protein_path:
+    proteinPath = glob.glob(f'{proteinBasePath}/{pdbid}*.pdbqt')
+    if not proteinPath:
         print(f'Protein file not found for {pdbid}')
         return
-    protein_path = protein_path[0]
+    proteinPath = proteinPath[0]
 
     # Check if output file already exists
-    output_file = os.path.join(des_path, f'{pdbid}_protein_features.csv')
-    if os.path.exists(output_file):
+    outputFile = os.path.join(desPath, f'{pdbid}_protein_features.csv')
+    if os.path.exists(outputFile):
         print(f'PDBID {pdbid} Feature File exists - skipping')
         return
 
     # Check if molecule directory exists
-    molecule_dir = os.path.join(molecule_path, pdbid)
-    if not os.path.exists(molecule_dir):
+    moleculeDir = os.path.join(moleculePath, pdbid)
+    if not os.path.exists(moleculeDir):
         print(f'Molecules not found for {pdbid}')
         return
-    molecules = os.listdir(molecule_dir)
+    molecules = os.listdir(moleculeDir)
 
     # Read protein content and start processing
     try:
-        def init_worker(protein_path):
-            global global_protein_object
-            with open(protein_path, 'r') as f:
-                protein_content = f.readlines()
-            global_protein_object = PDB()
-            global_protein_object.load_PDB(protein_path, protein_content)
-            global_protein_object.assign_secondary_structure()
+        def initWorker(proteinPath):
+            global globalProteinObject
+            with open(proteinPath, 'r') as f:
+                proteinContent = f.readlines()
+            globalProteinObject = PDB()
+            globalProteinObject.load_PDB(proteinPath, proteinContent)
+            globalProteinObject.assign_secondary_structure()
 
         # Determine number of processes to use
-        if num_cores is None:
+        if numCores is None:
             processes = max(1, os.cpu_count() - 1)
         else:
-            processes = min(num_cores, os.cpu_count())
+            processes = min(numCores, os.cpu_count())
 
         # Process molecules in parallel
-        with Pool(processes=processes, initializer=init_worker, initargs=(protein_path,)) as pool:
-            process_func = partial(
-                process_molecule,
-                ligand_path=molecule_dir,
+        with Pool(processes=processes, initializer=initWorker, initargs=(proteinPath,)) as pool:
+            processFunc = partial(
+                processMolecule,
+                ligandPath=moleculeDir,
                 pdbid=pdbid,
-                protein_path=protein_path  # keep for ECIF
+                proteinPath=proteinPath  # keep for ECIF
             )
-            futures = [pool.apply_async(process_func, (molecule,)) for molecule in molecules]
+            futures = [pool.apply_async(processFunc, (molecule,)) for molecule in molecules]
 
             results = []
             for i, future in enumerate(tqdm(futures, desc=f"Processing {pdbid} molecules", leave=False)):
@@ -491,8 +491,8 @@ def process_pdbid(pdbid, protein_base_path, molecule_path, des_path, num_cores=N
                     total = pd.concat(results, ignore_index=True)
 
                     if not total.empty:
-                        os.makedirs(des_path, exist_ok=True)
-                        total.to_csv(output_file, index=False)
+                        os.makedirs(desPath, exist_ok=True)
+                        total.to_csv(outputFile, index=False)
                         print(f"Saved features for {pdbid} ({len(total)} poses)")
                 except Exception as e:
                     print(f"Error saving results for {pdbid}: {e}")
@@ -509,13 +509,13 @@ def main(args):
     Args:
         args: Command line arguments
     """
-    des_path = args.output_dir
-    protein_base_path = args.protein_dir
-    molecule_path = args.ligand_dir
-    num_cores = args.num_cores
+    desPath = args.output_dir
+    proteinBasePath = args.protein_dir
+    moleculePath = args.ligand_dir
+    numCores = args.num_cores
 
     # Create output directory if it doesn't exist
-    os.makedirs(des_path, exist_ok=True)
+    os.makedirs(desPath, exist_ok=True)
 
     # Get list of PDB IDs
     if args.pdbids:
@@ -523,12 +523,12 @@ def main(args):
         print(f"Processing {len(pdbids)} specified PDB IDs")
     else:
         # Extract PDB IDs from filenames in protein directory
-        pdbids = [i.split("_")[0] for i in os.listdir(protein_base_path)]
-        print(f"Found {len(pdbids)} PDB IDs in {protein_base_path}")
+        pdbids = [i.split("_")[0] for i in os.listdir(proteinBasePath)]
+        print(f"Found {len(pdbids)} PDB IDs in {proteinBasePath}")
 
     # Process each PDB ID with progress bar
     for pdbid in tqdm(pdbids, desc="Processing PDB structures"):
-        process_pdbid(pdbid, protein_base_path, molecule_path, des_path, num_cores)
+        processPdbid(pdbid, proteinBasePath, moleculePath, desPath, numCores)
 
 
 
