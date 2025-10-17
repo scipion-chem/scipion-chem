@@ -50,9 +50,7 @@ class TestSCORCH2(TestImportSequences):
         cls._runPrepareLigandsADT()
         cls._runPrepareReceptorADT()
         cls._waitOutput(cls.protPrepareLigands, 'outputSmallMolecules')
-        print(f'...{cls.protPrepareLigands.outputSmallMolecules}')
         cls._waitOutput(cls.protPrepareReceptor, 'outputStructure')
-        print(f'...{cls.protPrepareReceptor.outputStructure}')
 
 
     @classmethod

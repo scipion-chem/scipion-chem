@@ -43,8 +43,8 @@ import subprocess
 from pwchem import Plugin, SCORCH2_DIC
 from pwchem.utils import fillEmptyAttributes
 
-current_dir = Path(__file__).parent.resolve()
-scriptRescoring = current_dir.parent.parent/'scripts'/'scorch2_rescoring.py'
+currentDir = Path(__file__).parent.resolve()
+scriptRescoring = currentDir.parent.parent/'scripts'/'scorch2_rescoring.py'
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -80,51 +80,51 @@ class ProtocolSCORCH2(EMProtocol):
                         #condition='not useFeatures',
                         help='If Yes, the best pose will be selected per compound with aggregation metadata. If No, all poses will be scored individually and ranked by SC2 score.')
 
-        iGroup.addParam('ps_weight', params.FloatParam, default=0.7, expertLevel=params.LEVEL_ADVANCED,
+        iGroup.addParam('psWeight', params.FloatParam, default=0.7, expertLevel=params.LEVEL_ADVANCED,
                         label='PS weight: ', help="Weight for SC2-PS predictions")
-        iGroup.addParam('pb_weight', params.FloatParam, default=0.3, expertLevel=params.LEVEL_ADVANCED,
+        iGroup.addParam('pbWeight', params.FloatParam, default=0.3, expertLevel=params.LEVEL_ADVANCED,
                         label='PB weight: ', help="Weight for SC2-PB predictions")
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        pre_extracted = self.useFeatures.get()
-        if not pre_extracted:
+        preExtracted = self.useFeatures.get()
+        if not preExtracted:
             self._insertFunctionStep('prepareFiles')
 
         self._insertFunctionStep('createOutputStep')
 
 
     def createOutputStep(self):
-        protein_dir = Path(self._getExtraPath()) / "protein"
-        ligand_dir = Path(self._getExtraPath()) / "molecule"
+        proteinDir = Path(self._getExtraPath()) / "protein"
+        ligandDir = Path(self._getExtraPath()) / "molecule"
 
-        project_dir = Path(self.getWorkingDir()).parent.resolve().parent
-        protein_full = project_dir / protein_dir
-        ligand_full = project_dir / ligand_dir
+        projectDir = Path(self.getWorkingDir()).parent.resolve().parent
+        proteinFull = projectDir / proteinDir
+        ligandFull = projectDir / ligandDir
 
-        output_file = self._getExtraPath('scorch2_results.tsv')
-        output_file_full = project_dir / output_file
+        outputFile = self._getExtraPath('scorch2_results.tsv')
+        outputFileFull = projectDir / outputFile
 
-        models_dir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/models'))
+        modelsDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/models'))
 
-        sc2_ps_model = os.path.abspath(os.path.join(models_dir, 'sc2_ps.xgb'))
-        sc2_pb_model = os.path.abspath(os.path.join(models_dir, 'sc2_pb.xgb'))
-        ps_scaler = os.path.abspath(os.path.join(models_dir, 'sc2_ps_scaler'))
-        pb_scaler = os.path.abspath(os.path.join(models_dir, 'sc2_pb_scaler'))
+        sc2PsModel = os.path.abspath(os.path.join(modelsDir, 'sc2_ps.xgb'))
+        sc2PbModel = os.path.abspath(os.path.join(modelsDir, 'sc2_pb.xgb'))
+        psScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_ps_scaler'))
+        pbScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_pb_scaler'))
 
         pre_extracted = self.useFeatures.get()
         if not pre_extracted:
             args = [
                 str(scriptRescoring),
-                "--protein-dir", str(protein_full),
-                "--ligand-dir", str(ligand_full),
-                "--sc2_ps_model", str(sc2_ps_model),
-                "--sc2_pb_model", str(sc2_pb_model),
-                "--ps_scaler", str(ps_scaler),
-                "--pb_scaler", str(pb_scaler),
-                "--output", str(output_file_full),
-                "--ps_weight", str(self.ps_weight.get()),
-                "--pb_weight", str(self.pb_weight.get()),
+                "--protein-dir", str(proteinFull),
+                "--ligand-dir", str(ligandFull),
+                "--sc2_ps_model", str(sc2PsModel),
+                "--sc2_pb_model", str(sc2PbModel),
+                "--ps_scaler", str(psScaler),
+                "--pb_scaler", str(pbScaler),
+                "--output", str(outputFileFull),
+                "--ps_weight", str(self.psWeight.get()),
+                "--pb_weight", str(self.pbWeight.get()),
                 "--keep-temp",
                 "--res-dir", str('results') # why is this created in the repo and not in the gui?
             ]
@@ -132,13 +132,13 @@ class ProtocolSCORCH2(EMProtocol):
             args = [
                 str(scriptRescoring),
                 "--features", str(self.inputFeatures.get()),
-                "--sc2_ps_model", str(sc2_ps_model),
-                "--sc2_pb_model", str(sc2_pb_model),
-                "--ps_scaler", str(ps_scaler),
-                "--pb_scaler", str(pb_scaler),
-                "--output", str(output_file_full),
-                "--ps_weight", str(self.ps_weight.get()),
-                "--pb_weight", str(self.pb_weight.get())
+                "--sc2_ps_model", str(sc2PsModel),
+                "--sc2_pb_model", str(sc2PbModel),
+                "--ps_scaler", str(psScaler),
+                "--pb_scaler", str(pbScaler),
+                "--output", str(outputFileFull),
+                "--ps_weight", str(self.psWeight.get()),
+                "--pb_weight", str(self.pbWeight.get())
             ]
 
         if self.aggregate.get():
@@ -149,12 +149,12 @@ class ProtocolSCORCH2(EMProtocol):
             args=" ".join(args),
             condaDic=SCORCH2_DIC,
             program="python",
-            cwd=str(current_dir.parent.parent)
+            cwd=str(currentDir.parent.parent)
         )
         #move results folder to scipion outputs, idk why it is created in the dir where the script is called
         if not pre_extracted:
-            res_dir = Path(self._getExtraPath()) / "results"
-            shutil.move(current_dir.parent.parent/'results', res_dir)
+            resDir = Path(self._getExtraPath()) / "results"
+            shutil.move(currentDir.parent.parent/'results', resDir)
 
 
     # --------------------------- INFO functions -----------------------------------
@@ -184,32 +184,32 @@ class ProtocolSCORCH2(EMProtocol):
 
         protein = self.inputPDBproteinFile.get()
         print(protein)
-        protein_path = Path(protein.getFileName())
-        pdb_id = protein_path.stem
-        protein_file = proteinDir / f"{pdb_id}_protein.pdbqt"
-        shutil.copy(protein_path, protein_file)
+        proteinPath = Path(protein.getFileName())
+        pdbId = proteinPath.stem
+        proteinFile = proteinDir / f"{pdbId}_protein.pdbqt"
+        shutil.copy(proteinPath, proteinFile)
 
         ligands = self.inputPDBligandFiles.get()
-        ligandOutDir = moleculeDir / pdb_id
+        ligandOutDir = moleculeDir / pdbId
         ligandOutDir.mkdir(parents=True, exist_ok=True)
 
         # Regex for valid ligand naming pattern
-        valid_pattern = re.compile(rf"^{re.escape(pdb_id)}_[A-Za-z0-9]+_pose.*\.pdbqt$")
+        validPattern = re.compile(rf"^{re.escape(pdbId)}_[A-Za-z0-9]+_pose.*\.pdbqt$")
 
         for i, ligand in enumerate(ligands, start=1):
-            ligand_path = Path(ligand.getFileName())
-            orig_name = ligand_path.name
+            ligandPath = Path(ligand.getFileName())
+            origName = ligandPath.name
 
-            if valid_pattern.match(orig_name):
-                new_name = orig_name
+            if validPattern.match(origName):
+                newName = origName
             else:
                 # Extract numeric ID from ligand filename
-                match = re.match(r"(\d+)", ligand_path.stem)
+                match = re.match(r"(\d+)", ligandPath.stem)
                 number = match.group(1) if match else str(i)
 
                 # Generate new standardized name: {protein_pdbid}_{number}_pose{i}.pdbqt
-                new_name = f"{pdb_id}_{number}_pose{i}.pdbqt"
-                print(f"Renaming ligand '{orig_name}' ? '{new_name}'")
+                newName = f"{pdbId}_{number}_pose{i}.pdbqt"
+                print(f"Renaming ligand '{origName}' ? '{newName}'")
 
-            dest = ligandOutDir / new_name
-            shutil.copy(ligand_path, dest)
+            dest = ligandOutDir / newName
+            shutil.copy(ligandPath, dest)
