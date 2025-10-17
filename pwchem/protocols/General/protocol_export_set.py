@@ -106,11 +106,11 @@ class ProtChemImportExportSet(EMProtocol):
             objValues = attrValues[i]
             for k, v in zip(attrKeys, objValues):
                 val = v.get()
-                if type(v.get()) == str and os.path.isfile(v.get()):
+                if type(v.get()) == str and os.path.isfile(v.get()) and os.getcwd() not in v.get():
+                    # Copy files if import in different project
                     oDir = self._getExtraPath(k)
                     if not os.path.exists(oDir):
                         os.mkdir(oDir)
-                    #     todo: copy files only if the project is different
                     nVal = os.path.join(oDir, getBaseFileName(val))
                     shutil.copy(val, nVal)
                     v = String(nVal)
