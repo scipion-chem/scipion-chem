@@ -70,9 +70,7 @@ class SelectLigandAtom(VariableWizard):
     parser = PDBParser().get_structure(molFile, molFile)
     atomNames = []
     for model in parser:
-      for i, atom in enumerate(model.get_atoms()):
-        if i == 0:
-          print(dir(atom))
+      for atom in model.get_atoms():
         atomNames.append(atom.get_name())
     atomNames = natural_sort(atomNames)
     return atomNames
