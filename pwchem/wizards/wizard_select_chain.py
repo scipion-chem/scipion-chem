@@ -45,7 +45,7 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 from pwchem.protocols import *
 
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct
+from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
@@ -66,6 +66,7 @@ class SelectLigandAtom(VariableWizard):
         runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
         molFile = oFile
 
+    molFile = relabelAtomsPDB(molFile)
     parser = PDBParser().get_structure(molFile, molFile)
     atomNames = []
     for model in parser:
