@@ -34,7 +34,7 @@ from pathlib import Path
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
-from pwchem.utils import *
+from pwchem.utils import os, shutil, re
 from pwchem import Plugin, SCORCH2_DIC
 currentDir = Path(__file__).parent.resolve()
 scriptRescoring = currentDir.parent.parent/'scripts'/'scorch2_rescoring.py'
@@ -159,10 +159,12 @@ class ProtocolSCORCH2(EMProtocol):
         return methods
 
     def _validate(self):
-        pass
+        errors = []
+        return errors
 
     def _warnings(self):
-        pass
+        warnings = []
+        return warnings
 
     # --------------------------- UTILS functions -----------------------------------
 

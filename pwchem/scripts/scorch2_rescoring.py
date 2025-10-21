@@ -296,42 +296,42 @@ def normalizeFeatures(featureFile: str, psScalerPath: str, pbScalerPath: str,
     
     # Separate IDs from features first
     ids = df['Id'].copy()
-    XAll = df.drop(['Id'], axis=1)
+    x_all = df.drop(['Id'], axis=1)
     
     # Get expected columns from scalers
     try:
         psExpected = list(psScaler.feature_names_in_)
         print(f"Aligned features to {len(psExpected)} expected columns")
     except AttributeError:
-        psExpected = sorted(XAll.columns)  # Fallback: assume sorted order
+        psExpected = sorted(x_all.columns)  # Fallback: assume sorted order
         print("⚠️ PS scaler feature_names_in_ not available, using sorted columns (may cause issues)")
 
     try:
         pbExpected = list(pbScaler.feature_names_in_)
         print(f"Aligned features to {len(pbExpected)} expected columns")
     except AttributeError:
-        pbExpected = sorted(XAll.columns)
+        pbExpected = sorted(x_all.columns)
         print("⚠️ PB scaler feature_names_in_ not available, using sorted columns (may cause issues)")
 
     # Align features
-    XPs = XAll.reindex(columns=psExpected, fill_value=0)
-    XPb = XAll.reindex(columns=pbExpected, fill_value=0)
+    x_ps = x_all.reindex(columns=psExpected, fill_value=0)
+    x_pb = x_all.reindex(columns=pbExpected, fill_value=0)
     
     # Normalize features
     try:
-        with tqdm(total=len(XPs), desc="Normalizing PS features", unit="feature") as psPbar:
-            XPsNormalized = psScaler.transform(XPs)
-            psPbar.update(len(XPs))
+        with tqdm(total=len(x_ps), desc="Normalizing PS features", unit="feature") as psPbar:
+            x_ps_normalized = psScaler.transform(x_ps)
+            psPbar.update(len(x_ps))
 
-        with tqdm(total=len(XPb), desc="Normalizing PB features", unit="feature") as pbPbar:
-            XPbNormalized = pbScaler.transform(XPb)
-            pbPbar.update(len(XPb))
+        with tqdm(total=len(x_pb), desc="Normalizing PB features", unit="feature") as pbPbar:
+            x_pb_normalized = pbScaler.transform(x_pb)
+            pbPbar.update(len(x_pb))
 
         # Create normalized DataFrames
-        dfPsNorm = pd.DataFrame(XPsNormalized, columns=XPs.columns)
+        dfPsNorm = pd.DataFrame(x_ps_normalized, columns=x_ps.columns)
         dfPsNorm.insert(0, 'Id', ids)
         
-        dfPbNorm = pd.DataFrame(XPbNormalized, columns=XPb.columns)
+        dfPbNorm = pd.DataFrame(x_pb_normalized, columns=x_pb.columns)
         dfPbNorm.insert(0, 'Id', ids)
         
         # Save normalized features
@@ -409,16 +409,16 @@ def loadNormalizedFeatures(psFeaturePath: str, pbFeaturePath: str) -> Tuple[xgb.
         ids = dfPs['Id'].copy()
         
         # Prepare feature matrices
-        XPs = dfPs.drop(['Id'], axis=1, errors='ignore')
-        XPb = dfPb.drop(['Id'], axis=1, errors='ignore')
+        x_ps = dfPs.drop(['Id'], axis=1, errors='ignore')
+        x_pb = dfPb.drop(['Id'], axis=1, errors='ignore')
         
         # Convert to XGBoost DMatrix
-        psFeatures = xgb.DMatrix(XPs, feature_names=XPs.columns.tolist())
-        pbFeatures = xgb.DMatrix(XPb, feature_names=XPb.columns.tolist())
+        psFeatures = xgb.DMatrix(x_ps, feature_names=x_ps.columns.tolist())
+        pbFeatures = xgb.DMatrix(x_pb, feature_names=x_pb.columns.tolist())
         
         print("Loaded normalized features:")
-        print(f"  PS features: {XPs.shape[0]} compounds, {XPs.shape[1]} features")
-        print(f"  PB features: {XPb.shape[0]} compounds, {XPb.shape[1]} features")
+        print(f"  PS features: {x_ps.shape[0]} compounds, {x_ps.shape[1]} features")
+        print(f"  PB features: {x_pb.shape[0]} compounds, {x_pb.shape[1]} features")
         
         return psFeatures, pbFeatures, ids
         

@@ -80,8 +80,8 @@ class TestSCORCH2(TestImportSequences):
                 repair=3)
 
             cls.launchProtocol(cls.protPrepareReceptor)
-        except:
-            print('Autodock plugin is necesssary to run this test')
+        except Exception as ex:
+            print(f'Autodock plugin is necesssary to run this test: {ex}')
 
     @classmethod
     def _runPrepareLigandsADT(cls):
@@ -92,8 +92,8 @@ class TestSCORCH2(TestImportSequences):
                 inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules)
 
             cls.launchProtocol(cls.protPrepareLigands)
-        except:
-            print('Autodock plugin is necesssary to run this test')
+        except Exception as ex:
+            print(f'Autodock plugin is necesssary to run this test: {ex}')
 
     @classmethod
     def _runPrepareLigandsOBabel(cls):
