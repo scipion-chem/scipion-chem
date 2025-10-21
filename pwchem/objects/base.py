@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import enum, io, subprocess, pickle, os
+import enum, io, pickle
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
@@ -114,34 +114,11 @@ class SequenceChem(data.Sequence):
 
     return data
 
-  def setInteractScoresDic(self, new_entries, data, output_file):
-    '''From a list of 'entries' writes the output file with the new entries of scores'''
-    for new_entry in new_entries:
-        seqName = new_entry["sequence"]
-        mols_dict = new_entry["molecules"]
-
-        existing_seq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
-
-        if existing_seq:
-            for mol, new_scores in mols_dict.items():
-                if mol in existing_seq["molecules"]:
-                    for score_name, score_val in new_scores.items():
-                        if score_name not in existing_seq["molecules"][mol]:
-                            existing_seq["molecules"][mol][score_name] = score_val
-                else:
-                    existing_seq["molecules"][mol] = new_scores
-        else:
-            data["entries"].append(new_entry)
-
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-    self.setInteractScoresFile(output_file)
-
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
 
   def setInteractScoresFile(self, intFile):
-    self._interactScoresFile.set(intFile) #todo this does not put the path int the ddbb
+    self._interactScoresFile.set(intFile)
 
 
 class SetOfSequencesChem(data.SetOfSequences):
@@ -225,8 +202,6 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getInteractScoresDic(self, calculate=False):
     '''Returns data from the files where the interaction scores are stored.'''
     if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
-      #with open(self.getInteractScoresFile(), 'rb') as f:
-      #  intDic = pickle.load(f)
       try:
           with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
               data = json.load(f)
@@ -235,10 +210,6 @@ class SetOfSequencesChem(data.SetOfSequences):
       except (json.JSONDecodeError, FileNotFoundError):
           data = {"entries": []}
     else:
-      #intDic = {}
-      #for seq in self:
-      #  with open(seq.getInteractScoresFile(), 'rb') as f:
-      #    intDic[seq.getSeqName()] = pickle.load(f)
       data = {"entries": []}
     return data
 
