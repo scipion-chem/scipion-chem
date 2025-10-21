@@ -375,7 +375,7 @@ class SequenceChemViewer(SequenceGeneralViewer):
       outSeqs = self.getOutSequences()
       filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
       if filtMolNames == 'All':
-        intAr, seqNames, molNames, scoreType = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
+        intAr, _, _, scoreType = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
         scoreList = intAr.flatten()
 
         self.plotter = EmPlotter(x=1, y=1, windowTitle=f'{scoreType} score distribution')
@@ -387,8 +387,6 @@ class SequenceChemViewer(SequenceGeneralViewer):
 
         n = 5
         mult = 10 ** n
-        stepSize = int(round((high - low) / self.intervals.get(), n) * mult)
-        #bins = [i / mult for i in range(int(low * mult), int(high * mult), stepSize)]
         bins = np.linspace(low, high + epsilon, self.intervals.get() + 1)
         _, _, bars = a.hist(scoreList, bins=bins, linewidth=1, label="Map", rwidth=0.9)
 

@@ -213,28 +213,28 @@ class SetOfSequencesChem(data.SetOfSequences):
       data = {"entries": []}
     return data
 
-  def setInteractScoresDic(self, new_entries, data, output_file):
+  def setInteractScoresDic(self, newEntries, data, outputFile):
     '''From a list of 'entries' writes the output file with the new entries of scores'''
-    for new_entry in new_entries:
-        seqName = new_entry["sequence"]
-        mols_dict = new_entry["molecules"]
+    for newEntry in newEntries:
+        seqName = newEntry["sequence"]
+        molsDict = newEntry["molecules"]
 
-        existing_seq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
+        existingSeq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
 
-        if existing_seq:
-            for mol, new_scores in mols_dict.items():
-                if mol in existing_seq["molecules"]:
-                    for score_name, score_val in new_scores.items():
-                        if score_name not in existing_seq["molecules"][mol]:
-                            existing_seq["molecules"][mol][score_name] = score_val
+        if existingSeq:
+            for mol, newScores in molsDict.items():
+                if mol in existingSeq["molecules"]:
+                    for scoreName, scoreVal in newScores.items():
+                        if scoreName not in existingSeq["molecules"][mol]:
+                            existingSeq["molecules"][mol][scoreName] = scoreVal
                 else:
-                    existing_seq["molecules"][mol] = new_scores
+                    existingSeq["molecules"][mol] = newScores
         else:
-            data["entries"].append(new_entry)
+            data["entries"].append(newEntry)
 
-    with open(output_file, "w", encoding="utf-8") as f:
+    with open(outputFile, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
-    self.setInteractScoresFile(output_file)
+    self.setInteractScoresFile(outputFile)
 
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()

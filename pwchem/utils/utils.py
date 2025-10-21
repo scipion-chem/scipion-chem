@@ -1268,13 +1268,13 @@ def filterScores(intAr, seqNames, molNames, scThres):
   return intAr, seqNames, molNames
 
 def formatInteractionsArray(intDic, seqNames, molNames, scoreType):
-  score_key = f"score_{scoreType}"
+  scoreKey = f"score_{scoreType}"
   intAr = np.zeros((len(seqNames), len(molNames)))
   for i, seqName in enumerate(seqNames):
     for j, molName in enumerate(molNames):
             try:
                 # get the numeric value for that score type
-                value = intDic[seqName][molName][score_key]
+                value = intDic[seqName][molName][scoreKey]
             except KeyError:
                 # if missing, assign NaN
                 value = np.nan
