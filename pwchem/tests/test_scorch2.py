@@ -47,9 +47,10 @@ class TestSCORCH2(TestImportSequences):
 
         cls._runPrepareLigandsADT()
         cls._runPrepareReceptorADT()
-        if not hasattr(cls, 'protPrepareLigands') or not hasattr(cls, 'protPrepareReceptor'):
-            print("Autodock plugin not available ? skipping SCORCH2 test")
-            return
+        cls._waitOutput(cls.protPrepareLigands, 'outputSmallMolecules')
+        cls._waitOutput(cls.protPrepareReceptor, 'outputStructure')
+
+        print(cls.protPrepareReceptor.get())
 
 
     @classmethod
