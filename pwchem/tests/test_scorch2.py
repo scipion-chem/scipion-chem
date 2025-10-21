@@ -29,10 +29,8 @@ from pwem.protocols import ProtImportPdb
 from pyworkflow.tests import setupTestProject, DataSet
 
 # Scipion chem imports
-from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands
+from pwchem.protocols import ProtChemImportSmallMolecules
 from pwchem.tests import TestImportSequences, prepRec
-from pwchem.utils import assertHandle
-
 from ..protocols import ProtocolSCORCH2
 
 
@@ -49,8 +47,9 @@ class TestSCORCH2(TestImportSequences):
 
         cls._runPrepareLigandsADT()
         cls._runPrepareReceptorADT()
-        cls._waitOutput(cls.protPrepareLigands, 'outputSmallMolecules')
-        cls._waitOutput(cls.protPrepareReceptor, 'outputStructure')
+        if not hasattr(cls, 'protPrepareLigands') or not hasattr(cls, 'protPrepareReceptor'):
+            print("Autodock plugin not available ? skipping SCORCH2 test")
+            return
 
 
     @classmethod
@@ -95,15 +94,6 @@ class TestSCORCH2(TestImportSequences):
         except Exception as ex:
             print(f'Autodock plugin is necesssary to run this test: {ex}')
 
-    @classmethod
-    def _runPrepareLigandsOBabel(cls):
-        cls.protOBabel = cls.newProtocol(
-            ProtChemOBabelPrepareLigands,
-            inputType=0, method_charges=0,
-            inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
-            doConformers=False)
-
-        cls.proj.launchProtocol(cls.protOBabel)
 
     def _runSCORCH2(self):
         protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
