@@ -273,6 +273,12 @@ class Plugin(pwem.Plugin):
             'SCORCH_MODELS_DOWNLOADED'
         )
 
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "git clone https://github.com/LinCompbio/SCORCH2.git",
+            'SCORCH2_REPO_CLONED'
+        )
+
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
 

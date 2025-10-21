@@ -36,8 +36,10 @@ from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 from pwchem.utils import os, shutil, re, runOpenBabel
 from pwchem import Plugin, SCORCH2_DIC
+
+
 currentDir = Path(__file__).parent.resolve()
-scriptRescoring = currentDir.parent.parent/'scripts'/'scorch2_rescoring.py'
+scriptRescoring =  os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'SCORCH2/scorch2_rescoring.py'))
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -125,6 +127,7 @@ class ProtocolSCORCH2(EMProtocol):
         pbScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_pb_scaler'))
 
         preExtracted = self.useFeatures.get()
+        print(scriptRescoring)
         if not preExtracted:
             args = [
                 str(scriptRescoring),
@@ -161,12 +164,12 @@ class ProtocolSCORCH2(EMProtocol):
             args=" ".join(args),
             condaDic=SCORCH2_DIC,
             program="python",
-            cwd=str(currentDir.parent.parent)
+            cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home']))
         )
         #move results folder to scipion outputs, idk why it is created in the dir where the script is called
         if not preExtracted:
             resDir = Path(self._getExtraPath()) / "results"
-            shutil.move(currentDir.parent.parent/'results', resDir)
+            shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']),'results')), resDir)
 
     def moveFiles(self):
         extraPath = Path(self._getExtraPath())

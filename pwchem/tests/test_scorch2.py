@@ -23,14 +23,15 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import time
 from pathlib import Path
 
 from pwem.protocols import ProtImportPdb
 from pyworkflow.tests import setupTestProject, DataSet
 
 # Scipion chem imports
-from pwchem.protocols import ProtChemImportSmallMolecules
-from pwchem.tests import TestImportSequences, prepRec
+from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands, ProtChemPrepareReceptor
+from pwchem.tests import TestImportSequences
 import pyworkflow.tests as tests
 from ..protocols import ProtocolSCORCH2
 
@@ -46,10 +47,10 @@ class TestSCORCH2(TestImportSequences):
         cls._runImportPDB()
         cls._runImportSmallMols()
 
-        cls._runPrepareLigandsADT()
-        cls._runPrepareReceptorADT()
-        cls._waitOutput(cls.protPrepareLigands, 'outputSmallMolecules')
-        cls._waitOutput(cls.protPrepareReceptor, 'outputStructure')
+        cls._runPrepareLigandsOBabel()
+        cls._runPrepareReceptorOBabel()
+        cls._waitOutput(cls.protOBabel, 'outputSmallMolecules')
+        cls._waitOutput(cls.receptorOBabel, 'outputStructure')
 
         print(cls.protPrepareReceptor.get())
 
@@ -63,38 +64,27 @@ class TestSCORCH2(TestImportSequences):
 
     @classmethod
     def _runImportPDB(cls):
-        protImportPDB = cls.newProtocol(
+        cls.protImportPDB = cls.newProtocol(
             ProtImportPdb,
             inputPdbData=1, pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
-        cls.launchProtocol(protImportPDB)
-        cls.protImportPDB = protImportPDB
+        cls.launchProtocol(cls.protImportPDB, wait=True)
 
     @classmethod
-    def _runPrepareReceptorADT(cls):
-        try:
-            from autodock.protocols import ProtChemADTPrepareReceptor
-            cls.protPrepareReceptor = cls.newProtocol(
-                ProtChemADTPrepareReceptor,
-                inputAtomStruct=cls.protImportPDB.outputPdb,
-                HETATM=True, rchains=True,
-                chain_name=prepRec,
-                repair=3)
-
-            cls.launchProtocol(cls.protPrepareReceptor)
-        except Exception as ex:
-            print(f'Autodock plugin is necesssary to run this test: {ex}')
+    def _runPrepareReceptorOBabel(cls):
+        cls.receptorOBabel = cls.newProtocol(
+            ProtChemPrepareReceptor,
+            inputSmallMolecules=cls.protImportPDB.outputStructure)
+        cls.proj.launchProtocol(cls.receptorOBabel)
 
     @classmethod
-    def _runPrepareLigandsADT(cls):
-        try:
-            from autodock.protocols import ProtChemADTPrepareLigands
-            cls.protPrepareLigands = cls.newProtocol(
-                ProtChemADTPrepareLigands,
-                inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules)
+    def _runPrepareLigandsOBabel(cls):
+        cls.protOBabel = cls.newProtocol(
+            ProtChemOBabelPrepareLigands,
+            inputType=0, method_charges=0,
+            inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
+            doConformers=False)
 
-            cls.launchProtocol(cls.protPrepareLigands)
-        except Exception as ex:
-            print(f'Autodock plugin is necesssary to run this test: {ex}')
+        cls.proj.launchProtocol(cls.protOBabel)
 
 
     def _runSCORCH2(self):
