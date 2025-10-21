@@ -238,27 +238,27 @@ class ProtocolSCORCH2(EMProtocol):
             else:
                 return True, files
 
-    def convertFiles(self, file_list, base_dir):
+    def convertFiles(self, fileList, baseDir):
         """Convert PDB to PDBQT, keeping output in the same folder as the input file"""
-        for file in file_list:
+        for file in fileList:
             if file.suffix.lower() == ".pdb":
                 basename = file.stem
-                pdbqtFile = Path(base_dir) / f"{basename}.pdbqt"
+                pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
 
-                input_abs = str(file.resolve())
-                output_abs = str(pdbqtFile.resolve())
+                inputAbs = str(file.resolve())
+                outputAbs = str(pdbqtFile.resolve())
 
-                args = f"-ipdb {input_abs} -opdbqt -O {output_abs}"
+                args = f"-ipdb {inputAbs} -opdbqt -O {outputAbs}"
                 runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
             else:
                 pass
 
     def removePdbFiles(self, directory):
         """Removes .pdb files only if their corresponding .pdbqt exists in the same directory."""
-        for pdb_file in directory.rglob("*.pdb"):
-            pdbqt_file = pdb_file.with_suffix(".pdbqt")
-            if pdbqt_file.exists():
+        for pdbFile in directory.rglob("*.pdb"):
+            pdbqtFile = pdbFile.with_suffix(".pdbqt")
+            if pdbqtFile.exists():
                 try:
-                    pdb_file.unlink()
+                    pdbFile.unlink()
                 except Exception as e:
-                    print(f"[WARNING] Could not delete {pdb_file.name}: {e}")
+                    print(f"[WARNING] Could not delete {pdbFile.name}: {e}")
