@@ -34,7 +34,7 @@ from pathlib import Path
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
-from pwchem.utils import os, shutil, re
+from pwchem.utils import os, shutil, re, runOpenBabel
 from pwchem import Plugin, SCORCH2_DIC
 currentDir = Path(__file__).parent.resolve()
 scriptRescoring = currentDir.parent.parent/'scripts'/'scorch2_rescoring.py'
@@ -60,11 +60,11 @@ class ProtocolSCORCH2(EMProtocol):
                         help='Input file where the pre-extracted features are stored.')
         # Ligand and protein file
         iGroup.addParam('inputPDBproteinFile', params.PointerParam, pointerClass='AtomStruct',
-                        label='Input PDB protein file: ', allowsNull=True,
+                        label='Input protein: ', allowsNull=True,
                         condition='not useFeatures',
                         help='Input PDB protein file.')
         iGroup.addParam('inputPDBligandFiles', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                        label='Input PDB ligand files: ', allowsNull=True,
+                        label='Input ligand: ', allowsNull=True,
                         condition='not useFeatures',
                         help='Input folder with PDB ligand files.')
         # Aggregate
@@ -81,10 +81,30 @@ class ProtocolSCORCH2(EMProtocol):
     def _insertAllSteps(self):
         preExtracted = self.useFeatures.get()
         if not preExtracted:
-            self._insertFunctionStep('prepareFiles')
+            self._insertFunctionStep('moveFiles')
 
+        self._insertFunctionStep('convertInputStep')
         self._insertFunctionStep('createOutputStep')
 
+    def convertInputStep(self):
+        proteinDir = Path(self._getExtraPath()) / "protein"
+        ligandDir = Path(self._getExtraPath()) / "molecule"
+
+        proteinFiles = list(proteinDir.glob("*"))
+        if proteinFiles:
+            print("convert protein")
+            self.convertFiles(proteinFiles, proteinDir)
+            self.removePdbFiles(proteinDir)
+        else:
+            print("[WARNING] No protein files found.")
+
+        ligandFiles = [f for f in ligandDir.rglob("*") if f.is_file()]
+        if ligandFiles:
+            print("convert ligands")
+            self.convertFiles(ligandFiles, ligandDir)
+            self.removePdbFiles(ligandDir)
+        else:
+            print("[WARNING] No ligand files found.")
 
     def createOutputStep(self):
         proteinDir = Path(self._getExtraPath()) / "protein"
@@ -148,27 +168,7 @@ class ProtocolSCORCH2(EMProtocol):
             resDir = Path(self._getExtraPath()) / "results"
             shutil.move(currentDir.parent.parent/'results', resDir)
 
-
-    # --------------------------- INFO functions -----------------------------------
-    def _summary(self):
-        summary = ["The results have been saved in the extra folder as scorch2.results.tsv.", "Features and normalized features have been saved in the extra/results folder, along with the aggregated results and target results."]
-        return summary
-
-    def _methods(self):
-        methods = []
-        return methods
-
-    def _validate(self):
-        errors = []
-        return errors
-
-    def _warnings(self):
-        warnings = []
-        return warnings
-
-    # --------------------------- UTILS functions -----------------------------------
-
-    def prepareFiles(self):
+    def moveFiles(self):
         extraPath = Path(self._getExtraPath())
 
         proteinDir = extraPath / "protein"
@@ -180,7 +180,7 @@ class ProtocolSCORCH2(EMProtocol):
         print(protein)
         proteinPath = Path(protein.getFileName())
         pdbId = proteinPath.stem
-        proteinFile = proteinDir / f"{pdbId}_protein.pdbqt"
+        proteinFile = proteinDir / f"{pdbId}_protein{proteinPath.suffix}"
         shutil.copy(proteinPath, proteinFile)
 
         ligands = self.inputPDBligandFiles.get()
@@ -201,9 +201,61 @@ class ProtocolSCORCH2(EMProtocol):
                 match = re.match(r"(\d+)", ligandPath.stem)
                 number = match.group(1) if match else str(i)
 
-                # Generate new standardized name: {protein_pdbid}_{number}_pose{i}.pdbqt
-                newName = f"{pdbId}_{number}_pose{i}.pdbqt"
-                print(f"Renaming ligand '{origName}' ? '{newName}'")
+                # Generate new standardized name
+                newName = f"{pdbId}_{number}_pose{i}{ligandPath.suffix}"
 
             dest = ligandOutDir / newName
             shutil.copy(ligandPath, dest)
+
+    # --------------------------- INFO functions -----------------------------------
+    def _summary(self):
+        summary = ["The results have been saved in the extra folder as scorch2.results.tsv.", "Features and normalized features have been saved in the extra/results folder, along with the aggregated results and target results."]
+        return summary
+
+    def _methods(self):
+        methods = []
+        return methods
+
+    def _validate(self):
+        errors = []
+        return errors
+
+    def _warnings(self):
+        warnings = []
+        return warnings
+
+    # --------------------------- UTILS functions -----------------------------------
+
+    def checkPdbqtFiles(self, directory):
+        """Check if files are PDBQT"""
+        files = list(directory.glob("*"))
+        for f in files:
+            if f.suffix.lower() != ".pdbqt":
+                return False, files
+            else:
+                return True, files
+
+    def convertFiles(self, file_list, base_dir):
+        """Convert PDB to PDBQT, keeping output in the same folder as the input file"""
+        for file in file_list:
+            if file.suffix.lower() == ".pdb":
+                basename = file.stem
+                pdbqtFile = Path(base_dir) / f"{basename}.pdbqt"
+
+                input_abs = str(file.resolve())
+                output_abs = str(pdbqtFile.resolve())
+
+                args = f"-ipdb {input_abs} -opdbqt -O {output_abs}"
+                runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+            else:
+                pass
+
+    def removePdbFiles(self, directory):
+        """Removes .pdb files only if their corresponding .pdbqt exists in the same directory."""
+        for pdb_file in directory.rglob("*.pdb"):
+            pdbqt_file = pdb_file.with_suffix(".pdbqt")
+            if pdbqt_file.exists():
+                try:
+                    pdb_file.unlink()
+                except Exception as e:
+                    print(f"[WARNING] Could not delete {pdb_file.name}: {e}")
