@@ -30,6 +30,7 @@
 SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-based virtual screening. (SC2, https://github.com/LinCompbio/SCORCH2)
 
 """
+import logging
 from pathlib import Path
 
 from pyworkflow.protocol import params
@@ -39,7 +40,7 @@ from pwchem import Plugin, SCORCH2_DIC
 
 
 currentDir = Path(__file__).parent.resolve()
-scriptRescoring =  os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'SCORCH2/scorch2_rescoring.py'))
+
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -84,8 +85,7 @@ class ProtocolSCORCH2(EMProtocol):
         preExtracted = self.useFeatures.get()
         if not preExtracted:
             self._insertFunctionStep('moveFiles')
-
-        self._insertFunctionStep('convertInputStep')
+            self._insertFunctionStep('convertInputStep')
         self._insertFunctionStep('createOutputStep')
 
     def convertInputStep(self):
@@ -94,19 +94,26 @@ class ProtocolSCORCH2(EMProtocol):
 
         proteinFiles = list(proteinDir.glob("*"))
         if proteinFiles:
-            print("convert protein")
             self.convertFiles(proteinFiles, proteinDir)
             self.removePdbFiles(proteinDir)
         else:
-            print("[WARNING] No protein files found.")
+            logging.warning("No protein files found.")
 
-        ligandFiles = [f for f in ligandDir.rglob("*") if f.is_file()]
+        ligandFiles = []
+        for subfolder in ligandDir.iterdir():
+            if subfolder.is_dir():
+                ligandFiles.extend(f for f in subfolder.glob("*") if f.is_file())
         if ligandFiles:
-            print("convert ligands")
-            self.convertFiles(ligandFiles, ligandDir)
-            self.removePdbFiles(ligandDir)
+            self.convertFiles(ligandFiles, os.path.abspath(subfolder))
+            self.removePdbFiles((subfolder))
+            pdbqtFiles = []
+            for subfolder in ligandDir.iterdir():
+                if subfolder.is_dir():
+                    pdbqtFiles.extend(f for f in subfolder.glob("*") if f.is_file())
+            for file in pdbqtFiles:
+                self.add_chain_id_inplace(file,"d")
         else:
-            print("[WARNING] No ligand files found.")
+            logging.warning("No ligand files found.")
 
     def createOutputStep(self):
         proteinDir = Path(self._getExtraPath()) / "protein"
@@ -119,18 +126,19 @@ class ProtocolSCORCH2(EMProtocol):
         outputFile = self._getExtraPath('scorch2_results.tsv')
         outputFileFull = projectDir / outputFile
 
+        scriptRescoringDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'SCORCH2'))
         modelsDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/models'))
 
+        script = os.path.abspath(os.path.join(scriptRescoringDir, 'scorch2_rescoring.py'))
         sc2PsModel = os.path.abspath(os.path.join(modelsDir, 'sc2_ps.xgb'))
         sc2PbModel = os.path.abspath(os.path.join(modelsDir, 'sc2_pb.xgb'))
         psScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_ps_scaler'))
         pbScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_pb_scaler'))
 
         preExtracted = self.useFeatures.get()
-        print(scriptRescoring)
         if not preExtracted:
             args = [
-                str(scriptRescoring),
+                str(script),
                 "--protein-dir", str(proteinFull),
                 "--ligand-dir", str(ligandFull),
                 "--sc2_ps_model", str(sc2PsModel),
@@ -145,7 +153,7 @@ class ProtocolSCORCH2(EMProtocol):
             ]
         else:
             args = [
-                str(scriptRescoring),
+                str(script),
                 "--features", str(self.inputFeatures.get()),
                 "--sc2_ps_model", str(sc2PsModel),
                 "--sc2_pb_model", str(sc2PbModel),
@@ -157,7 +165,8 @@ class ProtocolSCORCH2(EMProtocol):
             ]
 
         if self.aggregate.get():
-            args.append("--aggregate")
+            args.append("--aggregate --num-cores 30 --keep-temp")
+
 
         Plugin.runCondaCommand(
             self,
@@ -247,6 +256,7 @@ class ProtocolSCORCH2(EMProtocol):
 
                 inputAbs = str(file.resolve())
                 outputAbs = str(pdbqtFile.resolve())
+                print(outputAbs)
 
                 args = f"-ipdb {inputAbs} -opdbqt -O {outputAbs}"
                 runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
@@ -261,4 +271,29 @@ class ProtocolSCORCH2(EMProtocol):
                 try:
                     pdbFile.unlink()
                 except Exception as e:
-                    print(f"[WARNING] Could not delete {pdbFile.name}: {e}")
+                    logging.warning(f"Could not delete {pdbFile.name}: {e}")
+
+    def add_chain_id_inplace(self, pdb_file, chain_id='d'):
+        """
+        Add chain id (d by default)
+        """
+        with open(pdb_file, 'r') as f:
+            lines = f.readlines()
+
+        new_lines = []
+        for line in lines:
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                # SCORCH2 PDB: chainID en columna 22 (índice 21)
+                if len(line) >= 22:
+                    current_chain = line[21]
+                    if current_chain == ' ' or current_chain == '':
+                        line = line[:21] + chain_id + line[22:]
+                else:
+                    line = line.ljust(22)
+                    line = line[:21] + chain_id + line[22:]
+            new_lines.append(line)
+
+        with open(pdb_file, 'w') as f:
+            f.writelines(new_lines)
+
+

@@ -34,6 +34,7 @@ from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepare
 from pwchem.tests import TestImportSequences
 import pyworkflow.tests as tests
 from ..protocols import ProtocolSCORCH2
+from ..protocols.General.protocol_converter import ConvertStructures
 
 
 class TestSCORCH2(TestImportSequences):
@@ -47,12 +48,11 @@ class TestSCORCH2(TestImportSequences):
         cls._runImportPDB()
         cls._runImportSmallMols()
 
-        cls._runPrepareLigandsOBabel()
-        cls._runPrepareReceptorOBabel()
-        cls._waitOutput(cls.protOBabel, 'outputSmallMolecules')
-        cls._waitOutput(cls.receptorOBabel, 'outputStructure')
+        #cls._runPrepareLigandsOBabel()
+        cls._runConvertStructure()
 
-        print(cls.protPrepareReceptor.get())
+        cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules')
+        cls._waitOutput(cls.targetProt, 'outputStructure')
 
 
     @classmethod
@@ -73,8 +73,18 @@ class TestSCORCH2(TestImportSequences):
     def _runPrepareReceptorOBabel(cls):
         cls.receptorOBabel = cls.newProtocol(
             ProtChemPrepareReceptor,
-            inputSmallMolecules=cls.protImportPDB.outputStructure)
+            inputAtomStruct=cls.protImportPDB.outputPdb,
+            waters=True, HETATM=True, rchains=False, PDBFixer=False)
         cls.proj.launchProtocol(cls.receptorOBabel)
+
+    @classmethod
+    def _runConvertStructure(cls):
+        cls.targetProt = cls.newProtocol(
+            ConvertStructures,
+            inputObject=cls.protImportPDB.outputPdb,
+            outputFormatTarget=0
+        )
+        cls.proj.launchProtocol(cls.targetProt)
 
     @classmethod
     def _runPrepareLigandsOBabel(cls):
@@ -91,8 +101,8 @@ class TestSCORCH2(TestImportSequences):
         protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
 
         protSCORCH2.useFeatures.set('False')
-        protSCORCH2.inputPDBproteinFile.set(self.protPrepareReceptor.outputStructure)
-        protSCORCH2.inputPDBligandFiles.set(self.protPrepareLigands.outputSmallMolecules)
+        protSCORCH2.inputPDBproteinFile.set(self.targetProt.outputStructure)
+        protSCORCH2.inputPDBligandFiles.set(self.protImportSmallMols.outputSmallMolecules)
 
         self.proj.launchProtocol(protSCORCH2, wait=True)
         return protSCORCH2
@@ -103,9 +113,7 @@ class TestSCORCH2(TestImportSequences):
         extraPath = Path(protSCORCH2._getExtraPath())
         expectedCsv = extraPath / "scorch2_results.tsv"
 
-        if (expectedCsv.exists()):
-            self.assertTrue(expectedCsv.exists(), f"Expected output TSV not found at: {expectedCsv}")
-            self.assertGreater(expectedCsv.stat().st_size, 0, "Output TSV is empty")
-        else:
-            print('Try installing AutoDock')
+        self.assertTrue(expectedCsv.exists(), f"Expected output TSV not found at: {expectedCsv}")
+        self.assertGreater(expectedCsv.stat().st_size, 0, "Output TSV is empty")
+
 
