@@ -183,7 +183,6 @@ class ProtocolSCORCH2(EMProtocol):
         moleculeDir.mkdir(parents=True, exist_ok=True)
 
         protein = self.inputPDBproteinFile.get()
-        print(protein)
         proteinPath = Path(protein.getFileName())
         pdbId = proteinPath.stem
         proteinFile = proteinDir / f"{pdbId}_protein{proteinPath.suffix}"
@@ -196,7 +195,7 @@ class ProtocolSCORCH2(EMProtocol):
         for i, ligand in enumerate(ligands, start=1):
             ligandPath = Path(ligand.getFileName())
             origName = ligandPath.name
-            newName = f"{pdbId}_{origName}" 
+            newName = f"{pdbId}_{origName}"
 
             dest = ligandOutDir / newName
             shutil.copy(ligandPath, dest)
@@ -238,7 +237,6 @@ class ProtocolSCORCH2(EMProtocol):
 
                 inputAbs = str(file.resolve())
                 outputAbs = str(pdbqtFile.resolve())
-                print(outputAbs)
 
                 args = f"-ipdb {inputAbs} -opdbqt -O {outputAbs}"
                 runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
