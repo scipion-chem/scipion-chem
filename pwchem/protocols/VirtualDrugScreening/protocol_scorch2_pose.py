@@ -106,12 +106,6 @@ class ProtocolSCORCH2(EMProtocol):
         if ligandFiles:
             self.convertFiles(ligandFiles, os.path.abspath(subfolder))
             self.removePdbFiles((subfolder))
-            pdbqtFiles = []
-            for subfolder in ligandDir.iterdir():
-                if subfolder.is_dir():
-                    pdbqtFiles.extend(f for f in subfolder.glob("*") if f.is_file())
-            for file in pdbqtFiles:
-                self.add_chain_id_inplace(file,"d")
         else:
             logging.warning("No ligand files found.")
 
@@ -165,7 +159,7 @@ class ProtocolSCORCH2(EMProtocol):
             ]
 
         if self.aggregate.get():
-            args.append("--aggregate --num-cores 30 --keep-temp")
+            args.append("--aggregate --num-cores 30")
 
 
         Plugin.runCondaCommand(
@@ -199,22 +193,10 @@ class ProtocolSCORCH2(EMProtocol):
         ligandOutDir = moleculeDir / pdbId
         ligandOutDir.mkdir(parents=True, exist_ok=True)
 
-        # Regex for valid ligand naming pattern
-        validPattern = re.compile(rf"^{re.escape(pdbId)}_[A-Za-z0-9]+_pose.*\.pdbqt$")
-
         for i, ligand in enumerate(ligands, start=1):
             ligandPath = Path(ligand.getFileName())
             origName = ligandPath.name
-
-            if validPattern.match(origName):
-                newName = origName
-            else:
-                # Extract numeric ID from ligand filename
-                match = re.match(r"(\d+)", ligandPath.stem)
-                number = match.group(1) if match else str(i)
-
-                # Generate new standardized name
-                newName = f"{pdbId}_{number}_pose{i}{ligandPath.suffix}"
+            newName = f"{pdbId}_{origName}" 
 
             dest = ligandOutDir / newName
             shutil.copy(ligandPath, dest)
@@ -272,28 +254,3 @@ class ProtocolSCORCH2(EMProtocol):
                     pdbFile.unlink()
                 except Exception as e:
                     logging.warning(f"Could not delete {pdbFile.name}: {e}")
-
-    def add_chain_id_inplace(self, pdb_file, chain_id='d'):
-        """
-        Add chain id (d by default)
-        """
-        with open(pdb_file, 'r') as f:
-            lines = f.readlines()
-
-        new_lines = []
-        for line in lines:
-            if line.startswith("ATOM") or line.startswith("HETATM"):
-                # SCORCH2 PDB: chainID en columna 22 (índice 21)
-                if len(line) >= 22:
-                    current_chain = line[21]
-                    if current_chain == ' ' or current_chain == '':
-                        line = line[:21] + chain_id + line[22:]
-                else:
-                    line = line.ljust(22)
-                    line = line[:21] + chain_id + line[22:]
-            new_lines.append(line)
-
-        with open(pdb_file, 'w') as f:
-            f.writelines(new_lines)
-
-
