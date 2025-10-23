@@ -23,6 +23,7 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import os.path
 import time
 from pathlib import Path
 
@@ -112,8 +113,9 @@ class TestSCORCH2(TestImportSequences):
         self._waitOutput(protSCORCH2, '', sleepTime=10)
         extraPath = Path(protSCORCH2._getExtraPath())
         expectedCsv = extraPath / "scorch2_results.tsv"
+        expected = os.path.abspath(expectedCsv)
 
-        self.assertTrue(expectedCsv.exists(), f"Expected output TSV not found at: {expectedCsv}")
+        self.assertTrue(expectedCsv.exists(), f"Expected output TSV not found at: {expected}")
         self.assertGreater(expectedCsv.stat().st_size, 0, "Output TSV is empty")
 
 
