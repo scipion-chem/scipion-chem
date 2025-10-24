@@ -201,7 +201,6 @@ class ProtocolSCORCH2(EMProtocol):
         proteinDir.mkdir(parents=True, exist_ok=True)
         moleculeDir.mkdir(parents=True, exist_ok=True)
 
-        #protein = self.inputPDBproteinFile.get()
         protein = self.inputPDBligandFiles.get().getProteinFile()
         proteinPath = Path(protein)
         pdbId = proteinPath.stem
