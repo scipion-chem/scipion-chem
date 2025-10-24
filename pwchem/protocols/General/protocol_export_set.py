@@ -24,12 +24,14 @@
 # *
 # **************************************************************************
 
-import os, importlib
+import os, importlib, shutil
 
 from pwem.protocols import EMProtocol
 from pwem.objects import EMSet, String
 
 from pyworkflow.protocol import params
+
+from pwchem.utils import getBaseFileName
 
 IMP, EXP = 0, 1
 SET_NOCOPY = ['_size', '_streamState', '_mapperPath']
@@ -103,6 +105,15 @@ class ProtChemImportExportSet(EMProtocol):
         for i, obj in enumerate(outObjs):
             objValues = attrValues[i]
             for k, v in zip(attrKeys, objValues):
+                val = v.get()
+                if type(v.get()) == str and os.path.isfile(v.get()) and os.getcwd() not in v.get():
+                    # Copy files if import in different project
+                    oDir = self._getExtraPath(k)
+                    if not os.path.exists(oDir):
+                        os.mkdir(oDir)
+                    nVal = os.path.join(oDir, getBaseFileName(val))
+                    shutil.copy(val, nVal)
+                    v = String(nVal)
                 setattr(obj, k, v)
             oSet.append(obj)
         return oSet
@@ -161,7 +172,10 @@ class ProtChemImportExportSet(EMProtocol):
 
                     if line != "":
                         line += "; "
-                    line += str(value.get())
+                    val = str(value.get())
+                    if os.path.isfile(val):
+                        val = os.path.abspath(val)
+                    line += val
                 if i == 0:
                     fh.write(lineHdr + f"; {TYPE_STR}\n")
                     fh.write(lineTypes + "; ...\n")
@@ -175,7 +189,10 @@ class ProtChemImportExportSet(EMProtocol):
         oFile = self.getObjectsFile(oDir)[1]
         heads, lines = [], []
         for key, value in self.input.get().getAttributes():
-            heads.append(key), lines.append(str(value.get()))
+            val = str(value.get())
+            if os.path.isfile(val):
+                val = os.path.abspath(val)
+            heads.append(key), lines.append(val)
 
         with open(oFile, 'w') as f:
             f.write(';'.join(heads) + '\n')
