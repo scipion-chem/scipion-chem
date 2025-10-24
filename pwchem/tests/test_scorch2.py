@@ -27,19 +27,19 @@ import os.path
 import time
 from pathlib import Path
 
+from fpocket.protocols import FpocketFindPockets
 from pwem.protocols import ProtImportPdb
-from pyworkflow.tests import setupTestProject, DataSet
+from pyworkflow.tests import BaseTest, DataSet
 
 # Scipion chem imports
-from pwchem.protocols import ProtChemImportSmallMolecules, ProtChemOBabelPrepareLigands, ProtChemPrepareReceptor
-from pwchem.tests import TestImportSequences
+from pwchem.protocols import ProtChemImportSmallMolecules
 import pyworkflow.tests as tests
 from ..protocols import ProtocolSCORCH2
 from ..protocols.General.protocol_converter import ConvertStructures
-from ..utils import assertHandle
+from lephar.protocols import ProtChemLeDock
 
 
-class TestSCORCH2(TestImportSequences):
+class TestSCORCH2(BaseTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -50,11 +50,9 @@ class TestSCORCH2(TestImportSequences):
         cls._runImportPDB()
         cls._runImportSmallMols()
 
-        #cls._runPrepareLigandsOBabel()
-        cls._runConvertStructure()
 
-        cls._waitOutput(cls.protImportSmallMols, 'outputSmallMolecules')
-        cls._waitOutput(cls.targetProt, 'outputStructure')
+        cls._runFPocketFind()
+        cls._runLeDock()
 
 
     @classmethod
@@ -72,39 +70,36 @@ class TestSCORCH2(TestImportSequences):
         cls.launchProtocol(cls.protImportPDB, wait=True)
 
     @classmethod
-    def _runPrepareReceptorOBabel(cls):
-        cls.receptorOBabel = cls.newProtocol(
-            ProtChemPrepareReceptor,
-            inputAtomStruct=cls.protImportPDB.outputPdb,
-            waters=True, HETATM=True, rchains=False, PDBFixer=False)
-        cls.proj.launchProtocol(cls.receptorOBabel)
+    def _runFPocketFind(cls):
+        cls.protFPocket = cls.newProtocol(
+            FpocketFindPockets,
+            inputAtomStruct=cls.protImportPDB.outputPdb)
+
+        cls.launchProtocol(cls.protFPocket)
 
     @classmethod
-    def _runConvertStructure(cls):
-        cls.targetProt = cls.newProtocol(
-            ConvertStructures,
-            inputObject=cls.protImportPDB.outputPdb,
-            outputFormatTarget=0
-        )
-        cls.proj.launchProtocol(cls.targetProt)
+    def _runLeDock(cls):
+        cls.protLeDock = cls.newProtocol(
+            ProtChemLeDock,
+            wholeProt=False,
+            pocketRadiusN=3, nRuns=3,
+            numberOfThreads=4)
 
-    @classmethod
-    def _runPrepareLigandsOBabel(cls):
-        cls.protOBabel = cls.newProtocol(
-            ProtChemOBabelPrepareLigands,
-            inputType=0, method_charges=0,
-            inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
-            doConformers=False)
+        cls.protLeDock.inputStructROIs.set(cls.protFPocket)
+        cls.protLeDock.inputStructROIs.setExtended('outputStructROIs')
 
-        cls.proj.launchProtocol(cls.protOBabel)
+        cls.protLeDock.inputSmallMolecules.set(cls.protImportSmallMols)
+        cls.protLeDock.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+        cls.launchProtocol(cls.protLeDock)
 
 
     def _runSCORCH2(self):
         protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
 
         protSCORCH2.useFeatures.set('False')
-        protSCORCH2.inputPDBproteinFile.set(self.targetProt.outputStructure)
-        protSCORCH2.inputPDBligandFiles.set(self.protImportSmallMols.outputSmallMolecules)
+        #protSCORCH2.inputPDBproteinFile.set(self.targetProt.outputStructure)
+        protSCORCH2.inputPDBligandFiles.set(self.protLeDock.outputSmallMolecules)
 
         self.proj.launchProtocol(protSCORCH2, wait=True)
         return protSCORCH2
