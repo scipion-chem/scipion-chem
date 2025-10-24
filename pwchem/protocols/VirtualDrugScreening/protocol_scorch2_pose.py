@@ -260,8 +260,7 @@ class ProtocolSCORCH2(EMProtocol):
 
                 args = f"-ipdb {inputAbs} -opdbqt -O {outputAbs}"
                 runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
-            else:
-                pass
+
 
     def removePdbFiles(self, directory):
         """Removes .pdb files only if their corresponding .pdbqt exists in the same directory."""
@@ -285,17 +284,9 @@ class ProtocolSCORCH2(EMProtocol):
         reader = csv.DictReader(lines, delimiter=",")
 
         for row in reader:
-            compound_id = row["compound_id"].strip()
-            mol_name = compound_id.split("_", 1)[1].replace(".pdbqt", "")
+            compounId = row["compound_id"].strip()
+            molName = compounId.split("_", 1)[1].replace(".pdbqt", "")
             score = float(row["sc2_score"])
-            scoreDict[mol_name] = score
+            scoreDict[molName] = score
         return scoreDict
-
-        #for mol in mols:
-        molName = mol.getMolName().strip().lower()
-        if molName in score_dict:
-            mol.setScorchScore(score_dict[molName])
-            print(mol.getScorchScore())
-        else:
-            mol.setScorchScore(None)
 
