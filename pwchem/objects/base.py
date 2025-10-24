@@ -345,6 +345,7 @@ class SmallMolecule(data.EMObject):
     self._type = pwobj.String(kwargs.get('type', 'Standard'))
 
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))  # to be used when each mol has diff receptor
+    self._scorchScore = Float(kwargs.get('scorch2Score', None))
 
   def __str__(self):
     s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
@@ -452,6 +453,12 @@ class SmallMolecule(data.EMObject):
 
   def setMolClass(self, value):
     self._type.set(value)
+
+  def setScorchScore(self, value):
+    self._scorchScore.set(value)
+
+  def getScorchScore(self):
+    return self._scorchScore.get()
 
   def getUniqueName(self, grid=True, conf=True, pose=True, dock=True):
     name = self.getMolName()
@@ -576,6 +583,7 @@ class SetOfSmallMolecules(data.EMSet):
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
     self._docked = pwobj.Boolean(False)
 
+
   def __str__(self):
     s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
     return s
@@ -630,6 +638,7 @@ class SetOfSmallMolecules(data.EMSet):
 
   def setDocked(self, value=True):
     self._docked.set(value)
+
 
   def getUniqueMolNames(self):
     names = []

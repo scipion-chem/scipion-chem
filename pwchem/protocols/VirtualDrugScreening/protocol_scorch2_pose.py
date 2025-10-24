@@ -30,11 +30,15 @@
 SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-based virtual screening. (SC2, https://github.com/LinCompbio/SCORCH2)
 
 """
+import csv
 import logging
+from ctypes.wintypes import SMALL_RECT
 from pathlib import Path
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
+
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import os, shutil, re, runOpenBabel
 from pwchem import Plugin, SCORCH2_DIC
 
@@ -174,6 +178,22 @@ class ProtocolSCORCH2(EMProtocol):
             resDir = Path(self._getExtraPath()) / "results"
             shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']),'results')), resDir)
 
+        mols = self.inputPDBligandFiles.get()
+        newMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+        scoresDict = self.readScoresTSV()
+        for mol in mols:
+            newMol = SmallMolecule()
+            newMol.copy(mol)
+            molName = newMol.getMolName()
+            if molName in scoresDict:
+                newMol.setScorchScore(scoresDict[molName])
+            else:
+                newMol.setScorchScore(None)
+
+            newMols.append(newMol)
+
+        self._defineOutputs(outputSmallMolecules=newMols)
+
     def moveFiles(self):
         extraPath = Path(self._getExtraPath())
 
@@ -252,3 +272,30 @@ class ProtocolSCORCH2(EMProtocol):
                     pdbFile.unlink()
                 except Exception as e:
                     logging.warning(f"Could not delete {pdbFile.name}: {e}")
+
+    def readScoresTSV(self):
+        extraPath = Path(self._getExtraPath())
+        resultsTsv = extraPath / "scorch2_results.tsv"
+
+        scoreDict = {}
+
+        with open(resultsTsv, "r", encoding="utf-8-sig") as f:
+            lines = [line for line in f.readlines() if not line.startswith("#") and line.strip()]
+
+        reader = csv.DictReader(lines, delimiter=",")
+
+        for row in reader:
+            compound_id = row["compound_id"].strip()
+            mol_name = compound_id.split("_", 1)[1].replace(".pdbqt", "")
+            score = float(row["sc2_score"])
+            scoreDict[mol_name] = score
+        return scoreDict
+
+        #for mol in mols:
+        molName = mol.getMolName().strip().lower()
+        if molName in score_dict:
+            mol.setScorchScore(score_dict[molName])
+            print(mol.getScorchScore())
+        else:
+            mol.setScorchScore(None)
+

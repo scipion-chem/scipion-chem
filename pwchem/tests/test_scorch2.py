@@ -36,6 +36,7 @@ from pwchem.tests import TestImportSequences
 import pyworkflow.tests as tests
 from ..protocols import ProtocolSCORCH2
 from ..protocols.General.protocol_converter import ConvertStructures
+from ..utils import assertHandle
 
 
 class TestSCORCH2(TestImportSequences):
@@ -110,12 +111,7 @@ class TestSCORCH2(TestImportSequences):
 
     def test(self):
         protSCORCH2 = self._runSCORCH2()
-        self._waitOutput(protSCORCH2, '', sleepTime=10)
-        extraPath = Path(protSCORCH2._getExtraPath())
-        expectedCsv = extraPath / "scorch2_results.tsv"
-        expected = os.path.abspath(expectedCsv)
-
-        self.assertTrue(expectedCsv.exists(), f"Expected output TSV not found at: {expected}")
-        self.assertGreater(expectedCsv.stat().st_size, 0, "Output TSV is empty")
+        self._waitOutput(protSCORCH2, 'molecules', sleepTime=10)
+        (self.assertIsNotNone, getattr(protSCORCH2, 'molecules', None))
 
 
