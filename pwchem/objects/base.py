@@ -184,7 +184,7 @@ class SetOfSequencesChem(data.SetOfSequences):
       self._interactMols.set(mols)
 
   def getScoreTypes(self):
-      if self._scoreTypes is None:
+      if self._scoreTypes == "":
         return []
       return self._scoreTypes.get().split(",")
 
@@ -201,17 +201,8 @@ class SetOfSequencesChem(data.SetOfSequences):
 
   def getInteractScoresDic(self, calculate=False):
     '''Returns data from the files where the interaction scores are stored.'''
-    if not calculate and self.getInteractScoresFile() and os.path.getsize(self.getInteractScoresFile()) > 0:
-      try:
-          with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
-              data = json.load(f)
-          if "entries" not in data:
-              data["entries"] = []
-      except (json.JSONDecodeError, FileNotFoundError):
-          data = {"entries": []}
-    else:
-      data = {"entries": []}
-    return data
+    seq = self.getFirstItem()
+    return(seq.getInteractScoresDic())
 
   def setInteractScoresDic(self, newEntries, data, outputFile):
     '''From a list of 'entries' writes the output file with the new entries of scores'''

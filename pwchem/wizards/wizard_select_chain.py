@@ -736,7 +736,6 @@ class SelectScoreWizard(SelectElementWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
     def getListOfElements(self, protocol, seqSet):
-        print(seqSet.getScoreTypes())
         return seqSet.getScoreTypes()
 
 
