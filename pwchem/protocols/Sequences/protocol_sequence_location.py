@@ -32,6 +32,7 @@ This protocol is used to calculate conservation over a set of sequences and stor
 """
 import json
 import requests
+from fontTools.varLib.plot import stops
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
@@ -61,28 +62,45 @@ class ProtGetSequenceLocation(EMProtocol):
 
 
     def defineOutputStep(self):
-        data = self.downloadUniprotJson()
+        # og sequence data
+        inputSeq = self.inputSequence.get()
+        seqStr = inputSeq.getSequence()
+        seqId = inputSeq.getId()
+        seqName = inputSeq.getName()
+        seqDesc = inputSeq.getDescription() or ""
+        alphabet = inputSeq.getAlphabet()
+        isAmino = inputSeq.getIsAminoacids()
 
-        wholeSeq = self.inputSequence.get().getSequence()
+
+        data = self.downloadUniprotJson()
 
         # obtain each regions aa
         ranges = self.obtainRanges(data)
-        locationSeq = {}
+        if not ranges:
+            self.error("No topology regions found in UniProt record!")
+            return
+
+        seqROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
 
         for desc, info in ranges.items():
             start = info["start"]
             end = info["end"]
-            locationSeq[desc] = wholeSeq[start - 1:end]
-
-        # create SequenceROI for each region
-        seqROIs = SetOfSequenceROIs(filename=self._getPath('sequenceROIs.sqlite'))
-        for desc, seq in locationSeq.items():
-            type = ranges[desc]["type"]
-            seqRegion = Sequence(sequence=seq, description= desc)
-            seqROI = SequenceROI(sequence=self.inputSequence.get(), seqROI=seqRegion, type=type)
+            regionType = info["type"]
+            regionSeqStr = seqStr[start-1:end]
+            regionSeq = Sequence(name=f"{desc}_{regionType}",
+                                 sequence=regionSeqStr,
+                                 alphabet=alphabet,
+                                 isAminoacids=isAmino,
+                                 id=f"{seqId}_{desc}",
+                                 description=f"{seqDesc} | {desc} ({regionType}: {start}-{end})"
+                                 )
+            seqROI = SequenceROI(sequence=inputSeq, seqROI=regionSeq, type=regionType)
+            seqROI.setROIIdx(start)
+            seqROI.setROIIdx2(end)
             seqROIs.append(seqROI)
 
         self._defineOutputs(outputROIs=seqROIs)
+        self._defineSourceRelation(self.inputSequence, seqROIs)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -122,19 +140,25 @@ class ProtGetSequenceLocation(EMProtocol):
 
     def obtainRanges(self, data):
         features = data.get("features", [])
-
         regionRanges = {}
+        descCount = {}
 
-        for feature in features:
+        for i, feature in enumerate(features, start=1):
             start = feature["location"]["start"]["value"]
             end = feature["location"]["end"]["value"]
-            description = feature["description"]
-            type = feature["type"]
+            description = feature.get("description", f"Region_{i}")
+            ftype = feature.get("type", "Unknown")
 
-            regionRanges[description] = {
+            # handle duplicate descriptions
+            count = descCount.get(description, 0) + 1
+            descCount[description] = count
+
+            key = description if count == 1 else f"{description}_{count}"
+
+            regionRanges[key] = {
                 "start": start,
                 "end": end,
-                "type": type
+                "type": ftype
             }
 
         return regionRanges
