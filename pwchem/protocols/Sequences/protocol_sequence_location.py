@@ -66,7 +66,6 @@ class ProtGetSequenceLocation(EMProtocol):
         inputSeq = self.inputSequence.get()
         seqStr = inputSeq.getSequence()
         seqId = inputSeq.getId()
-        seqName = inputSeq.getName()
         seqDesc = inputSeq.getDescription() or ""
         alphabet = inputSeq.getAlphabet()
         isAmino = inputSeq.getIsAminoacids()
