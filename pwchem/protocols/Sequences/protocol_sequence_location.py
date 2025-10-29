@@ -27,7 +27,7 @@
 
 
 """
-This protocol is used to calculate conservation over a set of sequences and store it on the object SequenceChem
+This protocol is used to select the regions of the protein that are extracellular, transmembrane and intracellular
 
 """
 import json
