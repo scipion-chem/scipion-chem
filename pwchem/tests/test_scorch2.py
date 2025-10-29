@@ -33,7 +33,10 @@ from pyworkflow.tests import BaseTest, DataSet
 
 # Scipion chem imports
 from pwchem.protocols import ProtChemImportSmallMolecules
+from pwem.protocols.protocol_set_filter import ProtSetFilter
 import pyworkflow.tests as tests
+
+from ..objects import SetOfStructROIs
 from ..protocols import ProtocolSCORCH2
 
 
@@ -50,8 +53,24 @@ class TestSCORCH2(BaseTest):
 
 
         cls._runFPocketFind()
+        cls._runFilterSet()
         cls._runDocking()
 
+
+    @classmethod
+    def _runFilterSet(cls):
+        #cls.filteredSet = cls.newProtocol(
+        #    ProtSetFilter, inputSet=cls.protFPocket,
+        #    operation='ranking',
+        #    threshold=0.2,
+        #    rankingField='_score')
+        cls.filteredSet = cls.newProtocol(ProtSetFilter)
+        cls.filteredSet.inputSet.set(cls.protFPocket)
+        cls.filteredSet.inputSet.setExtended('outputStructROIs')
+        cls.filteredSet.operation.set(cls.filteredSet.CHOICE_RANKED)
+        cls.filteredSet.threshold.set(2)
+        cls.filteredSet.rankingField.set('_score')
+        cls.launchProtocol(cls.filteredSet)
 
     @classmethod
     def _runImportSmallMols(cls):
@@ -89,7 +108,7 @@ class TestSCORCH2(BaseTest):
                 pocketRadiusN=3, nRuns=3,
                 numberOfThreads=4)
 
-            cls.protLeDock.inputStructROIs.set(cls.protFPocket)
+            cls.protLeDock.inputStructROIs.set(cls.filteredSet)
             cls.protLeDock.inputStructROIs.setExtended('outputStructROIs')
 
             cls.protLeDock.inputSmallMolecules.set(cls.protImportSmallMols)
