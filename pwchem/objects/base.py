@@ -130,7 +130,7 @@ class SetOfSequencesChem(data.SetOfSequences):
     self._interactMols = pwobj.Pointer()
     self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
 
-    self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', None))
+    self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', ""))
 
   def copyInfo(self, other):
     """ Copy basic information from other set of classes to current one"""
