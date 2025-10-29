@@ -52,9 +52,15 @@ class ProtGetSequenceLocation(EMProtocol):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
+        group.addParam('uniprotSeq', params.BooleanParam, deafult=True,
+                       label='Sequence was downloaded from UniProtKB: ',
+                       help='Choose if the sequence was downloaded from UniProtKB.')
         group.addParam('inputSequence', params.PointerParam, pointerClass='Sequence',
-                       allowsNull=False, label="Input sequence: ",
-                       help='Select the sequence to find the cellular locations.')
+                       allowsNull=True, label="Input sequence: ",
+                       help='Select the sequence to find the cellular locations. In case the sequence WAS NOT downloaded from UniProt, enter manual UniProt ID.')
+        group.addParam('uniprotID', params.StringParam, condition= 'not uniprotSeq',
+                       allowsNull=True, label="Input UniProt ID: ",
+                       help='Select the UniProt ID for the sequence of interest.')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -65,13 +71,16 @@ class ProtGetSequenceLocation(EMProtocol):
         # og sequence data
         inputSeq = self.inputSequence.get()
         seqStr = inputSeq.getSequence()
-        seqId = inputSeq.getId()
+        if self.uniprotSeq.get():
+            seqId = inputSeq.getId()
+        else:
+            seqId = self.uniprotID.get()
         seqDesc = inputSeq.getDescription() or ""
         alphabet = inputSeq.getAlphabet()
         isAmino = inputSeq.getIsAminoacids()
 
 
-        data = self.downloadUniprotJson()
+        data = self.downloadUniprotJson(seqId)
 
         # obtain each regions aa
         ranges = self.obtainRanges(data)
@@ -119,8 +128,7 @@ class ProtGetSequenceLocation(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
-    def downloadUniprotJson(self):
-        seqId = self.inputSequence.get().getId()
+    def downloadUniprotJson(self, seqId):
         self.BASE_URL = f"{self.BASE_URL}{seqId}.json?fields=ft_topo_dom%2Cft_transmem"
 
         results = self._getExtraPath(f"{seqId}.json")
