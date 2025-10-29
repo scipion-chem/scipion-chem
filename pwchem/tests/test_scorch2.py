@@ -35,8 +35,6 @@ from pyworkflow.tests import BaseTest, DataSet
 from pwchem.protocols import ProtChemImportSmallMolecules
 import pyworkflow.tests as tests
 from ..protocols import ProtocolSCORCH2
-from ..protocols.General.protocol_converter import ConvertStructures
-from lephar.protocols import ProtChemLeDock
 
 
 class TestSCORCH2(BaseTest):
@@ -79,19 +77,25 @@ class TestSCORCH2(BaseTest):
 
     @classmethod
     def _runLeDock(cls):
-        cls.protLeDock = cls.newProtocol(
-            ProtChemLeDock,
-            wholeProt=False,
-            pocketRadiusN=3, nRuns=3,
-            numberOfThreads=4)
+        try:
+            from lephar.protocols import ProtChemLeDock
+            doLe = True
+        except:
+            pass
+        if doLe:
+            cls.protLeDock = cls.newProtocol(
+                ProtChemLeDock,
+                wholeProt=False,
+                pocketRadiusN=3, nRuns=3,
+                numberOfThreads=4)
 
-        cls.protLeDock.inputStructROIs.set(cls.protFPocket)
-        cls.protLeDock.inputStructROIs.setExtended('outputStructROIs')
+            cls.protLeDock.inputStructROIs.set(cls.protFPocket)
+            cls.protLeDock.inputStructROIs.setExtended('outputStructROIs')
 
-        cls.protLeDock.inputSmallMolecules.set(cls.protImportSmallMols)
-        cls.protLeDock.inputSmallMolecules.setExtended('outputSmallMolecules')
+            cls.protLeDock.inputSmallMolecules.set(cls.protImportSmallMols)
+            cls.protLeDock.inputSmallMolecules.setExtended('outputSmallMolecules')
 
-        cls.launchProtocol(cls.protLeDock)
+            cls.launchProtocol(cls.protLeDock)
 
 
     def _runSCORCH2(self):
