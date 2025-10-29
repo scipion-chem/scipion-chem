@@ -50,7 +50,7 @@ class TestSCORCH2(BaseTest):
 
 
         cls._runFPocketFind()
-        cls._runLeDock()
+        cls._runDocking()
 
 
     @classmethod
@@ -76,7 +76,7 @@ class TestSCORCH2(BaseTest):
         cls.launchProtocol(cls.protFPocket)
 
     @classmethod
-    def _runLeDock(cls):
+    def _runDocking(cls):
         try:
             from lephar.protocols import ProtChemLeDock
             doLe = True
@@ -96,6 +96,26 @@ class TestSCORCH2(BaseTest):
             cls.protLeDock.inputSmallMolecules.setExtended('outputSmallMolecules')
 
             cls.launchProtocol(cls.protLeDock)
+        try:
+            from autodock.protocols import ProtChemVinaDocking
+            doVina = True
+        except:
+            pass
+        if doVina and not doLe:
+            cls.protVina = cls.newProtocol(
+                ProtChemVinaDocking,
+                fromReceptor=0,
+                radius=24, nRuns=10,
+                numberOfThreads=4)
+
+            cls.protVina.inputAtomStruct.set(cls.protFPocket)
+            cls.protVina.inputAtomStruct.setExtended('outputStructROIs')
+
+            cls.launchProtocol(cls.protVina)
+
+        if not doLe and not doVina:
+            exit()
+
 
 
     def _runSCORCH2(self):
