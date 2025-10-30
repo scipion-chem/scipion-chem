@@ -35,4 +35,5 @@ from .tests_pharmacophores import *
 from .tests_general import *
 from .tests_databases import *
 from .tests_epitopes import *
+from .test_scorch2 import *
 
