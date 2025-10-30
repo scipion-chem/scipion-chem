@@ -36,7 +36,6 @@ from pwchem.protocols import ProtChemImportSmallMolecules
 from pwem.protocols.protocol_set_filter import ProtSetFilter
 import pyworkflow.tests as tests
 
-from ..objects import SetOfStructROIs
 from ..protocols import ProtocolSCORCH2
 
 
@@ -59,11 +58,6 @@ class TestSCORCH2(BaseTest):
 
     @classmethod
     def _runFilterSet(cls):
-        #cls.filteredSet = cls.newProtocol(
-        #    ProtSetFilter, inputSet=cls.protFPocket,
-        #    operation='ranking',
-        #    threshold=0.2,
-        #    rankingField='_score')
         cls.filteredSet = cls.newProtocol(ProtSetFilter)
         cls.filteredSet.inputSet.set(cls.protFPocket)
         cls.filteredSet.inputSet.setExtended('outputStructROIs')
@@ -141,7 +135,6 @@ class TestSCORCH2(BaseTest):
         protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
 
         protSCORCH2.useFeatures.set('False')
-        #protSCORCH2.inputPDBproteinFile.set(self.targetProt.outputStructure)
         protSCORCH2.inputPDBligandFiles.set(self.protLeDock.outputSmallMolecules)
 
         self.proj.launchProtocol(protSCORCH2, wait=True)
