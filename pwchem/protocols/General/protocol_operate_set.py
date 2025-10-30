@@ -48,14 +48,6 @@ class ProtChemOperateSet(EMProtocol):
                            'those items passing the filter\n\tRemove columns: remove the specified columns\n\t'
                            'Ranking: outputs only the top/bottom elements for the specified column.')
 
-        group.addParam('inputSet', params.PointerParam, pointerClass="EMSet", label='Set to filter: ',
-                       condition='not operation in [1, 2]', help='Principal set to operate')
-        group.addParam('inputMultiSet', params.MultiPointerParam, pointerClass="EMSet", allowsNull=True,
-                       label='Input sets: ', condition='operation in [1, 2]')
-        group.addParam('secondSet', params.PointerParam, pointerClass="EMSet", condition="operation==3",
-                       label='Set with items to remove: ',
-                       help='Secondary set to operate')
-
         group.addParam('removeDuplicates', params.BooleanParam, default=False,
                        label='Remove duplicates: ', condition='not operation in [0]',
                        help='Remove elements with the reference column value repeated')
@@ -85,7 +77,14 @@ class ProtChemOperateSet(EMProtocol):
                            'e.g: "-10%" == "-0.1" == 10% of the items with lower values\n'
                            'e.g: "5" == 5 items with higher values')
 
-
+        group = form.addGroup('Input')
+        group.addParam('inputSet', params.PointerParam, pointerClass="EMSet", label='Set to filter: ',
+                       condition='not operation in [1, 2]', help='Principal set to operate')
+        group.addParam('inputMultiSet', params.MultiPointerParam, pointerClass="EMSet", allowsNull=True,
+                      label='Input sets: ', condition='operation in [1, 2]')
+        group.addParam('secondSet', params.PointerParam, pointerClass="EMSet", condition="operation==3",
+                      label='Set with items to remove: ',
+                      help='Secondary set to operate')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
