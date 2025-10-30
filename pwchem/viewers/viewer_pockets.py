@@ -28,7 +28,8 @@ import os
 from pathlib import Path
 
 import numpy as np
-import pyworkflow.protocol.params as params
+from pyworkflow.protocol import params, Protocol
+
 import pyworkflow.viewer as pwviewer
 from matplotlib import pyplot as plt, cm
 from matplotlib.patches import Circle, Patch
@@ -122,18 +123,28 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
     }
 
   def _viewSet(self, e=None):
-    if type(self.protocol) == SetOfStructROIs:
-      molSet = self.protocol
-    elif hasattr(self.protocol, 'outputStructROIs'):
-      molSet = getattr(self.protocol, 'outputStructROIs')
-    else:
-      print('Cannot find outputStructROIs')
+    molSet = self.getObject()
 
     try:
       setV = MDViewer(project=self.getProject())
     except:
       setV = BioinformaticsDataViewer(project=self.getProject())
     return setV._visualize(molSet)
+
+  def getProtocol(self):
+    if hasattr(self, 'protocol') and isinstance(self.protocol, Protocol):
+      return self.protocol
+
+  def getObject(self):
+    if hasattr(self, 'protocol'):
+      if isinstance(self.protocol, Protocol) and hasattr(self.protocol, 'outputStructROIs'):
+        obj = getattr(self.protocol, 'outputStructROIs')
+      elif isinstance(self.protocol, SetOfStructROIs):
+        obj = self.protocol
+      else:
+        print('Cannot find outputStructROIs')
+
+      return obj
 
   def _validate(self):
     return []
@@ -143,9 +154,10 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
   # =========================================================================
 
   def checkIfPPIs(self):
-      if (self.protocol.getInteractingResiduesFile() is None):
-          return False
-      return True
+      molObj = self.getObject()
+      if molObj.getInteractingResiduesFile() is not None:
+          return True
+      return False
 
   def _viewResidueInteractions(self, paramName=None):
       df = self.load_interaction_data(self.distanceMinThreshold.get(), self.distanceMaxThreshold.get())
