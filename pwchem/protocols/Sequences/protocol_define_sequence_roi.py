@@ -40,6 +40,8 @@ from pwchem.utils.utilsFasta import pairwiseAlign, parseFasta
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
 
+RES, SUBS, VAR, MUT = 'Residues', 'SubSequences', 'Variant', 'Mutations'
+
 class ProtDefineSeqROI(EMProtocol):
     """
     Defines a list of sequence ROIs, each of them from:\n'
@@ -49,7 +51,7 @@ class ProtDefineSeqROI(EMProtocol):
     """
     _label = 'Define sequence ROIs'
     _inputOptions = ['Sequence', 'SequenceVariants']
-    _originOptions = ['Residues', 'SubSequences', 'Variant', 'Mutations']
+    _originOptions = [RES, SUBS, VAR, MUT]
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -60,46 +62,44 @@ class ProtDefineSeqROI(EMProtocol):
                        label='Define ROIs from: ', default=0, display=params.EnumParam.DISPLAY_HLIST,
                        help='Define sequence ROIs from a sequence or from a sequence variants object')
         group.addParam('inputSequence', params.PointerParam, pointerClass='Sequence',
-                      allowsNull=True, label="Input sequence: ", condition='chooseInput==0',
-                      help='Select the sequence object where the ROI will be defined')
+                       allowsNull=True, label="Input sequence: ", condition='chooseInput==0',
+                       help='Select the sequence object where the ROI will be defined')
         group.addParam('inputSequenceVariants', params.PointerParam, pointerClass='SequenceVariants',
                        label='Input Sequence Variants:', condition='chooseInput==1', allowsNull=True,
                        help="Sequence containing the information about the variants and mutations")
 
         group = form.addGroup('Add ROI')
-        group.addParam('whichToAdd', params.EnumParam, choices=self._originOptions,
-                       display=params.EnumParam.DISPLAY_HLIST,
-                       label='Add ROI from: ', default=0,
+        group.addParam('whichToAdd', params.StringParam, label='Add ROI from: ', default=RES,
                        help='Add ROI from which definition (residues, variant or mutation)')
         #From residues
         group.addParam('resPosition', params.StringParam, label='Residues of interest: ',
-                       condition='whichToAdd==0',
+                       condition=f'whichToAdd=="{RES}"',
                        help='Specify the residue to define a region of interest.\n'
                             'You can either select a single residue or a range '
                             '(it will take into account the first and last residues selected)')
 
         # From a set of sequences (that must constain subsequences)
-        group.addParam('inputSubsequences', params.PointerParam, label='SubSequences: ', condition='whichToAdd==1',
-                       pointerClass='SetOfSequences', allowsNull=True,
+        group.addParam('inputSubsequences', params.PointerParam, label='SubSequences: ',
+                       condition=f'whichToAdd=="{SUBS}"', pointerClass='SetOfSequences', allowsNull=True,
                        help='Specify the set of sequences containing the subsequences that will be defined as ROIs')
 
         #From Variant
-        group.addParam('selectVariant', params.StringParam, condition='chooseInput==1 and whichToAdd==2',
+        group.addParam('selectVariant', params.StringParam, condition=f'chooseInput==1 and whichToAdd=="{VAR}"',
                        label='Select a predefined variant:',
                        help="Variant to use for defining the ROIs. Each mutation will be a different ROI")
         #From mutations
         group.addParam('selectMutation', params.StringParam,
-                       label='Select some mutations: ', condition='chooseInput==1 and whichToAdd==3',
+                       label='Select some mutations: ', condition=f'chooseInput==1 and whichToAdd=="{MUT}"',
                        help="Mutations to be defined as sequence ROIs.\n"
                             "You can do multiple selection. Each mutation will be a different ROI")
 
         # Common for ROIs independent of the origin
-        group.addParam('descrip', params.StringParam,
-                       label='ROI description: ', condition='whichToAdd in [0]',
+        group.addParam('descrip', params.StringParam, default='',
+                       label='ROI description: ', condition=f'whichToAdd=="{RES}"',
                        help='Specify some description for this region of interest')
 
-        group.addParam('addROI', params.LabelParam,
-                       label='Add defined ROIs: ',
+        group.addParam('addROI', params.LabelParam, label='Add defined ROIs: ',
+                       condition=f'whichToAdd in ["{RES}", "{VAR}", "{MUT}", "{SUBS}"]',
                        help='Add defined residues, variant or mutations to become a ROI')
         group.addParam('inROIs', params.TextParam, width=70, default='',
                       label='Input residues: ',
@@ -137,7 +137,7 @@ class ProtDefineSeqROI(EMProtocol):
                 resDic = json.loads(roiInfo)
                 roiList, resIdxs = [resDic['residues']], resDic['index']
                 idxsList = [[int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]]
-                descList = [resDic['desc']]
+                descList = [resDic['desc']] if 'desc' in resDic else ['']
 
             elif '{}:'.format(self._originOptions[1]) in rStr:
                 setIdx = json.loads(':'.join(rStr.split(':')[1:]))['PointerIdx']
@@ -191,6 +191,12 @@ class ProtDefineSeqROI(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
+    def getROIOptions(self):
+      if self.chooseInput.get() == 0:
+        return self._originOptions[:2]
+      else:
+        return self._originOptions
+
     def getInputSequence(self):
         if self.chooseInput.get() == 0:
             return self.inputSequence.get()
@@ -224,6 +230,49 @@ class ProtDefineSeqROI(EMProtocol):
             for i in range(len(roiStrList)):
                 roiList.append(roiStrList[i]), idxsList.append(roiIdxsList[i]), descList.append(subseqName)
         return roiList, idxsList, descList
+
+
+    # ADD WIZARD UTILS
+    def getOriginLabel(self):
+      if self.whichToAdd.get() == RES:
+        inputLabel, sumLabel = 'resPosition', 'Residues'
+      elif self.whichToAdd.get() == VAR:
+        inputLabel, sumLabel = 'selectVariant', 'Variant'
+      elif self.whichToAdd.get() == MUT:
+        inputLabel, sumLabel = 'selectMutation', 'Mutations'
+      elif self.whichToAdd.get() == SUBS:
+        inputLabel, sumLabel = 'inputSubsequences', 'SubSequences'
+      return inputLabel, sumLabel
+
+    def getPrevPointersIds(self):
+      ids = []
+      for p in self.inputPointers:
+        ids.append(p.get().getObjId())
+      return ids
+
+    def buildSumLine(self, type=None):
+      inputLabel, sumLabel = self.getOriginLabel()
+
+      if sumLabel == 'SubSequences':
+        prevIds = self.getPrevPointersIds()
+        newSet = self.inputSubsequences.get()
+        newId = newSet.getObjId()
+
+        prevPointers = self.inputPointers
+        if newId not in prevIds:
+          newIndex = len(prevPointers)
+          prevPointers.append(Pointer(newSet))
+        else:
+          newIndex = prevIds.index(newId)
+        setattr(self, 'inputPointers', prevPointers)
+
+      roiInfo = getattr(self, inputLabel).get()
+      if sumLabel == 'SubSequences':
+        roiInfo = '{"PointerIdx": "%s", "Name": "%s"}' % (newIndex, roiInfo.__str__())
+      elif self.descrip.get().strip():
+        roiInfo = roiInfo.replace('}', ', "desc": "%s"}' % (self.descrip.get().strip()))
+      return f'{sumLabel}: {roiInfo}'
+
 
 
 

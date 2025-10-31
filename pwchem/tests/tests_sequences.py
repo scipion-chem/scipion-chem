@@ -168,7 +168,8 @@ class TestExtractSequenceROIs(TestCalculateConservation):
 		protExtSeqROIs = cls.newProtocol(
 			ProtExtractSeqsROI,
 			inputAttribute='Maximum Proportion Conservation',
-			thres=fThres, minSize=minSize, direction=direc
+			thres=fThres, minSize=minSize, direction=direc,
+			performSoftening=False
 		)
 		protExtSeqROIs.inputSequence.set(inProt)
 		protExtSeqROIs.inputSequence.setExtended('outputSequence')
@@ -182,7 +183,7 @@ class TestExtractSequenceROIs(TestCalculateConservation):
 		pCons = self._runCalculateConservation(pGen)
 		self._waitOutput(pCons, 'outputSequence', sleepTime=10)
 
-		p = self._runExtractROIs(pCons, minSize=1, fThres=0.05, direc=1)
+		p = self._runExtractROIs(pCons, minSize=1, fThres=0.95, direc=0)
 		self._waitOutput(p, 'outputROIs', sleepTime=10)
 		assertHandle(self.assertIsNotNone, getattr(p, 'outputROIs', None),
 	       					message='Test failed, no output SequenceROIs generated', cwd=p.getWorkingDir())
@@ -214,7 +215,7 @@ class TestOperateSeqROIs(TestExtractSequenceROIs, TestDefineSequenceROIs):
 
 		pCons = self._runCalculateConservation(pGen)
 		self._waitOutput(pCons, 'outputSequence', sleepTime=10)
-		pExt = self._runExtractROIs(pCons, fThres=0.05, minSize=1, direc=1)
+		pExt = self._runExtractROIs(pCons, fThres=0.95, minSize=1, direc=0)
 
 		self._waitOutput(pExt, 'outputROIs', sleepTime=10)
 		self._waitOutput(pDef, 'outputROIs', sleepTime=10)

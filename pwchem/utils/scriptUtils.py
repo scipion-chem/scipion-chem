@@ -35,7 +35,9 @@ def divideMultiPDB(file):
   pdbStrs = []
 
   with open(file) as fIn:
-    pdbs = fIn.read().split('\nENDMDL\n')
+    fileText = fIn.read()
+    endSplit = 'ENDMDL' if 'ENDMDL' in fileText else 'END'
+    pdbs = fileText.split(f'\n{endSplit}\n')
     if len(pdbs) > 1:
       pdbs = pdbs[:-1]
 
@@ -53,27 +55,18 @@ def divideMultiPDB(file):
     pdbStrs.append(pdb)
   return pdbStrs
 
-def makeSubsets(oriSet, nt, cloneItem=True, copySet=False):
+def makeSubsets(oriSet, nt, cloneItem=True):
   '''Returns a list of subsets, given a set and the number of subsets'''
-  subsets = []
   if nt > len(oriSet):
       nt = len(oriSet)
-  nObjs = len(oriSet) // nt
-  it, curSet = 0, []
-  for obj in oriSet:
-    nObj = obj.clone() if cloneItem else obj
-    curSet.append(nObj)
-    if len(curSet) == nObjs and it < nt - 1:
-      curSet = curSet.copy() if copySet else curSet
-      subsets.append(curSet)
-      curSet, it = [], it + 1
 
-  if len(curSet) > 0:
-    curSet = curSet.copy() if copySet else curSet
-    subsets.append(curSet)
+  subsets = [[] for _ in range(nt)]
+  for i, obj in enumerate(oriSet):
+    nObj = obj.clone() if cloneItem else obj
+    subsets[i%nt].append(nObj)
   return subsets
 
-def performBatchThreading(task, inSet, nt, cloneItem=True, copySet=False, *args, **kwargs):
+def performBatchThreading(task, inSet, nt, cloneItem=True, **kwargs):
   '''Uses threading to divide a task over an input set among a number of threads
   Input:
       -task: function. Task to perform
@@ -83,7 +76,7 @@ def performBatchThreading(task, inSet, nt, cloneItem=True, copySet=False, *args,
       -cloneItem: whether to perform "clone" function over the objects in inSet (necessary for Scipion objects)
   '''
   threads, outLists = [], [[] for i in range(nt)]
-  subsets = makeSubsets(inSet, nt, cloneItem=cloneItem, copySet=copySet)
+  subsets = makeSubsets(inSet, nt, cloneItem=cloneItem)
 
   for it, curSet in enumerate(subsets):
     t = threading.Thread(target=task, args=(curSet, outLists, it), kwargs=kwargs, daemon=False)

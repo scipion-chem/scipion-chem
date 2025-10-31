@@ -25,20 +25,18 @@
 # *
 # **************************************************************************
 
-# Versions
-DEFAULT_VERSION = '1.0'
-
 #Constant dictionaries
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
-PYMOL_DIC =     {'name': 'pymol',       'version': '2.5.5',         'home': 'PYMOL_HOME'}
 JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}
 OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPENBABEL_HOME'}
 ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
-RDKIT_DIC =     {'name': 'rdkit',       'version': DEFAULT_VERSION, 'home': 'RDKIT_HOME'}
-BIOCONDA_DIC =  {'name': 'bioconda',    'version': DEFAULT_VERSION}
+RDKIT_DIC =     {'name': 'rdkit',       'version': '2023.09.1',     'home': 'RDKIT_HOME'}
+BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
+DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
+RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RANKX_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
@@ -62,6 +60,10 @@ POCKET_ATTRIBUTES_MAPPING.update({'SiteScore': 'score', 'Dscore': 'druggability'
 FEATURE_LABELS_SIMPLE = ["Donor", "Acceptor", "Hydrophobe", "Aromatic"]
 FEATURE_LABELS_ADVANCED = ["LumpedHydrophobe", "PosIonizable", "NegIonizable", "ZnBinder"]
 
+MAX_MOLS_SET = 'MAX_MOLS_SET'
+WARNLIBBIG = f'WARNING: you are about to split an immense library of molecules, ' \
+             'which can cause severe disk IO traffic and storage use.\n' \
+             f'You can update this value setting the {MAX_MOLS_SET} scipion variable in your scipion.conf file'
 
 PML_STR = '''from pymol import cmd,stored
 load {}
@@ -69,19 +71,19 @@ load {}
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
 
-aux = list(map(int, stored.list))
+aux = {}
 aux.sort()
-stored.list = list(map(str, aux))
-#print(stored.list)
-lastSTP=stored.list[-1]	#get the index of the last residu
+
+lastSTP=max(list(map(int, stored.list)))	#get the index of the last residu
+stored.list = list(map(str, stored.list))
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))'''
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
 load {}, protein
@@ -368,19 +370,20 @@ load {}
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
 
-aux = list(map(int, stored.list))
+aux = {}
 aux.sort()
-stored.list = list(map(str, aux))
+
+stored.list = list(map(str, stored.list))
 #print(stored.list)
 lastSTP=stored.list[-1]	#get the index of the last residu
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(my_index), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
+for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
 
 python
 {}
@@ -495,11 +498,19 @@ mol material Opaque
 mol modrep 1 0
 '''
 
+TCL_MD_LIG_STR = '''
+mol addrep 0
+mol modstyle 2 0 Licorice 0.300000 12.000000 12.000000
+mol modselect 2 0 resname {}
+'''
+
 PML_MD_STR = '''load {}
 load_traj {}
 hide everything, not br. all within 3 of (byres polymer & name CA)
 set movie_fps, 15
 '''
 
-
+NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "borda"]
+SCORE_BASED_METHODS = ["med", "anz"]
+RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 

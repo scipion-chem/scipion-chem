@@ -30,7 +30,8 @@ from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
-from pwchem.protocols import ProtChemOBabelPrepareLigands, ProtChemRDKitPrepareLigands, ProtChemPrepareReceptor
+from pwchem.protocols import ProtChemOBabelPrepareLigands, ProtChemRDKitPrepareLigands, ProtChemPrepareReceptor, \
+	ProtocolLigandParametrization
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
 
@@ -90,23 +91,23 @@ class TestOBLigandPreparation(TestImportBase):
 class TestRDKitLigandPreparation(TestImportBase):
 	@classmethod
 	def _runPrep(cls, inProt, mode=0):
-		protShape = cls.newProtocol(
+		protPrep = cls.newProtocol(
 			ProtChemRDKitPrepareLigands,
 		)
-		protShape.inputSmallMolecules.set(inProt)
-		protShape.inputSmallMolecules.setExtended('outputSmallMolecules')
+		protPrep.inputSmallMolecules.set(inProt)
+		protPrep.inputSmallMolecules.setExtended('outputSmallMolecules')
 		if mode == 1:
-			protShape.doConformers.set(True)
+			protPrep.doConformers.set(True)
 
-		cls.proj.launchProtocol(protShape, wait=False)
-		return protShape
+		cls.proj.launchProtocol(protPrep, wait=False)
+		return protPrep
 
 	def test(self):
-		protsShape = []
+		protsPrep = []
 		for i in range(2):
-			protsShape.append(self._runPrep(inProt=self.protImportSmallMols, mode=i))
+			protsPrep.append(self._runPrep(inProt=self.protImportSmallMols, mode=i))
 
-		for p in protsShape:
+		for p in protsPrep:
 			self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
 			assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 
@@ -139,4 +140,23 @@ class TestPrepareReceptor(BaseTest):
 		self._runPrepareReceptor()
 
 		self._waitOutput(self.protPrepareReceptor, 'outputStructure', sleepTime=10)
-		assertHandle(self.assertIsNotNone, getattr(self.protPrepareReceptor, 'outputStructure', None), cwd=self.protPrepareReceptor.getWorkingDir())
+		assertHandle(self.assertIsNotNone, getattr(self.protPrepareReceptor, 'outputStructure', None),
+								 cwd=self.protPrepareReceptor.getWorkingDir())
+
+class TestLigandParametrization(TestImportBase):
+	@classmethod
+	def _runParam(cls, inProt):
+		protParam = cls.newProtocol(
+			ProtocolLigandParametrization,
+		)
+		protParam.inputSmallMolecules.set(inProt)
+		protParam.inputSmallMolecules.setExtended('outputSmallMolecules')
+		protParam.inputLigand.set('SmallMolecule (ZINC00000480 molecule)')
+
+		cls.proj.launchProtocol(protParam, wait=False)
+		return protParam
+
+	def test(self):
+		protParam = self._runParam(inProt=self.protImportSmallMols)
+		self._waitOutput(protParam, 'outputSmallMolecules', sleepTime=10)
+		assertHandle(self.assertIsNotNone, getattr(protParam, 'outputSmallMolecules', None), cwd=protParam.getWorkingDir())

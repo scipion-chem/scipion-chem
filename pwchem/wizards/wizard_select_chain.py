@@ -34,7 +34,7 @@ information such as name and number of residues.
 
 # Imports
 import os, requests, json
-from Bio.PDB import PDBParser, MMCIFParser
+from Bio.PDB import PDBParser, MMCIFParser, PDBIO
 
 from pyworkflow.gui import ListTreeProviderString, dialog
 from pyworkflow.object import String
@@ -44,10 +44,11 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
 
-from pwchem.objects import SequenceVariants, SetOfStructROIs
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort
+from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
+
+from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
 
 class SelectLigandAtom(VariableWizard):
@@ -65,6 +66,7 @@ class SelectLigandAtom(VariableWizard):
         runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
         molFile = oFile
 
+    molFile = relabelAtomsPDB(molFile)
     parser = PDBParser().get_structure(molFile, molFile)
     atomNames = []
     for model in parser:
@@ -105,7 +107,7 @@ class SelectLigandAtom(VariableWizard):
 class SelectLigandWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
-  def is_het(self, residue):
+  def isHet(self, residue):
     res = residue.id[0]
     return res != " " and res != "W"
 
@@ -132,7 +134,7 @@ class SelectLigandWizard(VariableWizard):
     for model in parser:
       for chain in model:
         for residue in chain:
-          if self.is_het(residue):
+          if self.isHet(residue):
             if not residue.resname in molNames:
               molNames.append(residue.resname)
     return molNames
@@ -199,153 +201,32 @@ class AddROIWizard(VariableWizard):
     lenPrev = len(prevList.split('\n'))
     return prevList, lenPrev
 
-class AddCoordinatesWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
   def show(self, form, *params):
     inputParams, outputParam = self.getInputOutput(form)
     protocol = form.protocol
 
     prevList, lenPrev = self.getPrevList(protocol, outputParam)
+    roiDef = protocol.getDefinedROILine()
+    if protocol.origin.get() == 2 and protocol.extLig.get():
+      _, newPointers = protocol.getNewPointers()
+      form.setVar(outputParam[1], newPointers)
 
-    coords = []
-    for i in range(3):
-        coords.append(getattr(protocol, inputParams[i]).get())
+    form.setVar(outputParam[0], f'{prevList}{lenPrev}) {roiDef}')
 
-    roiDef = '%s) Coordinate: {"X": %s, "Y": %s, "Z": %s}\n' % \
-             (lenPrev, coords[0], coords[1], coords[2])
+AddROIWizard().addTarget(protocol=ProtDefineStructROIs,
+                         targets=['addROI'],
+                         inputs=[],
+                         outputs=['inROIs', 'inputPointers'])
 
-    form.setVar(outputParam[0], prevList + roiDef)
-
-AddCoordinatesWizard().addTarget(protocol=ProtDefineStructROIs,
-                                 targets=['addCoordinate'],
-                                 inputs=['coordX', 'coordY', 'coordZ'],
-                                 outputs=['inROIs'])
-
-class AddResidueWizard(AddROIWizard):
-    _targets, _inputs, _outputs = [], {}, {}
-
-    def show(self, form, *params):
-        inputParams, outputParam = self.getInputOutput(form)
-        protocol = form.protocol
-        chainDic, resDic = json.loads(getattr(protocol, inputParams[0]).get()), \
-                           json.loads(getattr(protocol, inputParams[1]).get())
-
-        prevList, lenPrev = self.getPrevList(protocol, outputParam)
-
-        roiDef = '%s) Residues: {"model": %s, "chain": "%s", "index": "%s", "residues": "%s"}\n' % \
-                 (lenPrev, chainDic['model'], chainDic['chain'], resDic['index'], resDic['residues'])
-
-        form.setVar(outputParam[0], prevList + roiDef)
-
-
-AddResidueWizard().addTarget(protocol=ProtDefineStructROIs,
-                             targets=['addResidue'],
-                             inputs=['chain_name', 'resPosition'],
-                             outputs=['inROIs'])
-
-class AddLigandWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-  
-  def getPrevPointersIds(self, prevPointers):
-      ids = []
-      for p in prevPointers:
-          ids.append(p.get().getObjId())
-      return ids
-  
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-    prevList, lenPrev = self.getPrevList(protocol, outputParam)
-    
-    if not getattr(protocol, inputParams[0]):
-        roiDef = '%s) Ligand: {"molName": "%s"}\n' % \
-                 (lenPrev, getattr(protocol, inputParams[3]).get())
-    else:
-        prevPointers = getattr(protocol, outputParam[1])
-        prevIds = self.getPrevPointersIds(prevPointers)
-        newObj = getattr(protocol, inputParams[1]).get()
-        newId = newObj.getObjId()
-
-        if not newId in prevIds:
-            newIndex = len(prevPointers)
-            prevPointers.append(Pointer(newObj))
-        else:
-            newIndex = prevIds.index(newId)
-
-        roiDef = '%s) Ext-Ligand: {"pointerIdx": "%s", "ligName": "%s"}\n' % \
-                 (lenPrev, newIndex, getattr(protocol, inputParams[2]).get())
-        form.setVar(outputParam[1], prevPointers)
-
-    form.setVar(outputParam[0], prevList + roiDef)
-
-
-
-AddLigandWizard().addTarget(protocol=ProtDefineStructROIs,
-                            targets=['addLigand'],
-                            inputs=['extLig', 'inSmallMols', 'ligName', 'molName'],
-                            outputs=['inROIs', 'inputPointers'])
-
-class AddPPIsWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-
-    prevList, lenPrev = self.getPrevList(protocol, outputParam)
-
-    chain1Dic, chain2Dic = json.loads(getattr(protocol, inputParams[0]).get()), \
-                           json.loads(getattr(protocol, inputParams[1]).get())
-    iDist = getattr(protocol, inputParams[2]).get()
-
-    c1, c2 = '{}-{}'.format(chain1Dic['model'], chain1Dic['chain']), \
-             '{}-{}'.format(chain2Dic['model'], chain2Dic['chain'])
-
-    roiDef = '%s) PPI: {"chain1": "%s", "chain2": "%s", "interDist": "%s"}\n' % \
-             (lenPrev, c1, c2, iDist)
-
-    form.setVar(outputParam[0], prevList + roiDef)
-
-AddPPIsWizard().addTarget(protocol=ProtDefineStructROIs,
-                          targets=['addPPI'],
-                          inputs=['chain_name', 'chain_name2', 'ppiDistance'],
-                          outputs=['inROIs'])
-
-class AddNResidueWizard(AddROIWizard):
-  _targets, _inputs, _outputs = [], {}, {}
-
-  def show(self, form, *params):
-    inputParams, outputParam = self.getInputOutput(form)
-    protocol = form.protocol
-    resTypes, resDist = getattr(protocol, inputParams[0]).get(), \
-                        getattr(protocol, inputParams[1]).get()
-    resLink = protocol.getEnumText(inputParams[2])
-
-    prevList, lenPrev = self.getPrevList(protocol, outputParam)
-
-    roiDef = '%s) Near_Residues: {"residues": "%s", "distance": "%s", "linkage": "%s"}\n' % \
-             (lenPrev, resTypes, resDist, resLink)
-
-    form.setVar(outputParam[0], prevList + roiDef)
-
-
-AddNResidueWizard().addTarget(protocol=ProtDefineStructROIs,
-                              targets=['addNRes'],
-                              inputs=['resNRes', 'resDistance', 'linkNRes'],
-                              outputs=['inROIs'])
 
 
 ######################## Variable wizards ####################
 
 class SelectChainWizardQT(SelectChainWizard):
   _targets, _inputs, _outputs = [], {}, {}
+
   @classmethod
-  def getModelsChainsStep(cls, protocol, inputObj):
-    """ Returns (1) list with the information
-       {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
-       (2) list with residues, position and chain (modelsFirstResidue)"""
-    structureHandler = AtomicStructHandler()
+  def getInputFilename(cls, protocol, inputObj, structureHandler):
     if type(inputObj) == str:
       if os.path.exists(inputObj):
         fileName = inputObj
@@ -364,7 +245,7 @@ class SelectChainWizardQT(SelectChainWizard):
     elif str(type(inputObj).__name__) == 'SchrodingerAtomStruct':
         fileName = os.path.abspath(inputObj.convert2PDB())
 
-    elif str(type(inputObj).__name__) == 'SetOfStructROIs':
+    elif str(type(inputObj).__name__) == 'SetOfStructROIs' or str(type(inputObj).__name__) == 'SetOfSmallMolecules':
         fileName = inputObj.getProteinFile()
 
     else:
@@ -376,12 +257,20 @@ class SelectChainWizardQT(SelectChainWizard):
       args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(fileName), pdbFile)
       runOpenBabel(protocol=protocol, args=args, popen=True)
       fileName = pdbFile
+    return fileName
 
+  @classmethod
+  def getModelsChainsStep(cls, protocol, inputObj):
+    """ Returns (1) list with the information
+       {"model": %d, "chain": "%s", "residues": %d} (modelsLength)
+       (2) list with residues, position and chain (modelsFirstResidue)"""
+    structureHandler = AtomicStructHandler()
+    fileName = cls.getInputFilename(protocol, inputObj, structureHandler)
     structureHandler.read(fileName)
     structureHandler.getStructure()
     return structureHandler.getModelsChains()
 
-class SelectResidueWizardQT(SelectResidueWizard):
+class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
   _targets, _inputs, _outputs = [], {}, {}
   @classmethod
   def getModelsChainsStep(cls, protocol, inputObj):
@@ -398,14 +287,86 @@ class SelectResidueWizardQT(SelectResidueWizard):
       return fileName
 
   def getResidues(self, form, inputObj, chainStr):
-    if issubclass(type(inputObj), SetOfStructROIs):
-        inputObj = inputObj.getProteinFile()
-        inputObj = self.checkNoPDBQT(form, inputObj)
-    elif issubclass(type(inputObj), AtomStruct):
-        inputObj = inputObj.getFileName()
-        inputObj = self.checkNoPDBQT(form, inputObj)
+    if issubclass(type(inputObj), Sequence) or str(type(inputObj).__name__) == 'SequenceVariants':
+      finalResiduesList = []
+      for i, res in enumerate(inputObj.getSequence()):
+        if res in RESIDUES1TO3:
+          res3 = RESIDUES1TO3[res]
+        else:
+          res3 = res
+        stri = '{"index": %s, "residue": "%s"}' % (i + 1, res3)
+        finalResiduesList.append(String(stri))
 
-    return super().getResidues(form, inputObj, chainStr)
+    else:
+      structureHandler = AtomicStructHandler()
+      fileName = self.getInputFilename(form.protocol, inputObj, structureHandler)
+
+      structureHandler.read(fileName)
+      structureHandler.getStructure()
+      _, modelsFirstResidue = structureHandler.getModelsChains()
+
+      struct = json.loads(chainStr)  # From wizard dictionary
+      chain, model = struct["chain"].upper().strip(), int(struct["model"])
+
+      residueList = self.editionListOfResidues(modelsFirstResidue, model, chain)
+      finalResiduesList = []
+      for i in residueList:
+        finalResiduesList.append(String(i))
+
+    return finalResiduesList
+
+
+class SelectAtomWizardQT(SelectResidueWizardQT):
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getAtoms(self, form, inputObj, chainStr, resStr):
+    protocol = form.protocol
+    structureHandler = AtomicStructHandler()
+    parser = parseAtomStruct(self.getInputFilename(protocol, inputObj, structureHandler))
+
+    chainJson, residueJson = json.loads(chainStr), json.loads(resStr)  # From wizard dictionary
+    chainID, modelID = chainJson["chain"].upper().strip(), int(chainJson["model"])
+    residueID = int(residueJson['index'].split('-')[0])
+
+    atomList = self.editionListOfAtoms(parser, modelID, chainID, residueID)
+    finalAtomList = []
+    for i in atomList:
+      finalAtomList.append(String(i))
+    return finalAtomList
+
+  def editionListOfAtoms(self, parser, modelID, chainID, residueID):
+    atomList = []
+    for model in parser:
+      if model.get_id() == modelID:
+        for chain in model.get_chains():
+          if chain.get_id() in chainID:
+            for residue in chain.get_residues():
+              if residue.get_id()[1] == residueID:
+                for i, atom in enumerate(residue.get_atoms()):
+                  atomID = atom.get_id()
+                  atomList.append(f'{{"index": {i+1}, "atom": "{atomID}"}}')
+
+    return atomList
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    inputObj = getattr(protocol, inputParams[0]).get()
+    chainStr = getattr(protocol, inputParams[1]).get()
+    residueStr = getattr(protocol, inputParams[2]).get()
+
+    finalAtomsList = self.getAtoms(form, inputObj, chainStr, residueStr)
+
+    provider = ListTreeProviderString(finalAtomsList)
+    dlg = dialog.ListDialog(form.root, "Residue atoms", provider,
+                            "Select one atom (atom number, "
+                            "atom name)")
+
+    idx, atomID = json.loads(dlg.values[0].get())['index'], json.loads(dlg.values[0].get())['atom']
+
+    intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
+    form.setVar(outputParam[0], intervalStr)
+
 
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
@@ -443,6 +404,11 @@ SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
                               outputs=['chain_name'])
 
 SelectChainWizardQT().addTarget(protocol=ProtCalculateSASA,
+                              targets=['chain_name'],
+                              inputs=['inputAtomStruct'],
+                              outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
@@ -597,33 +563,269 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
 
 
 class SelectElementWizard(VariableWizard):
-    """Lists the items in a SetOfX and choose one"""
-    _targets, _inputs, _outputs = [], {}, {}
+  """Lists the items in a SetOfX and choose one"""
+  _targets, _inputs, _outputs = [], {}, {}
 
-    def getListOfElements(self, protocol, scipionSet):
-      eleList = []
-      if scipionSet is not None:
-        for element in scipionSet:
-            eleList.append(element.__str__())
-      return eleList
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for element in scipionSet:
+          eleList.append(element.__str__())
+    return eleList
 
-    def show(self, form, *params):
-      protocol = form.protocol
-      inputParam, outputParam = self.getInputOutput(form)
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      scipionSet = getattr(protocol, inputParam[0])
+      if isinstance(scipionSet, Pointer):
+        scipionSet = scipionSet.get()
+
+      listOfElements = self.getListOfElements(protocol, scipionSet)
+    except:
       try:
-        scipionSet = getattr(protocol, inputParam[0]).get()
-        listOfElements = self.getListOfElements(protocol, scipionSet)
+        if callable(getattr(protocol, inputParam[0])):
+          listOfElements = getattr(protocol, inputParam[0])()
       except Exception as e:
         print("ERROR: ", e)
         return
 
-      finalList = []
-      for i in listOfElements:
-        finalList.append(String(i))
-      provider = ListTreeProviderString(finalList)
-      dlg = dialog.ListDialog(form.root, "Set items", provider,
-                              "Select one of items in the set")
-      form.setVar(outputParam[0], dlg.values[0].get())
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Set items", provider,
+                            "Select one of items in the set")
+    return dlg
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form, inputParam)
+    form.setVar(outputParam[0], dlg.values[0].get())
+    
+SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
+                               targets=['inputLigand'],
+                               inputs=['inputSmallMolecules'],
+                               outputs=['inputLigand'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayMoleculeDock'],
+                               inputs=['moleculeLabels'],
+                               outputs=['displayMoleculeDock'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displaySingleDock'],
+                               inputs=['singleLabels'],
+                               outputs=['displaySingleDock'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayPymolPLIP'],
+                               inputs=['singleLabels'],
+                               outputs=['displayPymolPLIP'])
+
+
+class SelectElementMultiPointWizard(SelectElementWizard):
+  """Lists the items in a SetOfX selected from a multipointer"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getInputSet(self, multiPointer, setStr):
+    inSet = None
+    for inPointer in multiPointer:
+      curSet = inPointer.get()
+      if curSet.__str__() == setStr:
+        inSet = curSet
+    return inSet
+
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      multiPointer = getattr(protocol, inputParam[0])
+      inputSetStr = getattr(protocol, inputParam[1]).get()
+
+      inSet = self.getInputSet(multiPointer, inputSetStr)
+      listOfElements = self.getListOfElements(protocol, inSet)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Set items", provider,
+                            "Select one of items in the set")
+    return dlg
+
+SelectElementMultiPointWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                 targets=['inROI'],
+                                 inputs=['inputROIsSets', 'inSet'],
+                                 outputs=['inROI'])
+
+class SelectInputSetWizard(VariableWizard):
+  '''Select a set form a MultiPointer param'''
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, multipointer):
+    eleList = []
+    if multipointer is not None:
+      for inPointer in multipointer:
+        eleList.append(inPointer.get())
+    return eleList
+
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      multiPointer = getattr(protocol, inputParam[0])
+      listOfElements = self.getListOfElements(multiPointer)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "Select set", provider,
+                            "Select one of the sets in the input")
+    return dlg
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form, inputParam)
+    form.setVar(outputParam[0], dlg.values[0].get())
+
+SelectInputSetWizard().addTarget(protocol=ProtDefineMultiEpitope,
+                                 targets=['inSet'],
+                                 inputs=['inputROIsSets'],
+                                 outputs=['inSet'])
+SelectInputSetWizard().addTarget(protocol=ProtCombineScoresSeqROI,
+                                 targets=['inSet'],
+                                 inputs=['conditionalROIs'],
+                                 outputs=['inSet'])
+
+
+class SelectMultiElementWizard(SelectElementWizard):
+  """Lists the items in a SetOfX and choose one or several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParam, outputParam = self.getInputOutput(form)
+    dlg = self.displayDialog(form, inputParam)
+    values = [val.get().strip() for val in dlg.values]
+    form.setVar(outputParam[0], ', '.join(values))
+
+class SelectMultiSeqWizard(SelectMultiElementWizard):
+  """Lists the items in a SetOfSequences and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for element in scipionSet:
+        eleList.append(element.getSeqName())
+    return ['All'] + eleList
+
+class SelectMultiMolWizard(SelectMultiElementWizard):
+  """Lists the interacting mols in a SetOfSequences and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, seqSet):
+    return ['All'] + seqSet.getInteractMolNames()
+
+class SelectScoreWizard(SelectElementWizard):
+    """List the available scores in a SetOfSequences and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, seqSet):
+        return seqSet.getScoreTypes()
+
+
+SelectMultiSeqWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                 targets=['chooseSeq'],
+                                 inputs=['inputSequences'],
+                                 outputs=['chooseSeq'])
+
+SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                 targets=['chooseMol'],
+                                 inputs=['inputSequences'],
+                                 outputs=['chooseMol'])
+SelectScoreWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                     targets=['chooseScore'],
+                                     inputs=['inputSequences'],
+                                     outputs=['chooseScore'])
+
+class SelectMultiEpitopeElementWizard(SelectElementWizard):
+  """Lists the items in a MultiEpitope and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, scipionSet):
+    eleList = []
+    if scipionSet is not None:
+      for item in scipionSet:
+        elemType = 'Linker' if hasattr(item, '_type') and getattr(item, '_type') == 'Linker' else 'Epitope'
+        elem = f'{elemType} (ID {item.getObjId()}): {item.getROISequence()}'
+        eleList.append(elem)
+    return eleList
+
+SelectMultiEpitopeElementWizard().addTarget(protocol=ProtModifyMultiEpitope,
+                                 targets=['inROI'],
+                                 inputs=['inputMultiEpitope'],
+                                 outputs=['inROI'])
+
+class SelectSetMultiPointerWizard(SelectElementWizard):
+  """Lists the items in a multipointer of SetOfX and choose one"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def displayDialog(self, form, inputParam):
+    protocol = form.protocol
+    try:
+      scipionSet = getattr(protocol, inputParam[0])
+      listOfElements = self.getListOfElements(protocol, scipionSet)
+    except Exception as e:
+      print("ERROR: ", e)
+      return
+
+    finalList = []
+    for i in listOfElements:
+      finalList.append(String(i))
+    provider = ListTreeProviderString(finalList)
+    dlg = dialog.ListDialog(form.root, "MultiPointer sets", provider,
+                            "Select one of the sets in the multipointer")
+    return dlg
+
+  def getListOfElements(self, protocol, scipionMultiPointer):
+    eleList = []
+    if scipionMultiPointer is not None:
+      for i, element in enumerate(scipionMultiPointer):
+        eleList.append(f'{i}//{element.get().__str__()}')
+    return eleList
+
+SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRankDocking,
+                                        targets=['defineInput'],
+                                        inputs=['inputMoleculesSets'],
+                                        outputs=['defineInput'])
+
+SelectSetMultiPointerWizard().addTarget(protocol=ProtocolRANXFuse,
+                                        targets=['inSetID'],
+                                        inputs=['inputSets'],
+                                        outputs=['inSetID'])
+
+try:
+    SelectMultiElementWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                         targets=['seleLinker'],
+                                         inputs=['inLinkerSet'],
+                                         outputs=['seleLinker'])
+
+    SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                            targets=['inSet'],
+                                            inputs=['inputROISets'],
+                                            outputs=['inSet'])
+    SelectSetMultiPointerWizard().addTarget(protocol=ProtOptimizeMultiEpitope,
+                                            targets=['linkProtSet'],
+                                            inputs=['inputROISets'],
+                                            outputs=['linkProtSet'])
+except:
+    pass
+
 
 class SelectElementMultiPointerWizard(SelectElementWizard):
     """Lists the items in a multipointer of SetOfX and choose one"""
@@ -662,12 +864,12 @@ SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                inputs=['inSmallMols'],
                                outputs=['ligName'])
 
-SelectElementWizard().addTarget(protocol=ProtocolShapeDistancesFiltering,
+SelectElementWizard().addTarget(protocol=ProtocolShapeDistances,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
 
-SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
+SelectElementWizard().addTarget(protocol=ProtocolFingerprintDistance,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
@@ -719,7 +921,7 @@ class AddSequenceWizard(SelectResidueWizard):
             outStr = [os.path.splitext(os.path.basename(pdbFile))[0]]
             AS = True
         elif issubclass(type(inputObj), Sequence):
-            outStr = [inputObj.getId()]
+            outStr = [inputObj.getId().replace("|", "_")]
 
         if AS:
             # Chain

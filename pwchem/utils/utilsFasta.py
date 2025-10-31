@@ -160,10 +160,41 @@ def calculateIdentity(alignFile):
             return round(100 * ident, 2)
 
 
+def fastFastaExport(seqSet, outFasta):
+  lines = []
+  for seq in seqSet:
+    lines.append(f'>{seq.getSeqName()}\n{seq.getSequence()}\n')
+
+  with open(outFasta, 'w') as f:
+    f.write(''.join(lines))
 
 
+CLUSTALO, MUSCLE, MAFFT = 'CLUSTAL_OMEGA', 'MUSCLE', 'MAFFT'
+def getMultipleAlignmentCline(programName, inputFasta, outputFile, extraArgs=None):
+  programName = programName.upper()
+  if extraArgs is None or extraArgs.strip() == '':
+    if programName == MUSCLE:
+      extraArgs = '-align'
+    elif programName == MAFFT:
+      extraArgs = '--auto'
+    elif programName == CLUSTALO:
+      extraArgs = '--auto'
+    else:
+      extraArgs = ''
 
+  cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+  # Clustal Omega
+  if programName == CLUSTALO:
+    cline += 'clustalo -i {} {} -o {} --outfmt=clu'.format(inputFasta, extraArgs, outputFile)
 
+  # Muscle
+  elif programName == MUSCLE:
+    cline += 'muscle {} {} -output {}'.format(extraArgs, inputFasta, outputFile)
 
+  elif programName == MAFFT:
+    cline += 'mafft {} --clustalout {} > {}'.format(extraArgs, inputFasta, outputFile)
+  else:
+    cline += 'exit'
 
+  return cline
 

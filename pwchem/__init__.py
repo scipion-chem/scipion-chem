@@ -34,46 +34,52 @@ manipulation of atomic struct objects
 import os, subprocess
 from subprocess import run
 
-# Scipion em imports
-import pwem
+# Scipion core imports
+from pyworkflow import VarTypes
 import pyworkflow.utils as pwutils
 from pyworkflow.tests import DataSet
 from scipion.install.funcs import InstallHelper
+import pwem
 
 # Plugin imports
 from .bibtex import _bibtexStr
 from .constants import *
+from . import version
 
 _logo = 'pwchem_logo.png'
-__version__ = DEFAULT_VERSION
+__version__ = version.__version__
 
 class Plugin(pwem.Plugin):
 	@classmethod
 	def defineBinaries(cls, env):
 		cls.addRDKitPackage(env)
-		cls.addShapeitPackage(env)
+		cls.addOpenbabelPackage(env)
 		cls.addMGLToolsPackage(env)
 		cls.addJChemPaintPackage(env)
-		cls.addPyMolPackage(env)
 		cls.addAliViewPackage(env)
 		cls.addVMDPackage(env)
 		cls.addMDTrajPackage(env)
+		cls.addDEAPPackage(env)
+		cls.addRanxPackage(env)
 
 	@classmethod
 	def _defineVariables(cls):
 		# Package home directories
 		cls._defineEmVar(RDKIT_DIC['home'], cls.getEnvName(RDKIT_DIC))
 		cls._defineEmVar(MGL_DIC['home'], cls.getEnvName(MGL_DIC))
-		cls._defineEmVar(PYMOL_DIC['home'], cls.getEnvName(PYMOL_DIC))
 		cls._defineEmVar(JCHEM_DIC['home'], cls.getEnvName(JCHEM_DIC))
 		cls._defineEmVar(ALIVIEW_DIC['home'], cls.getEnvName(ALIVIEW_DIC))
 		cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
+		cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
 		cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
 
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
 		cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
 		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
+		cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
+									 description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
+															 'and IO overuse')
 
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
 	@classmethod
@@ -111,20 +117,13 @@ class Plugin(pwem.Plugin):
 		env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
 		# Installing package
-		installer.addCommand(f'conda create --name {RDKIT_DIC["name"]}-{RDKIT_DIC["version"]} --file {cls.getEnvSpecsPath("rdkit")} -y', 'RDKIT_ENV_CREATED')\
-			.addCommand('mkdir oddtModels', 'ODTMODELS_CREATED')\
+		rdkitEnvName = cls.getEnvName(RDKIT_DIC)
+		installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
+							 f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
+			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
+			.addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
 			.addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
-			
-	@classmethod
-	def addPyMolPackage(cls, env, default=True):
-		# Instantiating install helper
-		installer = InstallHelper(PYMOL_DIC['name'], packageHome=cls.getVar(PYMOL_DIC['home']), packageVersion=PYMOL_DIC['version'])
 
-		# Installing package
-		installer.getExtraFile('https://pymol.org/installers/PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_DOWNLOADED')\
-			.addCommand('tar -jxf PyMOL-' + PYMOL_DIC['version'] + '_496-Linux-x86_64-py37.tar.bz2', 'PYMOL_EXTRACTED')\
-			.addCommand('rm PyMOL-2.5.5_496-Linux-x86_64-py37.tar.bz2', 'TAR_REMOVED')\
-			.addPackage(env, dependencies=['tar', 'wget'], default=default)
 
 	@classmethod
 	def addMGLToolsPackage(cls, env, default=True):
@@ -153,28 +152,34 @@ class Plugin(pwem.Plugin):
 			.addPackage(env, dependencies=['wget'], default=default)
 
 	@classmethod
-	def addShapeitPackage(cls, env, default=True):
+	def addOpenbabelPackage(cls, env, default=True):
 		# Instantiating openbabel install helper
-		openbabel_installer = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=OPENBABEL_DIC['version'])
+		openbabelInstaller = InstallHelper(OPENBABEL_DIC['name'], packageHome=cls.getVar(OPENBABEL_DIC['home']),
+																			 packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabel_installer.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip'], channel='conda-forge')\
-			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')
-		
-		# Instantiating shape it install helper
-		shape_it_installer = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']), packageVersion=SHAPEIT_DIC['version'])
+		openbabelInstaller.getCondaEnvCommand()\
+			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge')\
+			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
+			.addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
+						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
+						'BITBIRCH_INSTALLED')\
+			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
 
-		# Importing commands from openbabel and rdkit installers
-		shape_it_installer.importCommandList(openbabel_installer.getCommandList())
-
-		# Defining binaries folder name
-		binaries_directory = SHAPEIT_DIC['name']
+		# # Instantiating shape it install helper
+		binariesDirectory = SHAPEIT_DIC['name']
+		shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
+																		 packageVersion=SHAPEIT_DIC['version'])
 
 		# Installing package
-		shape_it_installer.getCloneCommand('https://github.com/rdkit/shape-it.git', binaryFolderName=binaries_directory)\
-			.addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC)} && cmake -DCMAKE_INSTALL_PREFIX=. -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 -DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so -Bbuild .', 'MAKEFILES_BUILT', workDir=binaries_directory)\
-			.addCommand(f'cd {binaries_directory}/build && make', 'SHAPEIT_COMPILED')\
+		shapeHome = cls.getProgramHome(SHAPEIT_DIC)
+		shapeItInstaller.getCloneCommand(cls.getShapeItGithub(), binaryFolderName=binariesDirectory) \
+			.addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
+									f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
+									f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 '
+									f'-DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so .. && '
+									f'make && make install', 'MAKEFILES_BUILT') \
+			.addCommand(f'cp {binariesDirectory}/build/shape-it bin/shape-it', 'BIN_ENABLED') \
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make'], default=default)
 
 	@classmethod
@@ -186,7 +191,7 @@ class Plugin(pwem.Plugin):
 		file_name = cls.getDefTar(ALIVIEW_DIC)
 
 		# Installing package
-		installer.getExtraFile('https://ormbunkar.se/aliview/downloads/linux/linux-version-1.28/aliview.tgz', 'ALIVIEW_DOWNLOADED', fileName=file_name)\
+		installer.getExtraFile(cls.getAliviewUrl(), 'ALIVIEW_DOWNLOADED', fileName=file_name)\
 			.addCommand(f'tar -xf {file_name} && rm {file_name}', 'ALIVIEW_EXTRACTED')\
 			.addCommand(f"conda create --name {BIOCONDA_DIC['name']}-{BIOCONDA_DIC['version']} --file {cls.getEnvSpecsPath('bioconda')} -y", 'BIOCONDA_ENV_CREATED')\
 			.addPackage(env, dependencies=['wget', 'conda'], default=default)
@@ -207,26 +212,60 @@ class Plugin(pwem.Plugin):
 		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype', 'parmed'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
+	@classmethod
+	def addDEAPPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
+															packageVersion=DEAP_DIC['version'])
+
+		scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
+		installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate scipion3 && conda install conda-forge::deap -y')\
+			.addCommand('git clone https://github.com/bdsul/grape.git') \
+			.addCommand(f'mv grape {scipionEnvPath}') \
+			.addPackage(env, dependencies=['conda', 'git'], default=default)
+
+	@classmethod
+	def addRanxPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(RANX_DIC['name'], packageHome=cls.getVar(RANX_DIC['home']),
+															packageVersion=RANX_DIC['version'])
+
+		installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
+			addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
+			.addPackage(env, dependencies=['conda', 'pip'], default=default)
+
 	##################### RUN CALLS ######################
 	@classmethod
-	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, scriptDir=None):
+	def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None, pyStr='python'):
 		""" Run a script from a given protocol using a specific environment """
-		scriptName = cls.getScriptsDir(scriptName) if not scriptDir else os.path.join(scriptDir, scriptName)
-		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), 'python', scriptName)
+		scriptName = cls.getScriptsDir(scriptName) if scriptDir == None else os.path.join(scriptDir, scriptName)
+		fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), pyStr, scriptName)
 
 		if not popen:
 			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
 		else:
-			subprocess.check_call(fullProgram + args, cwd=cwd, shell=True)
+			if wait:
+				subprocess.check_call(f'{fullProgram} {args}', cwd=cwd, shell=True)
+			else:
+				subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
 	@classmethod
-	def runShapeIt(cls, protocol, program, args, cwd=None):
+	def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True):
+		""" General function to run conda commands """
+		fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
+		if not popen:
+			protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+		else:
+			kwargs = {}
+			if silent:
+				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+			run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+
+	@classmethod
+	def runShapeIt(cls, protocol, args, cwd=None):
 		""" Run shapeit command from a given protocol (it must be run from the shape-it dir, where the lib file is) """
-		progDir = cls.getProgramHome(SHAPEIT_DIC)
-		progFile = os.path.join(os.path.abspath(progDir), args.split('-s ')[1].split()[0])
-		outFile = os.path.join(os.path.abspath(cwd), os.path.basename(progFile))
-		protocol.runJob(program, args, env=cls.getEnviron(), cwd=progDir)
-		os.rename(progFile, outFile)
+		binFile = os.path.join(cls.getProgramHome(SHAPEIT_DIC), 'bin/shape-it')
+		protocol.runJob(binFile, args, env=cls.getEnviron(), cwd=cwd)
 
 	@classmethod
 	def runJChemPaint(cls, protocol, cwd=None):
@@ -236,21 +275,20 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def runOPENBABEL(cls, protocol, program="obabel ", args=None, cwd=None, popen=False, silent=True):
 		""" Run openbabel command from a given protocol. """
-		full_program = '%s && %s' % (cls.getEnvActivationCommand(OPENBABEL_DIC), program)
-		if not popen:
-			protocol.runJob(full_program, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
-		else:
-			if silent:
-				kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-			run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+		cls.runCondaCommand(protocol, args, OPENBABEL_DIC, program, cwd, popen, silent)
+
+	@classmethod
+	def runACPYPE(cls, protocol, program='acpype', args=None, cwd=None, popen=False, silent=True):
+		""" Run ACPYPE command from a given protocol. """
+		cls.runCondaCommand(protocol, args, MDTRAJ_DIC, program, cwd, popen, silent)
 
 	@classmethod
 	def runPLIP(cls, args, cwd=None):
 		""" Run PLIP command from a given protocol. """
-		full_program = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'openbabel')
-		run(full_program + args, env=cls.getEnviron(), cwd=cwd, shell=True)
+		fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
+		run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
-  ##################### UTILS ###########################
+##################### UTILS ###########################
 	@classmethod
 	def getPluginHome(cls, path=""):
 		import pwchem
@@ -296,6 +334,14 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def getDefTar(cls, programDic, ext='tgz'):
 		return os.path.join(cls.getDefPath(programDic), '{}-{}.{}'.format(programDic['name'], programDic['version'], ext))
+
+	@classmethod
+	def getAliviewUrl(cls, version='1.28'):
+		return f'http://www.ormbunkar.se/aliview/downloads/linux/linux-versions-all/linux-version-{version}/aliview.tgz'
+
+	@classmethod
+	def getShapeItGithub(cls):
+		return 'https://github.com/rdkit/shape-it'
 
 DataSet(name='smallMolecules', folder='smallMolecules',
 					files={

@@ -43,6 +43,7 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 
+MIN, MAX = 0, 1
 
 class ProtocolConsensusDocking(EMProtocol):
     """
@@ -51,9 +52,7 @@ class ProtocolConsensusDocking(EMProtocol):
     """
     _label = 'Consensus docking'
 
-    def __init__(self, **args):
-        EMProtocol.__init__(self, **args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -89,7 +88,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
         group.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
                       help="Maximum RMSD for clustering different docked molecules")
-        group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings',
+        group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings: ',
                       help="Min number of docked molecules to be considered consensus docking")
 
         group = form.addGroup('Representative')
@@ -98,9 +97,9 @@ class ProtocolConsensusDocking(EMProtocol):
                       help='Criteria to follow on docking clusters to choose a representative. '
                            'It will extract the representative as the pose with max/min (next argument) value '
                            'of this attribute')
-        group.addParam('maxmin', params.BooleanParam, default=True,
-                      label='Keep maximum values: ',
-                      help='True to keep the maximum values. False to get the minimum')
+        group.addParam('maxmin', params.EnumParam, default=MAX, choices=['Minimum', 'Maximum'], label='Keep values: ',
+                       help='Whether to keep the minimum or maximum values of the criteria attribute to select the '
+                            'representative')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -116,11 +115,11 @@ class ProtocolConsensusDocking(EMProtocol):
         outDir = self.getInputMolsDir()
         os.mkdir(outDir)
 
-        maeMols, _ = self.getMAEMoleculeFiles(allMols)
+        maeMols, _ = getMAEMoleculeFiles(allMols)
         if len(maeMols) > 0:
             try:
-                from schrodingerScipion.utils.utils import convertMAEMolSet
-                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False)
+                from pwchemSchrodinger.utils.utils import convertMAEMolSet
+                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
             except ImportError:
                 print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
 
@@ -146,7 +145,7 @@ class ProtocolConsensusDocking(EMProtocol):
             indepClustersDic = self.getIndepClusters(molClusters, molDic)
             for inSetId in indepClustersDic:
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], minSize=1)
+                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], molDic, minSize=1)
 
 
     def createOutputStep(self):
@@ -205,16 +204,6 @@ class ProtocolConsensusDocking(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
-
-    def getMAEMoleculeFiles(self, molList):
-        maeMols, otherMols = [], []
-        for mol in molList:
-            molFile = os.path.abspath(mol.getPoseFile())
-            if '.mae' in molFile:
-                maeMols.append(mol)
-            else:
-                otherMols.append(mol)
-        return maeMols, otherMols
 
     def buildMolDic(self):
         dic = {}
@@ -292,8 +281,8 @@ class ProtocolConsensusDocking(EMProtocol):
                     # If the RMSD threshold is passed
                     if repRMSD <= self.maxRMSD.get():
                         repScore, newScore = getattr(repMol, self.repAttr.get()), getattr(newMol, self.repAttr.get())
-                        if (newScore > repScore and self.maxmin.get()) or \
-                                (newScore < repScore and not self.maxmin.get()):
+                        if (newScore > repScore and self.maxmin.get() == MAX) or \
+                                (newScore < repScore and self.maxmin.get() == MIN):
                             # Becomes new representative (first position)
                             newClust += clust
                         else:
@@ -396,11 +385,11 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
-        maxScore = -10e15 if self.maxmin.get() else 10e15
+        maxScore = -10e15 if self.maxmin.get() == MAX else 10e15
         for mol in cluster:
             molScore = getattr(mol, self.repAttr.get())
-            if (molScore > maxScore and self.maxmin.get()) or \
-                    (molScore < maxScore and not self.maxmin.get()):
+            if (molScore > maxScore and self.maxmin.get() == MAX) or \
+                    (molScore < maxScore and self.maxmin.get() == MIN):
                 maxScore = molScore
                 outMol = mol.clone()
         return outMol
@@ -456,23 +445,6 @@ class ProtocolConsensusDocking(EMProtocol):
             idsDic[i+1] = item.getObjId()
             item.setObjId(i+1)
         return inSet, idsDic
-
-    def createOutPDB(self, idsDic):
-        outStr = self.getTemplateOutPDB()
-        for pocket in self.consensusPockets:
-            outFile = pocket.getProteinFile()
-            newId, oldId = pocket.getObjId(), idsDic[pocket.getObjId()]
-            outStr += self.parseHETATM(outFile, oldId, newId)
-
-        outPDBFile = self._getExtraPath(self.getPDBName()) + '_out.pdb'
-        with open(outPDBFile, 'w') as f:
-            f.write(outStr)
-            f.write('\nTER\n')
-
-        pmlFile = self._getExtraPath('{}.pml'.format(self.getPDBName()))
-        with open(pmlFile, 'w') as f:
-            f.write(PML_STR.format(outPDBFile.split('/')[-1]))
-        return os.path.abspath(outPDBFile), os.path.abspath(pmlFile)
 
     def getTemplateOutPDB(self):
         templatePocket = None

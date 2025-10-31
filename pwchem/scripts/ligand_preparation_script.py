@@ -1,47 +1,8 @@
 from rdkit import Chem, RDConfig
-from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom
+from rdkit.Chem import AllChem, rdMolAlign, rdShapeHelpers, rdDistGeom, SaltRemover
 import sys, os
 
-def parseMoleculeFile(molFile):
-    if molFile.endswith('.mol2'):
-        mol = Chem.MolFromMol2File(molFile)
-    elif molFile.endswith('.mol'):
-        mol = Chem.MolFromMolFile(molFile)
-    elif molFile.endswith('.pdb'):
-        mol = Chem.MolFromPDBFile(molFile)
-    elif molFile.endswith('.smi'):
-        f = open(molFile, "r")
-        firstline = next(f)
-        mol = Chem.MolFromSmiles(str(firstline))
-    elif molFile.endswith('.sdf'):
-        suppl = Chem.SDMolSupplier(molFile)
-        for mol in suppl:
-            break
-    else:
-        mol = Chem.MolFromSmiles(molFile)
-
-    return mol
-
-def getMolFilesDic(molFiles):
-    mols_dict = {}
-    for molFile in molFiles:
-        m = parseMoleculeFile(molFile)
-        mols_dict[m] = molFile
-
-    mols = list(mols_dict.keys())
-    return mols_dict, mols
-
-
-def parseParams(paramsFile):
-    paramsDic = {}
-    with open(paramsFile) as f:
-        for line in f:
-            key, value = line.strip().split(':')
-            if key == 'ligandFiles':
-                paramsDic[key] = value.strip().split()
-            else:
-                paramsDic[key] = value.strip()
-    return paramsDic
+from utils import getMolFilesDic, parseParams, writeMol
 
 #################################################################################################################
 def conformer_generation(mol, outBase, ffMethod, restrainMethod, numConf, rmsThres):
@@ -63,31 +24,28 @@ def filterMolsSize(mols, size):
     return nMols
 
 def embedAndOptimize(mol):
-    embedMess = AllChem.EmbedMolecule(mol, randomSeed=44)
-    if embedMess == 0:
-        AllChem.MMFFOptimizeMolecule(mol)
-    else:
-        embedMess = AllChem.EmbedMolecule(mol, randomSeed=44, useRandomCoords=True)
+    try:
+        embedMess = AllChem.EmbedMolecule(mol, randomSeed=44)
         if embedMess == 0:
             AllChem.MMFFOptimizeMolecule(mol)
         else:
-            return False
+            embedMess = AllChem.EmbedMolecule(mol, randomSeed=44, useRandomCoords=True)
+            if embedMess == 0:
+                AllChem.MMFFOptimizeMolecule(mol)
+            else:
+                return False
+    except:
+        mol = False
     return mol
-
-def writeMol(mol, outFile, cid=-1):
-    w = Chem.SDWriter(outFile)
-    w.write(mol, cid)
-    w.close()
 
 ###################################################################################################################
 if __name__ == "__main__":
     '''Use: python <scriptName> <paramsFile>
     ParamsFile must include:
         <outputPath> <descritor> <receptorFile> <molFile1> <molFile2> ...'''
-    paramsDic = parseParams(sys.argv[1])
+    paramsDic = parseParams(sys.argv[1], listParams=['ligandFiles'])
     molFiles = paramsDic['ligandFiles']
     outDir = paramsDic['outputDir']
-    ffMethod = paramsDic['ffMethod']
 
     failedMols = []
     mols_dict, _ = getMolFilesDic(molFiles)
@@ -95,9 +53,11 @@ if __name__ == "__main__":
         molBase = os.path.splitext(os.path.basename(mols_dict[inmol]))[0]
         outBase = os.path.join(outDir, molBase)
         if 'numAtoms' in paramsDic:
-            inMols = []
-            frags = Chem.GetMolFrags(inmol, asMols=True)
-            frags = filterMolsSize(frags, paramsDic['numAtoms'])
+            try:
+                frags = Chem.GetMolFrags(inmol, asMols=True)
+                frags = filterMolsSize(frags, paramsDic['numAtoms'])
+            except:
+                failedMols.append(outBase)
         else:
             frags = [inmol]
 
@@ -107,6 +67,11 @@ if __name__ == "__main__":
             else:
                 outBasef = outBase
 
+            if eval(paramsDic['removeSalts']) != ['']:
+                saltStr = paramsDic['removeSalts'].replace("'", "")
+                remover = SaltRemover.SaltRemover(defnData=saltStr)
+                mol = remover.StripMol(mol)
+
             if paramsDic['doHydrogens']:
                 mol = Chem.AddHs(Chem.RemoveHs(mol), addCoords=True)
 
@@ -114,20 +79,26 @@ if __name__ == "__main__":
                 AllChem.ComputeGasteigerCharges(mol)
 
             if 'numConf' in paramsDic:
-                mol = conformer_generation(mol, outBasef, ffMethod, paramsDic['restrainMethod'],
+                mol = conformer_generation(mol, outBasef, paramsDic['ffMethod'], paramsDic['restrainMethod'],
                                                  paramsDic['numConf'], paramsDic['rmsThres'])
                 if mol:
                     for cid, cMol in enumerate(mol.GetConformers()):
                         outFile = outBasef + '-{}.sdf'.format(cid+1)
-                        writeMol(mol, outFile, cid=cid)
-                else:
+                        mol = writeMol(mol, outFile, cid=cid, setName=True)
+
+                if not mol:
                     failedMols.append(outBase)
             else:
                 mol = embedAndOptimize(mol)
+                try:
+                    AllChem.UFFOptimizeMolecule(mol)
+                except:
+                    pass
                 if mol:
                     outFile = outBasef + '.sdf'
-                    writeMol(mol, outFile)
-                else:
+                    mol = writeMol(mol, outFile, setName=True)
+
+                if not mol:
                     failedMols.append(outBase)
 
 

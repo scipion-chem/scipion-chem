@@ -28,12 +28,12 @@
 import os, glob
 
 # Scipion em imports
-from pyworkflow.tests import *
+from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
 from pwchem.tests.tests_imports import TestImportBase
-from pwchem.protocols import *
+from pwchem.protocols import ProtChemImportSmallMolecules, ConvertStructures, ProtChemExportCSV, ProtChemOperateSet
 from pwchem.utils import assertHandle
 
 class TestImportBoth(BaseTest):
@@ -77,8 +77,8 @@ class TestConverter(TestImportBoth):
 		# Import SetOfSmallMolecules
 		smallM = self.smallProt.outputSmallMolecules
 		args = {
-			'inputType': 0, # SmallMolecules
-			'inputSmallMolecules': smallM, "useManager": 1,
+			'inputObject': smallM, # SmallMolecules
+			"useManager": 1,
 			'outputFormatSmall': 0, # PDB
 		}
 
@@ -86,14 +86,14 @@ class TestConverter(TestImportBoth):
 		self.launchProtocol(protocol)
 
 		small1 = getattr(protocol, 'outputSmallMolecules', None)
-		convert_file = glob.glob(protocol._getExtraPath("*"))
+		convertFile = glob.glob(protocol._getExtraPath("*"))
 
 		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
 		assertHandle(self.assertTrue, small1.getSize()==4,
 								 message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
 		files = ""
-		for file in convert_file:
+		for file in convertFile:
 			if not file.endswith(".pdb"):
 				files += "%s; "
 
@@ -108,22 +108,22 @@ class TestConverter(TestImportBoth):
 		smallM = self.smallProt.outputSmallMolecules
 
 		args = {
-			'inputType': 0, # SmallMolecules
-			'inputSmallMolecules': smallM, "useManager": 1,
+			'inputObject': smallM, # SmallMolecules
+			"useManager": 1,
 			'outputFormatSmall': 3, # smiles or smi
 		}
 
 		protocol = self.newProtocol(ConvertStructures, **args)
 		self.launchProtocol(protocol)
 		small1 = getattr(protocol, 'outputSmallMolecules', None)
-		convert_file = glob.glob(protocol._getExtraPath("*"))
+		convertFile = glob.glob(protocol._getExtraPath("*"))
 
 		assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
 		assertHandle(self.assertTrue, small1.getSize()==4,
 								 message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
 		files = ""
-		for file in convert_file:
+		for file in convertFile:
 			if not file.endswith(".smi"):
 				files += "%s; "
 
@@ -138,8 +138,7 @@ class TestConverter(TestImportBoth):
 		target = self.pdbProt.outputPdb
 
 		args = {
-			'inputType': 1, # Protein structure
-			'inputStructure': target,
+			'inputObject': target, # AtomStruct
 			'outputFormatTarget': 0, # pdb
 		}
 
@@ -150,9 +149,9 @@ class TestConverter(TestImportBoth):
 		assertHandle(self.assertIsNotNone, prot,
 								 message="There was a problem with the conversion and the new file not exist", cwd=protocol.getWorkingDir())
 
-		prot_end = prot.getFileName()
-		assertHandle(self.assertTrue, prot_end.endswith(".pdb"),
-								 message="The conversion was incorrect and this file have a wrong format : %s" %os.path.basename(prot_end), cwd=protocol.getWorkingDir())
+		protEnd = prot.getFileName()
+		assertHandle(self.assertTrue, protEnd.endswith(".pdb"),
+								 message="The conversion was incorrect and this file have a wrong format : %s" %os.path.basename(protEnd), cwd=protocol.getWorkingDir())
 
 class TestExportcsv(TestImportBase):
 	@classmethod

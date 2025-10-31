@@ -23,13 +23,13 @@
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolADMEFiltering, ProtocolPainsRdkitFiltering, ProtocolGeneralLigandFiltering, \
-	ProtocolShapeDistancesFiltering, ProtocolFingerprintFiltering
-from pwchem.tests.tests_imports import TestImportBase
+	ProtocolShapeDistances, ProtocolFingerprintDistance, ProtocolOperateLibrary, ProtClusterMolecules
+from pwchem.tests.tests_imports import TestImportBase, TestImportSmallMoleculesLibrary
 from pwchem.utils import assertHandle
 
 generalFilter = '''Remove molecule if contains at least 1 atom type B
 Keep molecule if contains at least 2 atoms 
-Remove molecule if contains at least 3 cycles '''
+Remove molecule if contains at least 3 cycles'''
 
 class TestGeneralFiltering(TestImportBase):
 	@classmethod
@@ -92,10 +92,11 @@ class TestPAINSFiltering(TestImportBase):
 
 class TestShapeFiltering(TestImportBase):
 	@classmethod
-	def _runShapeFilter(cls, inProt, mode=0):
+	def _runShapeFilter(cls, inProt, program, mode=0):
 		protShape = cls.newProtocol(
-			ProtocolShapeDistancesFiltering,
-			distanceType=mode, inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
+			ProtocolShapeDistances,
+			program=program, distanceType=mode, distanceTypeShapeit=mode,
+			inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
 		)
 		protShape.inputSmallMolecules.set(inProt)
 		protShape.inputSmallMolecules.setExtended('outputSmallMolecules')
@@ -108,8 +109,9 @@ class TestShapeFiltering(TestImportBase):
 
 	def test(self):
 		protsShape = []
-		for i in range(3):
-			protsShape.append(self._runShapeFilter(inProt=self.protImportSmallMols, mode=i))
+		for program in range(2):
+			for i in range(3):
+				protsShape.append(self._runShapeFilter(inProt=self.protImportSmallMols, program=program, mode=i))
 
 		for p in protsShape:
 			self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
@@ -119,7 +121,7 @@ class TestFingerprintFiltering(TestImportBase):
 	@classmethod
 	def _runFingerprintFilter(cls, inProt, mode=0):
 		protFinger = cls.newProtocol(
-			ProtocolFingerprintFiltering,
+			ProtocolFingerprintDistance,
 			fpChoice=mode, inputReferenceMolecule='SmallMolecule (ZINC00000480 molecule)'
 		)
 		protFinger.inputSmallMolecules.set(inProt)
@@ -139,3 +141,91 @@ class TestFingerprintFiltering(TestImportBase):
 		for p in protsShape:
 			self._waitOutput(p, 'outputSmallMolecules', sleepTime=10)
 			assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
+
+
+class TestOperateSmallMoleculesLibrary(TestImportSmallMoleculesLibrary):
+
+		@classmethod
+		def _runOperateSets(cls, protLibs, op=0):
+			protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, refAttribute=1)
+			for protLib in protLibs:
+				protOperateLibrary.inputLibraries.append(protLib)
+				protOperateLibrary.inputLibraries[-1].setExtended('outputLibrary')
+	
+			cls.proj.launchProtocol(protOperateLibrary, wait=False)
+			return protOperateLibrary
+
+		@classmethod
+		def _runOperateLibrary(cls, protLib, op, kwargs):
+			protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, **kwargs)
+			protOperateLibrary.inputLibrary.set(protLib)
+			protOperateLibrary.inputLibrary.setExtended('outputLibrary')
+
+			cls.proj.launchProtocol(protOperateLibrary, wait=False)
+			return protOperateLibrary
+
+
+		def test(self):
+			protImport1 = self._runImportLibrary(defLib=True, nMols=1000, rSeed=44)
+			protImport2 = self._runImportLibrary(defLib=True, nMols=1000, rSeed=4)
+			self._waitOutput(protImport1, 'outputLibrary')
+			self._waitOutput(protImport2, 'outputLibrary')
+			
+			opProts = []
+			for op in range(3):
+				opProts.append(self._runOperateSets([protImport1, protImport2], op))
+
+			filtList = 'Keep molecule if LogP is below threshold 2.0\n'
+			kwDic = {3: {"filterList": filtList}, 4: {"filterAttr": 'LogP', "filterValue": '-0.4'},
+							 5: {"removeList": "Reactivity\nPurchasability"}}
+			for op in range(3, 6):
+				opProts.append(self._runOperateLibrary(protImport1, op, kwDic[op]))
+
+			for opProt in opProts:
+				self._waitOutput(opProt, 'outputLibrary')
+				assertHandle(self.assertIsNotNone, getattr(opProt, 'outputLibrary', None),
+										 cwd=opProt.getWorkingDir())
+
+class TestClusterMolecules(TestImportSmallMoleculesLibrary):
+	@classmethod
+	def _runOperateSets(cls, protLibs, op=0):
+		protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, refAttribute=1)
+		for protLib in protLibs:
+			protOperateLibrary.inputLibraries.append(protLib)
+			protOperateLibrary.inputLibraries[-1].setExtended('outputLibrary')
+
+		cls.proj.launchProtocol(protOperateLibrary, wait=False)
+		return protOperateLibrary
+
+	@classmethod
+	def _runClusterMolecules(cls, protIn, useLib, kwargs):
+		protClusterMols = cls.newProtocol(ProtClusterMolecules, useLibrary=useLib, outputOnlyReps=False, **kwargs)
+		if useLib:
+			protClusterMols.inputLibrary.set(protIn)
+			protClusterMols.inputLibrary.setExtended('outputLibrary')
+		else:
+			protClusterMols.inputSmallMolecules.set(protIn)
+			protClusterMols.inputSmallMolecules.setExtended('outputSmallMolecules')
+
+		cls.proj.launchProtocol(protClusterMols, wait=False)
+		return protClusterMols
+
+	def test(self):
+		self._runImportSmallMols()
+		protImportLib = self._runImportLibrary(defLib=True, nMols=1000, rSeed=44)
+		self._waitOutput(protImportLib, 'outputLibrary')
+		self._waitOutput(self.protImportSmallMols, 'outputSmallMolecules')
+		kwargs = {}
+
+		clProts = []
+		for i in range(2):
+			protIn = protImportLib if i == 0 else self.protImportSmallMols 
+			clProts.append(self._runClusterMolecules(protIn, i==0, kwargs))
+
+		for i, clProt in enumerate(clProts):
+			outName = 'outputLibrary' if i == 0 else 'outputSmallMolecules'
+			self._waitOutput(clProt, outName)
+			assertHandle(self.assertIsNotNone, getattr(clProt, outName, None),
+									 cwd=clProt.getWorkingDir())
+			assertHandle(self.assertIsNotNone, getattr(clProt, 'outputRepSmallMolecules', None),
+									 cwd=clProt.getWorkingDir())

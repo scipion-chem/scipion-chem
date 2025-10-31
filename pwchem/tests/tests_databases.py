@@ -77,8 +77,8 @@ class TestIdentifyLigands(TestImportBase):
 			useManager=1, nameDatabase=3,
 		)
 
-		protIdentify.inputSet.set(inProt)
-		protIdentify.inputSet.setExtended('outputSmallMolecules')
+		protIdentify.inputSmallMolecules.set(inProt)
+		protIdentify.inputSmallMolecules.setExtended('outputSmallMolecules')
 		cls.proj.launchProtocol(protIdentify)
 		return protIdentify
 

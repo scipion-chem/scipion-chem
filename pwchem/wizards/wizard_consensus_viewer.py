@@ -31,7 +31,6 @@
 
 # Imports
 from pwem.wizards.wizard import EmWizard
-from pwem.wizards.wizards_3d.mask_structure_wizard import MaskStructureWizard
 from ..viewers import ViewerConsensusStructROIs
 
 
@@ -47,6 +46,3 @@ class SetOutputClass(EmWizard):
         outSetClass = outSet.getPocketsClass()
 
         form.setVar('setClass', outSetClass)
-
-
-
