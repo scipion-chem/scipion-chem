@@ -204,7 +204,7 @@ class Plugin(pwem.Plugin):
 		# Instantiating install helper
 		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-		installer.getCondaEnvCommand().addCondaPackages(['mdtraj'], channel='conda-forge')\
+		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype', 'parmed'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)
 
 	##################### RUN CALLS ######################
