@@ -190,7 +190,8 @@ class ProtocolSCORCH2(EMProtocol):
 
                 newMol.setAttributeValue('scorchScore', None)
             newMols.append(newMol)
-
+        newMols.setDocked(True)
+        newMols.proteinFile.set(self.inputPDBligandFiles.get().getProteinFile())
         self._defineOutputs(outputSmallMolecules=newMols)
 
     def moveFilesStep(self):
