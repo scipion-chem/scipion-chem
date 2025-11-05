@@ -82,23 +82,20 @@ hide lines, resn STP
 for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
 for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
 for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.hide("sticks","pocket"+str(aux[my_index-1]))
 for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
 for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
-load {}, protein
-create ligands, protein and organic
-select xlig, protein and organic
-delete xlig
+load {}
 
-hide everything, all
+select protein_only, polymer and not organic
+select non_stp_ligands, organic and not resn STP
+hide everything
 
-color white, elem c
-color bluewhite, protein
-show surface, protein
-
-show sticks, ligands
-set stick_color, magenta
+show surface, protein_only
+color white, protein_only
+show sticks, non_stp_ligands
 
 {}
 zoom visible
@@ -117,11 +114,11 @@ TCL_STR = '''proc highlighting { colorId representation id selection } {
    mol addrep $id
 }
 
-set id [mol new %s type pdb]
+set id [mol new %s type cif]
 mol delrep top $id
-highlighting Name "Lines" $id "protein"
-highlighting Name "Licorice" $id "not protein and not resname STP"
-highlighting Element "NewCartoon" $id "protein"
+highlighting Name "Lines" 0 "protein"
+highlighting Name "Licorice" 0 "not protein and not resname STP"
+highlighting Element "NewCartoon" 0 "protein"
 set id [mol new %s type pqr]
                         mol selection "all" 
                          mol material "Glass3" 
@@ -129,7 +126,7 @@ set id [mol new %s type pqr]
                          mol representation "QuickSurf 0.3" 
                          mol color ResId $id 
                          mol addrep $id 
-highlighting Index "Points 1" $id "resname STP"
+highlighting Index "Points 1" 1 "resname STP"
 display rendermode GLSL'''#.format(proteinHETATMFile, proteinPQRFile)
 
 FUNCTION_GRID_BOX = '''from pymol.cgo import *
@@ -382,6 +379,7 @@ hide lines, resn STP
 for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
 for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
 for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
+for my_index in range(1,int(lastSTP)+1): cmd.hide("sticks","pocket"+str(aux[my_index-1]))
 for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
 for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
 
@@ -393,13 +391,15 @@ python end
 
 PML_BBOX_STR_POCKSURF = '''
 from pymol import cmd,stored
-load {}, protein
-create protein and organic
-hide everything, all
+load {}
 
-color white, elem c
-color bluewhite, protein
-show surface, protein
+select protein_only, polymer and not organic
+select non_stp_ligands, organic and not resn STP
+hide everything
+
+show surface, protein_only
+color white, protein_only
+show sticks, non_stp_ligands
 
 {}
 zoom visible
@@ -514,3 +514,13 @@ NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "b
 SCORE_BASED_METHODS = ["med", "anz"]
 RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 
+CIF_DEF_COLS = ["_atom_site.group_PDB",  "_atom_site.id",  "_atom_site.type_symbol",
+                "_atom_site.label_atom_id",  "_atom_site.label_alt_id",
+                "_atom_site.label_comp_id",  "_atom_site.label_asym_id",
+                "_atom_site.label_entity_id",  "_atom_site.label_seq_id",
+                "_atom_site.Cartn_x",  "_atom_site.Cartn_y",  "_atom_site.Cartn_z",
+                "_atom_site.auth_asym_id",  "_atom_site.auth_seq_id",
+                "_atom_site.pdbx_PDB_ins_code",  "_atom_site.occupancy",  "_atom_site.B_iso_or_equiv",
+                "_atom_site.pdbx_PDB_model_num"]
+
+CIF_DEF_HEADER = "data_example\nloop_\n{}\n"

@@ -34,11 +34,11 @@ from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.convert.atom_struct import toPdb
+from pwem.convert.atom_struct import toPdb, toCIF
 from pwem.objects.data import Sequence, Object, String, Integer, Float, Pointer
 
 # Plugin imports
-from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC, RDKIT_DIC
+from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC, RDKIT_DIC, CIF_DEF_HEADER, CIF_DEF_COLS
 from .. import Plugin as pwchemPlugin
 from ..utils.scriptUtils import makeSubsets, performBatchThreading
 
@@ -290,6 +290,8 @@ def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   return fileName
 
 def getRawPDBStr(pdbFile, ter=True):
+  '''Return the raw PDB/CIF lines from a file (Those starting with ATOM or HETATM) plus TER lines if ter
+  '''
   outStr = ''
   with open(pdbFile) as fIn:
     for line in fIn:
@@ -329,6 +331,44 @@ def writePDBLine(j):
   j[12] = j[12].rjust(2)  # elname
   return "%s%s %s %s %s%s    %s%s%s%s%s%s%s\n" % \
          (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
+
+def writeCIFLine(idx,  # atom serial number
+          atom_name,  # atom name, e.g., C1
+          res_name,  # residue name, e.g., STP
+          chain_id,  # asym_id, e.g., A
+          entity_id,  # entity ID, usually 1 for small molecules
+          res_seq,  # residue sequence number
+          x, y, z,  # coordinates
+          occupancy=1.0,
+          b_factor=1.0,
+          alt_id='.',
+          pdb_ins_code='?',
+          model_num=1,
+          type_symbol='C'
+  ):
+    """
+    Return a CIF HETATM line in the specified _atom_site order.
+    """
+    # Ensure numeric values
+    x, y, z = float(x), float(y), float(z)
+    occupancy = float(occupancy)
+    b_factor = float(b_factor)
+    idx = int(idx)
+    res_seq = int(res_seq)
+    model_num = int(model_num)
+
+    # auth_asym_id and auth_seq_id are usually the same as label_asym_id and label_seq_id
+    auth_asym_id = chain_id
+    auth_seq_id = res_seq
+
+    # Build CIF line with proper formatting
+    line = (
+      f"HETATM{idx:5d} {type_symbol:<2} {atom_name:<4} {alt_id:1} "
+      f"{res_name:<3} {chain_id:1} {res_seq:>4} {pdb_ins_code:1} "
+      f"{x:8.3f} {y:8.3f} {z:8.3f} {auth_asym_id:1} {auth_seq_id:>4} "
+      f"{pdb_ins_code:1} {occupancy:5.2f} {b_factor:6.2f} {model_num:2d}\n"
+    )
+    return line
 
 
 def splitPDBLine(line, rosetta=False):
@@ -461,23 +501,41 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
-def pdbFromAS(AS, oFile):
-  inpStruct = AS
-  name, ext = os.path.splitext(inpStruct.getFileName())
-  if ext == '.cif':
-      cifFile = inpStruct.getFileName()
-      toPdb(cifFile, oFile)
+def pdbFromASFile(inFile, oFile, AS=None):
+  name, ext = os.path.splitext(inFile)
+  if ext.lower() in ['.cif', '.mmcif']:
+      toPdb(inFile, oFile)
 
-  elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-      inpStruct.convert2PDB(outPDB=oFile)
+  elif AS and str(type(AS).__name__) == 'SchrodingerAtomStruct':
+      AS.convert2PDB(outPDB=oFile)
 
   elif ext == '.pdbqt':
       pdbFile = os.path.abspath(oFile)
-      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpStruct.getFileName()), pdbFile)
+      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inFile), pdbFile)
       runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
 
   else:
-      shutil.copy(inpStruct.getFileName(), oFile)
+      shutil.copy(inFile, oFile)
+  return oFile
+
+def cifFromASFile(inFile, oFile, AS=None):
+  '''Convert Atomic Structure files (PDB, CIF, MAE...) to CIF. If MAE, the AtomStruct object is needed'''
+  name, ext = os.path.splitext(inFile)
+
+  if ext.lower() in ['.ent', '.pdb']:
+      toCIF(inFile, oFile)
+
+  elif AS and str(type(AS).__name__) == 'SchrodingerAtomStruct':
+      AS.convert2(outPDB=oFile)
+
+  elif ext == '.pdbqt':
+      cifFile = os.path.abspath(oFile)
+      args = ' -ipdbqt {} -ocif -O {}'.format(os.path.abspath(inFile), cifFile)
+      runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
+
+  else:
+      shutil.copy(inFile, oFile)
+
   return oFile
 
 def pdbqt2other(protocol, pdbqtFile, otherFile):
@@ -1080,12 +1138,25 @@ def clusterSurfaceCoords(surfCoords, intraDist):
     clusters = newClusters.copy()
   return clusters
 
-def createPocketFile(clust, i, outDir):
-  outFile = os.path.join(outDir, f'pocketFile_{i}.pdb')
-  with open(outFile, 'w') as f:
-    for j, coord in enumerate(clust):
-      f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-  return outFile
+# def createPocketFile(clust, i, outDir):
+#   outFile = os.path.join(outDir, f'pocketFile_{i}.pdb')
+#   with open(outFile, 'w') as f:
+#     for j, coord in enumerate(clust):
+#       f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
+#   return outFile
+
+# todo: switch all uses of this function
+def createPocketFile(coords, pocketK, oFile):
+  cifCols = '\n'.join(CIF_DEF_COLS)
+  outStr = CIF_DEF_HEADER.format(cifCols)
+
+  for i, coord in enumerate(coords):
+    replacements = [str(i + 1), f'C{i + 1}', 'STP', 'C', 1, pocketK, *coord]
+    cifLine = writeCIFLine(*replacements)
+    outStr += cifLine
+
+  with open(oFile, 'w') as f:
+    f.write(outStr)
 
 ################# Wizard utils #####################
 def getChainIds(chainStr):
