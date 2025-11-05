@@ -1355,7 +1355,9 @@ class StructROI(data.EMFile):
       cifDic = MMCIF2Dict(extraFile)
       for i, atomId in enumerate(cifDic['_atom_site.id']):
         atomsIds.append(atomId)
-        residuesIds.append(f'{cifDic["_atom_site.auth_asym_id"][i]}_{cifDic["_atom_site.auth_seq_id"][i]}')
+        asymId = "_atom_site.auth_asym_id" if "_atom_site.auth_asym_id" in cifDic else "_atom_site.label_asym_id"
+        seqId = "_atom_site.auth_seq_id" if "_atom_site.auth_seq_id" in cifDic else "_atom_site.label_seq_id"
+        residuesIds.append(f'{cifDic[asymId][i]}_{cifDic[seqId][i]}')
       residuesIds = list(set(residuesIds))
       props['contactAtoms'] = self.encodeIds(atomsIds)
       props['contactResidues'] = self.encodeIds(residuesIds)
