@@ -1040,7 +1040,11 @@ class StructROI(data.EMFile):
     self._score = Float(kwargs.get('score', None))
     self._energy = Float(kwargs.get('energy', None))
 
-    if proteinFile != None:
+    if hasattr(self, 'properties') and 'contactResidues' in self.properties:
+      self.setContactResidues(self.properties['contactResidues'])
+      self.setContactAtoms(self.properties['contactAtoms'])
+
+    elif proteinFile != None:
       self.calculateContacts()
 
   def __str__(self):
@@ -1347,7 +1351,6 @@ class StructROI(data.EMFile):
     return residues
 
   def parseFile(self, extraFile, filename):
-    # todo: optimize this process
     if self.getPocketClass() == 'FPocket':
       props = {}
       atomsIds, residuesIds = [], []
@@ -1380,8 +1383,8 @@ class StructROI(data.EMFile):
       for i, k in enumerate(keys):
         props[k.strip()] = values[i]
 
-      props['residue_ids'] = props['residue_ids'].strip().replace(' ', '-')
-      props['surf_atom_ids'] = props['surf_atom_ids'].strip().replace(' ', '-')
+      props['contactResidues'] = props['residue_ids'].strip().replace(' ', '-')
+      props['contactAtoms'] = props['surf_atom_ids'].strip().replace(' ', '-')
       pocketId = int(values[1])
 
     elif self.getPocketClass() == 'AutoLigand':
