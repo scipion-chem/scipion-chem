@@ -363,7 +363,7 @@ def writeCIFLine(idx,  # atom serial number
 
     # Build CIF line with proper formatting
     line = (
-      f"HETATM{idx:5d} {type_symbol:<2} {atom_name:<4} {alt_id:1} "
+      f"HETATM {idx} {type_symbol:<2} {atom_name:<4} {alt_id:1} "
       f"{res_name:<3} {chain_id:1} {res_seq:>4} {pdb_ins_code:1} "
       f"{x:8.3f} {y:8.3f} {z:8.3f} {auth_asym_id:1} {auth_seq_id:>4} "
       f"{pdb_ins_code:1} {occupancy:5.2f} {b_factor:6.2f} {model_num:2d}\n"
