@@ -24,7 +24,8 @@
 # *
 # **************************************************************************
 
-import enum, io, pickle
+import enum, io, pickle, os
+import subprocess as sp
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 from Bio.PDB import PDBParser, MMCIFParser, MMCIFIO, Structure
 
@@ -1362,22 +1363,10 @@ class StructROI(data.EMFile):
       props['contactAtoms'] = self.encodeIds(atomsIds)
       props['contactResidues'] = self.encodeIds(residuesIds)
 
-      ini, parse = 'Information about the pocket', False
+      for sc in ' '.join(cifDic['_struct.pdbx_descriptor']).split(' - ')[1:]:
+        props[sc.split(':')[0].strip()] = sc.split(':')[1].split()[0]
 
-      # Parsing properties (for cif)
-      with open(extraFile) as f:
-        for line in f:
-          if line.startswith(ini):
-            parse = True
-            pocketId = int(line.split()[-1].replace(':', ''))
-          elif parse:
-            sline = line.strip()
-            if sline != '#':
-                name = sline.split('-')[1].split(':')[0]
-                val = sline.split(':')[-1]
-                props[name.strip()] = float(val.strip())
-            else:
-                break
+      pocketId = int(extraFile.split('pocket')[-1].split('_')[0])
 
     elif self.getPocketClass() == 'P2Rank':
       props = {}
@@ -1421,7 +1410,11 @@ class StructROI(data.EMFile):
     elif self.getPocketClass() == 'SiteMap':
       props, pId = {}, 1
       pocketId = int(filename.split('_site_')[-1].split('_volpts.')[0])
-      with open(extraFile) as fh:
+
+      sumFile = os.path.join(os.path.dirname(extraFile), 'summary.log')
+      if not os.path.exists(sumFile):
+        sp.check_call(f'cat {extraFile} | grep "SiteScore" -A 1 > {sumFile}', shell=True)
+      with open(sumFile) as fh:
         for line in fh:
           if line.startswith("SiteScore"):
             # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
