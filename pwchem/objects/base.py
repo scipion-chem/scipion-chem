@@ -1639,7 +1639,6 @@ class SetOfStructROIs(data.EMSet):
     pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
     # Creates the pml for pymol visualization
-    idList = [pock.getObjId() for pock in self]
     with open(pmlFile, 'w') as f:
       if bBox:
         toWrite = FUNCTION_BOUNDING_BOX
@@ -1648,9 +1647,9 @@ class SetOfStructROIs(data.EMSet):
           radius = [(minMax[1] - minMax[0]) * bBox for minMax in minMaxCoords]
           toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(), radius,
                                               'BoundingBox_' + str(pocket.getObjId()))
-        f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, idList, toWrite))
+        f.write(PML_BBOX_STR_POCK.format(outHETMFile, toWrite))
       else:
-        f.write(PML_STR.format(outHETMFile, idList))
+        f.write(PML_STR.format(outHETMFile))
 
     return pmlFile
 
@@ -1685,7 +1684,8 @@ class SetOfStructROIs(data.EMSet):
     tclFile = outHETMFile.replace('_out.cif', '.tcl')
     with open(pqrFile, 'w') as f:
       for pocket in self:
-        pqrPocket = getRawPDBStr(pocket.getFileName(), ter=False).strip()
+        pqrF = pocket.getFileName().replace('.cif', '.pqr')
+        pqrPocket = getRawPDBStr(pqrF, ter=False).strip()
         f.write(pqrPocket + '\n')
       f.write('TER\nEND')
     tclStr = TCL_STR % (outHETMFile, pqrFile)

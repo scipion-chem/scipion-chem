@@ -836,7 +836,7 @@ class CleanStructureSelect(Select):
         accept = False
     return accept
 
-def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
+def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseName(structFile)
   if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
@@ -846,6 +846,9 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
   else:
     print('Unknown format for file ', structFile)
     exit()
+
+  if singleModel is not None:
+    struct = struct[singleModel]
 
   io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
   io.set_structure(struct)

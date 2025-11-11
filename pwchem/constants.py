@@ -67,24 +67,25 @@ WARNLIBBIG = f'WARNING: you are about to split an immense library of molecules, 
 
 PML_STR = '''from pymol import cmd,stored
 load {}
-#select pockets, resn STP
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
-
-aux = {}
-aux.sort()
-
-lastSTP=max(list(map(int, stored.list)))	#get the index of the last residu
 stored.list = list(map(str, stored.list))
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.hide("sticks","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
+for my_index in stored.list: cmd.select("pocket"+my_index, "resn STP and resi "+my_index)
+for my_index in stored.list: cmd.color(int(my_index)+1,"pocket"+my_index)
+for my_index in stored.list: cmd.show("spheres","pocket"+my_index)
+for my_index in stored.list: cmd.hide("sticks","pocket"+my_index)
+for my_index in stored.list: cmd.set("sphere_scale","0.3","pocket"+my_index)
+for my_index in stored.list: cmd.set("sphere_transparency","0.1","pocket"+my_index)'''
+
+PML_BBOX_STR_POCK = PML_STR + '''
+python
+{}
+zoom
+python end
+'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
 load {}
@@ -100,6 +101,19 @@ show sticks, non_stp_ligands
 {}
 zoom visible
 '''
+
+PML_BBOX_STR_POCKSURF = PML_SURF_STR + '''
+python
+{}
+zoom
+python end
+'''
+
+
+PML_BBOX_STR_EACH = '''rgb = {}
+boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
+'''
+
 
 PML_SURF_EACH = '''set_color pcol{} = {}
 select surf_pocket{}, protein and id {} 
@@ -356,63 +370,6 @@ python
 {}
 zoom
 python end
-'''
-
-PML_BBOX_STR_POCK = '''load {} 
-set cartoon_color, white
-
-from pymol import cmd,stored
-load {}
-#select pockets, resn STP
-stored.list=[]
-cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
-
-aux = {}
-aux.sort()
-
-stored.list = list(map(str, stored.list))
-#print(stored.list)
-lastSTP=stored.list[-1]	#get the index of the last residu
-hide lines, resn STP
-
-#show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.hide("sticks","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
-
-python
-{}
-zoom
-python end
-'''
-
-PML_BBOX_STR_POCKSURF = '''
-from pymol import cmd,stored
-load {}
-
-select protein_only, polymer and not organic
-select non_stp_ligands, organic and not resn STP
-hide everything
-
-show surface, protein_only
-color white, protein_only
-show sticks, non_stp_ligands
-
-{}
-zoom visible
-
-python
-{}
-zoom
-python end
-'''
-
-
-PML_BBOX_STR_EACH = '''rgb = {}
-boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
 '''
 
 
