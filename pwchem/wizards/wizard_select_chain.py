@@ -731,6 +731,14 @@ class SelectMultiMolWizard(SelectMultiElementWizard):
   def getListOfElements(self, protocol, seqSet):
     return ['All'] + seqSet.getInteractMolNames()
 
+class SelectScoreWizard(SelectElementWizard):
+    """List the available scores in a SetOfSequences and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, seqSet):
+        return seqSet.getScoreTypes()
+
+
 SelectMultiSeqWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  targets=['chooseSeq'],
                                  inputs=['inputSequences'],
@@ -740,6 +748,10 @@ SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  targets=['chooseMol'],
                                  inputs=['inputSequences'],
                                  outputs=['chooseMol'])
+SelectScoreWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                     targets=['chooseScore'],
+                                     inputs=['inputSequences'],
+                                     outputs=['chooseScore'])
 
 class SelectMultiEpitopeElementWizard(SelectElementWizard):
   """Lists the items in a MultiEpitope and choose several"""
