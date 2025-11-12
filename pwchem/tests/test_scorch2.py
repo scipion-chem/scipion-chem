@@ -37,8 +37,16 @@ from pwem.protocols.protocol_set_filter import ProtSetFilter
 import pyworkflow.tests as tests
 
 from ..protocols import ProtocolSCORCH2
+from ..protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
 
-
+defStr = '''1) Residues: {"model": 0, "chain": "A", "index": "87-87", "residues": "H"}
+2) Residues: {"model": 0, "chain": "A", "index": "88-88", "residues": "A"}
+3) Residues: {"model": 0, "chain": "A", "index": "92-92", "residues": "R"}
+4) Residues: {"model": 0, "chain": "D", "index": "32-39", "residues": "LVVYPWTQ"}
+5) Residues: {"model": 0, "chain": "D", "index": "48-51", "residues": "LSTP"}
+6) Residues: {"model": 0, "chain": "D", "index": "54-54", "residues": "V"}
+7) Residues: {"model": 0, "chain": "C", "index": "105-105", "residues": "L"}
+8) Residues: {"model": 0, "chain": "C", "index": "109-109", "residues": "L"}'''
 class TestSCORCH2(BaseTest):
     @classmethod
     def setUpClass(cls):
@@ -51,7 +59,7 @@ class TestSCORCH2(BaseTest):
         cls._runImportSmallMols()
 
 
-        cls._runFPocketFind()
+        cls._runDefineStructROIs()
         cls._runFilterSet()
         cls._runDocking()
 
@@ -59,7 +67,7 @@ class TestSCORCH2(BaseTest):
     @classmethod
     def _runFilterSet(cls):
         cls.filteredSet = cls.newProtocol(ProtSetFilter)
-        cls.filteredSet.inputSet.set(cls.protFPocket)
+        cls.filteredSet.inputSet.set(cls.protDef)
         cls.filteredSet.inputSet.setExtended('outputStructROIs')
         cls.filteredSet.operation.set(cls.filteredSet.CHOICE_RANKED)
         cls.filteredSet.threshold.set(2)
@@ -81,12 +89,13 @@ class TestSCORCH2(BaseTest):
         cls.launchProtocol(cls.protImportPDB, wait=True)
 
     @classmethod
-    def _runFPocketFind(cls):
-        cls.protFPocket = cls.newProtocol(
-            FpocketFindPockets,
-            inputAtomStruct=cls.protImportPDB.outputPdb)
+    def _runDefineStructROIs(cls):
+        cls.protDef = cls.newProtocol(
+            ProtDefineStructROIs,
+            inputAtomStruct=cls.protImportPDB.outputPdb,
+            inROIs=defStr)
 
-        cls.launchProtocol(cls.protFPocket)
+        cls.launchProtocol(cls.protDef)
 
     @classmethod
     def _runDocking(cls):
