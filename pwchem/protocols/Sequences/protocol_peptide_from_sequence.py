@@ -30,46 +30,106 @@
 This protocol is used to obtain peptides from sequences.
 
 """
+import glob
+
+import requests
+from pwem.objects import AtomStruct, Sequence, SetOfSequences, SetOfAtomStructs
+
 import pwchem.constants as constants
 import os
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
-from pwchem import ESM_DIC, Plugin
+from pwchem import Plugin
 
+URL="https://api.esmatlas.com/foldSequence/v1/pdb/"
 
 class ProtPeptideFromSequence(EMProtocol):
     """
-    Generates a pdb peptide file from a sequence.
+    Generates a pdb peptide file from a sequence with ESM Metagenomics Atlas (https://github.com/facebookresearch/esm).
     """
     _label = 'Get peptide from sequence'
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
-        #todo start with one then do multiple to get a SetOfAtomStructs
         form.addSection(label=Message.LABEL_INPUT)
         group = form.addGroup('Input')
+        group.addParam('seqObject', params.BooleanParam, default=False,
+                       label='Input sequence objects: ',
+                       help='Choose whether to input sequence objects or string.')
+
         group.addParam('name', params.StringParam, default='',
-                       label='Input sequence name: ',
-                       help='Input sequence name.')
+                       label='Input sequences names: ', condition='not seqObject',
+                       help='Input sequence name. Separate names with ",". Eg: NAME1, NAME2')
         group.addParam('inputSeq', params.StringParam, default='',
-                       label='Input sequence: ',
+                       label='Input sequences: ', condition='not seqObject',
+                       help='Input sequence to get peptide pdb. Separate sequences with ",". Eg: IKILAVR, paffaktsav')
+
+        group.addParam('set', params.BooleanParam, default=False,
+                       label='Input a set of sequences: ', condition='seqObject',
+                       help='Choose whether to input a set of sequences or individual objects.')
+        group.addParam('inputSeqObject', params.PointerParam, pointerClass=Sequence,
+                       label='Input sequence: ', condition='seqObject and not set',
                        help='Input sequence to get peptide pdb.')
+        group.addParam('inputSeqSet', params.PointerParam, pointerClass=SetOfSequences,
+                       label='Input sequences: ', condition='seqObject and set',
+                       help='Input sequences to get peptide pdb.')
+
+
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        #self._insertFunctionStep('createEnvStep')
+        self._insertFunctionStep('getESMpdbAPIStep')
         self._insertFunctionStep('createOutputStep')
 
-    def createEnvStep(self):
-        Plugin.addESMPackage(constants.ESM_DIC)
+    def getESMpdbAPIStep(self):
+        if (not self.seqObject.get()):
+            sequences = self.inputSeq.get()
+            sequenceList = [s.strip().upper() for s in sequences.split(",") if s.strip()]
+
+            names = self.name.get()
+            namesList = [s.strip().upper() for s in names.split(",") if s.strip()]
+
+            if len(sequenceList) != len(namesList):
+                raise ValueError("Number of sequences and names must match.")
+
+            for seq, name in zip(sequenceList, namesList):
+                self.doRequest(seq,name)
+
+        elif (self.seqObject.get() and self.set.get()):
+            for seq in self.inputSeqSet.get():
+                sequence = seq.getSequence()
+                name = seq.getSeqName()
+                self.doRequest(sequence,name)
+
+        elif (self.seqObject.get() and not self.set.get()):
+            seq = self.inputSeqObject.get().getSequence()
+            name = self.inputSeqObject.get().getSeqName()
+            self.doRequest(seq, name)
 
     def createOutputStep(self):
+        pdbFilesDir = self.getPath()
+        pdbFiles = glob.glob(os.path.join(pdbFilesDir, "*.pdb"))
 
-        pdbFile = self.getESMpdb()
-        print(pdbFile)
+        if not pdbFiles:
+            self.warning("No PDB files found in:", pdbFilesDir)
+            return
+
+        if len(pdbFiles)>1:
+            setOfAtomStructs = SetOfAtomStructs().create(self._getPath())
+
+            for pdbFile in pdbFiles:
+                atomStruct = AtomStruct(filename=pdbFile)
+                setOfAtomStructs.append(atomStruct)
+
+            self._defineOutputs(outputAtomStructs=setOfAtomStructs)
+        else:
+            pdbFile = pdbFiles[0]
+            atomStruct = AtomStruct(filename=pdbFile)
+            self._defineOutputs(outputAtomStruct=atomStruct)
+
 
 
     # --------------------------- INFO functions -----------------------------------
@@ -86,43 +146,12 @@ class ProtPeptideFromSequence(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions ------------------------
-    def getESMpdb(self):
-        """
-        Retrieve a predicted peptide PDB structure from ESM Atlas web endpoint.
-        """
-        sequence = self.inputSeq.get()
-        sequence = sequence.strip().upper()
-        print(sequence)
+    def doRequest(self, seq, name):
+        response = requests.post(URL, data=seq)
+        pdbFile = self.getPath(f'{name}.pdb')
 
-        esmHome = Plugin.getVar(ESM_DIC["home"])
-
-        outputDir = os.path.abspath(self._getExtraPath())
-        fastaPath = os.path.abspath(self._getTmpPath('sequence.fasta'))
-
-        header = ">unnamed"
-        with open(fastaPath, "w") as f:
-            f.write(f"{header}\n{sequence}\n")
-        pdbName = "unnamed.pdb"
-        pdbPath = os.path.join(outputDir,pdbName)
-        scriptName = "fold.py"
-        script_dir = os.path.join(esmHome, "scripts")
-
-        args = f"-i {fastaPath} -o {outputDir}"
-        print(args)
-
-        self.info(f"Running ESMFold for sequence: {sequence}")
-
-        Plugin.runScript(protocol=self,
-                       scriptName=scriptName,
-                       args=args,
-                       env=ESM_DIC,
-                       cwd=str(outputDir),
-                       popen=False,
-                       scriptDir=script_dir)
-
-        if not pdbPath.exists():
-            raise FileNotFoundError(f"ESMFold did not produce a PDB file at {pdbPath}")
-
-        self.info(f"ESMFold completed successfully: {pdbPath}")
-        return str(pdbPath)
-
+        if response.status_code == 200:
+            with open(pdbFile, "w") as f:
+                f.write(response.text)
+        else:
+            self.error("Error:", response.status_code, response.text)

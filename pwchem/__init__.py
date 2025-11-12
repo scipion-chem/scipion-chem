@@ -61,7 +61,6 @@ class Plugin(pwem.Plugin):
         cls.addMDTrajPackage(env)
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
-        cls.addESMPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -73,7 +72,6 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
-        cls._defineEmVar(ESM_DIC['home'], cls.getEnvName(ESM_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -235,36 +233,6 @@ class Plugin(pwem.Plugin):
         installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
             addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
             .addPackage(env, dependencies=['conda', 'pip'], default=default)
-
-    @classmethod
-    def addESMPackage(cls, env, default=True):
-        """
-        Install and configure Meta's ESMFold for structure prediction from sequence.
-        """
-        installer = InstallHelper(ESM_DIC['name'],
-                                  packageHome=cls.getVar(ESM_DIC['home']),
-                                  packageVersion=ESM_DIC['version'])
-        esmRepoUrl = "https://github.com/facebookresearch/esm.git"
-        esmHome = cls.getProgramHome(ESM_DIC)
-
-        esmEnvName = cls.getEnvName(ESM_DIC)
-
-        envYmlPath = os.path.join(esmHome, "environment.yml")
-
-        condaActivateCmd = cls.getEnvActivationCommand(ESM_DIC)
-
-        installer.addCommand(
-            f"git clone {esmRepoUrl} {esmHome} && touch {os.path.join(esmHome, 'ESM_REPO_CLONED')}",
-            'ESM_REPO_CLONED'
-        ).addCommand(
-            f"conda env create -f {envYmlPath} -n {esmEnvName} && touch {os.path.join(esmHome, 'ESM_ENV_CREATED')}",
-            'ESM_ENV_CREATED'
-        ).addCommand(
-            f"{condaActivateCmd} && "
-            f"pip install {esmHome} && "
-            f"touch {os.path.join(esmHome, 'ESM_REPO_INSTALLED')}",
-            'ESM_REPO_INSTALLED'
-        ).addPackage(env, dependencies=['git', 'conda', 'pip'], default=default)
 
     ##################### RUN CALLS ######################
     @classmethod
