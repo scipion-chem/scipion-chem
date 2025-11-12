@@ -37,6 +37,7 @@ BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
 DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
 RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RANKX_HOME'}
+ESM_DIC = {'name': 'esm', 'version': '2023.02', 'home': 'ESM_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
