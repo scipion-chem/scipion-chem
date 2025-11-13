@@ -60,21 +60,21 @@ class ProtPeptideFromSequence(EMProtocol):
                        label='Input sequence objects: ',
                        help='Choose whether to input sequence objects or string.')
 
-        group.addParam('name', params.StringParam, default='',
-                       label='Input sequences names: ', condition='not seqObject',
+        group.addParam('name', params.StringParam, default=' ',
+                       label='Input sequences names: ', condition='not seqObject',allowsNull=True,
                        help='Input sequence name. Separate names with ",". Eg: NAME1, NAME2')
         group.addParam('inputSeq', params.StringParam, default='',
-                       label='Input sequences: ', condition='not seqObject',
+                       label='Input sequences: ', condition='not seqObject', allowsNull=True,
                        help='Input sequence to get peptide pdb. Separate sequences with ",". Eg: IKILAVR, paffaktsav')
 
         group.addParam('set', params.BooleanParam, default=False,
                        label='Input a set of sequences: ', condition='seqObject',
                        help='Choose whether to input a set of sequences or individual objects.')
         group.addParam('inputSeqObject', params.PointerParam, pointerClass=Sequence,
-                       label='Input sequence: ', condition='seqObject and not set',
+                       label='Input sequence: ', condition='seqObject and not set', allowsNull=True,
                        help='Input sequence to get peptide pdb.')
         group.addParam('inputSeqSet', params.PointerParam, pointerClass=SetOfSequences,
-                       label='Input sequences: ', condition='seqObject and set',
+                       label='Input sequences: ', condition='seqObject and set', allowsNull=True,
                        help='Input sequences to get peptide pdb.')
 
 
@@ -154,4 +154,4 @@ class ProtPeptideFromSequence(EMProtocol):
             with open(pdbFile, "w") as f:
                 f.write(response.text)
         else:
-            self.error("Error:", response.status_code, response.text)
+            self.error(f"Error: {response.status_code} {response.text}")
