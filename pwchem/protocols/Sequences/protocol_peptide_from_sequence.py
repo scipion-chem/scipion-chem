@@ -45,7 +45,7 @@ from pwchem import Plugin
 
 URL="https://api.esmatlas.com/foldSequence/v1/pdb/"
 
-class ProtPeptideFromSequence(EMProtocol):
+class ProtESMatlas(EMProtocol):
     """
     Generates a pdb peptide file from a sequence with ESM Metagenomics Atlas (https://github.com/facebookresearch/esm).
     """

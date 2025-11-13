@@ -28,7 +28,7 @@ from pwem.convert.atom_struct import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
-from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtPeptideFromSequence
+from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtESMatlas
 # Scipion chem imports
 from pwchem.tests import TestImportVariants, TestImportSequences
 from pwchem.protocols import ProtDefineSeqROI, ProtChemGenerateVariants, ProtSeqCalculateConservation
@@ -381,19 +381,20 @@ class TestMultipleAlignSequences(TestImportSequences):
         assertHandle(self.assertIsNotNone, getattr(protMAFFT, 'outputSequences', None), cwd=protMAFFT.getWorkingDir())
 
 
-class TestPeptideFromSeq(TestImportSequences):
+class TestESMatlas(TestImportSequences):
     @classmethod
     def _runImportSeqs(cls):
         protImportSeqs = cls.newProtocol(
             ProtChemImportSetOfSequences,
-            multiple=False,
-            filePath=cls.ds.getFile('Sequences/3lqd_B_mutated.fasta'))
+            multiple=True,
+            filesPath=cls.ds.getFile('Sequences/'),
+            filesPattern='*mutated*')
         cls.launchProtocol(protImportSeqs)
         cls.protImportSeqs = protImportSeqs
 
     def _runPeptideFromSeqString(self):
         protPepFromSeqString = self.newProtocol(
-            ProtPeptideFromSequence,
+            ProtESMatlas,
             name='TestSeq',
             inputSeq='paffaktsav'
             )
@@ -402,7 +403,7 @@ class TestPeptideFromSeq(TestImportSequences):
 
     def _runPeptideFromSeqObject(self):
         protPeptideFromObjects = self.newProtocol(
-            ProtPeptideFromSequence,
+            ProtESMatlas,
             seqObject=True,
             set=True,
             inputSeqSet=self.protImportSeqs.outputSequences
@@ -417,7 +418,7 @@ class TestPeptideFromSeq(TestImportSequences):
         protPeptideFromObjects = self._runPeptideFromSeqObject()
 
         self._waitOutput(protPeptideFromString, 'outputAtomStruct', sleepTime=5)
-        self._waitOutput(protPeptideFromObjects, 'outputAtomStruct', sleepTime=5)
+        self._waitOutput(protPeptideFromObjects, 'outputAtomStructs', sleepTime=5)
 
         assertHandle(self.assertIsNotNone, getattr(protPeptideFromString, 'outputAtomStruct', None), cwd=protPeptideFromString.getWorkingDir())
-        assertHandle(self.assertIsNotNone, getattr(protPeptideFromObjects, 'outputAtomStruct', None),cwd=protPeptideFromObjects.getWorkingDir())
+        assertHandle(self.assertIsNotNone, getattr(protPeptideFromObjects, 'outputAtomStructs', None),cwd=protPeptideFromObjects.getWorkingDir())
