@@ -115,12 +115,23 @@ def oddt_PLECscore_score(paramsDic, v):
 
 def cleanPDB(pdbFile):
     auxFile = pdbFile.replace('.pdb', '_aux.pdb')
-    with open(auxFile, 'w') as f:
-        with open(pdbFile) as fIn:
-            for line in fIn:
-                if line.strip() != '' and \
-                        line.split()[0] in ['HEADER', 'EXPDTA', 'REMARK', 'ATOM', 'HETATM', 'TER', 'CONECT']:
-                    f.write(line)
+    allowed = ('HEADER', 'EXPDTA', 'REMARK', 'ATOM', 'HETATM', 'TER', 'CONECT')
+
+    wrote = False
+    with open(auxFile, 'w') as fout:
+        with open(pdbFile, 'r') as fin:
+            for line in fin:
+                tag = line[:6].strip()
+                if tag in allowed:
+                    fout.write(line)
+                    wrote = True
+
+    if not wrote:
+        print(f"[cleanPDB WARNING] No valid lines found in {pdbFile}. Keeping original.")
+        if os.path.exists(auxFile):
+            os.remove(auxFile)
+        return pdbFile
+
     shutil.move(auxFile, pdbFile)
     return pdbFile
 
