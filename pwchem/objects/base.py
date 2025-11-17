@@ -1582,12 +1582,12 @@ class SetOfStructROIs(data.EMSet):
     # Create a new empty structure
     merged = Structure.Structure("merged")
 
-    model_index = 0
+    modelIndex = 0
     for struct in structures:
       for model in struct:
-        model.id = model_index
+        model.id = modelIndex
         merged.add(model)
-        model_index += 1
+        modelIndex += 1
 
     io = MMCIFIO()
     io.set_structure(merged)
@@ -1596,19 +1596,19 @@ class SetOfStructROIs(data.EMSet):
     return oFile
 
   def filterCifCols(self, cifFile, cols):
-    cif_dict = MMCIF2Dict(cifFile)
-    filtered = {col: cif_dict[col] for col in cols if col in cif_dict}
+    cifDict = MMCIF2Dict(cifFile)
+    filtered = {col: cifDict[col] for col in cols if col in cifDict}
 
     cifLines = self.writeCifBlocks(filtered)
     return cifLines
 
   def writeCifBlocks(self, data):
-    lines = [f"data_example", "loop_"]
+    lines = ["data_example", "loop_"]
     for key in data:
       lines.append(key)
     # assume all columns have the same length
-    n_rows = len(next(iter(data.values())))
-    for i in range(n_rows):
+    nRows = len(next(iter(data.values())))
+    for i in range(nRows):
       row = [data[key][i] for key in data]
       lines.append("\t".join(row))
     return "\n".join(lines) + '\n'

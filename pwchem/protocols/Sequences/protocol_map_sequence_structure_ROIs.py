@@ -100,7 +100,7 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seq_name, seqName2=seq_nameAS)
 
     def definePocketsStep(self):
-        cifFile = cifFromASFile(self.getInputPath(), self._getCifFile(), AS=self.inputAtomStruct.get())
+        cifFile = cifFromASFile(self.getInputPath(), self._getCifFile(), atomStruct=self.inputAtomStruct.get())
 
         structModel = MMCIFParser().get_structure(self._getInputName(), cifFile)[0] # 0: modelID?
         self.structSurface = get_surface(structModel,
@@ -187,9 +187,9 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
 
     def getInputASSequence(self):
         from pwem.convert.atom_struct import AtomicStructHandler
-        ASFile = self.getInputPath()
-        seq_name = os.path.basename(ASFile)
-        handler = AtomicStructHandler(ASFile)
+        asFile = self.getInputPath()
+        seq_name = os.path.basename(asFile)
+        handler = AtomicStructHandler(asFile)
         chainName = getattr(self, 'chain_name').get()
 
         # Parse chainName for model and chain selection

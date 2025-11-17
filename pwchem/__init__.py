@@ -162,7 +162,7 @@ class Plugin(pwem.Plugin):
 		obEnvName = cls.getEnvName(OPENBABEL_DIC)
 		openbabelInstaller.addCommand(f'conda create -y -c conda-forge --name {obEnvName} python=3.10 '
 																	f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
-			.addCondaPackages([f'swig', 'plip', 'pdbfixer'], channel='conda-forge')\
+			.addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
 

@@ -333,18 +333,18 @@ def writePDBLine(j):
          (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
 
 def writeCIFLine(idx,  # atom serial number
-          atom_name,  # atom name, e.g., C1
-          res_name,  # residue name, e.g., STP
-          chain_id,  # asym_id, e.g., A
-          entity_id,  # entity ID, usually 1 for small molecules
-          res_seq,  # residue sequence number
+          atomName,  # atom name, e.g., C1
+          resName,  # residue name, e.g., STP
+          chainId,  # asym_id, e.g., A
+          entityId,  # entity ID, usually 1 for small molecules
+          resSeq,  # residue sequence number
           x, y, z,  # coordinates
           occupancy=1.0,
-          b_factor=1.0,
-          alt_id='.',
-          pdb_ins_code='?',
-          model_num=1,
-          type_symbol='C'
+          bFactor=1.0,
+          altId='.',
+          pdbInsCode='?',
+          modelNum=1,
+          typeSymbol='C'
   ):
     """
     Return a CIF HETATM line in the specified _atom_site order.
@@ -352,21 +352,21 @@ def writeCIFLine(idx,  # atom serial number
     # Ensure numeric values
     x, y, z = float(x), float(y), float(z)
     occupancy = float(occupancy)
-    b_factor = float(b_factor)
+    bFactor = float(bFactor)
     idx = int(idx)
-    res_seq = int(res_seq)
-    model_num = int(model_num)
+    resSeq = int(resSeq)
+    modelNum = int(modelNum)
 
-    # auth_asym_id and auth_seq_id are usually the same as label_asym_id and label_seq_id
-    auth_asym_id = chain_id
-    auth_seq_id = res_seq
+    # authAsymId and authSeqId are usually the same as label_asym_id and label_seq_id
+    authAsymId = chainId
+    authSeqId = resSeq
 
     # Build CIF line with proper formatting
     line = (
-      f"HETATM {idx} {type_symbol:<2} {atom_name:<4} {alt_id:1} "
-      f"{res_name:<3} {chain_id:1} {res_seq:>4} {pdb_ins_code:1} "
-      f"{x:8.3f} {y:8.3f} {z:8.3f} {auth_asym_id:1} {auth_seq_id:>4} "
-      f"{pdb_ins_code:1} {occupancy:5.2f} {b_factor:6.2f} {model_num:2d}\n"
+      f"HETATM {idx} {typeSymbol:<2} {atomName:<4} {altId:1} "
+      f"{resName:<3} {chainId:1} {resSeq:>4} {pdbInsCode:1} "
+      f"{x:8.3f} {y:8.3f} {z:8.3f} {authAsymId:1} {authSeqId:>4} "
+      f"{pdbInsCode:1} {occupancy:5.2f} {bFactor:6.2f} {modelNum:2d}\n"
     )
     return line
 
@@ -501,13 +501,13 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
-def pdbFromASFile(inFile, oFile, AS=None):
-  name, ext = os.path.splitext(inFile)
+def pdbFromASFile(inFile, oFile, atomStruct=None):
+  _, ext = os.path.splitext(inFile)
   if ext.lower() in ['.cif', '.mmcif']:
       toPdb(inFile, oFile)
 
-  elif AS and str(type(AS).__name__) == 'SchrodingerAtomStruct':
-      AS.convert2PDB(outPDB=oFile)
+  elif atomStruct and str(type(atomStruct).__name__) == 'SchrodingerAtomStruct':
+      atomStruct.convert2PDB(outPDB=oFile)
 
   elif ext == '.pdbqt':
       pdbFile = os.path.abspath(oFile)
@@ -518,9 +518,9 @@ def pdbFromASFile(inFile, oFile, AS=None):
       shutil.copy(inFile, oFile)
   return oFile
 
-def cifFromASFile(inFile, oFile, AS=None):
+def cifFromASFile(inFile, oFile, atomStruct=None):
   '''Convert Atomic Structure files (PDB, CIF, MAE...) to CIF. If MAE, the AtomStruct object is needed'''
-  name, ext = os.path.splitext(inFile)
+  _, ext = os.path.splitext(inFile)
 
   if ext == '.pdbqt':
     pdbFile = os.path.abspath(inFile.replace('.pdbqt', '.pdb'))
@@ -531,8 +531,8 @@ def cifFromASFile(inFile, oFile, AS=None):
   if ext.lower() in ['.ent', '.pdb']:
       toCIF(inFile, oFile)
 
-  elif AS and str(type(AS).__name__) == 'SchrodingerAtomStruct':
-      AS.convert2(outPDB=oFile)
+  elif atomStruct and str(type(atomStruct).__name__) == 'SchrodingerAtomStruct':
+      atomStruct.convert2(outPDB=oFile)
 
   else:
       shutil.copy(inFile, oFile)
