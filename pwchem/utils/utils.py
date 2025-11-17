@@ -522,16 +522,17 @@ def cifFromASFile(inFile, oFile, AS=None):
   '''Convert Atomic Structure files (PDB, CIF, MAE...) to CIF. If MAE, the AtomStruct object is needed'''
   name, ext = os.path.splitext(inFile)
 
+  if ext == '.pdbqt':
+    pdbFile = os.path.abspath(inFile.replace('.pdbqt', '.pdb'))
+    args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inFile), pdbFile)
+    runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
+    ext, inFile = '.pdb', pdbFile
+
   if ext.lower() in ['.ent', '.pdb']:
       toCIF(inFile, oFile)
 
   elif AS and str(type(AS).__name__) == 'SchrodingerAtomStruct':
       AS.convert2(outPDB=oFile)
-
-  elif ext == '.pdbqt':
-      cifFile = os.path.abspath(oFile)
-      args = ' -ipdbqt {} -ocif -O {}'.format(os.path.abspath(inFile), cifFile)
-      runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
 
   else:
       shutil.copy(inFile, oFile)
