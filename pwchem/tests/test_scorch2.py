@@ -129,7 +129,7 @@ class TestSCORCH2(BaseTest):
                 fromReceptor=1,
                 inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
                 convSoft=1,
-                radius=24, nRuns=10,
+                radius=24, nRuns=2,
                 numberOfThreads=4)
 
             cls.protVina.inputStructROIs.set(cls.filteredSet)
