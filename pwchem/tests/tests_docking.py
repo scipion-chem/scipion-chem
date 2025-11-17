@@ -142,7 +142,7 @@ class TestScoreDocking(TestDefineStructROIs):
 			protVina = self.newProtocol(
 				prot,
 				fromReceptor=0,
-				radius=24, nRuns=10,
+				radius=24, nRuns=3,
 				numberOfThreads=4)
 
 			protVina.inputAtomStruct.set(self.protPrepareReceptor)
@@ -169,7 +169,7 @@ class TestScoreDocking(TestDefineStructROIs):
 			protLeDock = self.newProtocol(
 				prot,
 				wholeProt=True,
-				radius=24, nRuns=10,
+				radius=24, nRuns=3,
 				numberOfThreads=4)
 
 			protLeDock.inputAtomStruct.set(self.protPrepareReceptor)
