@@ -41,7 +41,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-from pwchem.constants import RDKIT_DIC
+from pwchem.constants import RDKIT_DIC, MAX_MOLS_SET
 from pwchem import Plugin
 
 scriptName = 'scores_docking_oddt.py'
@@ -127,13 +127,20 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
-        '''Get the number of threads available for each scoring execution'''
+        '''Get the number of threads available for each scoring execution.
+        Takes int account the MAX_MOLS_SET variable and makes batches of that size maximum'''
         nScores = len(self.workFlowSteps.get().strip().split('\n'))
         nThreads = (self.numberOfThreads.get() - 1) // nScores
         if nThreads < (self.numberOfThreads.get() - 1) / nScores:
             nThreads += 1
 
         nThreads = 1 if nThreads == 0 else nThreads
+        
+        lenMols = len(self.getAllInputMols())
+        maxMols = int(Plugin.getVar(MAX_MOLS_SET))
+        if lenMols / nThreads > maxMols:
+            nThreads = lenMols // maxMols + 1
+
         return nThreads
 
     def _insertAllSteps(self):
