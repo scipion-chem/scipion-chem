@@ -123,15 +123,17 @@ class TestSCORCH2(BaseTest):
             doVina = True
         except:
             pass
-        if doVina and not doLe:
+        if doVina:
             cls.protVina = cls.newProtocol(
                 ProtChemVinaDocking,
-                fromReceptor=0,
+                fromReceptor=1,
+                inputSmallMolecules=cls.protImportSmallMols.outputSmallMolecules,
+                convSoft=1,
                 radius=24, nRuns=10,
                 numberOfThreads=4)
 
-            cls.protVina.inputAtomStruct.set(cls.protFPocket)
-            cls.protVina.inputAtomStruct.setExtended('outputStructROIs')
+            cls.protVina.inputStructROIs.set(cls.filteredSet)
+            cls.protVina.inputStructROIs.setExtended('outputStructROIs')
 
             cls.launchProtocol(cls.protVina)
 
@@ -140,7 +142,7 @@ class TestSCORCH2(BaseTest):
 
 
 
-    def _runSCORCH2(self):
+    def _runSCORCH2LeDock(self):
         protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
 
         protSCORCH2.useFeatures.set('False')
@@ -149,9 +151,21 @@ class TestSCORCH2(BaseTest):
         self.proj.launchProtocol(protSCORCH2, wait=True)
         return protSCORCH2
 
+    def _runSCORCH2Vina(self):
+        protSCORCH2_2 = self.newProtocol(ProtocolSCORCH2)
+
+        protSCORCH2_2.useFeatures.set('False')
+        protSCORCH2_2.inputPDBligandFiles.set(self.protVina.outputSmallMolecules)
+
+        self.proj.launchProtocol(protSCORCH2_2, wait=True)
+        return protSCORCH2_2
+
     def test(self):
-        protSCORCH2 = self._runSCORCH2()
+        protSCORCH2 = self._runSCORCH2LeDock()
         self._waitOutput(protSCORCH2, 'molecules', sleepTime=10)
         (self.assertIsNotNone, getattr(protSCORCH2, 'molecules', None))
+        protSCORCH2_2 = self._runSCORCH2Vina()
+        self._waitOutput(protSCORCH2_2, 'molecules', sleepTime=10)
+        (self.assertIsNotNone, getattr(protSCORCH2_2, 'molecules', None))
 
 
