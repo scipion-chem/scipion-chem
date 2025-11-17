@@ -211,7 +211,7 @@ def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime
       if not popen:
         protocol.runJob(fullProgram, progArgs, **kwargs)
       else:
-        subprocess.check_call(fullProgram + progArgs, shell=True, **kwargs)
+        subprocess.check_call(f'{fullProgram} {progArgs}', shell=True, **kwargs)
 
       finished = True
     except Exception:
