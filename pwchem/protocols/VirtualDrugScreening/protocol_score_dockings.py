@@ -73,6 +73,9 @@ class ProtocolScoreDocking(EMProtocol):
                        pointerClass='SetOfSmallMolecules', allowsNull=False,
                        label="Input Docked Small Molecules: ",
                        help='Select the docked molecules to be scored')
+        form.addParam('maxMolSize', params.IntParam, default=1000, label='Max. batch size: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="Maximum size of the batches that are send to score")
 
         group = form.addGroup('Scoring function')
         group.addParam('scoreChoice', params.EnumParam, default=VINA, label='Score to calculate: ',
@@ -128,7 +131,7 @@ class ProtocolScoreDocking(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
         '''Get the number of threads available for each scoring execution.
-        Takes int account the MAX_MOLS_SET variable and makes batches of that size maximum'''
+        Takes int account the maxMolSize variable and makes batches of that size maximum'''
         nScores = len(self.workFlowSteps.get().strip().split('\n'))
         nThreads = (self.numberOfThreads.get() - 1) // nScores
         if nThreads < (self.numberOfThreads.get() - 1) / nScores:
@@ -137,7 +140,7 @@ class ProtocolScoreDocking(EMProtocol):
         nThreads = 1 if nThreads == 0 else nThreads
         
         lenMols = len(self.getAllInputMols())
-        maxMols = int(Plugin.getVar(MAX_MOLS_SET))
+        maxMols = self.maxMolSize.get()
         if lenMols / nThreads > maxMols:
             nThreads = lenMols // maxMols + 1
 
