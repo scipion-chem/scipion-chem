@@ -185,15 +185,15 @@ class ProtDefineStructROIs(EMProtocol):
         self._insertFunctionStep('defineOutputStep')
 
     def getSurfaceStep(self):
-        parser = MMCIFParser()
         inFile = self.getProteinFileName()
+        inExt = os.path.splitext(inFile)[1]
+        parser = MMCIFParser() if inExt == '.cif' else PDBParser()
         if self.origin.get() == LIGANDS and not self.extLig:
-            inFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.cif')),
+            inFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath(f'cleanPDB{inExt}')),
                               waters=True, hetatm=True)
 
         structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
-
         self.structSurface = get_surface(self.structModel,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
