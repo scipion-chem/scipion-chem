@@ -28,7 +28,7 @@
 #Constant dictionaries
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
 JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}
-OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPENBABEL_HOME'}
+OPENBABEL_DIC = {'name': 'openbabel',   'version': '3.1',           'home': 'OPENBABEL_HOME'}
 ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
