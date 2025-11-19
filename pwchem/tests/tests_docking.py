@@ -402,7 +402,8 @@ class TestMapLigandContacts(TestExtractLigand):
 	@classmethod
 	def _runDefineContacts(cls, inputProt):
 		protDefContacts = cls.newProtocol(
-			ProtDefineContactStructROIs
+			ProtDefineContactStructROIs,
+			selectionList='Molecule :: 5ni1_HEM'
 		)
 
 		protDefContacts.inputSmallMols.set(inputProt)

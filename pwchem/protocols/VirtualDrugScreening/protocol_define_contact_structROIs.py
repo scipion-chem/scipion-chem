@@ -183,8 +183,8 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
           coordsClusters = pickle.load(f)
 
         for i, clust in enumerate(coordsClusters):
-            pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
-            createPocketFile(clust, i, pocketFile)
+            pocketFile = self._getExtraPath(f'pocketFile_{i+1}.cif')
+            createPocketFile(clust, i+1, pocketFile)
             pocket = StructROI(pocketFile, cifFile)
             pocket.calculateContacts()
             outPockets.append(pocket)
@@ -210,6 +210,9 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
       if not pSet.isDocked():
         validations.append('Sets of input molecules must be docked first.\n'
                            'Set: {} has not been docked'.format(pSet))
+
+      if self.selectionList.get().strip() == '':
+        validations.append('A ligand or group of ligands must be selected and added to the list.')
 
       return validations
 
