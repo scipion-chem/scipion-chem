@@ -226,6 +226,7 @@ class ProtDefineStructROIs(EMProtocol):
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
             pocket.calculateContacts()
+            pocket.setVolume(pocket.getPocketVolume())
             outPockets.append(pocket)
 
         if len(outPockets) > 0:
@@ -378,7 +379,11 @@ class ProtDefineStructROIs(EMProtocol):
             chainId, resIdxs = jDic['chain'], jDic['index']
             idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
             for resId in range(idxs[0], idxs[1] + 1):
-                residue = self.structModel[chainId][resId]
+                try:
+                    residue = self.structModel[chainId][resId]
+                except KeyError:
+                    print(f'{resId} not in chain {chainId}')
+                    pass
                 atoms = residue.get_atoms()
                 for a in atoms:
                   oCoords.append(list(a.get_coord()))
