@@ -383,7 +383,7 @@ class ProtDefineStructROIs(EMProtocol):
                     residue = self.structModel[chainId][resId]
                 except KeyError:
                     print(f'{resId} not in chain {chainId}')
-                    pass
+                    
                 atoms = residue.get_atoms()
                 for a in atoms:
                   oCoords.append(list(a.get_coord()))
