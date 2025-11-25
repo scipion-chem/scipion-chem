@@ -36,8 +36,8 @@ from pwchem.protocols.VirtualDrugScreening.protocol_rdkit_ligand_preparation imp
 
 from pwchem.protocols.VirtualDrugScreening.protocol_PAINS_filter import ProtocolPainsRdkitFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_ADME_filter import ProtocolADMEFiltering
-from pwchem.protocols.VirtualDrugScreening.protocol_shape_filtering import ProtocolShapeDistancesFiltering
-from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprints import ProtocolFingerprintFiltering
+from pwchem.protocols.VirtualDrugScreening.protocol_ligand_shape_distance import ProtocolShapeDistances
+from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprint_distance import ProtocolFingerprintDistance
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolGeneralLigandFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_cluster_mols import ProtClusterMolecules
 
@@ -86,6 +86,8 @@ try:
 except ImportError:
   pass
 
+from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
+
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
@@ -100,6 +102,7 @@ from pwchem.protocols.General.protocol_add_attribute import ProtAddAttribute
 from pwchem.protocols.General.protocol_operate_set import ProtChemOperateSet
 from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateLibrary
 from pwchem.protocols.General.protocol_export_csv import ProtChemExportCSV
+from pwchem.protocols.General.protocol_export_set import ProtChemImportExportSet
 from pwchem.protocols.General.protocol_pymol import ProtPymolOperate
 from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse
 from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateLibrary

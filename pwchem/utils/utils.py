@@ -34,6 +34,7 @@ from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
+from pwem.convert.atom_struct import toPdb
 from pwem.objects.data import Sequence, Object, String, Integer, Float, Pointer
 
 # Plugin imports
@@ -460,6 +461,25 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
+def pdbFromAS(AS, oFile):
+  inpStruct = AS
+  name, ext = os.path.splitext(inpStruct.getFileName())
+  if ext == '.cif':
+      cifFile = inpStruct.getFileName()
+      toPdb(cifFile, oFile)
+
+  elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
+      inpStruct.convert2PDB(outPDB=oFile)
+
+  elif ext == '.pdbqt':
+      pdbFile = os.path.abspath(oFile)
+      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpStruct.getFileName()), pdbFile)
+      runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
+
+  else:
+      shutil.copy(inpStruct.getFileName(), oFile)
+  return oFile
+
 def pdbqt2other(protocol, pdbqtFile, otherFile):
   '''Convert pdbqt to pdb or others using openbabel (better for AtomStruct)'''
   inExt = os.path.splitext(os.path.basename(otherFile))[1]
@@ -624,7 +644,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
     """
   protName = os.path.splitext(os.path.basename(protFile))[0]
   gpfFile = os.path.join(outDir, protName + '.gpf')
-  npts = int(round(npts))
+  npts = [int(round(n)) for n in npts]
 
   if allDefAtomTypes:
     ligAtomTypes = ["HD", "C", "A", "N", "NA", "OA", "F", "P", "SA", "S", "Cl", "Br", "I", "Si", "B"]
@@ -645,7 +665,7 @@ def generate_gpf(protFile, spacing, xc, yc, zc, npts, outDir, ligandFns=None, zn
   protAtomTypes = ' '.join(sortSet(protAtomTypes))
 
   with open(os.path.abspath(gpfFile), "w") as file:
-    file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts, npts, npts))
+    file.write("npts %s %s %s                        # num.grid points in xyz\n" % (npts[0], npts[1], npts[2]))
     if znFFfile:
         file.write("parameter_file %s                        # force field default parameter file\n" % (znFFfile))
     file.write("gridfld %s.maps.fld                # grid_data_file\n" % (protName))
@@ -684,6 +704,33 @@ def calculate_centerMass(atomStructFile):
     print("ERROR: ", "A pdb file was not entered in the Atomic structure field. Please enter it.", e)
     return
 
+def calculateCoordLimits(atomStructFile):
+  """
+    Returns the coordinate limits of an Entity (anything with a get_atoms function in biopython).
+    """
+
+  asH = AtomicStructHandler()
+  asH.read(atomStructFile)
+  struct = asH.getStructure()
+
+  xmin = ymin = zmin = 100000
+  xmax = ymax = zmax = -100000
+  for atom in struct.get_atoms():
+      (x, y, z) = atom.get_coord()
+      if x < xmin: xmin = x
+      if x > xmax: xmax = x
+
+      if y < ymin: ymin = y
+      if y > ymax: ymax = y
+
+      if z < zmin: zmin = z
+      if z > zmax: zmax = z
+
+  limitCoords = [(xmin, xmax), (ymin, ymax),  (zmin, zmax)]
+
+  return limitCoords
+
+
 def parseAtomTypes(pdbqtFile, allowed=None, ignore=['Si', 'B', 'G0', 'CG0', 'G1', 'CG1']):
   atomTypes = set([])
   if pdbqtFile.endswith('.pdbqt'):
@@ -711,12 +758,14 @@ def sortSet(seti):
 
 class CleanStructureSelect(Select):
   def __init__(self, chainIds, remHETATM, remWATER, het2keep=[], het2rem=[]):
-    self.chain_ids = chainIds
+    self.chainIds = chainIds
     self.remHETATM, self.remWATER = remHETATM, remWATER
     self.het2keep, self.het2rem = het2keep, het2rem
 
   def accept_chain(self, chain):
-    return not self.chain_ids or chain.id in self.chain_ids
+    model = chain.get_parent()
+    modelChain = f'{model.id}-{chain.id}'
+    return not self.chainIds or chain.id in self.chainIds or modelChain in self.chainIds
 
   def accept_residue(self, residue):
     """ Recognition of heteroatoms - Remove water molecules """
@@ -1162,26 +1211,41 @@ def createMSJDic(protocol):
   return msjDic
 
 ########### SEQUENCE INTERACTING MOL UTILS ########
-def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, scThres):
+def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, filtScoreType, scThres):
   '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
   The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
-  intDic = inSeqs.getInteractScoresDic()
+  data = inSeqs.getInteractScoresDic()
+  #data = {"entries": [ {"sequence": "...", "molecules": {...}}, ... ]}
 
-  seqNames, molNames = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames()
-  seqNames, molNames = filterNames(seqNames, molNames, filtSeqNames, filtMolNames)
+  intDic = {}
+  for entry in data.get("entries", []):
+      seqName = entry.get("sequence")
+      mols = entry.get("molecules", {})
+      intDic[seqName] = mols
+  #returns dic {seq:mol {...}}
 
-  intAr = formatInteractionsArray(intDic, seqNames, molNames)
-  intAr, seqNames, molNames = filterScores(intAr, seqNames, molNames, scThres)
-  return intAr, seqNames, molNames
+  seqNames, molNames, scoreTypes = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames(), inSeqs.getScoreTypes()
+  seqNames, molNames, scoreType = filterNames(seqNames, molNames, filtSeqNames, filtMolNames, scoreTypes, filtScoreType)
 
-def filterNames(seqNames, molNames, filtSeqNames, filtMolNames):
+  intAr = formatInteractionsArray(intDic, seqNames, molNames, scoreType)
+  intAr, seqNames, molNames= filterScores(intAr, seqNames, molNames, scThres)
+
+  return intAr, seqNames, molNames, scoreType
+
+def filterNames(seqNames, molNames, filtSeqNames, filtMolNames, scoreTypes, filtScoreType):
   if 'All' not in filtSeqNames:
     seqNames = [seqName for seqName in seqNames if seqName in filtSeqNames]
 
   if 'All' not in filtMolNames:
     molNames = [molName for molName in molNames if molName in filtMolNames]
 
-  return seqNames, molNames
+  for scType in scoreTypes:
+      if scType == filtScoreType:
+          scoreType = filtScoreType
+      else:
+          scoreType = None
+
+  return seqNames, molNames, scoreType
 
 def filterScores(intAr, seqNames, molNames, scThres):
   ips, ims = [], []
@@ -1201,14 +1265,20 @@ def filterScores(intAr, seqNames, molNames, scThres):
   if len(molNames) != len(ims):
     molNames = list(np.array(molNames)[ims])
     intAr = intAr[:, ims]
-
   return intAr, seqNames, molNames
 
-def formatInteractionsArray(intDic, seqNames, molNames):
+def formatInteractionsArray(intDic, seqNames, molNames, scoreType):
+  scoreKey = f"score_{scoreType}"
   intAr = np.zeros((len(seqNames), len(molNames)))
   for i, seqName in enumerate(seqNames):
     for j, molName in enumerate(molNames):
-      intAr[i, j] = intDic[seqName][molName]
+            try:
+                # get the numeric value for that score type
+                value = intDic[seqName][molName][scoreKey]
+            except KeyError:
+                # if missing, assign NaN
+                value = np.nan
+            intAr[i, j] = value
   return intAr
   
 def normalizeToRange(iterable, normRange=[0, 1]):

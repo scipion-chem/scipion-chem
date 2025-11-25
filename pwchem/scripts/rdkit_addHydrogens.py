@@ -4,6 +4,20 @@ import sys, os
 
 from utils import getMolFilesDic, parseParams, getBaseName, writeMol
 
+DEFAULT_VALENCES = {
+    'H': 1,
+    'C': 4,
+    'N': 3,
+    'O': 2,
+    'F': 1,
+    'P': 3,
+    'S': 2,
+    'Cl': 1,
+    'Br': 1,
+    'I': 1,
+    'B': 3,
+}
+
 def fixLigand(mol):
     """
     Add explicit hydrogens to carbon atoms and ensure tetravalent nitrogens are assigned a +1 charge
@@ -12,8 +26,15 @@ def fixLigand(mol):
     for chemProblem in chemProblems:
         if chemProblem.GetType() == 'AtomValenceException':
             atom = mol.GetAtomWithIdx(chemProblem.GetAtomIdx())
-            if atom.GetSymbol() == 'N' and atom.GetFormalCharge() == 0 and atom.GetExplicitValence() == 4:
-                atom.SetFormalCharge(1)
+            symbol = atom.GetSymbol()
+            valence = atom.GetTotalValence()  # total number of bonds (including to H)
+
+            if symbol in DEFAULT_VALENCES:
+                defValence = DEFAULT_VALENCES[symbol]
+                if valence != defValence and atom.GetFormalCharge() == 0:
+                    # Adjust formal charge to match valence difference
+                    charge = defValence - valence
+                    atom.SetFormalCharge(charge)
     Chem.SanitizeMol(mol)
     for a in mol.GetAtoms():
         rad = a.GetNumRadicalElectrons()

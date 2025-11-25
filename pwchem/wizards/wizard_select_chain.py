@@ -45,7 +45,7 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 from pwchem.protocols import *
 
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES3TO1, RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct
+from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
@@ -66,6 +66,7 @@ class SelectLigandAtom(VariableWizard):
         runOpenBabel(protocol=protocol, args=args, cwd=proj.getTmpPath(), popen=True)
         molFile = oFile
 
+    molFile = relabelAtomsPDB(molFile)
     parser = PDBParser().get_structure(molFile, molFile)
     atomNames = []
     for model in parser:
@@ -616,6 +617,11 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                inputs=['singleLabels'],
                                outputs=['displaySingleDock'])
 
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayPymolPLIP'],
+                               inputs=['singleLabels'],
+                               outputs=['displayPymolPLIP'])
+
 
 class SelectElementMultiPointWizard(SelectElementWizard):
   """Lists the items in a SetOfX selected from a multipointer"""
@@ -725,6 +731,14 @@ class SelectMultiMolWizard(SelectMultiElementWizard):
   def getListOfElements(self, protocol, seqSet):
     return ['All'] + seqSet.getInteractMolNames()
 
+class SelectScoreWizard(SelectElementWizard):
+    """List the available scores in a SetOfSequences and choose one"""
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getListOfElements(self, protocol, seqSet):
+        return seqSet.getScoreTypes()
+
+
 SelectMultiSeqWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  targets=['chooseSeq'],
                                  inputs=['inputSequences'],
@@ -734,6 +748,10 @@ SelectMultiMolWizard().addTarget(protocol=ProtExtractInteractingMols,
                                  targets=['chooseMol'],
                                  inputs=['inputSequences'],
                                  outputs=['chooseMol'])
+SelectScoreWizard().addTarget(protocol=ProtExtractInteractingMols,
+                                     targets=['chooseScore'],
+                                     inputs=['inputSequences'],
+                                     outputs=['chooseScore'])
 
 class SelectMultiEpitopeElementWizard(SelectElementWizard):
   """Lists the items in a MultiEpitope and choose several"""
@@ -846,12 +864,12 @@ SelectElementWizard().addTarget(protocol=ProtDefineStructROIs,
                                inputs=['inSmallMols'],
                                outputs=['ligName'])
 
-SelectElementWizard().addTarget(protocol=ProtocolShapeDistancesFiltering,
+SelectElementWizard().addTarget(protocol=ProtocolShapeDistances,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])
 
-SelectElementWizard().addTarget(protocol=ProtocolFingerprintFiltering,
+SelectElementWizard().addTarget(protocol=ProtocolFingerprintDistance,
                                targets=['inputReferenceMolecule'],
                                inputs=['inputRefSmallMolecules'],
                                outputs=['inputReferenceMolecule'])

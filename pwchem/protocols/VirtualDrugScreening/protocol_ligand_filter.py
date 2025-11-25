@@ -63,15 +63,8 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
     def _insertAllSteps(self):
       aSteps = []
-      nt = self.numberOfThreads.get()
-      inLen = self.getInputLength()
 
-      # If the number of input mols is so big, make more subsets than threads
-      nSubsets = max(nt - 1, int(inLen / self.maxPerStep.get()))
-
-      # Ensuring there are no more subsets than input molecules
-      nSubsets = min(nSubsets, inLen)
-
+      nSubsets = self.getNSubsets()
       iStep = self._insertFunctionStep(self.createInputStep, nSubsets, prerequisites=[])
       for it in range(nSubsets):
         aSteps += [self._insertFunctionStep(self.mainStep, it, prerequisites=[iStep])]
@@ -100,6 +93,17 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
     def getInputDir(self):
       return self._getExtraPath()
+
+    def getNSubsets(self):
+      nt = self.numberOfThreads.get()
+      inLen = self.getInputLength()
+
+      # If the number of input mols is so big, make more subsets than threads. But at least 1.
+      nSubsets = max(nt - 1, int(inLen / self.maxPerStep.get()), 1)
+
+      # Ensuring there are no more subsets than input molecules
+      nSubsets = min(nSubsets, inLen)
+      return nSubsets
 
     def getInputFile(self, it):
       return os.path.join(self.getInputDir(), f'inputLigandFiles_{it}.txt')
