@@ -1249,8 +1249,8 @@ class StructROI(data.EMFile):
   def getProteinCoords(self):
     coords = []
     inFile = self.getProteinFile()
-    parser = PDBParser if inFile.endswith('.pdb') else MMCIFParser
-    kwargs = {"PERMISSIVE": True} if inFile.endswith('.pdb') else {}
+    parser = PDBParser if inFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
+    kwargs = {"PERMISSIVE": True} if inFile.endswith(('.pdb', '.pdbqt')) else {}
     structModel = parser(**kwargs).get_structure(getBaseName(inFile), inFile)
     for atom in structModel.get_atoms():
       coords.append(atom.get_coord().tolist())
@@ -1259,7 +1259,7 @@ class StructROI(data.EMFile):
   def getProteinAtoms(self):
     atoms = []
     inFile = self.getProteinFile()
-    parser = PDBParser if inFile.endswith('.pdb') else MMCIFParser
+    parser = PDBParser if inFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
     structModel = parser().get_structure(getBaseName(inFile), inFile)
     for atom in structModel.get_atoms():
       atoms.append(atom)
@@ -1621,7 +1621,7 @@ class SetOfStructROIs(data.EMSet):
     outFile = os.path.join(outDir, protName + f'{suffix}_out{ext}')
 
     with open(outFile, 'w') as f:
-      if ext == '.pdb':
+      if ext in ('.pdb', '.pdbqt'):
           f.write(getRawPDBStr(protFile, ter=False))
           f.write(self.getPocketsPDBStr())
       else:
