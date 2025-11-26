@@ -1142,14 +1142,6 @@ def clusterSurfaceCoords(surfCoords, intraDist):
     clusters = newClusters.copy()
   return clusters
 
-# def createPocketFile(clust, i, outDir):
-#   outFile = os.path.join(outDir, f'pocketFile_{i}.pdb')
-#   with open(outFile, 'w') as f:
-#     for j, coord in enumerate(clust):
-#       f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-#   return outFile
-
-# todo: switch all uses of this function
 def createPocketFile(coords, pocketK, oFile):
   cifCols = '\n'.join(CIF_DEF_COLS)
   outStr = CIF_DEF_HEADER.format(cifCols)

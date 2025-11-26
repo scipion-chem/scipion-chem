@@ -91,13 +91,13 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         self._mapWarning = 'Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln")
 
     def alignSequencesStep(self):
-        seq, seq_name = self.getInputSequence()
-        seqAS, seq_nameAS = self.getInputASSequence()
+        seq, seqName = self.getInputSequence()
+        seqAS, seqNameAS = self.getInputASSequence()
 
         # Alignment
         out_file = os.path.abspath(self._getPath("pairWise.fasta"))
-        pairwiseAlign(seq, seqAS, out_file, seqName1=seq_name, seqName2=seq_nameAS)
-        pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seq_name, seqName2=seq_nameAS)
+        pairwiseAlign(seq, seqAS, out_file, seqName1=seqName, seqName2=seqNameAS)
+        pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seqName, seqName2=seqNameAS)
 
     def definePocketsStep(self):
         cifFile = cifFromASFile(self.getInputPath(), self._getCifFile(), atomStruct=self.inputAtomStruct.get())
@@ -180,15 +180,15 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
     def getInputSequence(self):
         inputObj = getattr(self, 'inputSequenceROIs').get()
         seq = inputObj.getSequence()
-        seq_name = inputObj.getSequenceObj().getId()
-        if not seq_name:
-            seq_name = inputObj.getSeqName()
-        return seq, seq_name
+        seqName = inputObj.getSequenceObj().getId()
+        if not seqName:
+            seqName = inputObj.getSeqName()
+        return seq, seqName
 
     def getInputASSequence(self):
         from pwem.convert.atom_struct import AtomicStructHandler
         asFile = self.getInputPath()
-        seq_name = os.path.basename(asFile)
+        seqName = os.path.basename(asFile)
         handler = AtomicStructHandler(asFile)
         chainName = getattr(self, 'chain_name').get()
 
@@ -197,7 +197,7 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
         seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
-        return seq, seq_name
+        return seq, seqName
 
     def mapResidues(self, structModel):
         '''Returns a dictionary which maps the idxs of the residues of  the sequence and the sequence from a structure
