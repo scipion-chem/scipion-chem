@@ -76,7 +76,7 @@ class Plugin(pwem.Plugin):
 		# Common enviroments
 		cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
 		cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
-		cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
+		cls._defineVar('OPENBABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
 		cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
 									 description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
 															 'and IO overuse')
@@ -158,12 +158,12 @@ class Plugin(pwem.Plugin):
 																			 packageVersion=OPENBABEL_DIC['version'])
 
 		# Generating installation commands
-		openbabelInstaller.getCondaEnvCommand()\
-			.addCondaPackages(['openbabel', 'swig', 'plip', 'pdbfixer', 'pymol-open-source'], channel='conda-forge')\
+		# todo: install bitbirch
+		obEnvName = cls.getEnvName(OPENBABEL_DIC)
+		openbabelInstaller.addCommand(f'conda create -y -c conda-forge --name {obEnvName} python=3.10 '
+																	f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
+			.addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
 			.addCondaPackages(['clustalo'], channel='bioconda', targetName='CLUSTALO_INSTALLED')\
-			.addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
-						f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
-						'BITBIRCH_INSTALLED')\
 			.addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
 
 		# # Instantiating shape it install helper
@@ -207,7 +207,8 @@ class Plugin(pwem.Plugin):
 	@classmethod
 	def addMDTrajPackage(cls, env, default=True):
 		# Instantiating install helper
-		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
+		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']),
+															packageVersion=MDTRAJ_DIC['version'])
 
 		installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
 			.addPackage(env, dependencies=['conda'], default=default)

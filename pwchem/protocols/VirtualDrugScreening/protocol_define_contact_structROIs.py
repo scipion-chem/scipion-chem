@@ -40,7 +40,7 @@ from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import runInParallel, obabelMolConversion, performBatchThreading, clusterSurfaceCoords,\
-    numberSort, createPocketFile, runOpenBabel, parseAtomStruct, isHet, getBaseName, removeNumberFromStr, \
+    numberSort, createPocketFile, cifFromASFile, parseAtomStruct, isHet, getBaseName, removeNumberFromStr, \
     getMAEMoleculeFiles, cleanPDB
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
@@ -131,7 +131,7 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
                       paramList=[item.clone() for item in otherMols], jobs=self.numberOfThreads.get())
 
         recFile = self.inputSmallMols.get().getProteinFile()
-        self.convertReceptor2PDB(recFile)
+        cifFromASFile(recFile, self.getReceptorCIF())
 
     def performContactAnalysis(self, molFns, molLists, it, recFile, outDir):
         for ligFile in molFns:
@@ -141,7 +141,7 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
             self.writeContactFile(contactDic, ligFile, outDir)
 
     def getContactsStep(self):
-        recFile = self.getReceptorPDB()
+        recFile = self.getReceptorCIF()
         molFns = self.getInputMolFiles()
 
         outDir = self.getContactsDir()
@@ -156,11 +156,11 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
           nConStrs, areRes = self.parseContacts(os.path.join(cDir, contFile))
           conStrs += nConStrs
 
-        recFile = self.getReceptorPDB()
+        recFile = self.getReceptorCIF()
         conStrs = numberSort(list(set(conStrs)))
         if self.filterChains.get():
           chains = list(set([res.split('_')[0] for res in conStrs]))
-          tmpFile = self._getTmpPath('receptor_filter.pdb')
+          tmpFile = self._getTmpPath('receptor_filter.cif')
           cleanPDB(recFile, tmpFile, False, False, chains)
           os.rename(tmpFile, recFile)
 
@@ -176,15 +176,16 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
           pickle.dump(coordsClusters, f)
 
     def defineOutputStep(self):
-        pdbFile = self.getReceptorPDB()
+        cifFile = self.getReceptorCIF()
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
 
         with open(self.getClusterCoordsPickle(), 'rb') as f:
           coordsClusters = pickle.load(f)
 
         for i, clust in enumerate(coordsClusters):
-            pocketFile = createPocketFile(clust, i, outDir=self._getExtraPath())
-            pocket = StructROI(pocketFile, pdbFile)
+            pocketFile = self._getExtraPath(f'pocketFile_{i+1}.cif')
+            createPocketFile(clust, i+1, pocketFile)
+            pocket = StructROI(pocketFile, cifFile)
             pocket.calculateContacts()
             outPockets.append(pocket)
 
@@ -210,15 +211,22 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
         validations.append('Sets of input molecules must be docked first.\n'
                            'Set: {} has not been docked'.format(pSet))
 
+      if self.selectionList.get().strip() == '':
+        validations.append('A ligand or group of ligands must be selected and added to the list.')
+
       return validations
 
     # --------------------------- UTILS functions -----------------------------------
+
+    def createElementLine(self):
+      return f'{self.getEnumText("selectionType")} :: {self.ligandSelection.get()}\n'
+
     # ----------- General ---------------
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
 
-    def getReceptorPDB(self):
-        return os.path.abspath(self._getExtraPath('receptor.pdb'))
+    def getReceptorCIF(self):
+        return os.path.abspath(self._getExtraPath('receptor.cif'))
 
     def getContactsDir(self):
         return os.path.abspath(self._getExtraPath('contacts'))
@@ -230,25 +238,22 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
     def getSelectedInputMols(self):
       '''Return the molecules present in the group selected in the form'''
       molSet = self.inputSmallMols.get()
-      vType = self.typeLabels[self.getEnumText('selectionType')]
 
-      groupDic = molSet.getGroupIndexes()[vType]
-      if vType != 'set':
-        indexes = []
-        for selLine in self.selectionList.get().split('\n'):
+      indexes = []
+      for selLine in self.selectionList.get().split('\n'):
           if selLine.strip():
-            indexes += groupDic[selLine.strip()]
-      else:
-        indexes = list(groupDic.values())[0]
-      return molSet.getMolsFromIds(indexes)
+              selType, selGroup = selLine.strip().split('::')
 
-    def convertReceptor2PDB(self, proteinFile):
-        inExt = os.path.splitext(os.path.basename(proteinFile))[1]
-        oFile = self.getReceptorPDB()
-        if not os.path.exists(oFile):
-          args = ' -i{} {} -opdb -O {}'.format(inExt[1:], os.path.abspath(proteinFile), oFile)
-          runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
-        return oFile
+              vType = self.typeLabels[selType.strip()]
+              groupDic = molSet.getGroupIndexes()[vType]
+              if vType != 'set':
+                if selGroup.strip():
+                  indexes += groupDic[selGroup.strip()]
+              else:
+                indexes += list(groupDic.values())[0]
+
+      indexes = list(set(indexes))
+      return molSet.getMolsFromIds(indexes)
 
     # ----------- Get contacts functions ---------------
     def getInputMolFiles(self):
@@ -411,7 +416,7 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
       return coords
 
     def getInputStructure(self):
-        inFile = self.getReceptorPDB()
+        inFile = self.getReceptorCIF()
         structure = parseAtomStruct(inFile)
         return structure
 
