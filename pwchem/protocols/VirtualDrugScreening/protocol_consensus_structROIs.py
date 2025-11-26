@@ -101,6 +101,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping structural ROIs from the same input set when calculating the '
                            'cluster size')
+        form.addParam('keepSmall', params.BooleanParam, default=False,
+                      label='Keep small ROIs: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Whether to keep as output the smaller ROIs if they overlap.')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -388,14 +391,23 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     clust = self.filterPocketsBySet(clust, onlyRef)
 
                 if clust:
-                    if self.repChoice.get() == MAXVOL:
-                        outPocket = self.getMaxVolumePocket(clust)
-                    elif self.repChoice.get() == MAXSURF:
-                        outPocket = self.getMaxSurfacePocket(clust)
-                    elif self.repChoice.get() == INTERSEC:
-                        outPocket = self.getIntersectionPocket(clust, i)
-
-                    representatives.append(outPocket)
+                    if not self.keepSmall.get():
+                        if self.repChoice.get() == MAXVOL:
+                            outPocket = self.getMaxVolumePocket(clust)
+                        elif self.repChoice.get() == MAXSURF:
+                            outPocket = self.getMaxSurfacePocket(clust)
+                        elif self.repChoice.get() == INTERSEC:
+                            outPocket = self.getIntersectionPocket(clust, i)
+                        representatives.append(outPocket)
+                    else:
+                        # Keep only small pockets inside others
+                        bigPocket = max(clust, key=lambda p: p.getSurfaceConvexVolume())
+                        for pock in clust:
+                            if pock is bigPocket:
+                                continue  # not present in the output
+                            overlap = self.calculateResiduesOverlap(pock, bigPocket)
+                            if overlap >= self.overlap.get():
+                                representatives.append(pock)
         return representatives
 
     def filterPocketsBySet(self, pockets, setId):
