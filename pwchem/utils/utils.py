@@ -34,11 +34,11 @@ from Bio.PDB.SASA import ShrakeRupley
 
 # Scipion em imports
 from pwem.convert import AtomicStructHandler
-from pwem.convert.atom_struct import toPdb
+from pwem.convert.atom_struct import toPdb, toCIF
 from pwem.objects.data import Sequence, Object, String, Integer, Float, Pointer
 
 # Plugin imports
-from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC, RDKIT_DIC
+from ..constants import PML_SURF_EACH, PML_SURF_STR, OPENBABEL_DIC, RDKIT_DIC, CIF_DEF_HEADER, CIF_DEF_COLS
 from .. import Plugin as pwchemPlugin
 from ..utils.scriptUtils import makeSubsets, performBatchThreading
 
@@ -211,7 +211,7 @@ def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime
       if not popen:
         protocol.runJob(fullProgram, progArgs, **kwargs)
       else:
-        subprocess.check_call(fullProgram + progArgs, shell=True, **kwargs)
+        subprocess.check_call(f'{fullProgram} {progArgs}', shell=True, **kwargs)
 
       finished = True
     except Exception:
@@ -290,6 +290,8 @@ def downloadPDB(pdbID, structureHandler=None, outDir='/tmp/'):
   return fileName
 
 def getRawPDBStr(pdbFile, ter=True):
+  '''Return the raw PDB/CIF lines from a file (Those starting with ATOM or HETATM) plus TER lines if ter
+  '''
   outStr = ''
   with open(pdbFile) as fIn:
     for line in fIn:
@@ -329,6 +331,44 @@ def writePDBLine(j):
   j[12] = j[12].rjust(2)  # elname
   return "%s%s %s %s %s%s    %s%s%s%s%s%s%s\n" % \
          (j[0], j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9], j[10], j[11], j[12])
+
+def writeCIFLine(idx,  # atom serial number
+          atomName,  # atom name, e.g., C1
+          resName,  # residue name, e.g., STP
+          chainId,  # asym_id, e.g., A
+          entityId,  # entity ID, usually 1 for small molecules
+          resSeq,  # residue sequence number
+          x, y, z,  # coordinates
+          occupancy=1.0,
+          bFactor=1.0,
+          altId='.',
+          pdbInsCode='?',
+          modelNum=1,
+          typeSymbol='C'
+  ):
+    """
+    Return a CIF HETATM line in the specified _atom_site order.
+    """
+    # Ensure numeric values
+    x, y, z = float(x), float(y), float(z)
+    occupancy = float(occupancy)
+    bFactor = float(bFactor)
+    idx = int(idx)
+    resSeq = int(resSeq)
+    modelNum = int(modelNum)
+
+    # authAsymId and authSeqId are usually the same as label_asym_id and label_seq_id
+    authAsymId = chainId
+    authSeqId = resSeq
+
+    # Build CIF line with proper formatting
+    line = (
+      f"HETATM {idx} {typeSymbol:<2} {atomName:<4} {altId:1} "
+      f"{resName:<3} {chainId:1} {resSeq:>4} {pdbInsCode:1} "
+      f"{x:8.3f} {y:8.3f} {z:8.3f} {authAsymId:1} {authSeqId:>4} "
+      f"{pdbInsCode:1} {occupancy:5.2f} {bFactor:6.2f} {modelNum:2d}\n"
+    )
+    return line
 
 
 def splitPDBLine(line, rosetta=False):
@@ -461,23 +501,42 @@ def writeSurfPML(pockets, pmlFileName):
   with open(pmlFileName, 'w') as f:
     f.write(createSurfacePml(pockets))
 
-def pdbFromAS(AS, oFile):
-  inpStruct = AS
-  name, ext = os.path.splitext(inpStruct.getFileName())
-  if ext == '.cif':
-      cifFile = inpStruct.getFileName()
-      toPdb(cifFile, oFile)
+def pdbFromASFile(inFile, oFile, atomStruct=None):
+  _, ext = os.path.splitext(inFile)
+  if ext.lower() in ['.cif', '.mmcif']:
+      toPdb(inFile, oFile)
 
-  elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-      inpStruct.convert2PDB(outPDB=oFile)
+  elif atomStruct and str(type(atomStruct).__name__) == 'SchrodingerAtomStruct':
+      atomStruct.convert2PDB(outPDB=oFile)
 
   elif ext == '.pdbqt':
       pdbFile = os.path.abspath(oFile)
-      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpStruct.getFileName()), pdbFile)
+      args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inFile), pdbFile)
       runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
 
   else:
-      shutil.copy(inpStruct.getFileName(), oFile)
+      shutil.copy(inFile, oFile)
+  return oFile
+
+def cifFromASFile(inFile, oFile, atomStruct=None):
+  '''Convert Atomic Structure files (PDB, CIF, MAE...) to CIF. If MAE, the AtomStruct object is needed'''
+  _, ext = os.path.splitext(inFile)
+
+  if ext == '.pdbqt':
+    pdbFile = os.path.abspath(inFile.replace('.pdbqt', '.pdb'))
+    args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inFile), pdbFile)
+    runOpenBabel(None, args=args, cwd=os.path.dirname(oFile), popen=True)
+    ext, inFile = '.pdb', pdbFile
+
+  if ext.lower() in ['.ent', '.pdb']:
+      toCIF(inFile, oFile)
+
+  elif atomStruct and str(type(atomStruct).__name__) == 'SchrodingerAtomStruct':
+      atomStruct.convert2(outPDB=oFile)
+
+  else:
+      shutil.copy(inFile, oFile)
+
   return oFile
 
 def pdbqt2other(protocol, pdbqtFile, otherFile):
@@ -778,7 +837,7 @@ class CleanStructureSelect(Select):
         accept = False
     return accept
 
-def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
+def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseName(structFile)
   if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
@@ -788,6 +847,9 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
   else:
     print('Unknown format for file ', structFile)
     exit()
+
+  if singleModel is not None:
+    struct = struct[singleModel]
 
   io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
   io.set_structure(struct)
@@ -1080,12 +1142,17 @@ def clusterSurfaceCoords(surfCoords, intraDist):
     clusters = newClusters.copy()
   return clusters
 
-def createPocketFile(clust, i, outDir):
-  outFile = os.path.join(outDir, f'pocketFile_{i}.pdb')
-  with open(outFile, 'w') as f:
-    for j, coord in enumerate(clust):
-      f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-  return outFile
+def createPocketFile(coords, pocketK, oFile):
+  cifCols = '\n'.join(CIF_DEF_COLS)
+  outStr = CIF_DEF_HEADER.format(cifCols)
+
+  for i, coord in enumerate(coords):
+    replacements = [str(i + 1), f'C{i + 1}', 'STP', 'C', 1, pocketK, *coord]
+    cifLine = writeCIFLine(*replacements)
+    outStr += cifLine
+
+  with open(oFile, 'w') as f:
+    f.write(outStr)
 
 ################# Wizard utils #####################
 def getChainIds(chainStr):

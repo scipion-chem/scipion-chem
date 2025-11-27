@@ -103,7 +103,7 @@ class ProtChemPrepareReceptor(EMProtocol):
         het2keep = self.het2keep.get().split(', ')
         inFile = self.inputAtomStruct.get().getFileName()
         cleanFile = self.getCleanedFile()
-        cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep)
+        cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep, singleModel=0)
 
     def pdbFixerStep(self):
         addResStr = ' --add-residues' if self.addRes else ''

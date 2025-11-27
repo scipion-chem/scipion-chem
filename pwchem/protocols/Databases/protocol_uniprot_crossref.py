@@ -43,10 +43,6 @@ class ProtChemUniprotCrossRef(EMProtocol):
     """Extract cross references from uniprot"""
     _label = 'uniprot crossref'
 
-    def __init__(self, *args, **kwargs):
-        EMProtocol.__init__(self, *args, **kwargs)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
-
     def _defineParams(self, form):
         form.addSection(label='Input')
         group = form.addGroup('Input')
