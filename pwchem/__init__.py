@@ -142,7 +142,7 @@ class Plugin(pwem.Plugin):
 
         installer.addCommand(
             f'conda create -c conda-forge --name {clustEnvName} '
-            f'oddt=0.7 python=3.10 scikit-learn=1.1.3 -y',
+            f'oddt=0.7 python=3.10 scikit-learn=1.3.2 -y',
             'CLUST_ENV_CREATED'
         )
         installer.addCommand(
