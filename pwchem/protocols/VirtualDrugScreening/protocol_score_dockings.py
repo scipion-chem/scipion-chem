@@ -41,7 +41,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-from pwchem.constants import RDKIT_DIC
+from pwchem.constants import RDKIT_DIC, SCIK_DIC
 from pwchem import Plugin
 
 scriptName = 'scores_docking_oddt.py'
@@ -63,7 +63,7 @@ class ProtocolScoreDocking(EMProtocol):
 
     def __init__(self, **args):
         super().__init__(**args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
+        self.stepsExecutionMode = params.STEPS_SERIAL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -123,7 +123,6 @@ class ProtocolScoreDocking(EMProtocol):
                        label='Delete score number: ',
                        help='Delete the score of the specified index from the workflow.')
         group.addParam('workFlowSteps', params.TextParam, label='User transparent', condition='False')
-        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
@@ -199,7 +198,7 @@ class ProtocolScoreDocking(EMProtocol):
     def scoringStep(self, wStep, iScore, it):
         paramsPath = os.path.abspath(self._getExtraPath(f'inputParams_{iScore}_{it}.txt'))
         self.writeParamsFile(paramsPath, eval(wStep), iScore, it)
-        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getExtraPath(), popen=True)
+        Plugin.runScript(self, scriptName, paramsPath, env=SCIK_DIC, cwd=self._getExtraPath(), popen=True)
 
 
     def createOutputStep(self):
