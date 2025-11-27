@@ -53,6 +53,8 @@ class ProtocolSCORCH2(EMProtocol):
     Computes the best poses of protein-ligand interactions using SCORCH2: https://github.com/LinCompbio/SCORCH2
     """
     _label = 'SCORCH2 rescoring'
+    _pdbId = ''
+    _defaultName = 'prot'
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -85,37 +87,10 @@ class ProtocolSCORCH2(EMProtocol):
     def _insertAllSteps(self):
         preExtracted = self.useFeatures.get()
         if not preExtracted:
-            self._insertFunctionStep(self.moveFilesStep)
-            self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.createOutputStep)
-
-    def moveFilesStep(self):
-        extraPath = Path(self._getExtraPath())
-
-        proteinDir = extraPath / "protein"
-        moleculeDir = extraPath / "molecule"
-        proteinDir.mkdir(parents=True, exist_ok=True)
-        moleculeDir.mkdir(parents=True, exist_ok=True)
-
-        protein = self.inputPDBligandFiles.get().getProteinFile()
-        proteinPath = Path(protein)
-        pdbId = proteinPath.stem
-        # todo: asegurar que el pdbId no tiene "_"
-        proteinFile = proteinDir / f"{pdbId}_protein{proteinPath.suffix}"
-        shutil.copy(proteinPath, proteinFile)
-
-        ligands = self.inputPDBligandFiles.get()
-        ligandOutDir = moleculeDir / pdbId
-        ligandOutDir.mkdir(parents=True, exist_ok=True)
-
-        for i, ligand in enumerate(ligands, start=1):
-            ligandPath = Path(ligand.getPoseFile())
-            origName = ligandPath.name
-            newName = f"{pdbId}_{origName}"
-
-            dest = ligandOutDir / newName
-            shutil.copy(ligandPath, dest)
-
+            self._insertFunctionStep('moveFilesStep')
+            self._insertFunctionStep('convertInputStep')
+        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep('renameFilesStep')
 
     def convertInputStep(self):
         proteinDir = Path(self._getExtraPath()) / "protein"
@@ -223,6 +198,68 @@ class ProtocolSCORCH2(EMProtocol):
         newMols.proteinFile.set(self.inputPDBligandFiles.get().getProteinFile())
         self._defineOutputs(outputSmallMolecules=newMols)
 
+    def moveFilesStep(self):
+        extraPath = Path(self._getExtraPath())
+
+        proteinDir = extraPath / "protein"
+        moleculeDir = extraPath / "molecule"
+        proteinDir.mkdir(parents=True, exist_ok=True)
+        moleculeDir.mkdir(parents=True, exist_ok=True)
+
+        protein = self.inputPDBligandFiles.get().getProteinFile()
+        proteinPath = Path(protein)
+        self._pdbId = proteinPath.stem
+        #change names so it does not crash with _
+        proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
+        shutil.copy(proteinPath, proteinFile)
+
+        ligands = self.inputPDBligandFiles.get()
+        ligandOutDir = moleculeDir / self._defaultName
+        ligandOutDir.mkdir(parents=True, exist_ok=True)
+
+        for i, ligand in enumerate(ligands, start=1):
+            ligandPath = Path(ligand.getPoseFile())
+            origName = ligandPath.name
+            newName = f"{self._defaultName}_{origName}"
+
+            dest = ligandOutDir / newName
+            shutil.copy(ligandPath, dest)
+
+    def renameFilesStep(self):
+        extraPath = Path(self._getExtraPath())
+
+        proteinDir = extraPath / "protein"
+        moleculeDir = extraPath / "molecule"
+        ligandDir = moleculeDir / self._defaultName
+
+        for file in proteinDir.iterdir():
+            if file.name.startswith(f"{self._defaultName}_protein"):
+                newProteinName = f"{self._pdbId}_protein{file.suffix}"
+                file.rename(proteinDir / newProteinName)
+
+        newLigandFolder = moleculeDir / self._pdbId
+        if ligandDir.exists():
+            ligandDir.rename(newLigandFolder)
+            ligandDir = newLigandFolder
+
+        for file in ligandDir.iterdir():
+            if file.name.startswith(f"{self._defaultName}_"):
+                newName = file.name.replace(
+                    f"{self._defaultName}_",
+                    f"{self._pdbId}_",
+                    1
+                )
+                file.rename(ligandDir / newName)
+
+        resultsDir = extraPath / "results"
+        oldPrefix = f"{self._defaultName}_"
+        newPrefix = f"{self._pdbId}_"
+
+        if resultsDir.exists():
+            for path in resultsDir.rglob("*"):
+                if path.is_file() and path.name.startswith(oldPrefix):
+                    newName = path.name.replace(oldPrefix, newPrefix, 1)
+                    path.rename(path.with_name(newName))
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):

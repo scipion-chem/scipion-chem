@@ -27,12 +27,16 @@ from pwem.protocols import ProtImportPdb, ProtImportSequence
 from pwem.convert.atom_struct import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
+from pwchem import tests
+from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
 # Scipion chem imports
 from pwchem.tests import TestImportVariants, TestImportSequences
 from pwchem.protocols import ProtDefineSeqROI, ProtChemGenerateVariants, ProtSeqCalculateConservation
 from pwchem.protocols import ProtExtractSeqsROI, ProtOperateSeqROI, ProtDefineSetOfSequences
 from pwchem.protocols import ProtMapSequenceROI, ProtChemMultipleSequenceAlignment, ProtChemPairWiseAlignment
 from pwchem.utils import assertHandle
+
+from pyworkflow.tests import BaseTest, DataSet
 
 CLUSTALO, MUSCLE, MAFFT = 0, 1, 2
 
@@ -61,7 +65,7 @@ defSetFiles = [defSetSeqFile, defSetASFile, defSetPDBFile]
 defSetSeqs = '''1) {"name": "%s", "index": "FIRST-LAST", "seqFile": "%s"}
 2) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile": "%s"}
 3) {"name": "%s", "chain": "%s", "index": "FIRST-LAST", "seqFile": "%s"}''' % \
-						 (names[0], defSetSeqFile, names[1], defSetASChain, defSetASFile, names[2], defSetPDBChain, defSetPDBFile)
+                         (names[0], defSetSeqFile, names[1], defSetASChain, defSetASFile, names[2], defSetPDBChain, defSetPDBFile)
 
 testFile = 'PDBx_mmCIF/1aoi.cif'
 class TestDefineSequenceROIs(TestImportVariants):
@@ -317,7 +321,7 @@ class TestMapSeqROIs(TestDefineSetSequences):
 
 		cls.proj.launchProtocol(protMapROIs, wait=False)
 		return protMapROIs
-	
+
 	def test(self):
 		pDef = self._runDefSeqROIs(inProt=self.protImportSeq, mode=0)
 		self._waitOutput(pDef, 'outputROIs', sleepTime=5)
@@ -377,3 +381,38 @@ class TestMultipleAlignSequences(TestImportSequences):
 		assertHandle(self.assertIsNotNone, getattr(protCLUSTALO, 'outputSequences', None), cwd=protCLUSTALO.getWorkingDir())
 		assertHandle(self.assertIsNotNone, getattr(protMUSCLE, 'outputSequences', None), cwd=protMUSCLE.getWorkingDir())
 		assertHandle(self.assertIsNotNone, getattr(protMAFFT, 'outputSequences', None), cwd=protMAFFT.getWorkingDir())
+
+
+class TestSeqLocation(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        tests.setupTestProject(cls)
+
+    @classmethod
+    def _runImportSequence(cls):
+        cls.protImportSeq = cls.newProtocol(
+            ProtImportSequence,
+            inputSequenceName='user_seq',
+            inputProteinSequence=ProtImportSequence.IMPORT_FROM_UNIPROT,
+            uniProtSequence='P0DTC2'
+        )
+        cls.proj.launchProtocol(cls.protImportSeq, wait=True)
+        return cls.protImportSeq
+
+    def _runSeqLoc(self):
+        protSeqLoc = self.newProtocol(
+            ProtGetSequenceLocation,
+            uniprotSeq=True,
+            inputSequence=self.protImportSeq.outputSequence)
+        self.proj.launchProtocol(protSeqLoc, wait=True)
+        return protSeqLoc
+
+    def test(self):
+        self._runImportSequence()
+
+        protSeqLoc = self._runSeqLoc()
+        self._waitOutput(protSeqLoc, 'outputROIs', sleepTime=5)
+
+        assertHandle(self.assertIsNotNone, getattr(protSeqLoc, 'outputROIs', None),
+                     cwd=protSeqLoc.getWorkingDir())

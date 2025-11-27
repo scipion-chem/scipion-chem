@@ -28,7 +28,7 @@
 #Constant dictionaries
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
 JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}
-OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPENBABEL_HOME'}
+OPENBABEL_DIC = {'name': 'openbabel',   'version': '3.1.1',           'home': 'OPENBABEL_HOME'}
 ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
@@ -68,42 +68,53 @@ WARNLIBBIG = f'WARNING: you are about to split an immense library of molecules, 
 
 PML_STR = '''from pymol import cmd,stored
 load {}
-#select pockets, resn STP
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
-
-aux = {}
-aux.sort()
-
-lastSTP=max(list(map(int, stored.list)))	#get the index of the last residu
 stored.list = list(map(str, stored.list))
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
+for my_index in stored.list: cmd.select("pocket"+my_index, "resn STP and resi "+my_index)
+for my_index in stored.list: cmd.color(int(my_index)+1,"pocket"+my_index)
+for my_index in stored.list: cmd.show("spheres","pocket"+my_index)
+for my_index in stored.list: cmd.hide("sticks","pocket"+my_index)
+for my_index in stored.list: cmd.set("sphere_scale","0.3","pocket"+my_index)
+for my_index in stored.list: cmd.set("sphere_transparency","0.1","pocket"+my_index)'''
+
+PML_BBOX_STR_POCK = PML_STR + '''
+python
+{}
+zoom
+python end
+'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
-load {}, protein
-create ligands, protein and organic
-select xlig, protein and organic
-delete xlig
+load {}
 
-hide everything, all
+select protein_only, polymer and not organic
+select non_stp_ligands, organic and not resn STP
+hide everything
 
-color white, elem c
-color bluewhite, protein
-show surface, protein
-
-show sticks, ligands
-set stick_color, magenta
+show surface, protein_only
+color white, protein_only
+show sticks, non_stp_ligands
 
 {}
 zoom visible
 '''
+
+PML_BBOX_STR_POCKSURF = PML_SURF_STR + '''
+python
+{}
+zoom
+python end
+'''
+
+
+PML_BBOX_STR_EACH = '''rgb = {}
+boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
+'''
+
 
 PML_SURF_EACH = '''set_color pcol{} = {}
 select surf_pocket{}, protein and id {} 
@@ -118,11 +129,11 @@ TCL_STR = '''proc highlighting { colorId representation id selection } {
    mol addrep $id
 }
 
-set id [mol new %s type pdb]
+set id [mol new %s type cif]
 mol delrep top $id
-highlighting Name "Lines" $id "protein"
-highlighting Name "Licorice" $id "not protein and not resname STP"
-highlighting Element "NewCartoon" $id "protein"
+highlighting Name "Lines" 0 "protein"
+highlighting Name "Licorice" 0 "not protein and not resname STP"
+highlighting Element "NewCartoon" 0 "protein"
 set id [mol new %s type pqr]
                         mol selection "all" 
                          mol material "Glass3" 
@@ -130,7 +141,7 @@ set id [mol new %s type pqr]
                          mol representation "QuickSurf 0.3" 
                          mol color ResId $id 
                          mol addrep $id 
-highlighting Index "Points 1" $id "resname STP"
+highlighting Index "Points 1" 1 "resname STP"
 display rendermode GLSL'''#.format(proteinHETATMFile, proteinPQRFile)
 
 FUNCTION_GRID_BOX = '''from pymol.cgo import *
@@ -362,60 +373,6 @@ zoom
 python end
 '''
 
-PML_BBOX_STR_POCK = '''load {} 
-set cartoon_color, white
-
-from pymol import cmd,stored
-load {}
-#select pockets, resn STP
-stored.list=[]
-cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
-
-aux = {}
-aux.sort()
-
-stored.list = list(map(str, stored.list))
-#print(stored.list)
-lastSTP=stored.list[-1]	#get the index of the last residu
-hide lines, resn STP
-
-#show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
-
-python
-{}
-zoom
-python end
-'''
-
-PML_BBOX_STR_POCKSURF = '''
-from pymol import cmd,stored
-load {}, protein
-create protein and organic
-hide everything, all
-
-color white, elem c
-color bluewhite, protein
-show surface, protein
-
-{}
-zoom visible
-
-python
-{}
-zoom
-python end
-'''
-
-
-PML_BBOX_STR_EACH = '''rgb = {}
-boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
-'''
-
 
 PML_PHARM = '''from pymol.cgo import *
 from pymol import cmd
@@ -515,3 +472,13 @@ NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "b
 SCORE_BASED_METHODS = ["med", "anz"]
 RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 
+CIF_DEF_COLS = ["_atom_site.group_PDB",  "_atom_site.id",  "_atom_site.type_symbol",
+                "_atom_site.label_atom_id",  "_atom_site.label_alt_id",
+                "_atom_site.label_comp_id",  "_atom_site.label_asym_id",
+                "_atom_site.label_entity_id",  "_atom_site.label_seq_id",
+                "_atom_site.Cartn_x",  "_atom_site.Cartn_y",  "_atom_site.Cartn_z",
+                "_atom_site.auth_asym_id",  "_atom_site.auth_seq_id",
+                "_atom_site.pdbx_PDB_ins_code",  "_atom_site.occupancy",  "_atom_site.B_iso_or_equiv",
+                "_atom_site.pdbx_PDB_model_num"]
+
+CIF_DEF_HEADER = "data_example\nloop_\n{}\n"
