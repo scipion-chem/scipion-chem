@@ -204,10 +204,11 @@ class Plugin(pwem.Plugin):
         installer.getCondaEnvCommand().addCondaPackages(['vmd'], channel='conda-forge')\
             .addPackage(env, dependencies=['conda'], default=default)
 
-    @classmethod
-    def addMDTrajPackage(cls, env, default=True):
-        # Instantiating install helper
-        installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
+	@classmethod
+	def addMDTrajPackage(cls, env, default=True):
+		# Instantiating install helper
+		installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']),
+															packageVersion=MDTRAJ_DIC['version'])
 
         installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
             .addPackage(env, dependencies=['conda'], default=default)

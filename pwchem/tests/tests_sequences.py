@@ -29,12 +29,16 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtESMatlas
+from pwchem import tests
+from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
 # Scipion chem imports
 from pwchem.tests import TestImportVariants, TestImportSequences
 from pwchem.protocols import ProtDefineSeqROI, ProtChemGenerateVariants, ProtSeqCalculateConservation
 from pwchem.protocols import ProtExtractSeqsROI, ProtOperateSeqROI, ProtDefineSetOfSequences
 from pwchem.protocols import ProtMapSequenceROI, ProtChemMultipleSequenceAlignment, ProtChemPairWiseAlignment
 from pwchem.utils import assertHandle
+
+from pyworkflow.tests import BaseTest, DataSet
 
 CLUSTALO, MUSCLE, MAFFT = 0, 1, 2
 
@@ -422,3 +426,38 @@ class TestESMatlas(TestImportSequences):
 
         assertHandle(self.assertIsNotNone, getattr(protPeptideFromString, 'outputAtomStruct', None), cwd=protPeptideFromString.getWorkingDir())
         assertHandle(self.assertIsNotNone, getattr(protPeptideFromObjects, 'outputAtomStructs', None),cwd=protPeptideFromObjects.getWorkingDir())
+
+
+class TestSeqLocation(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        tests.setupTestProject(cls)
+
+    @classmethod
+    def _runImportSequence(cls):
+        cls.protImportSeq = cls.newProtocol(
+            ProtImportSequence,
+            inputSequenceName='user_seq',
+            inputProteinSequence=ProtImportSequence.IMPORT_FROM_UNIPROT,
+            uniProtSequence='P0DTC2'
+        )
+        cls.proj.launchProtocol(cls.protImportSeq, wait=True)
+        return cls.protImportSeq
+
+    def _runSeqLoc(self):
+        protSeqLoc = self.newProtocol(
+            ProtGetSequenceLocation,
+            uniprotSeq=True,
+            inputSequence=self.protImportSeq.outputSequence)
+        self.proj.launchProtocol(protSeqLoc, wait=True)
+        return protSeqLoc
+
+    def test(self):
+        self._runImportSequence()
+
+        protSeqLoc = self._runSeqLoc()
+        self._waitOutput(protSeqLoc, 'outputROIs', sleepTime=5)
+
+        assertHandle(self.assertIsNotNone, getattr(protSeqLoc, 'outputROIs', None),
+                     cwd=protSeqLoc.getWorkingDir())

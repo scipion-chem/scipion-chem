@@ -78,7 +78,7 @@ AddElementWizard().addTarget(protocol=ProtocolOperateLibrary,
                              outputs=['removeList'])
 AddElementWizard().addTarget(protocol=ProtDefineContactStructROIs,
                              targets=['addSelection'],
-                             inputs=['ligandSelection'],
+                             inputs=[],
                              outputs=['selectionList'])
 
 
