@@ -59,7 +59,6 @@ class PyMolView(pwviewer.CommandView):
   """ View for calling an external command. """
 
   def __init__(self, pymolArgs, cwd, **kwargs):
-    print('command: ', [self.getPymolBin(), *pymolArgs.split()])
     pwviewer.CommandView.__init__(self, [self.getPymolBin(), *pymolArgs.split()],
                                   cwd=cwd, **kwargs)
     
