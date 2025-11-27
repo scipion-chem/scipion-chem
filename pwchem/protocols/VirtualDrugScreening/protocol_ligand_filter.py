@@ -37,6 +37,7 @@ from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from pwchem.constants import RDKIT_DIC, WARNLIBBIG
 from pwchem.utils import getBaseName, makeSubsets
+from pwchem.objects import SetOfSmallMolecules
 
 ATYPE, SIZE, HASCYCLES = 'Contains at least x atom type', 'Contains at least x atoms', \
                                 'Contains at least x cycles'
@@ -207,7 +208,8 @@ class ProtocolGeneralLigandFiltering(ProtocolBaseLibraryToSetOfMols):
           self._defineOutputs(outputLibrary=outputLib)
       else:
           inMols = self.inputSmallMolecules.get()
-          outputSet = inMols.create(self._getPath())
+          outputSet = SetOfSmallMolecules.createCopy(inMols, self._getPath(), copyInfo=True)
+
           for mol in inMols:
             if os.path.abspath(mol.getFileName()) in passMolFiles:
               outputSet.append(mol)
