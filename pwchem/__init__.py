@@ -64,7 +64,7 @@ class Plugin(pwem.Plugin):
         cls.addScikitPackage(env)
 
     @classmethod
-    def _defineVariables(cls, SCIK_HOME=None):
+    def _defineVariables(cls):
         # Package home directories
         cls._defineEmVar(RDKIT_DIC['home'], cls.getEnvName(RDKIT_DIC))
         cls._defineEmVar(MGL_DIC['home'], cls.getEnvName(MGL_DIC))
