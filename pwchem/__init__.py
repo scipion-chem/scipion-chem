@@ -241,49 +241,49 @@ class Plugin(pwem.Plugin):
 
 
     @classmethod
-      def addSCORCHenv(cls, env, default=True):
-          # Instantiating install helper
-          installer = InstallHelper(SCORCH2_DIC['name'],
-                                    packageHome=cls.getVar(SCORCH2_DIC['home']),
-                                    packageVersion=SCORCH2_DIC['version'])
-
-          # Create the environment with mamba/conda
-          scorchEnvName = cls.getEnvName(SCORCH2_DIC)
-          installer.addCommand(
-              f"conda create -n {scorchEnvName} "
-              "python=3.10 numpy pandas scipy matplotlib-base seaborn scikit-learn tqdm "
-              "optuna dask xgboost rdkit openbabel sqlalchemy joblib pycairo rlpycairo "
-              "fonttools contourpy pyparsing python-dateutil pytz packaging typing-extensions "
-              "freetype-py reportlab shap pip -c conda-forge -y",
-              'SCORCH2_ENV_CREATED'
-          )
-
-          installer.addCommand(
-              f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && mkdir -p scorchModels",
-              'SCORCH_MODELS_FOLDER_CREATED'
-          )
-
-          #download and extract models from Zenodo
-          modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
-          installer.addCommand(
-              f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
-              "cd scorchModels && "
-              f"wget -O SCORCH2_models.xz {modelUrl} && "
-              "xz -d SCORCH2_models.xz && "
-              "tar -xf SCORCH2_models && "
-              "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
-              "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
-              "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
-              'SCORCH_MODELS_DOWNLOADED'
-          )
-
-          installer.addCommand(
-              f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
-              "git clone https://github.com/LinCompbio/SCORCH2.git",
-              'SCORCH2_REPO_CLONED'
-          )
-
-          installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
+	def addSCORCHenv(cls, env, default=True):
+	  # Instantiating install helper
+	  installer = InstallHelper(SCORCH2_DIC['name'],
+								packageHome=cls.getVar(SCORCH2_DIC['home']),
+								packageVersion=SCORCH2_DIC['version'])
+	
+	  # Create the environment with mamba/conda
+	  scorchEnvName = cls.getEnvName(SCORCH2_DIC)
+	  installer.addCommand(
+		  f"conda create -n {scorchEnvName} "
+		  "python=3.10 numpy pandas scipy matplotlib-base seaborn scikit-learn tqdm "
+		  "optuna dask xgboost rdkit openbabel sqlalchemy joblib pycairo rlpycairo "
+		  "fonttools contourpy pyparsing python-dateutil pytz packaging typing-extensions "
+		  "freetype-py reportlab shap pip -c conda-forge -y",
+		  'SCORCH2_ENV_CREATED'
+	  )
+	
+	  installer.addCommand(
+		  f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && mkdir -p scorchModels",
+		  'SCORCH_MODELS_FOLDER_CREATED'
+	  )
+	
+	  #download and extract models from Zenodo
+	  modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
+	  installer.addCommand(
+		  f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+		  "cd scorchModels && "
+		  f"wget -O SCORCH2_models.xz {modelUrl} && "
+		  "xz -d SCORCH2_models.xz && "
+		  "tar -xf SCORCH2_models && "
+		  "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
+		  "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
+		  "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
+		  'SCORCH_MODELS_DOWNLOADED'
+	  )
+	
+	  installer.addCommand(
+		  f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+		  "git clone https://github.com/LinCompbio/SCORCH2.git",
+		  'SCORCH2_REPO_CLONED'
+	  )
+	
+	  installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
     ##################### RUN CALLS ######################
     @classmethod
