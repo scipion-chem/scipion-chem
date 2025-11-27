@@ -42,11 +42,11 @@ from Bio.PDB.ResidueDepth import get_surface
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
-from pwem.convert import cifToPdb
+
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
 from pwchem import Plugin
-from pwchem.constants import MGL_DIC
+from pwchem.constants import *
 
 COORDS, RESIDUES, LIGANDS, PPI, NRES = 0, 1, 2, 3, 4
 INTERACTIONSFILENAME = "interacting_residues.csv"
@@ -185,15 +185,15 @@ class ProtDefineStructROIs(EMProtocol):
         self._insertFunctionStep('defineOutputStep')
 
     def getSurfaceStep(self):
-        parser = PDBParser()
-        pdbFile = self.getProteinFileName()
+        inFile = self.getProteinFileName()
+        inExt = os.path.splitext(inFile)[1]
+        parser = MMCIFParser() if inExt == '.cif' else PDBParser()
         if self.origin.get() == LIGANDS and not self.extLig:
-            pdbFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath('cleanPDB.pdb')),
-                                waters=True, hetatm=True)
+            inFile = cleanPDB(self.getProteinFileName(), os.path.abspath(self._getExtraPath(f'cleanPDB{inExt}')),
+                              waters=True, hetatm=True)
 
-        structure = parser.get_structure(self.getProteinName(), pdbFile)
+        structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
-
         self.structSurface = get_surface(self.structModel,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
@@ -215,13 +215,14 @@ class ProtDefineStructROIs(EMProtocol):
 
     def defineOutputStep(self):
         inpStruct = self.inputAtomStruct.get()
-        pdbFile = self.getProteinFileName()
-        newPDBFile = self._getPath(os.path.basename(pdbFile))
-        newPDBFile = self.checkLigands(pdbFile, newPDBFile)
+        inFile = self.getProteinFileName()
+        newPDBFile = self._getPath(os.path.basename(inFile))
+        newPDBFile = self.checkLigands(inFile, newPDBFile)
 
         outPockets = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
         for i, clust in enumerate(self.coordsClusters):
-            pocketFile = createPocketFile(clust, i, outDir=self._getExtraPath())
+            pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
+            createPocketFile(clust, i+1, pocketFile)
             pocket = StructROI(pocketFile, newPDBFile)
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
@@ -253,7 +254,7 @@ class ProtDefineStructROIs(EMProtocol):
 
     def _validate(self):
         errors = []
-        if not self.getProteinFileName(inProtocol=False):
+        if not self.inputAtomStruct.get():
             errors.append('You must specify an input structure')
 
         for roiStr in self.inROIs.get().split('\n'):
@@ -271,7 +272,7 @@ class ProtDefineStructROIs(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
-    def checkLigands(self, pdbFile, newPDBFile):
+    def checkLigands(self, inFile, newPDBFile):
       ligToRem = []
       for roiStr in self.inROIs.get().split('\n'):
         if roiStr.strip():
@@ -282,37 +283,17 @@ class ProtDefineStructROIs(EMProtocol):
             ligToRem.append(jDic['molName'])
 
       if ligToRem:
-        newPDBFile = cleanPDB(pdbFile, newPDBFile, het2rem=ligToRem)
+        newPDBFile = cleanPDB(inFile, newPDBFile, het2rem=ligToRem)
       else:
-        shutil.copy(pdbFile, newPDBFile)
+        shutil.copy(inFile, newPDBFile)
       return newPDBFile
 
-    def getProteinFileName(self, inProtocol=True):
-        inpStruct = self.inputAtomStruct.get()
-        if inpStruct:
-            inpFile = inpStruct.getFileName()
-        else:
-            inpFile = self.inSmallMols.get().getProteinFile()
-
-        if not inpFile:
-            return None
-
-        if inpFile.endswith('.cif'):
-          if inProtocol:
-              inpPDBFile = self._getExtraPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
-          else:
-              inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).replace('.cif', '.pdb'))
-          cifToPdb(inpFile, inpPDBFile)
-
-        elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            inpPDBFile = self.getProject().getTmpPath(os.path.basename(inpFile).
-                                                      replace(inpStruct.getExtension(), '.pdb'))
-            inpStruct.convert2PDB(outPDB=inpPDBFile)
-
-        else:
-          inpPDBFile = inpFile
-
-        return inpPDBFile
+    def getProteinFileName(self):
+        cifFile = self._getCifFile()
+        if not os.path.exists(cifFile):
+          inpFile = self.inputAtomStruct.get().getFileName()
+          cifFromASFile(inpFile, cifFile)
+        return cifFile
 
     def getProteinName(self):
       return os.path.splitext(os.path.basename(self.getProteinFileName()))[0]
@@ -506,13 +487,10 @@ class ProtDefineStructROIs(EMProtocol):
         closestIndexes = distances < self.maxDepth.get()
         return list(self.structSurface[closestIndexes[0]])
 
-    def createPocketFile(self, clust, i):
-        outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))
-        with open(outFile, 'w') as f:
-            for j, coord in enumerate(clust):
-                f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-        return outFile
 
+    def _getCifFile(self):
+      return os.path.abspath(self._getExtraPath(self._getInputName() + '.cif'))
 
-
+    def _getInputName(self):
+        return os.path.splitext(os.path.basename(self.inputAtomStruct.get().getFileName()))[0]
 

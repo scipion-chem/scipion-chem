@@ -76,8 +76,8 @@ class ProtExtractLigands(EMProtocol):
                       important=True, pointerClass='AtomStruct',
                       help='Atom structure from which you want to extract a ligand')
         form.addParam('nAtoms', params.IntParam,
-                      label="Minimum number of atoms: ", default=4,
-                      help='Minimum number of atoms for a ligand to be considered (used for ignoring '
+                      label="Minimum number of heavy atoms: ", default=4,
+                      help='Minimum number of heavy atoms for a ligand to be considered (used for ignoring '
                            'waters for example)')
 
         self._cleanStructureParams(form)
@@ -101,8 +101,8 @@ class ProtExtractLigands(EMProtocol):
         else:
             chain_id = None
 
-        cleanFile = self._getPath('{}.pdb'.format(getBaseName(inputStructureFile)))
-        tmpCleanFile = self._getTmpPath('{}.pdb'.format(getBaseName(inputStructureFile)))
+        cleanFile = self._getPath('{}.cif'.format(getBaseName(inputStructureFile)))
+        tmpCleanFile = self._getTmpPath('{}.cif'.format(getBaseName(inputStructureFile)))
 
         # Keep only structure chains selected, with ligands for extraction
         tmpCleanFile = cleanPDB(inputStructureFile, tmpCleanFile, self.waters.get(), False, chain_id)
@@ -142,7 +142,8 @@ class ProtExtractLigands(EMProtocol):
         for model in struct:
             for chain in model:
                 for residue in chain:
-                    if not isHet(residue) or len(list(residue.get_atoms())) < self.nAtoms.get():
+                    heavyAtoms = [atom for atom in residue if atom.element != 'H']
+                    if not isHet(residue) or len(heavyAtoms) < self.nAtoms.get():
                         continue
                     print(f"saving {chain} {residue}")
                     outFile = self._getPath(f"{struct_name}_{residue.get_resname()}-{i}.pdb")
