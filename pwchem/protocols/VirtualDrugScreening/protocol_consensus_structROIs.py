@@ -35,6 +35,7 @@ sources
 import numpy as np
 from Bio import pairwise2, AlignIO
 from Bio.Align import substitution_matrices
+from Bio.PDB import PDBParser, MMCIFParser
 from scipy.optimize import linear_sum_assignment
 
 from pyworkflow.protocol import params
@@ -42,7 +43,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import writePDBLine, splitPDBLine, flipDic
+from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName
 from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
 MAXVOL, MAXSURF, INTERSEC = 0, 1, 2
@@ -441,28 +442,19 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 outPocket = pocket.clone()
         return outPocket
 
-    def createPocketFile(self, coords, i):
-        outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))
-        with open(outFile, 'w') as f:
-            for j, coord in enumerate(coords):
-                f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-        return outFile
-
-    def parsePDBResidueCoords(self, pdbFile):
+    def parseResidueCoords(self, asFile):
         resCoordsDic = {}
-        with open(pdbFile) as f:
-            for line in f:
-                if line.startswith('ATOM'):
-                    line = splitPDBLine(line)
-                    proteinChain, residueNumber = line[4:6]
-                    residueId = '{}_{}'.format(proteinChain, residueNumber)
-                    coord = list(map(float, line[6:9]))
-                    if residueId in resCoordsDic:
-                        resCoordsDic[residueId].append(coord)
-                    else:
-                        resCoordsDic[residueId] = [coord]
-        return resCoordsDic
+        parser = PDBParser if asFile.endswith('.pdb') else MMCIFParser
 
+        struct = parser().get_structure(getBaseName(asFile), asFile)[0]
+        for chain in struct.get_chains():
+            chainId = chain.get_id()
+            for res in chain.get_residues():
+                resId = res.id[1]
+                residueId = f'{chainId}_{resId}'
+                resCoordsDic[residueId] = [atom.coord.tolist() for atom in res.get_atoms()]
+
+        return resCoordsDic
 
     def getIntersectionPocket(self, cluster, i):
         '''Return the pocket as set of intersection residues in a cluster.'''
@@ -474,11 +466,12 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
         if len(inters) > 0:
             coords = []
-            resCoordDic = self.parsePDBResidueCoords(pdbFile)
+            resCoordDic = self.parseResidueCoords(pdbFile)
             for res in inters:
                 coords += resCoordDic[res]
 
-            pocketFile = self.createPocketFile(coords, i)
+            pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
+            createPocketFile(coords, i, pocketFile)
             outPocket = StructROI(pocketFile, pdbFile)
             outPocket.calculateContacts()
         else:

@@ -33,10 +33,10 @@ This protocol maps a set of sequence ROIs to structure ROIs for an AtomStruct
 import json
 from scipy.spatial import distance
 from Bio.PDB.ResidueDepth import get_surface
+from Bio.PDB.MMCIFParser import MMCIFParser
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
-from pwem.convert import cifToPdb
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
@@ -91,17 +91,18 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         self._mapWarning = 'Mapping of ROIs not posible, check the alignment in ', self._getPath("pairWise.aln")
 
     def alignSequencesStep(self):
-        seq, seq_name = self.getInputSequence()
-        seqAS, seq_nameAS = self.getInputASSequence()
+        seq, seqName = self.getInputSequence()
+        seqAS, seqNameAS = self.getInputASSequence()
 
         # Alignment
         out_file = os.path.abspath(self._getPath("pairWise.fasta"))
-        pairwiseAlign(seq, seqAS, out_file, seqName1=seq_name, seqName2=seq_nameAS)
-        pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seq_name, seqName2=seq_nameAS)
+        pairwiseAlign(seq, seqAS, out_file, seqName1=seqName, seqName2=seqNameAS)
+        pairwiseAlign(seq, seqAS, out_file.replace('.fasta', '.aln'), seqName1=seqName, seqName2=seqNameAS)
 
     def definePocketsStep(self):
-        parser = PDBParser()
-        structModel = parser.get_structure(self.getASName(), self.getASFileName())[0] # 0: modelID?
+        cifFile = cifFromASFile(self.getInputPath(), self._getCifFile(), atomStruct=self.inputAtomStruct.get())
+
+        structModel = MMCIFParser().get_structure(self._getInputName(), cifFile)[0] # 0: modelID?
         self.structSurface = get_surface(structModel,
                                          MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
@@ -130,8 +131,9 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         if coordsClusters:
             for i, clust in coordsClusters.items():
                 if clust:
-                    pocketFile = createPocketFile(clust, i, self._getExtraPath())
-                    pocket = StructROI(pocketFile, self.getASFileName())
+                    pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
+                    createPocketFile(clust, i, pocketFile)
+                    pocket = StructROI(pocketFile, self._getCifFile())
                     pocket.setNumberOfPoints(len(clust))
                     if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                         pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
@@ -160,44 +162,34 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
-    def getASFileName(self):
-        inpStruct = self.inputAtomStruct.get()
-        inpFile = inpStruct.getFileName()
-        basename = os.path.basename(inpFile).split('.')[0]
-        if inpFile.endswith('.cif'):
-            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            cifToPdb(inpFile, inpPDBFile)
+    def getInputPath(self):
+        return self.inputAtomStruct.get().getFileName()
 
-        elif str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
-            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            inpStruct.convert2PDB(outPDB=inpPDBFile)
+    def getInputFileName(self):
+        return self.getInputPath().split('/')[-1]
 
-        elif inpFile.endswith('.pdbqt'):
-            inpPDBFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            args = ' -ipdbqt {} -opdb -O {}'.format(os.path.abspath(inpFile), inpPDBFile)
-            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+    def _getPdbFile(self):
+        return os.path.abspath(self._getExtraPath(self._getInputName() + '.pdb'))
 
-        else:
-            inpPDBFile = inpFile
+    def _getCifFile(self):
+        return os.path.abspath(self._getExtraPath(self._getInputName() + '.cif'))
 
-        return inpPDBFile
-
-    def getASName(self):
-      return os.path.splitext(os.path.basename(self.getASFileName()))[0]
+    def _getInputName(self):
+        return getBaseName(self.getInputPath())
 
     def getInputSequence(self):
         inputObj = getattr(self, 'inputSequenceROIs').get()
         seq = inputObj.getSequence()
-        seq_name = inputObj.getSequenceObj().getId()
-        if not seq_name:
-            seq_name = inputObj.getSeqName()
-        return seq, seq_name
+        seqName = inputObj.getSequenceObj().getId()
+        if not seqName:
+            seqName = inputObj.getSeqName()
+        return seq, seqName
 
     def getInputASSequence(self):
         from pwem.convert.atom_struct import AtomicStructHandler
-        ASFile = self.getASFileName()
-        seq_name = os.path.basename(ASFile)
-        handler = AtomicStructHandler(ASFile)
+        asFile = self.getInputPath()
+        seqName = os.path.basename(asFile)
+        handler = AtomicStructHandler(asFile)
         chainName = getattr(self, 'chain_name').get()
 
         # Parse chainName for model and chain selection
@@ -205,7 +197,7 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         chain_id, modelId = struct["chain"].upper().strip(), int(struct["model"])
 
         seq = str(handler.getSequenceFromChain(modelID=modelId, chainID=chain_id))
-        return seq, seq_name
+        return seq, seqName
 
     def mapResidues(self, structModel):
         '''Returns a dictionary which maps the idxs of the residues of  the sequence and the sequence from a structure
@@ -272,13 +264,6 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
         distances = distance.cdist([coord], self.structSurface)
         closestIndexes = distances < self.maxDepth.get()
         return list(self.structSurface[closestIndexes[0]])
-
-    def createPocketFile(self, clust, i):
-        outFile = self._getExtraPath('pocketFile_{}.pdb'.format(i))
-        with open(outFile, 'w') as f:
-            for j, coord in enumerate(clust):
-                f.write(writePDBLine(['HETATM', str(j), 'APOL', 'STP', 'C', '1', *coord, 1.0, 0.0, '', 'Ve']))
-        return outFile
 
     def parseSequences(self):
         seq, seqAS = '', ''
