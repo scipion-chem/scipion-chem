@@ -147,7 +147,7 @@ class ProtocolSCORCH2(EMProtocol):
                 "--ps_weight", str(self.psWeight.get()),
                 "--pb_weight", str(self.pbWeight.get()),
                 "--keep-temp",
-                "--res-dir", str('results')  # why is this created in the repo and not in the gui?
+                "--res-dir", str('results')
             ]
         else:
             args = [
@@ -172,13 +172,11 @@ class ProtocolSCORCH2(EMProtocol):
             program="python",
             cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home']))
         )
-        # move results folder to scipion outputs, idk why it is created in the dir where the script is called
         if not preExtracted:
             resDir = Path(self._getExtraPath()) / "results"
             shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results')), resDir)
 
     def createOutputStep(self):
-        # todo: separa la ejecucion (scorchStep) de la creacion del output (createOutputStep) a distintos steps
         mols = self.inputPDBligandFiles.get()
         newMols = SetOfSmallMolecules().create(outputPath=self._getPath())
         scoresDict = self.readScoresTSV()
@@ -227,6 +225,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     def renameFilesStep(self):
         extraPath = Path(self._getExtraPath())
+        pdbid = self.getPDBId()
 
         proteinDir = extraPath / "protein"
         moleculeDir = extraPath / "molecule"
@@ -234,10 +233,10 @@ class ProtocolSCORCH2(EMProtocol):
 
         for file in proteinDir.iterdir():
             if file.name.startswith(f"{self._defaultName}_protein"):
-                newProteinName = f"{self.getPDBId()}_protein{file.suffix}"
+                newProteinName = f"{pdbid}_protein{file.suffix}"
                 file.rename(proteinDir / newProteinName)
 
-        newLigandFolder = moleculeDir / self.getPDBId()
+        newLigandFolder = moleculeDir / pdbid
         if ligandDir.exists():
             ligandDir.rename(newLigandFolder)
             ligandDir = newLigandFolder
@@ -246,14 +245,14 @@ class ProtocolSCORCH2(EMProtocol):
             if file.name.startswith(f"{self._defaultName}_"):
                 newName = file.name.replace(
                     f"{self._defaultName}_",
-                    f"{self.getPDBId()}_",
+                    f"{pdbid}_",
                     1
                 )
                 file.rename(ligandDir / newName)
 
         resultsDir = extraPath / "results"
         oldPrefix = f"{self._defaultName}_"
-        newPrefix = f"{self.getPDBId()}_"
+        newPrefix = f"{pdbid}_"
 
         if resultsDir.exists():
             for path in resultsDir.rglob("*"):
