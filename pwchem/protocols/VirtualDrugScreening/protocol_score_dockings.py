@@ -63,6 +63,7 @@ class ProtocolScoreDocking(EMProtocol):
 
     def __init__(self, **args):
         super().__init__(**args)
+        self.stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
