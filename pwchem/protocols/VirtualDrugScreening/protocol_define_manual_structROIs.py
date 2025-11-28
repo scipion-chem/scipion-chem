@@ -389,9 +389,6 @@ class ProtDefineStructROIs(EMProtocol):
 
             interactionsFile = self._getExtraPath(INTERACTIONSFILENAME)
 
-            print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
-            sys.stdout.flush()
-
             residuePairs = defaultdict(list)
 
             for atom1 in chain1.get_atoms():
@@ -422,7 +419,6 @@ class ProtDefineStructROIs(EMProtocol):
 
                 for (ch1, res1, ch2, res2), dists in residuePairs.items():
                     meanDist = sum(dists) / len(dists)
-                    print(f'{ch1}:{res1} -- {ch2}:{res2} | mean distance = {meanDist:.2f} Å')
                     writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
 
 
