@@ -53,7 +53,6 @@ class ProtocolSCORCH2(EMProtocol):
     Computes the best poses of protein-ligand interactions using SCORCH2: https://github.com/LinCompbio/SCORCH2
     """
     _label = 'SCORCH2 rescoring'
-    _pdbId = ''
     _defaultName = 'prot'
 
     # -------------------------- DEFINE param functions ----------------------
@@ -89,6 +88,7 @@ class ProtocolSCORCH2(EMProtocol):
         if not preExtracted:
             self._insertFunctionStep('moveFilesStep')
             self._insertFunctionStep('convertInputStep')
+        self._insertFunctionStep('scorchStep')
         self._insertFunctionStep('createOutputStep')
         self._insertFunctionStep('renameFilesStep')
 
@@ -113,8 +113,7 @@ class ProtocolSCORCH2(EMProtocol):
         else:
             logging.warning("No ligand files found.")
 
-    def createOutputStep(self):
-        # todo: separa la ejecucion (scorchStep) de la creacion del output (createOutputStep) a distintos steps
+    def scorchStep(self):
         proteinDir = Path(self._getExtraPath()) / "protein"
         ligandDir = Path(self._getExtraPath()) / "molecule"
 
@@ -148,7 +147,7 @@ class ProtocolSCORCH2(EMProtocol):
                 "--ps_weight", str(self.psWeight.get()),
                 "--pb_weight", str(self.pbWeight.get()),
                 "--keep-temp",
-                "--res-dir", str('results') # why is this created in the repo and not in the gui?
+                "--res-dir", str('results')  # why is this created in the repo and not in the gui?
             ]
         else:
             args = [
@@ -166,7 +165,6 @@ class ProtocolSCORCH2(EMProtocol):
         if self.aggregate.get():
             args.append("--aggregate")
 
-
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
@@ -174,11 +172,13 @@ class ProtocolSCORCH2(EMProtocol):
             program="python",
             cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home']))
         )
-        #move results folder to scipion outputs, idk why it is created in the dir where the script is called
+        # move results folder to scipion outputs, idk why it is created in the dir where the script is called
         if not preExtracted:
             resDir = Path(self._getExtraPath()) / "results"
-            shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']),'results')), resDir)
+            shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results')), resDir)
 
+    def createOutputStep(self):
+        # todo: separa la ejecucion (scorchStep) de la creacion del output (createOutputStep) a distintos steps
         mols = self.inputPDBligandFiles.get()
         newMols = SetOfSmallMolecules().create(outputPath=self._getPath())
         scoresDict = self.readScoresTSV()
@@ -208,7 +208,7 @@ class ProtocolSCORCH2(EMProtocol):
 
         protein = self.inputPDBligandFiles.get().getProteinFile()
         proteinPath = Path(protein)
-        self._pdbId = proteinPath.stem
+        pdbId = self.getPDBId()
         #change names so it does not crash with _
         proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
         shutil.copy(proteinPath, proteinFile)
@@ -234,10 +234,10 @@ class ProtocolSCORCH2(EMProtocol):
 
         for file in proteinDir.iterdir():
             if file.name.startswith(f"{self._defaultName}_protein"):
-                newProteinName = f"{self._pdbId}_protein{file.suffix}"
+                newProteinName = f"{self.getPDBId()}_protein{file.suffix}"
                 file.rename(proteinDir / newProteinName)
 
-        newLigandFolder = moleculeDir / self._pdbId
+        newLigandFolder = moleculeDir / self.getPDBId()
         if ligandDir.exists():
             ligandDir.rename(newLigandFolder)
             ligandDir = newLigandFolder
@@ -246,14 +246,14 @@ class ProtocolSCORCH2(EMProtocol):
             if file.name.startswith(f"{self._defaultName}_"):
                 newName = file.name.replace(
                     f"{self._defaultName}_",
-                    f"{self._pdbId}_",
+                    f"{self.getPDBId()}_",
                     1
                 )
                 file.rename(ligandDir / newName)
 
         resultsDir = extraPath / "results"
         oldPrefix = f"{self._defaultName}_"
-        newPrefix = f"{self._pdbId}_"
+        newPrefix = f"{self.getPDBId()}_"
 
         if resultsDir.exists():
             for path in resultsDir.rglob("*"):
@@ -283,6 +283,10 @@ class ProtocolSCORCH2(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def getPDBId(self):
+        protein = self.inputPDBligandFiles.get().getProteinFile()
+        proteinPath = Path(protein)
+        return proteinPath.stem
 
     def checkPdbqtFiles(self, directory):
         """Check if files are PDBQT"""
