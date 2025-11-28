@@ -63,6 +63,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_filtering impo
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
+from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtESMatlas
 
 from pwchem.protocols.Sequences.protocol_import_variants import ProtChemImportVariants
 from pwchem.protocols.Sequences.protocol_generate_variants import ProtChemGenerateVariants
