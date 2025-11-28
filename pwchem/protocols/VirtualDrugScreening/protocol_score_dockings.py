@@ -41,7 +41,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-from pwchem.constants import RDKIT_DIC, MAX_MOLS_SET
+from pwchem.constants import ODDT_DIC
 from pwchem import Plugin
 
 scriptName = 'scores_docking_oddt.py'
@@ -130,37 +130,39 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
-        '''Get the number of threads available for each scoring execution.
-        Takes int account the maxMolSize variable and makes batches of that size maximum'''
-        nScores = len(self.workFlowSteps.get().strip().split('\n'))
-        nThreads = (self.numberOfThreads.get() - 1) // nScores
-        if nThreads < (self.numberOfThreads.get() - 1) / nScores:
-            nThreads += 1
+        nScores = max(1, len([w for w in self.workFlowSteps.get().split('\n') if w.strip()]))
+        threadsDisponibles = max(1, self.numberOfThreads.get() - 1)
+        nThreads = max(1, threadsDisponibles // nScores)
 
-        nThreads = 1 if nThreads == 0 else nThreads
-        
         lenMols = len(self.getAllInputMols())
         maxMols = self.maxMolSize.get()
         if lenMols / nThreads > maxMols:
-            nThreads = lenMols // maxMols + 1
+            nThreads = (lenMols + maxMols - 1) // maxMols
 
         return nThreads
 
     def _insertAllSteps(self):
-        sSteps, wSteps = [], []
         self.createGUISummary()
-        nThreads = self.getnThreads()
-
         cStep = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
-        spStep = self._insertFunctionStep(self.splitMolsStep, nThreads, prerequisites=[cStep])
-        #Performing every score listed in the form
-        for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-            if wStep.strip() and not wStep in wSteps:
-                for it in range(nThreads):
-                    sSteps.append(self._insertFunctionStep(self.scoringStep, wStep, i+1, it, prerequisites=[spStep]))
-                    wSteps.append(wStep)
 
-        self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
+        nThreads = self.getnThreads()
+        spStep = self._insertFunctionStep(self.splitMolsStep, nThreads, prerequisites=[cStep])
+
+        sSteps = []
+        wStepsList = [w.strip() for w in self.workFlowSteps.get().split('\n') if w.strip()]
+
+        for iScore, wStep in enumerate(wStepsList):
+            for it in range(nThreads):
+                sSteps.append(
+                    self._insertFunctionStep(
+                        self.scoringStep,
+                        wStep, iScore + 1, it,
+                        prerequisites=[spStep]
+                    )
+                )
+
+        # Paso 4: Crear salida después de todos los scoring steps
+        self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
 
     def convertInputStep(self):
         #Convert ligands
@@ -210,7 +212,7 @@ class ProtocolScoreDocking(EMProtocol):
         paramsPath = os.path.abspath(self._getExtraPath(f'inputParams_{iScore}_{it}.txt'))
         self.writeParamsFile(paramsPath, eval(wStep), iScore, it)
         scriptsCall = f'python {Plugin.getScriptsDir(scriptName)}'
-        insistentRun(self, scriptsCall, paramsPath, envDic=RDKIT_DIC, cwd=self._getExtraPath(), popen=True)
+        insistentRun(self, scriptsCall, paramsPath, envDic=ODDT_DIC, cwd=self._getExtraPath(), popen=True)
 
 
     def createOutputStep(self):
