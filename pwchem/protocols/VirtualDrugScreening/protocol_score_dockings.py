@@ -211,7 +211,7 @@ class ProtocolScoreDocking(EMProtocol):
         paramsPath = os.path.abspath(self._getExtraPath(f'inputParams_{iScore}_{it}.txt'))
         self.writeParamsFile(paramsPath, eval(wStep), iScore, it)
         scriptsCall = f'python {Plugin.getScriptsDir(scriptName)}'
-        insistentRun(self, scriptsCall, paramsPath, envDic=MDTRAJ_DIC, cwd=self._getExtraPath(), popen=True)
+        insistentRun(self, scriptsCall, paramsPath, envDic=SCIK_DIC, cwd=self._getExtraPath(), popen=True)
 
 
     def createOutputStep(self):
