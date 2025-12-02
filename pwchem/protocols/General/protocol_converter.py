@@ -27,7 +27,7 @@
 # **************************************************************************
 
 # General imports
-import os, shutil, parmed, importlib
+import os, shutil, parmed, importlib, mdtraj
 
 # Scipion chem imports
 from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, LEVEL_ADVANCED
@@ -85,7 +85,7 @@ class ConvertStructures(EMProtocol):
         group.addParam('convSysFile', BooleanParam, default=False, label='Convert coordinates file: ',
                        condition=f'{inputTypeCondition}MDSystem)', help="Convert coordinates file from the MDSystem")
         group.addParam('outputSysFormat', EnumParam, default=0, label='System coordinates output format: ',
-                       condition=f'{inputTypeCondition}MDSystem) and convSysFile', choices=['PDB'],
+                       condition=f'{inputTypeCondition}MDSystem) and convSysFile', choices=['PDB', 'GRO'],
                        help="Output format for the coordinates of the system.")
         
         group.addParam('convTopFile', BooleanParam, default=True, label='Convert topology file: ',
@@ -163,6 +163,23 @@ class ConvertStructures(EMProtocol):
         elif isinstance(self.inputObject.get(), MDSystem):
             inSystem = self.inputObject.get()
             sysFile = inSystem.getSystemFile()
+            topFile = inSystem.getTopologyFile() # may be None
+            topPath = os.path.split(topFile)[0]
+
+            # Load system with ParmEd: topology + coordinates if available
+            # Set GROMACS_TOPDIR if using a .top file
+            if importlib.util.find_spec('gromacs'):
+                from gromacs import Plugin as gromacsPlugin
+                from gromacs.constants import GROMACS_DIC
+                parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(
+                    GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
+
+            parmedSystem = parmed.load_file(topFile)
+            parmedSystem.coordinates = parmed.load_file(sysFile).coordinates
+
+            mdtrajTop = mdtraj.load(sysFile, top=sysFile).top
+            resseqs = [r.resSeq for r in mdtrajTop.residues]
+            assignChainsResseqs(parmedSystem, topPath, resseqs)
 
             if self.convSysFile.get():
                 outDir = os.path.abspath(self._getExtraPath())
@@ -170,8 +187,10 @@ class ConvertStructures(EMProtocol):
                 outFormat = self.getEnumText('outputSysFormat').lower()
                 fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                args = ' -s {} -o {}'.format(os.path.abspath(sysFile), fnOut) # no traj so convert system
-                Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                if outFormat == 'pdb':
+                    parmedSystem.save(fnOut, renumber=False)
+                else:
+                    parmedSystem.save(fnOut)
                 sysFile = fnOut
 
             outSystem = MDSystem(filename=sysFile)
@@ -206,6 +225,9 @@ class ConvertStructures(EMProtocol):
                     trjFile = fnOut
 
                 outSystem.setTrajectoryFile(trjFile)
+
+            outSystem.setForceField(inSystem.getForceField())
+            outSystem.setWaterForceField(inSystem.getWaterForceField())
 
             self._defineOutputs(outputSystem=outSystem)
             self._defineSourceRelation(self.inputObject, outSystem)
@@ -262,4 +284,41 @@ class ConvertStructures(EMProtocol):
             elif self.outputFormatTarget.get() == 2:
                 summary.append('Converted to Mol2')
         return summary
-    
+
+# --------------------------- Helper functions --------------------
+def assignChainsResseqs(parmedSystem, topPath, resseqs):
+    """
+    Assign chain IDs to residues in a parmed.Structure object
+    according to the number of residues in each .itp inclusion.
+    """
+    residues = parmedSystem.residues
+
+    if hasattr(parmedSystem, 'itps') and parmedSystem.itps:
+        proteinITPs = [itp for itp in parmedSystem.itps if "Protein" in itp]
+        chainIDs = [fn.split("_")[-1].split(".")[0] for fn in proteinITPs]
+        counts = [len(parmed.load_file(os.path.join(topPath, itp), parametrize=False).residues)
+                for itp in proteinITPs]
+
+        idx = 0
+        for cid, numRes in zip(chainIDs, counts):
+            chainResidues = residues[idx: idx + numRes]
+            for res in chainResidues:
+                res.chain = cid
+            idx += numRes
+
+    for i, res in enumerate(residues):
+        res.number = resseqs[i]
+
+    missing_dihedrals = [dih for dih in parmedSystem.dihedrals if dih.funct is None]
+    for dih in missing_dihedrals:
+        dih.funct = 1
+
+    missing_angles = [(i, a) for (i, a) in enumerate(parmedSystem.angles) if a.type is None]
+    for i, angle in missing_angles:
+        if angle.type is None:
+            angle_type = parmed.AngleType(1.0, 109.5)
+            # Replace the angle in the tracked list to ensure it's linked properly
+            parmedSystem.angles[i].type = angle_type
+        # sanity check
+        if angle.type is None or not hasattr(angle.type, 'theteq'):
+            print(f"Warning: angle {angle} still has no type")
