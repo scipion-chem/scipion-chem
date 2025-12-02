@@ -1216,8 +1216,8 @@ class StructROI(data.EMFile):
   def getConvexVolume(self):
     '''Calculate the convex volume of the points forming the pocket'''
     coords = np.array(self.getPointsCoords())
-    cHull = spatial.ConvexHull(coords)
-    return cHull.volume
+    vol = spatial.ConvexHull(coords).volume if len(coords) > 3 else 0
+    return vol
 
   def getSurfaceConvexVolume(self):
     '''Calculate the convex volume of the protein contact atoms'''
