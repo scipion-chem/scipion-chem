@@ -227,6 +227,7 @@ class ProtDefineStructROIs(EMProtocol):
             if str(type(inpStruct).__name__) == 'SchrodingerAtomStruct':
                 pocket._maeFile = String(os.path.relpath(inpStruct.getFileName()))
             pocket.calculateContacts()
+            pocket.setVolume(pocket.getPocketVolume())
             outPockets.append(pocket)
 
         if len(outPockets) > 0:
@@ -359,7 +360,11 @@ class ProtDefineStructROIs(EMProtocol):
             chainId, resIdxs = jDic['chain'], jDic['index']
             idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
             for resId in range(idxs[0], idxs[1] + 1):
-                residue = self.structModel[chainId][resId]
+                try:
+                    residue = self.structModel[chainId][resId]
+                except KeyError:
+                    print(f'{resId} not in chain {chainId}')
+                    
                 atoms = residue.get_atoms()
                 for a in atoms:
                   oCoords.append(list(a.get_coord()))
@@ -383,9 +388,6 @@ class ProtDefineStructROIs(EMProtocol):
             chain1, chain2 = self.structModel[chain1Id], self.structModel[chain2Id]
 
             interactionsFile = self._getExtraPath(INTERACTIONSFILENAME)
-
-            print('Checking interface between chains "{}" and "{}"'.format(chain1Id, chain2Id))
-            sys.stdout.flush()
 
             residuePairs = defaultdict(list)
 
@@ -417,7 +419,6 @@ class ProtDefineStructROIs(EMProtocol):
 
                 for (ch1, res1, ch2, res2), dists in residuePairs.items():
                     meanDist = sum(dists) / len(dists)
-                    print(f'{ch1}:{res1} -- {ch2}:{res2} | mean distance = {meanDist:.2f} Å')
                     writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
 
 
