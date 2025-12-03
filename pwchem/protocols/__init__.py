@@ -49,6 +49,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_extract_interactingMols impo
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import ProtocolConsensusDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import ProtocolScoreDocking
 # from pwchem.protocols.VirtualDrugScreening.protocol_oddt_descriptors import ProtocolODDTDescriptors
+from pwchem.protocols.VirtualDrugScreening.protocol_scorch2_pose import ProtocolSCORCH2
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_define_contact_structROIs import ProtDefineContactStructROIs
 from pwchem.protocols.VirtualDrugScreening.protocol_rank_docking_score import ProtocolRankDocking
@@ -63,6 +64,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_pharmacophore_filtering impo
 # Sequences and sequences ROIs protocols
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from pwchem.protocols.Sequences.protocol_define_sequences import ProtDefineSetOfSequences
+from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtESMatlas
 
 from pwchem.protocols.Sequences.protocol_import_variants import ProtChemImportVariants
 from pwchem.protocols.Sequences.protocol_generate_variants import ProtChemGenerateVariants

@@ -369,6 +369,8 @@ class SmallMolecule(data.EMObject):
 
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))  # to be used when each mol has diff receptor
 
+
+
   def __str__(self):
     s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
     return s
@@ -475,6 +477,8 @@ class SmallMolecule(data.EMObject):
 
   def setMolClass(self, value):
     self._type.set(value)
+
+
 
   def getUniqueName(self, grid=True, conf=True, pose=True, dock=True):
     name = self.getMolName()
@@ -599,6 +603,7 @@ class SetOfSmallMolecules(data.EMSet):
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
     self._docked = pwobj.Boolean(False)
 
+
   def __str__(self):
     s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
     return s
@@ -653,6 +658,7 @@ class SetOfSmallMolecules(data.EMSet):
 
   def setDocked(self, value=True):
     self._docked.set(value)
+
 
   def getUniqueMolNames(self):
     names = []
@@ -1210,8 +1216,8 @@ class StructROI(data.EMFile):
   def getConvexVolume(self):
     '''Calculate the convex volume of the points forming the pocket'''
     coords = np.array(self.getPointsCoords())
-    cHull = spatial.ConvexHull(coords)
-    return cHull.volume
+    vol = spatial.ConvexHull(coords).volume if len(coords) > 3 else 0
+    return vol
 
   def getSurfaceConvexVolume(self):
     '''Calculate the convex volume of the protein contact atoms'''
