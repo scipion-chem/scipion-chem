@@ -41,7 +41,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
-from pwchem.constants import RDKIT_DIC
+from pwchem.constants import RDKIT_DIC, MAX_MOLS_SET
 from pwchem import Plugin
 
 scriptName = 'scores_docking_oddt.py'
@@ -73,6 +73,9 @@ class ProtocolScoreDocking(EMProtocol):
                        pointerClass='SetOfSmallMolecules', allowsNull=False,
                        label="Input Docked Small Molecules: ",
                        help='Select the docked molecules to be scored')
+        form.addParam('maxMolSize', params.IntParam, default=1000, label='Max. batch size: ',
+                       expertLevel=params.LEVEL_ADVANCED,
+                       help="Maximum size of the batches that are send to score")
 
         group = form.addGroup('Scoring function')
         group.addParam('scoreChoice', params.EnumParam, default=VINA, label='Score to calculate: ',
@@ -127,13 +130,20 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
-        '''Get the number of threads available for each scoring execution'''
+        '''Get the number of threads available for each scoring execution.
+        Takes int account the maxMolSize variable and makes batches of that size maximum'''
         nScores = len(self.workFlowSteps.get().strip().split('\n'))
         nThreads = (self.numberOfThreads.get() - 1) // nScores
         if nThreads < (self.numberOfThreads.get() - 1) / nScores:
             nThreads += 1
 
         nThreads = 1 if nThreads == 0 else nThreads
+        
+        lenMols = len(self.getAllInputMols())
+        maxMols = self.maxMolSize.get()
+        if lenMols / nThreads > maxMols:
+            nThreads = lenMols // maxMols + 1
+
         return nThreads
 
     def _insertAllSteps(self):
@@ -199,7 +209,8 @@ class ProtocolScoreDocking(EMProtocol):
     def scoringStep(self, wStep, iScore, it):
         paramsPath = os.path.abspath(self._getExtraPath(f'inputParams_{iScore}_{it}.txt'))
         self.writeParamsFile(paramsPath, eval(wStep), iScore, it)
-        Plugin.runScript(self, scriptName, paramsPath, env=RDKIT_DIC, cwd=self._getExtraPath(), popen=True)
+        scriptsCall = f'python {Plugin.getScriptsDir(scriptName)}'
+        insistentRun(self, scriptsCall, paramsPath, envDic=RDKIT_DIC, cwd=self._getExtraPath(), popen=True)
 
 
     def createOutputStep(self):

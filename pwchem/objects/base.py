@@ -24,7 +24,10 @@
 # *
 # **************************************************************************
 
-import enum, io, pickle
+import enum, io, pickle, os
+import subprocess as sp
+from Bio.PDB.MMCIF2Dict import MMCIF2Dict
+from Bio.PDB import PDBParser, MMCIFParser, MMCIFIO, Structure
 
 import pyworkflow.object as pwobj
 import pwem.objects.data as data
@@ -366,6 +369,8 @@ class SmallMolecule(data.EMObject):
 
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))  # to be used when each mol has diff receptor
 
+
+
   def __str__(self):
     s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
     return s
@@ -472,6 +477,8 @@ class SmallMolecule(data.EMObject):
 
   def setMolClass(self, value):
     self._type.set(value)
+
+
 
   def getUniqueName(self, grid=True, conf=True, pose=True, dock=True):
     name = self.getMolName()
@@ -596,6 +603,7 @@ class SetOfSmallMolecules(data.EMSet):
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
     self._docked = pwobj.Boolean(False)
 
+
   def __str__(self):
     s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
     return s
@@ -650,6 +658,7 @@ class SetOfSmallMolecules(data.EMSet):
 
   def setDocked(self, value=True):
     self._docked.set(value)
+
 
   def getUniqueMolNames(self):
     names = []
@@ -1037,7 +1046,11 @@ class StructROI(data.EMFile):
     self._score = Float(kwargs.get('score', None))
     self._energy = Float(kwargs.get('energy', None))
 
-    if proteinFile != None:
+    if hasattr(self, 'properties') and 'contactResidues' in self.properties:
+      self.setContactResidues(self.properties['contactResidues'])
+      self.setContactAtoms(self.properties['contactAtoms'])
+
+    elif proteinFile != None:
       self.calculateContacts()
 
   def __str__(self):
@@ -1112,8 +1125,7 @@ class StructROI(data.EMFile):
   def calculateContacts(self):
     cAtoms = self.buildContactAtoms(calculate=True)
     self.setContactAtoms(self.encodeIds(self.getAtomsIds(cAtoms)))
-    cResidues = self.getResiduesFromAtoms(cAtoms)
-    self.setContactResidues(self.encodeIds(self.getResiduesIds(cResidues)))
+    self.setContactResidues(self.encodeIds(self.getResiduesIds(cAtoms)))
 
   # Complex pocket attributes functions
   def buildContactAtoms(self, calculate=False, maxDistance=5):
@@ -1123,17 +1135,17 @@ class StructROI(data.EMFile):
     contactAtoms = []
     if str(contactCodes) != 'None' and not calculate:
       contactsIds = self.decodeIds(contactCodes)
-      with open(self.getProteinFile()) as f:
-        for line in f:
-          if line.startswith('ATOM'):
-            atomId = splitPDBLine(line)[1]
-            if atomId in contactsIds:
-              contactAtoms.append(ProteinAtom(line))
+      protAtoms = self.getProteinAtoms()
+      for atom in protAtoms:
+        atomId = atom.serial_number
+        if atomId in contactsIds:
+          contactAtoms.append(atom)
     else:
       # Manually calculate the contacts
       pocketCoords = self.getPointsCoords()
       proteinAtoms = self.getProteinAtoms()
-      proteinCoords = self.getAtomsCoords(proteinAtoms)
+      proteinCoords = self.getProteinCoords()
+
       dists = spatial.distance.cdist(proteinCoords, pocketCoords)
       for i in range(len(proteinCoords)):
         if min(dists[i, :]) < maxDistance:
@@ -1204,8 +1216,8 @@ class StructROI(data.EMFile):
   def getConvexVolume(self):
     '''Calculate the convex volume of the points forming the pocket'''
     coords = np.array(self.getPointsCoords())
-    cHull = spatial.ConvexHull(coords)
-    return cHull.volume
+    vol = spatial.ConvexHull(coords).volume if len(coords) > 3 else 0
+    return vol
 
   def getSurfaceConvexVolume(self):
     '''Calculate the convex volume of the protein contact atoms'''
@@ -1240,21 +1252,38 @@ class StructROI(data.EMFile):
   def decodeIds(self, idStr):
     return str(idStr).split('-')
 
-  def getProteinAtoms(self):
-    atoms = []
-    with open(self.getProteinFile()) as f:
-      for line in f:
-        if line.startswith('ATOM'):
-          atoms.append(ProteinAtom(line))
-    return atoms
-
   def getProteinCoords(self):
     coords = []
-    with open(self.getProteinFile()) as f:
-      for line in f:
-        if line.startswith('ATOM'):
-          coords.append(tuple(line.split()[6:9]))
+    inFile = self.getProteinFile()
+    parser = PDBParser if inFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
+    kwargs = {"PERMISSIVE": True} if inFile.endswith(('.pdb', '.pdbqt')) else {}
+    try:
+        structModel = parser(**kwargs).get_structure(getBaseName(inFile), inFile)
+        for atom in structModel.get_atoms():
+          coords.append(atom.get_coord().tolist())
+    except:
+        try:
+            cifDic = MMCIF2Dict(inFile)
+            xs = cifDic.get('_atom_site.Cartn_x', [])
+            ys = cifDic.get('_atom_site.Cartn_y', [])
+            zs = cifDic.get('_atom_site.Cartn_z', [])
+            coords = [[x, y, z] for x, y, z in zip(xs, ys, zs)]
+
+        except:
+            print(f'The input file {inFile} could not be parsed with bioPython')
     return coords
+
+  def getProteinAtoms(self):
+    '''Return the protein atoms as a dictionary with the values:
+    '''
+    atoms = []
+    inFile = self.getProteinFile()
+    parser = PDBParser if inFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
+    structModel = parser(QUIET=True).get_structure(getBaseName(inFile), inFile)
+    for atom in structModel.get_atoms():
+      atoms.append(atom)
+
+    return atoms
 
   def getAtomsCoords(self, atoms):
     coords = []
@@ -1265,41 +1294,38 @@ class StructROI(data.EMFile):
   def getAtomsIds(self, atoms):
     ids = []
     for atom in atoms:
-      ids.append(atom.atomId)
+      ids.append(str(atom.serial_number))
     ids = natural_sort(ids)
     return ids
 
-  def getResiduesIds(self, residues):
+  def buildResidueId(self, atom):
+    res, chain = atom.get_parent(), atom.get_parent().get_parent()
+    return f'{chain.id}_{res.get_id()[1]}'
+
+  def getResiduesIds(self, atoms):
     ids = set([])
-    for res in residues:
-      ids.add(res.residueId)
+    for atom in atoms:
+      resId = self.buildResidueId(atom)
+      ids.add(resId)
     ids = natural_sort(list(ids))
     return ids
 
-  def getAtomsResidues(self, atoms):
-    res = set([])
-    for atom in atoms:
-      res.add(atom.get)
-
-  def buildPocketPoints(self):
-    pocketPoints = []
-    with open(self.getFileName()) as f:
-      for line in f:
-        if line.startswith('HETATM') or line.startswith('ATOM'):
-          pocketPoints += [ProteinAtom(line)]
-    return pocketPoints
-
   def getPointsCoords(self):
     coords = []
-    for point in self.buildPocketPoints():
-      coords.append(point.getCoords())
-    return coords
+    inFile = self.getFileName()
 
-  def getResiduesFromAtoms(self, atoms):
-    res = []
-    for atom in atoms:
-      res.append(ProteinResidue(atom.line))
-    return res
+    if inFile.endswith(('.pdb', '.pqr')):
+      with open(inFile) as f:
+        for line in f:
+          if line.startswith('ATOM') or line.startswith('HETATM'):
+            l = splitPDBLine(line)
+            coords.append(list(map(float, l[6:9])))
+    else:
+      cifD = MMCIF2Dict(inFile)
+      for x, y, z in zip(cifD['_atom_site.Cartn_x'], cifD['_atom_site.Cartn_y'], cifD['_atom_site.Cartn_z']):
+        coords.append((float(x), float(y), float(z)))
+
+    return coords
 
   def getMostCentralResidues(self, n=2):
     cMass = self.calculateMassCenter()
@@ -1334,28 +1360,24 @@ class StructROI(data.EMFile):
 
   def parseFile(self, extraFile, filename):
     if self.getPocketClass() == 'FPocket':
-      props, atoms, residues = {}, [], []
+      props = {}
       atomsIds, residuesIds = [], []
-      ini, parse = 'HEADER Information', False
-      with open(extraFile) as f:
-        for line in f:
-          if line.startswith(ini):
-            parse = True
-            pocketId = int(line.split()[-1].replace(':', ''))
-          elif line.startswith('HEADER') and parse:
-            name = line.split('-')[1].split(':')[0]
-            val = line.split(':')[-1]
-            props[name.strip()] = float(val.strip())
 
-          elif line.startswith('ATOM') and parse:
-            atoms.append(ProteinAtom(line))
-            atomsIds.append(atoms[-1].atomId)
-            newResidue = ProteinResidue(line)
-            if newResidue.residueId not in residuesIds:
-              residues.append(newResidue)
-              residuesIds.append(newResidue.residueId)
+      # Parsing contact residues and atoms
+      cifDic = MMCIF2Dict(extraFile)
+      for i, atomId in enumerate(cifDic['_atom_site.id']):
+        atomsIds.append(atomId)
+        asymId = "_atom_site.auth_asym_id" if "_atom_site.auth_asym_id" in cifDic else "_atom_site.label_asym_id"
+        seqId = "_atom_site.auth_seq_id" if "_atom_site.auth_seq_id" in cifDic else "_atom_site.label_seq_id"
+        residuesIds.append(f'{cifDic[asymId][i]}_{cifDic[seqId][i]}')
+      residuesIds = list(set(residuesIds))
       props['contactAtoms'] = self.encodeIds(atomsIds)
       props['contactResidues'] = self.encodeIds(residuesIds)
+
+      for sc in ' '.join(cifDic['_struct.pdbx_descriptor']).split(' - ')[1:]:
+        props[sc.split(':')[0].strip()] = sc.split(':')[1].split()[0]
+
+      pocketId = int(extraFile.split('pocket')[-1].split('_')[0])
 
     elif self.getPocketClass() == 'P2Rank':
       props = {}
@@ -1369,8 +1391,8 @@ class StructROI(data.EMFile):
       for i, k in enumerate(keys):
         props[k.strip()] = values[i]
 
-      props['residue_ids'] = props['residue_ids'].strip().replace(' ', '-')
-      props['surf_atom_ids'] = props['surf_atom_ids'].strip().replace(' ', '-')
+      props['contactResidues'] = props['residue_ids'].strip().replace(' ', '-')
+      props['contactAtoms'] = props['surf_atom_ids'].strip().replace(' ', '-')
       pocketId = int(values[1])
 
     elif self.getPocketClass() == 'AutoLigand':
@@ -1385,7 +1407,6 @@ class StructROI(data.EMFile):
             # Energy/vol
             props[sline[2].strip()] = float(sline[3].split('=')[1].strip())
             if 'NumberOfClusters' in line:
-              print(int(sline[4].split('=')[1].strip()))
               self.setNClusters(int(sline[4].split('=')[1].strip()))
           i += 1
       with open(filename) as f:
@@ -1399,8 +1420,12 @@ class StructROI(data.EMFile):
 
     elif self.getPocketClass() == 'SiteMap':
       props, pId = {}, 1
-      pocketId = int(filename.split('-')[-1].split('.')[0])
-      with open(extraFile) as fh:
+      pocketId = int(filename.split('_site_')[-1].split('_volpts.')[0])
+
+      sumFile = os.path.join(os.path.dirname(extraFile), 'summary.log')
+      if not os.path.exists(sumFile):
+        sp.check_call(f'cat {extraFile} | grep "SiteScore" -A 1 > {sumFile}', shell=True)
+      with open(sumFile) as fh:
         for line in fh:
           if line.startswith("SiteScore"):
             # SiteScore size   Dscore  volume  exposure enclosure contact  phobic   philic   balance  don/acc
@@ -1549,16 +1574,52 @@ class SetOfStructROIs(data.EMSet):
     super().append(item)
     self.updatePocketsClass()
 
+  def loadStructure(self, inFile):
+    """Read a structure from a PDB or CIF file and return a Biopython Structure object."""
+    if inFile.endswith(".pdb"):
+      parser = PDBParser(QUIET=True)
+    elif inFile.endswith(".cif"):
+      parser = MMCIFParser(QUIET=True)
+    else:
+      raise ValueError(f"Unsupported file format: {inFile}")
+
+    return parser.get_structure(getBaseName(inFile), inFile)
+
+  def mergeStructures(self, structures, oFile):
+    """Merge multiple Biopython Structure objects into one."""
+    # Create a new empty structure
+    merged = Structure.Structure("merged")
+
+    modelIndex = 0
+    for struct in structures:
+      for model in struct:
+        model.id = modelIndex
+        merged.add(model)
+        modelIndex += 1
+
+    io = MMCIFIO()
+    io.set_structure(merged)
+    io.save(oFile)
+
+    return oFile
+
   def buildPDBhetatmFile(self, suffix=''):
     protName = self.getProteinName()
-    atmFile = self.getProteinFile()
-    atmExt = os.path.splitext(atmFile)[1]
+    protFile = self.getProteinFile()
+    ext = os.path.splitext(protFile)[1]
     outDir = self.getSetDir()
-    outFile = os.path.join(outDir, protName + '{}_out{}'.format(suffix, atmExt))
+    outFile = os.path.join(outDir, protName + f'{suffix}_out{ext}')
 
     with open(outFile, 'w') as f:
-      f.write(getRawPDBStr(atmFile, ter=False))
-      f.write(self.getPocketsPDBStr())
+      if ext in ('.pdb', '.pdbqt'):
+          f.write(getRawPDBStr(protFile, ter=False))
+          f.write(self.getPocketsPDBStr())
+      else:
+          cifDic = MMCIF2Dict(protFile)
+          cifDic = filterCifCols(cifDic, CIF_DEF_COLS)
+          f.write(writeCifBlocks(cifDic))
+          for pocket in self:
+              f.write(getRawPDBStr(pocket.getFileName(), ter=False))
 
     self.setProteinHetatmFile(outFile)
     return outFile
@@ -1569,7 +1630,6 @@ class SetOfStructROIs(data.EMSet):
     pmlFile = outHETMFile.replace('_out{}'.format(outExt), '.pml')
 
     # Creates the pml for pymol visualization
-    idList = [pock.getObjId() for pock in self]
     with open(pmlFile, 'w') as f:
       if bBox:
         toWrite = FUNCTION_BOUNDING_BOX
@@ -1578,9 +1638,9 @@ class SetOfStructROIs(data.EMSet):
           radius = [(minMax[1] - minMax[0]) * bBox for minMax in minMaxCoords]
           toWrite += PML_BBOX_STR_EACH.format([0, 1, 0], pocket.calculateMassCenter(), radius,
                                               'BoundingBox_' + str(pocket.getObjId()))
-        f.write(PML_BBOX_STR_POCK.format(outHETMFile, outHETMFile, idList, toWrite))
+        f.write(PML_BBOX_STR_POCK.format(outHETMFile, toWrite))
       else:
-        f.write(PML_STR.format(outHETMFile, idList))
+        f.write(PML_STR.format(outHETMFile))
 
     return pmlFile
 
@@ -1611,11 +1671,12 @@ class SetOfStructROIs(data.EMSet):
 
   def createTCL(self):
     outHETMFile = os.path.abspath(self.getProteinHetatmFile())
-    pqrFile = outHETMFile.replace('_out.pdb', '.pqr')
-    tclFile = outHETMFile.replace('_out.pdb', '.tcl')
+    pqrFile = outHETMFile.replace('_out.cif', '.pqr')
+    tclFile = outHETMFile.replace('_out.cif', '.tcl')
     with open(pqrFile, 'w') as f:
       for pocket in self:
-        pqrPocket = getRawPDBStr(pocket.getFileName(), ter=False).strip()
+        pqrF = pocket.getFileName().replace('.cif', '.pqr')
+        pqrPocket = getRawPDBStr(pqrF, ter=False).strip()
         f.write(pqrPocket + '\n')
       f.write('TER\nEND')
     tclStr = TCL_STR % (outHETMFile, pqrFile)

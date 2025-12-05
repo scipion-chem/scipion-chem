@@ -85,7 +85,7 @@ class TestScoreDocking(TestDefineStructROIs):
 		cls._runImportSmallMols()
 
 		cls._runPrepareLigandsOBabel()
-		cls._runPrepareReceptorADT()
+		cls._runPrepareReceptor()
 		cls._waitOutput(cls.protOBabel, 'outputSmallMolecules')
 		cls._waitOutput(cls.protPrepareReceptor, 'outputStructure')
 
@@ -116,19 +116,14 @@ class TestScoreDocking(TestDefineStructROIs):
 		cls.proj.launchProtocol(cls.protOBabel)
 
 	@classmethod
-	def _runPrepareReceptorADT(cls):
-		try:
-			from autodock.protocols import ProtChemADTPrepareReceptor
+	def _runPrepareReceptor(cls):
 			cls.protPrepareReceptor = cls.newProtocol(
-				ProtChemADTPrepareReceptor,
+				ProtChemPrepareReceptor,
 				inputAtomStruct=cls.protImportPDB.outputPdb,
 				HETATM=True, rchains=True,
-				chain_name=prepRec,
-				repair=3)
+				chain_name=prepRec)
 
 			cls.launchProtocol(cls.protPrepareReceptor)
-		except:
-			print('Autodock plugin is necesssary to run this test')
 
 	@classmethod
 	def _runDefStructROIs(cls, defStr):
@@ -147,7 +142,7 @@ class TestScoreDocking(TestDefineStructROIs):
 			protVina = self.newProtocol(
 				prot,
 				fromReceptor=0,
-				radius=24, nRuns=10,
+				radius=24, nRuns=3,
 				numberOfThreads=4)
 
 			protVina.inputAtomStruct.set(self.protPrepareReceptor)
@@ -174,7 +169,7 @@ class TestScoreDocking(TestDefineStructROIs):
 			protLeDock = self.newProtocol(
 				prot,
 				wholeProt=True,
-				radius=24, nRuns=10,
+				radius=24, nRuns=3,
 				numberOfThreads=4)
 
 			protLeDock.inputAtomStruct.set(self.protPrepareReceptor)
@@ -254,6 +249,30 @@ class TestScoreDocking(TestDefineStructROIs):
 			assertHandle(self.assertIsNotNone, getattr(pScore, 'outputSmallMolecules', None), cwd=pScore.getWorkingDir())
 		else:
 			print('No docking plugins found installed. Try installing AutoDock or LePhar')
+
+
+class TestSCORCH2(TestScoreDocking):
+		def _runSCORCH2(self, dockProt):
+				protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
+				protSCORCH2.useFeatures.set('False')
+
+				protSCORCH2.inputPDBligandFiles.set(dockProt)
+				protSCORCH2.inputPDBligandFiles.setExtended('outputSmallMolecules')
+
+				self.proj.launchProtocol(protSCORCH2, wait=True)
+				return protSCORCH2
+
+		def test(self):
+			protPockets = self._runDefStructROIs(defRoiStr)
+			self._waitOutput(protPockets, 'outputStructROIs', sleepTime=5)
+
+			inputDockProts = self._runDockings(protPockets)
+			if len(inputDockProts) >= 1:
+				for protDock in inputDockProts:
+					pScore = self._runSCORCH2(protDock)
+					assertHandle(self.assertIsNotNone, getattr(pScore, 'outputSmallMolecules', None), cwd=pScore.getWorkingDir())
+			else:
+				print('No docking plugins found installed. Try installing AutoDock or LePhar')
 
 
 class TestConsensusDocking(TestScoreDocking):
@@ -407,7 +426,8 @@ class TestMapLigandContacts(TestExtractLigand):
 	@classmethod
 	def _runDefineContacts(cls, inputProt):
 		protDefContacts = cls.newProtocol(
-			ProtDefineContactStructROIs
+			ProtDefineContactStructROIs,
+			selectionList='Molecule :: 5ni1_HEM'
 		)
 
 		protDefContacts.inputSmallMols.set(inputProt)
