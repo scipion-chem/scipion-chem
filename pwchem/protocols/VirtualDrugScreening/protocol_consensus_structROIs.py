@@ -139,6 +139,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
+            newPock.setVolume(newPock.getPocketVolume())
             outPockets.append(newPock)
         if outPockets.getSize() > 0:
             outPockets.buildPDBhetatmFile(suffix='_All')
