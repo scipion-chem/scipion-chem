@@ -148,7 +148,6 @@ class Plugin(pwem.Plugin):
             .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED') \
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 
-        @classmethod
     @classmethod
     def addMGLToolsPackage(cls, env, default=True):
         # Instantiating install helper
