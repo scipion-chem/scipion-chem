@@ -369,6 +369,8 @@ class SmallMolecule(data.EMObject):
 
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))  # to be used when each mol has diff receptor
 
+
+
   def __str__(self):
     s = '{} ({} molecule)'.format(self.getClassName(), self.getUniqueName())
     return s
@@ -475,6 +477,8 @@ class SmallMolecule(data.EMObject):
 
   def setMolClass(self, value):
     self._type.set(value)
+
+
 
   def getUniqueName(self, grid=True, conf=True, pose=True, dock=True):
     name = self.getMolName()
@@ -599,6 +603,7 @@ class SetOfSmallMolecules(data.EMSet):
     self.proteinFile = pwobj.String(kwargs.get('proteinFile', None))
     self._docked = pwobj.Boolean(False)
 
+
   def __str__(self):
     s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getMolClass())
     return s
@@ -653,6 +658,7 @@ class SetOfSmallMolecules(data.EMSet):
 
   def setDocked(self, value=True):
     self._docked.set(value)
+
 
   def getUniqueMolNames(self):
     names = []
@@ -1210,8 +1216,8 @@ class StructROI(data.EMFile):
   def getConvexVolume(self):
     '''Calculate the convex volume of the points forming the pocket'''
     coords = np.array(self.getPointsCoords())
-    cHull = spatial.ConvexHull(coords)
-    return cHull.volume
+    vol = spatial.ConvexHull(coords).volume if len(coords) > 3 else 0
+    return vol
 
   def getSurfaceConvexVolume(self):
     '''Calculate the convex volume of the protein contact atoms'''
@@ -1251,16 +1257,29 @@ class StructROI(data.EMFile):
     inFile = self.getProteinFile()
     parser = PDBParser if inFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
     kwargs = {"PERMISSIVE": True} if inFile.endswith(('.pdb', '.pdbqt')) else {}
-    structModel = parser(**kwargs).get_structure(getBaseName(inFile), inFile)
-    for atom in structModel.get_atoms():
-      coords.append(atom.get_coord().tolist())
+    try:
+        structModel = parser(**kwargs).get_structure(getBaseName(inFile), inFile)
+        for atom in structModel.get_atoms():
+          coords.append(atom.get_coord().tolist())
+    except:
+        try:
+            cifDic = MMCIF2Dict(inFile)
+            xs = cifDic.get('_atom_site.Cartn_x', [])
+            ys = cifDic.get('_atom_site.Cartn_y', [])
+            zs = cifDic.get('_atom_site.Cartn_z', [])
+            coords = [[x, y, z] for x, y, z in zip(xs, ys, zs)]
+
+        except:
+            print(f'The input file {inFile} could not be parsed with bioPython')
     return coords
 
   def getProteinAtoms(self):
+    '''Return the protein atoms as a dictionary with the values:
+    '''
     atoms = []
     inFile = self.getProteinFile()
     parser = PDBParser if inFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
-    structModel = parser().get_structure(getBaseName(inFile), inFile)
+    structModel = parser(QUIET=True).get_structure(getBaseName(inFile), inFile)
     for atom in structModel.get_atoms():
       atoms.append(atom)
 
@@ -1291,11 +1310,6 @@ class StructROI(data.EMFile):
     ids = natural_sort(list(ids))
     return ids
 
-  def getAtomsResidues(self, atoms):
-    res = set([])
-    for atom in atoms:
-      res.add(atom.get)
-
   def getPointsCoords(self):
     coords = []
     inFile = self.getFileName()
@@ -1312,12 +1326,6 @@ class StructROI(data.EMFile):
         coords.append((float(x), float(y), float(z)))
 
     return coords
-
-  def getResiduesFromAtoms(self, atoms):
-    res = []
-    for atom in atoms:
-      res.append(atom.get_parent())
-    return resf
 
   def getMostCentralResidues(self, n=2):
     cMass = self.calculateMassCenter()
@@ -1595,24 +1603,6 @@ class SetOfStructROIs(data.EMSet):
 
     return oFile
 
-  def filterCifCols(self, cifFile, cols):
-    cifDict = MMCIF2Dict(cifFile)
-    filtered = {col: cifDict[col] for col in cols if col in cifDict}
-
-    cifLines = self.writeCifBlocks(filtered)
-    return cifLines
-
-  def writeCifBlocks(self, data):
-    lines = ["data_example", "loop_"]
-    for key in data:
-      lines.append(key)
-    # assume all columns have the same length
-    nRows = len(next(iter(data.values())))
-    for i in range(nRows):
-      row = [data[key][i] for key in data]
-      lines.append("\t".join(row))
-    return "\n".join(lines) + '\n'
-
   def buildPDBhetatmFile(self, suffix=''):
     protName = self.getProteinName()
     protFile = self.getProteinFile()
@@ -1625,8 +1615,9 @@ class SetOfStructROIs(data.EMSet):
           f.write(getRawPDBStr(protFile, ter=False))
           f.write(self.getPocketsPDBStr())
       else:
-          f.write(self.filterCifCols(protFile, CIF_DEF_COLS))
-          # f.write(getRawPDBStr(protFile, ter=False))
+          cifDic = MMCIF2Dict(protFile)
+          cifDic = filterCifCols(cifDic, CIF_DEF_COLS)
+          f.write(writeCifBlocks(cifDic))
           for pocket in self:
               f.write(getRawPDBStr(pocket.getFileName(), ter=False))
 

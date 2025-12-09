@@ -61,6 +61,7 @@ class Plugin(pwem.Plugin):
         cls.addMDTrajPackage(env)
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
+        cls.addSCORCHenv(env)
         cls.addoddtPackage(env)
 
     @classmethod
@@ -73,13 +74,13 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+        cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
         cls._defineEmVar(ODDT_DIC['home'], cls.getEnvName(ODDT_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
-        cls._defineVar('ODDT_ENV_ACTIVATION', cls.getEnvActivationCommand(ODDT_DIC))
         cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
-        cls._defineVar('OPENBABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
+        cls._defineVar('OPENABEL_ENV_ACTIVATION', cls.getEnvActivationCommand(OPENBABEL_DIC))
         cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
                                      description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
                                                              'and IO overuse')
@@ -124,8 +125,8 @@ class Plugin(pwem.Plugin):
         installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
                              f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
             .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
+            .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
-
 
     @classmethod
     def addoddtPackage(cls, env, default=True):
@@ -139,13 +140,15 @@ class Plugin(pwem.Plugin):
         # Installing package
         oddtEnv = cls.getEnvName(ODDT_DIC)
         installer.addCommand(f'conda create -c conda-forge --name {oddtEnv} '
-                             f'{ODDT_DIC["name"]}={ODDT_DIC["version"]} python=3.10 scikit-learn=1.1.3 numpy scipy pandas rdkit -y', 'ODDT_ENV_CREATED') \
-            .addCommand(f'{cls.getEnvActivationCommand(ODDT_DIC)} && conda install conda-forge::scikit-learn-extra -y',
-                        'SKLEARN_INSTALLED') \
+                             f'{ODDT_DIC["name"]}={ODDT_DIC["version"]} python=3.10 scikit-learn=1.1.3 numpy scipy pandas rdkit -y',
+                             'ODDT_ENV_CREATED') \
+            .addCommand(
+            f'{cls.getEnvActivationCommand(ODDT_DIC)} && conda install conda-forge::scikit-learn-extra -y',
+            'SKLEARN_INSTALLED') \
             .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED') \
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 
-
+        @classmethod
     @classmethod
     def addMGLToolsPackage(cls, env, default=True):
         # Instantiating install helper
@@ -181,12 +184,12 @@ class Plugin(pwem.Plugin):
         # Generating installation commands
         obEnvName = cls.getEnvName(OPENBABEL_DIC)
         openbabelInstaller.addCommand(f'conda create -y -c conda-forge --name {obEnvName} python=3.11 '
-                                                                    f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
+                                      f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
             .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
-                                    f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
-                                    'BITBIRCH_INSTALLED') \
+                        f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
+                        'BITBIRCH_INSTALLED')\
             .addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
 
         # # Instantiating shape it install helper
@@ -230,8 +233,7 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addMDTrajPackage(cls, env, default=True):
         # Instantiating install helper
-        installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']),
-                                                            packageVersion=MDTRAJ_DIC['version'])
+        installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
         installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
             .addPackage(env, dependencies=['conda'], default=default)
@@ -257,6 +259,52 @@ class Plugin(pwem.Plugin):
         installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
             addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
             .addPackage(env, dependencies=['conda', 'pip'], default=default)
+
+    @classmethod
+    def addSCORCHenv(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(SCORCH2_DIC['name'],
+                                  packageHome=cls.getVar(SCORCH2_DIC['home']),
+                                  packageVersion=SCORCH2_DIC['version'])
+
+        # Create the environment with mamba/conda
+        scorchEnvName = cls.getEnvName(SCORCH2_DIC)
+        installer.addCommand(
+            f"conda create -n {scorchEnvName} "
+            "python=3.10 numpy pandas scipy matplotlib-base seaborn scikit-learn tqdm "
+            "optuna dask xgboost rdkit openbabel sqlalchemy joblib pycairo rlpycairo "
+            "fonttools contourpy pyparsing python-dateutil pytz packaging typing-extensions "
+            "freetype-py reportlab shap pip -c conda-forge -y",
+            'SCORCH2_ENV_CREATED'
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && mkdir -p scorchModels",
+            'SCORCH_MODELS_FOLDER_CREATED'
+        )
+
+        #download and extract models from Zenodo
+        modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "cd scorchModels && "
+            f"wget -O SCORCH2_models.xz {modelUrl} && "
+            "xz -d SCORCH2_models.xz && "
+            "tar -xf SCORCH2_models && "
+            "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
+            "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
+            "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
+            'SCORCH_MODELS_DOWNLOADED'
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "git clone https://github.com/LinCompbio/SCORCH2.git",
+            'SCORCH2_REPO_CLONED'
+        )
+
+        installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
+
 
     ##################### RUN CALLS ######################
     @classmethod

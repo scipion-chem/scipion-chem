@@ -395,6 +395,47 @@ def splitPDBLine(line, rosetta=False):
   else:
     return None
 
+def addCifCols(cifDict, col, values, position=-1, copyValues=False):
+    '''Add a column to the atom lines of a cifDic.
+    The column is added in the desired position (-1 for last).
+    Returns the cifDic with the filtered columns
+    '''
+    nDic, copied = {}, False
+    for i, (key, vals) in enumerate(cifDict.items()):
+      if copyValues and not copied:
+        values = cifDict[values]
+        copied = True
+      elif not isinstance(values, list):
+        values = [str(values) for _ in range(len(vals))]
+      if i == position:
+        nDic[col] = list(map(str, values))
+      nDic[key] = vals
+
+    if position == -1:
+      nDic[col] = list(map(str, values))
+
+    return nDic
+
+def filterCifCols(cifDict, cols):
+    '''Filters the columns of a cifDic to keep only "cols"
+    Returns the cifDic with the filtered columns
+    '''
+    filtDic = {col: cifDict[col] for col in cols if col in cifDict}
+    return filtDic
+
+def writeCifBlocks(cifDic):
+    '''From a cifDic, generates the string of the cif file
+    '''
+    lines = ["data_example", "loop_"]
+    for key in cifDic:
+      lines.append(key)
+    # assume all columns have the same length
+    nRows = len(next(iter(cifDic.values())))
+    for i in range(nRows):
+      row = [cifDic[key][i] for key in cifDic]
+      lines.append("\t".join(row))
+    return "\n".join(lines) + '\n'
+
 def splitFile(inFile, b=None, n=None, oDir=None, ext=None, pref=None, remove=True):
   '''Split file into a) n files or b) files of size b (MB)
   '''
