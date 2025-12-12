@@ -130,37 +130,37 @@ class ProtocolScoreDocking(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def getnThreads(self):
-        '''Get the number of threads available for each scoring execution.
-        Takes int account the maxMolSize variable and makes batches of that size maximum'''
-        nScores = len(self.workFlowSteps.get().strip().split('\n'))
-        nThreads = (self.numberOfThreads.get() - 1) // nScores
-        if nThreads < (self.numberOfThreads.get() - 1) / nScores:
-            nThreads += 1
+        nScores = max(1, len([w for w in self.workFlowSteps.get().split('\n') if w.strip()]))
+        threadsDisponibles = max(1, self.numberOfThreads.get() - 1)
+        nThreads = max(1, threadsDisponibles // nScores)
 
-        nThreads = 1 if nThreads == 0 else nThreads
-        
         lenMols = len(self.getAllInputMols())
         maxMols = self.maxMolSize.get()
         if lenMols / nThreads > maxMols:
-            nThreads = lenMols // maxMols + 1
+            nThreads = (lenMols + maxMols - 1) // maxMols
 
         return nThreads
 
     def _insertAllSteps(self):
-        sSteps, wSteps = [], []
         self.createGUISummary()
-        nThreads = self.getnThreads()
-
         cStep = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
-        spStep = self._insertFunctionStep(self.splitMolsStep, nThreads, prerequisites=[cStep])
-        #Performing every score listed in the form
-        for i, wStep in enumerate(self.workFlowSteps.get().strip().split('\n')):
-            if wStep.strip() and not wStep in wSteps:
-                for it in range(nThreads):
-                    sSteps.append(self._insertFunctionStep(self.scoringStep, wStep, i+1, it, prerequisites=[spStep]))
-                    wSteps.append(wStep)
 
-        self._insertFunctionStep('createOutputStep', prerequisites=sSteps)
+        nThreads = self.getnThreads()
+        spStep = self._insertFunctionStep(self.splitMolsStep, nThreads, prerequisites=[cStep])
+
+        sSteps = []
+        wStepsList = [w.strip() for w in self.workFlowSteps.get().split('\n') if w.strip()]
+
+        for iScore, wStep in enumerate(wStepsList):
+            for it in range(nThreads):
+                sSteps.append(
+                    self._insertFunctionStep(
+                        self.scoringStep,
+                        wStep, iScore + 1, it,
+                        prerequisites=[spStep]
+                    )
+                )
+        self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
 
     def convertInputStep(self):
         #Convert ligands
