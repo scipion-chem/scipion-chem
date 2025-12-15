@@ -61,6 +61,7 @@ class Plugin(pwem.Plugin):
         cls.addMDTrajPackage(env)
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
+        cls.addPoseBustersPackage(env)
         cls.addSCORCHenv(env)
 
     @classmethod
@@ -73,6 +74,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+        cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
 
         # Common enviroments
@@ -237,6 +239,21 @@ class Plugin(pwem.Plugin):
         installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
             addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
             .addPackage(env, dependencies=['conda', 'pip'], default=default)
+
+    @classmethod
+    def addPoseBustersPackage(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(POSEB_DIC['name'], packageHome=cls.getVar(POSEB_DIC['home']),
+                                  packageVersion=POSEB_DIC['version'])
+
+        installer.getCondaEnvCommand(POSEB_DIC['name'], binaryVersion=POSEB_DIC['version'], pythonVersion='3.10'). \
+            addCommand(f'{cls.getEnvActivationCommand(POSEB_DIC)} && pip install posebusters', 'POSEBUSTERS_INSTALLED') \
+            .addPackage(env, dependencies=['conda', 'pip'], default=default). \
+            installer.addCommand(
+                f"{cls.getEnvActivationCommand(POSEB_DIC)} && "
+                "git clone https://github.com/maabuu/posebusters.git",
+                'POSEBUSTERS_REPO_CLONED'
+            )
 
     @classmethod
     def addSCORCHenv(cls, env, default=True):
