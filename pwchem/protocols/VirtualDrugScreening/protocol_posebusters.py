@@ -60,7 +60,28 @@ class ProtocolPoseBusters(EMProtocol):
         'Volume overlap (requires protein + crystal ligand)'
     ]
 
+    _scripts = os.path.abspath(os.path.join(POSEB_DIC['home'], 'posebusters/modules'))
+
     # -------------------------- DEFINE param functions ----------------------
+    def _defineDistanceGeom(self, form):
+
+        form.addParam('thrBadB', params.FloatParam, default=0.2, label="Bond length threshold: ",
+                       help='Bonds may be up to x% longer than DG bounds.')
+        form.addParam('thrClash', params.FloatParam, default=0.2, label="Overlap that constitutes a clash: ",
+                      help='If set to 20%, two atoms may be up to 80% of the lower bound apart.')
+        form.addParam('thrBadAngle', params.FloatParam, default=0.2, label="Bond angle threshold: ",
+                      help='Bonds may be up to x% longer than DG bounds.')
+        form.addParam('ignoreH', params.BooleanParam, default=True,
+                        label="Ignore hydrogen: ",
+                        help='Choose whether to ignore H.')
+        form.addParam('sanitize', params.BooleanParam, default=True,
+                      label="Sanitize molecule: ",
+                      help='Choose whether to sanitize molecule before running.')
+        form.addParam('symmetrize', params.BooleanParam, default=True,
+                      label="Symmetrize conjugated terminal groups: ",
+                      help='Will symmetrize the lower and upper bounds of the terminal conjugated bonds.')
+        return form
+
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
@@ -96,6 +117,10 @@ class ProtocolPoseBusters(EMProtocol):
         form.addParam('molCond', params.PointerParam, pointerClass="AtomStruct",
                       condition='tests in [0, 5, 7] and oneFile', allowsNull=True,
                        label='Protein:', help='Choose the conditioning molecule (protein).')
+
+        distGroup = form.addGroup('Distance geometry', condition='tests in [1]')
+        self._defineDistanceGeom(distGroup)
+
         group = form.addGroup('Scoring function')
         group.addParam('fullReport', params.BooleanParam, default=True,
                       label="Output full report: ",
@@ -110,12 +135,10 @@ class ProtocolPoseBusters(EMProtocol):
         if self.tests.get() == 0:
             self._insertFunctionStep(self.allTestsStep)
         else:
-            pass
-            #todo differentiate between tests and run them through the repo classes
+            self._insertFunctionStep(self.indivTestsStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def allTestsStep(self):
-        # get args
         args = ['bust ']
 
         if self.oneFile.get():
@@ -155,6 +178,13 @@ class ProtocolPoseBusters(EMProtocol):
             program="",
             cwd=os.path.abspath(Plugin.getVar(POSEB_DIC['home']))
         )
+
+    def indivTestsStep(self):
+        #todo differentiate between tests and run them through the repo classes
+        if self.tests.get() == 1: #distance geometry
+            script = 'distance_geometry.py'
+            molPred = self.getSpecifiedMol('pred')
+
 
     def createOutputStep(self):
         if (self.outputFormat.get() == 2):
