@@ -35,11 +35,12 @@ import os, glob
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message, createLink
-import pyworkflow.object as pwobj
+from pwchem import Plugin, POSEB_DIC, SCORCH2_DIC
 
 from pwem.protocols import EMProtocol
+from pyworkflow.object import String
 
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import *
 
 
@@ -59,15 +60,11 @@ class ProtocolPoseBusters(EMProtocol):
         'Volume overlap (requires protein + crystal ligand)'
     ]
 
-
-    def __init__(self, **args):
-        super().__init__(**args)
-        self.stepsExecutionMode = params.STEPS_PARALLEL
-
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
+        # todo do i give this option?
         form.addParam('tests', params.EnumParam, choices=self._tests, default=0,
                       label="Select test: ",
                       help=(
@@ -77,6 +74,7 @@ class ProtocolPoseBusters(EMProtocol):
                           "? Some tests require a crystal ligand (True molecule)\n"
                           "? Some tests require a protein structure (Protein)"
                       ))
+
         form.addParam('oneFile', params.BooleanParam, default=True,
                         label="Test on one docked molecule: ",
                         help='Choose whether to run the test on one docked molecule or a set.')
@@ -89,27 +87,35 @@ class ProtocolPoseBusters(EMProtocol):
                         label='Predicted molecule: ', condition='oneFile',
                         help='Choose the predicted molecule (docked ligand).')
         form.addParam('inputMoleculesRefSets', params.PointerParam, condition='oneFile',
-                      pointerClass='SetOfSmallMolecules',
+                      pointerClass='SetOfSmallMolecules', allowsNull=True,
                       label="Input Reference Small Molecules: ",
                       help='Select the reference molecules to be tested against.')
         form.addParam('molTrue', params.StringParam,
                       label='True molecule: ', condition='tests in [0, 1, 4, 6, 7] and oneFile',
                       help='Choose the ground truth molecule (crystal ligand).')
         form.addParam('molCond', params.PointerParam, pointerClass="AtomStruct",
-                      condition='tests in [0, 5, 7] and oneFile',
+                      condition='tests in [0, 5, 7] and oneFile', allowsNull=True,
                        label='Protein:', help='Choose the conditioning molecule (protein).')
+        group = form.addGroup('Scoring function')
+        group.addParam('fullReport', params.BooleanParam, default=True,
+                      label="Output full report: ",
+                      help='Choose whether to output full report or not.')
+        group.addParam('outputFormat', params.EnumParam, choices=['short', 'long', 'csv'], default=2,
+                       label="Output format: ",
+                       help='Choose whether to output full report or not.')
 
-        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         if self.tests.get() == 0:
             self._insertFunctionStep(self.allTestsStep)
-        #self._insertFunctionStep(self.createOutputStep)
+        else:
+            pass
+            #todo differentiate between tests and run them through the repo classes
+        self._insertFunctionStep(self.createOutputStep)
 
-    def allTestsStep(self): #todo call pypi to run all tests and output in txt file
+    def allTestsStep(self):
         # get args
-
         args = ['bust ']
 
         if self.oneFile.get():
@@ -128,20 +134,46 @@ class ProtocolPoseBusters(EMProtocol):
 
         else:
             for dockedMol in self.inputMoleculesSets.get():
-                #todo mirar este caso
                 args.append(f'{dockedMol.getPoseFile()} ')
 
-        print(args)
+        outputFormat = self.getEnumText('outputFormat')
+        args.append(f'--outfmt {outputFormat}')
 
+        if (self.fullReport.get()):
+            args.append('--full-report')
+
+        if (self.outputFormat.get() == 2):
+            resultsFile = self._getPath('results.csv')
+        else:
+            resultsFile = self._getPath('results.txt')
+        args.append(f'--output {os.path.abspath(resultsFile)}')
+
+        Plugin.runCondaCommand(
+            self,
+            args=" ".join(args),
+            condaDic=SCORCH2_DIC,
+            program="",
+            cwd=os.path.abspath(Plugin.getVar(POSEB_DIC['home']))
+        )
 
     def createOutputStep(self):
-        outDir = self.getOutDir()
-        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
-        mol = self.getSpecifiedMol()
+        if (self.outputFormat.get() == 2):
+            resultsFile = self._getPath('results.csv')
+        else:
+            resultsFile = self._getPath('results.txt')
 
-        outFile = self.getOutMol2(outDir)
-        mol.setFileName(outFile)
-        newMols.append(mol)
+        newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
+
+        predPose = self.getSpecifiedMol('pred').getPoseFile()
+
+        for mol in self.inputMoleculesSets.get():
+            mol.PoseBusters_file = String()
+            if self.oneFile.get():
+                if mol.getPoseFile() == predPose:
+                    mol.setAttributeValue('PoseBusters_file', resultsFile)
+            else:
+                mol.setAttributeValue('PoseBusters_file', resultsFile)
+            newMols.append(mol)
 
         self._defineOutputs(outputSmallMolecules=newMols)
 
@@ -190,17 +222,3 @@ class ProtocolPoseBusters(EMProtocol):
             return None
         else:
             return myMol
-
-    def getOutDir(self):
-        for d in os.listdir(self._getExtraPath()):
-            d = self._getExtraPath(d)
-            if os.path.isdir(d) and d.endswith('.acpype'):
-                return d
-        return None
-
-    def getOutMol2(self, outDir):
-        for d in os.listdir(outDir):
-            d = os.path.join(outDir, d)
-            if d.endswith('.mol2'):
-                return d
-        return None
