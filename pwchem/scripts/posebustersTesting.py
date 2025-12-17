@@ -26,23 +26,8 @@ from rdkit import Chem
 # Utils
 # -------------------------------------------------------------------------
 
-def results_to_text(results):
-    """Convert PoseBusters results to readable text."""
-    lines = []
 
-    for key, value in results.items():
-        lines.append(f"\n=== {key} ===\n")
-
-        if isinstance(value, pd.DataFrame):
-            lines.append(value.to_string())
-        elif isinstance(value, dict):
-            lines.append(pprint.pformat(value, indent=2))
-        else:
-            lines.append(str(value))
-
-    return "\n".join(lines)
-
-def read_params(fname):
+def readParams(fname):
     """Read key=value parameter file."""
     params = {}
     with open(fname) as f:
@@ -61,7 +46,7 @@ def str2bool(val):
     return val.lower() in ('true', '1', 'yes', 'y')
 
 
-def load_molecule(molfile):
+def loadMolecule(molfile):
     """
     Load molecule and perform any required transformations.
     This is the ONLY place where molecules are handled.
@@ -89,20 +74,20 @@ def load_molecule(molfile):
 
     return mol
 
-def write_results(results, output_dir):
+def writeResults(results, outputDir):
     """Write PoseBusters results: summary in TXT, details tables as CSV."""
     import os
     import pandas as pd
     import pprint
 
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(outputDir, exist_ok=True)
 
     # --- summary ---
     summary = results.get('results', {})
-    summary = clean_summary(summary)
+    summary = cleanSummary(summary)
 
-    summary_file = os.path.join(output_dir, 'summary.txt')
-    with open(summary_file, 'w') as f:
+    summaryFile = os.path.join(outputDir, 'summary.txt')
+    with open(summaryFile, 'w') as f:
         f.write(pprint.pformat(summary, indent=2))
 
     # --- details ---
@@ -111,30 +96,30 @@ def write_results(results, output_dir):
         if isinstance(details, dict):
             for key, df in details.items():
                 if isinstance(df, pd.DataFrame):
-                    csv_file = os.path.join(output_dir, f"{key}.csv")
-                    df.to_csv(csv_file, index=False)
+                    csvFile = os.path.join(outputDir, f"{key}.csv")
+                    df.to_csv(csvFile, index=False)
                 else:
-                    with open(summary_file, 'a') as f:
+                    with open(summaryFile, 'a') as f:
                         f.write(f"\n=== {key} ===\n")
                         f.write(pprint.pformat(df, indent=2))
 
         elif isinstance(details, pd.DataFrame):
-            csv_file = os.path.join(output_dir, 'details.csv')
-            details.to_csv(csv_file, index=False)
+            csvFile = os.path.join(outputDir, 'details.csv')
+            details.to_csv(csvFile, index=False)
         else:
-            with open(summary_file, 'a') as f:
+            with open(summaryFile, 'a') as f:
                 f.write("\n=== details ===\n")
                 f.write(pprint.pformat(details, indent=2))
 
-    print(f"PoseBusters results written to folder: {os.path.basename(output_dir)}")
+    print(f"PoseBusters results written to folder: {os.path.basename(outputDir)}")
 
 
-def clean_summary(d):
+def cleanSummary(d):
     """Recursively convert numpy types to native Python types."""
     if isinstance(d, dict):
-        return {k: clean_summary(v) for k, v in d.items()}
+        return {k: cleanSummary(v) for k, v in d.items()}
     elif isinstance(d, list):
-        return [clean_summary(v) for v in d]
+        return [cleanSummary(v) for v in d]
     elif isinstance(d, np.generic):
         return d.item()
     else:
@@ -143,9 +128,9 @@ def clean_summary(d):
 # PoseBusters tests
 # -------------------------------------------------------------------------
 
-def run_distance_geometry(params):
+def ruDdistanceGeometry(params):
     """Run PoseBusters distance geometry test."""
-    mol = load_molecule(params['mol_pred'])
+    mol = loadMolecule(params['mol_pred'])
     from posebusters.modules.distance_geometry import check_geometry
 
     results = check_geometry(
@@ -172,9 +157,9 @@ def run_distance_geometry(params):
 
     return results
 
-def run_energy_ratio(params):
+def runEnergyRatio(params):
     """Run PoseBusters energy ratio test."""
-    mol = load_molecule(params['mol_pred'])
+    mol = loadMolecule(params['mol_pred'])
     from posebusters.modules.energy_ratio import check_energy_ratio
 
     results = check_energy_ratio(
@@ -188,9 +173,9 @@ def run_energy_ratio(params):
     )
     return results
 
-def run_flatness(params):
+def runFlatness(params):
     """Run PoseBusters flatness test."""
-    mol = load_molecule(params['mol_pred'])
+    mol = loadMolecule(params['mol_pred'])
     from posebusters.modules.flatness import check_flatness
 
     results = check_flatness(
@@ -198,16 +183,16 @@ def run_flatness(params):
         threshold_flatness=float(
             params.get('threshold_flatness', 0.1)
         ),
-        check_nonflat=bool(
-            params.get('check_nonflat', False)
+        check_nonflat=str2bool(
+            params.get('check_nonflat', 'False')
         )
     )
     return results
 
-def run_identity(params):
+def runIdentity(params):
     """Run PoseBusters flatness test."""
-    mol = load_molecule(params['mol_pred'])
-    molTrue = load_molecule(params['mol_true'])
+    mol = loadMolecule(params['mol_pred'])
+    molTrue = loadMolecule(params['mol_true'])
     from posebusters.modules.identity import check_identity
 
     results = check_identity(
@@ -216,10 +201,10 @@ def run_identity(params):
     )
     return results
 
-def run_intermol_distance(params):
+def runIntermolDistance(params):
     """Run PoseBusters intermolecular distance test."""
-    mol = load_molecule(params['mol_pred'])
-    molCond = load_molecule(params['mol_cond'])
+    mol = loadMolecule(params['mol_pred'])
+    molCond = loadMolecule(params['mol_cond'])
     from posebusters.modules.intermolecular_distance import check_intermolecular_distance
 
     results = check_intermolecular_distance(
@@ -241,10 +226,10 @@ def run_intermol_distance(params):
     )
     return results
 
-def run_rmsd(params):
+def runRmsd(params):
     """Run PoseBusters intermolecular distance test."""
-    mol = load_molecule(params['mol_pred'])
-    molTrue = load_molecule(params['mol_true'])
+    mol = loadMolecule(params['mol_pred'])
+    molTrue = loadMolecule(params['mol_true'])
     from posebusters.modules.rmsd import check_rmsd
 
     results = check_rmsd(
@@ -253,16 +238,16 @@ def run_rmsd(params):
         rmsd_threshold=float(
             params.get('rmsd_threshold', 2.0)
         ),
-        heavy_only=bool(
-            params.get('heavy_only', True)
+        heavy_only=str2bool(
+            params.get('heavy_only', 'True')
         )
     )
     return results
 
-def run_vol_overlap(params):
+def runVolOverlap(params):
     """Run PoseBusters intermolecular distance test."""
-    mol = load_molecule(params['mol_pred'])
-    molCond = load_molecule(params['mol_cond'])
+    mol = loadMolecule(params['mol_pred'])
+    molCond = loadMolecule(params['mol_cond'])
     from posebusters.modules.volume_overlap import check_volume_overlap
 
     results = check_volume_overlap(
@@ -284,24 +269,24 @@ def run_vol_overlap(params):
 # Dispatcher
 # -------------------------------------------------------------------------
 
-def run_test(params):
+def runTest(params):
     test = params.get('test')
 
     if test == 'distance_geometry':
-        return run_distance_geometry(params)
+        return ruDdistanceGeometry(params)
 
     elif test == 'check_energy_ratio':
-        return run_energy_ratio(params)
+        return runEnergyRatio(params)
     elif test == 'check_flatness':
-        return run_flatness(params)
+        return runFlatness(params)
     elif test == 'check_identity':
-        return run_identity(params)
+        return runIdentity(params)
     elif test == 'check_intermolecular_distance':
-        return run_intermol_distance(params)
+        return runIntermolDistance(params)
     elif test == 'check_rmsd':
-        return run_rmsd(params)
+        return runRmsd(params)
     elif test == 'check_volume_overlap':
-        return run_vol_overlap(params)
+        return runVolOverlap(params)
 
     else:
         raise NotImplementedError(f"Unknown or unsupported test: {test}")
@@ -316,12 +301,12 @@ def main():
     if not os.path.isfile(paramsFile):
         raise FileNotFoundError(paramsFile)
 
-    params = read_params(paramsFile)
+    params = readParams(paramsFile)
 
-    results = run_test(params)
+    results = runTest(params)
 
     outDir = params['output']
-    write_results(results, outDir)
+    writeResults(results, outDir)
 
 
 

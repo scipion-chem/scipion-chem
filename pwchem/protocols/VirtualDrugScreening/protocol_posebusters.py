@@ -326,7 +326,7 @@ class ProtocolPoseBusters(EMProtocol):
     def indivTestsStep(self):
         paramsFile = self._getExtraPath('testParams.txt')
 
-        Plugin.runScript(self, 'posebusters_tests.py', args=f'{os.path.abspath(paramsFile)}', env=SCORCH2_DIC,
+        Plugin.runScript(self, 'posebustersTesting.py', args=f'{os.path.abspath(paramsFile)}', env=SCORCH2_DIC,
                          cwd=self._getPath())
 
 
