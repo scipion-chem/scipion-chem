@@ -16,8 +16,6 @@ and writes results to a JSON file.
 import numpy as np
 import os
 import sys
-import pprint
-import pandas as pd
 
 from rdkit import Chem
 

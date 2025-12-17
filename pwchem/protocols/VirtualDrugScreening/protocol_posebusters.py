@@ -217,20 +217,26 @@ class ProtocolPoseBusters(EMProtocol):
         if self.oneFile.get():
             #docked molecule
             molPred = self.getSpecifiedMol('pred')
-            args.append(os.path.abspath(molPred.getPoseFile()))
+            inpFile = self.convertFormat(molPred)
+            args.append(os.path.abspath(inpFile))
 
             if self.inputMoleculesRefSets.get() is not None:
                 #true molecule
                 molTrue = self.getSpecifiedMol('true')
-                args.append(f'-l {os.path.abspath(molTrue.getPoseFile())}')
+                inpFile = self.convertFormat(molTrue)
+                args.append(f'-l {os.path.abspath(inpFile)}')
 
             if self.molCond.get() is not None:
                 #protein
-                args.append(f'-p {os.path.abspath(self.molCond.get().getFileName())}')
+                molCond = self.molCond.get()
+                inpFile = self.convertFormat(molCond)
+                args.append(f'-p {os.path.abspath(inpFile)}')
 
         else:
             for dockedMol in self.inputMoleculesSets.get():
-                args.append(f'{dockedMol.getPoseFile()} ')
+                inpFile = self.convertFormat(dockedMol)
+                print(inpFile)
+                args.append(os.path.abspath(inpFile))
 
         outputFormat = self.getEnumText('outputFormat')
         args.append(f'--outfmt {outputFormat}')
@@ -258,13 +264,7 @@ class ProtocolPoseBusters(EMProtocol):
         molPred = self.getSpecifiedMol('pred')
         outputFolder = self._getPath('posebusters_results')
 
-        basename = os.path.basename(molPred.getFileName()).split('.')[0]
-        if molPred.getFileName().endswith('.cif'):
-            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            cifToPdb(molPred.getFileName(), inpFile)
-        else:
-            inpFile = molPred.getFileName()
-
+        inpFile = self.convertFormat(molPred)
 
         with open(paramsFile, 'w') as f:
             f.write(f"output = {os.path.abspath(outputFolder)}\n")
@@ -288,11 +288,11 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"check_nonflat = {self.nonFlat.get()}\n")
             elif self.tests.get() == 4:
                 f.write(f"test = check_identity\n")
-                inpFile = self.getTrueMol()
+                inpFile = self.convertFormat(self.molTrue.get())
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
             elif self.tests.get() == 5:
                 f.write(f"test = check_intermolecular_distance\n")
-                inpFile = self.getProt()
+                inpFile = self.convertFormat(self.molCond.get())
                 f.write(f"mol_cond = {inpFile}\n")
                 if self.radType.get() == 0:
                     radType = 'vdw'
@@ -308,13 +308,13 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"max_distance = {self.maxDist.get()}\n")
             elif self.tests.get() == 6:
                 f.write(f"test = check_rmsd\n")
-                inpFile = self.getTrueMol()
+                inpFile = self.convertFormat(self.molTrue.get())
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
                 f.write(f"rmsd_threshold = {self.thrRMSD.get()}\n")
                 f.write(f"heavy_only = {self.heavyOnly.get()}\n")
             elif self.tests.get() == 7:
                 f.write(f"test = check_volume_overlap\n")
-                inpFile = self.getProt()
+                inpFile = self.convertFormat(self.molCond.get())
                 f.write(f"mol_cond = {inpFile}\n")
                 f.write(f"clash_cutoff = {self.thrClash.get()}\n")
                 f.write(f"vdw_scale = {self.vdwScale.get()}\n")
@@ -342,11 +342,10 @@ class ProtocolPoseBusters(EMProtocol):
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
 
-        predPose = self.getSpecifiedMol('pred').getPoseFile()
-
         for mol in self.inputMoleculesSets.get():
             mol.PoseBusters_file = String()
             if self.oneFile.get():
+                predPose = self.getSpecifiedMol('pred').getPoseFile()
                 if mol.getPoseFile() == predPose:
                     mol.setAttributeValue('PoseBusters_file', resultsFile)
             else:
@@ -382,24 +381,16 @@ class ProtocolPoseBusters(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def getTrueMol(self):
-        molTrue = self.getSpecifiedMol('true')
-        basename = os.path.basename(molTrue.getFileName()).split('.')[0]
-        if molTrue.getFileName().endswith('.cif'):
+    def convertFormat(self, molPred):
+        basename = os.path.basename(molPred.getPoseFile()).split('.')[0]
+        if molPred.getPoseFile().endswith('.cif'):
             inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            cifToPdb(molTrue.getFileName(), inpFile)
-        else:
-            inpFile = molTrue.getFileName()
-        return inpFile
-
-    def getProt(self):
-        molCond = self.molCond.get()
-        basename = os.path.basename(molCond.getFileName()).split('.')[0]
-        if molCond.getFileName().endswith('.cif'):
+            cifToPdb(molPred.getPoseFile(), inpFile)
+        elif (molPred.getPoseFile().endswith('.pdbqt')):
             inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            cifToPdb(molCond.getFileName(), inpFile)
+            pdbqt2other(self, molPred.getPoseFile(), inpFile)
         else:
-            inpFile = molCond.getFileName()
+            inpFile = molPred.getPoseFile()
         return inpFile
 
     def getSpecifiedMol(self, string):
