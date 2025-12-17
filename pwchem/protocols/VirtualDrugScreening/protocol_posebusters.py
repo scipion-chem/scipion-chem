@@ -42,11 +42,14 @@ from pyworkflow.object import String
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import *
+from pwem.convert import cifToPdb
 
 
 class ProtocolPoseBusters(EMProtocol):
     """
-    Performs plausibility checks for generated molecule poses. Info about each test: https://posebusters.readthedocs.io/en/latest/api.html
+    Performs plausibility checks for generated molecule poses.
+    #todo poner definiciones de tests
+    More info about each test: https://posebusters.readthedocs.io/en/latest/api.html
     """
     _label = 'PoseBusters docking tests'
     _tests = [
@@ -82,10 +85,62 @@ class ProtocolPoseBusters(EMProtocol):
                       help='Will symmetrize the lower and upper bounds of the terminal conjugated bonds.')
         return form
 
+    def _defineEnergyRatio(self, form):
+
+        form.addParam('thrEnergyRatio', params.FloatParam, default=0.7, label="Energy ratio threshold: ",
+                       help='Limit above which the energy ratio is deemed to high.')
+        form.addParam('ensNumConf', params.FloatParam, default=100, label="Conformations: ",
+                      help='Number of conformations to generate for the ensemble over which to average.')
+        return form
+
+    def _defineFlatness(self, form):
+
+        form.addParam('thrFlatness', params.FloatParam, default=0.1, label="Flatness threshold: ",
+                       help='Maximum distance from shared plane used as cutoff.')
+        form.addParam('nonFlat', params.BooleanParam, default=False,
+                        label="Check non-flat: ",
+                        help='Whether to check the ring non-flatness instead of flatness. Turns (flatness <= threshold_flatness) to (flatness >= threshold_flatness).')
+        return form
+
+    def _defineIntermolDistance(self, form):
+
+        form.addParam('radType', params.EnumParam, default=0, choices=['van der Waals', 'covalent'],
+                      label="Type of atomic radius: ",
+                       help='Type of atomic radius to use.')
+        form.addParam('radScale', params.FloatParam, default=0.8, label="Radius scale: ",
+                      help='Scaling factor for the atomic radii.')
+        form.addParam('thrClash', params.FloatParam, default=0.05, label="Clash threshold: ",
+                      help='Threshold for how much the atoms may overlap before a clash is reported.')
+        form.addParam('ignoreTypes', params.StringParam, default='hydrogens',
+                      label="Atoms to ignore in protein: ",
+                       help="Which types of atoms to ignore in protein. May include: ['hydrogens', 'protein', 'organic cofactors', 'inorganic cofactors', 'waters']")
+        form.addParam('maxDist', params.FloatParam, default=5.0, label="Maximum distance: ",
+                      help='Maximum distance (in Angstrom) predicted and conditioning molecule may be apart to be considered as valid.')
+        return form
+
+    def _defineRMSD(self, form):
+
+        form.addParam('thrRMSD', params.FloatParam, default=2.0, label="Threshold: ",
+                      help='Threshold in angstrom for reporting whether RMSD is within threshold.')
+        form.addParam('heavyOnly', params.BooleanParam, default=True,
+                      label="Consider only heavy atoms: ",
+                      help='Whether to only consider heavy atoms for RMSD calculation.')
+        return form
+
+    def _defineVolOverlap(self, form):
+
+        form.addParam('thrClash', params.FloatParam, default=0.05, label="Overlap that constitutes a clash: ",
+                      help='Threshold for how much volume overlap is allowed. This is the maximum share of volume of predicted molecule allowed to overlap with protein.')
+        form.addParam('vdwScale', params.FloatParam, default=0.8, label="Scaling factor: ",
+                      help='Scaling factor for the van der Waals radii which define the volume around each atom.')
+        form.addParam('ignoreTypes', params.StringParam, default='hydrogens',
+                      label="Atoms to ignore in protein: ",
+                      help="Which types of atoms to ignore in protein. May include: ['hydrogens', 'protein', 'organic cofactors', 'inorganic cofactors', 'waters']")
+        return form
+
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        # todo do i give this option?
         form.addParam('tests', params.EnumParam, choices=self._tests, default=0,
                       label="Select test: ",
                       help=(
@@ -107,12 +162,12 @@ class ProtocolPoseBusters(EMProtocol):
         form.addParam('molPred', params.StringParam,
                         label='Predicted molecule: ', condition='oneFile',
                         help='Choose the predicted molecule (docked ligand).')
-        form.addParam('inputMoleculesRefSets', params.PointerParam, condition='oneFile',
+        form.addParam('inputMoleculesRefSets', params.PointerParam, condition='oneFile and tests in [0, 4, 6]',
                       pointerClass='SetOfSmallMolecules', allowsNull=True,
                       label="Input Reference Small Molecules: ",
                       help='Select the reference molecules to be tested against.')
         form.addParam('molTrue', params.StringParam,
-                      label='True molecule: ', condition='tests in [0, 1, 4, 6, 7] and oneFile',
+                      label='True molecule: ', condition='tests in [0, 4, 6] and oneFile',
                       help='Choose the ground truth molecule (crystal ligand).')
         form.addParam('molCond', params.PointerParam, pointerClass="AtomStruct",
                       condition='tests in [0, 5, 7] and oneFile', allowsNull=True,
@@ -120,12 +175,23 @@ class ProtocolPoseBusters(EMProtocol):
 
         distGroup = form.addGroup('Distance geometry', condition='tests in [1]')
         self._defineDistanceGeom(distGroup)
+        energyRatio = form.addGroup('Energy ratio', condition='tests in [2]')
+        self._defineEnergyRatio(energyRatio)
+        flatness = form.addGroup('Flatness', condition='tests in [3]')
+        self._defineFlatness(flatness)
+        intermolDist = form.addGroup('Intermolecular distance', condition='tests in [5]')
+        self._defineIntermolDistance(intermolDist)
+        rmsd = form.addGroup('RMSD', condition='tests in [6]')
+        self._defineRMSD(rmsd)
+        volOverlap = form.addGroup('Volume overlap', condition='tests in [7]')
+        self._defineVolOverlap(volOverlap)
 
-        group = form.addGroup('Scoring function')
-        group.addParam('fullReport', params.BooleanParam, default=True,
+        group = form.addGroup('Scoring function', condition='tests in [0]')
+        group.addParam('fullReport', params.BooleanParam, default=True, condition='tests in [0]',
                       label="Output full report: ",
                       help='Choose whether to output full report or not.')
         group.addParam('outputFormat', params.EnumParam, choices=['short', 'long', 'csv'], default=2,
+                       condition='tests in [0]',
                        label="Output format: ",
                        help='Choose whether to output full report or not.')
 
@@ -135,6 +201,7 @@ class ProtocolPoseBusters(EMProtocol):
         if self.tests.get() == 0:
             self._insertFunctionStep(self.allTestsStep)
         else:
+            self._insertFunctionStep(self.createParamsFileStep)
             self._insertFunctionStep(self.indivTestsStep)
         self._insertFunctionStep(self.createOutputStep)
 
@@ -179,18 +246,93 @@ class ProtocolPoseBusters(EMProtocol):
             cwd=os.path.abspath(Plugin.getVar(POSEB_DIC['home']))
         )
 
+    def createParamsFileStep(self):
+        """Write test parameters to TXT file."""
+        paramsFile = self._getExtraPath('testParams.txt')
+        molPred = self.getSpecifiedMol('pred')
+        outputFolder = self._getPath('posebusters_results')
+
+        basename = os.path.basename(molPred.getFileName()).split('.')[0]
+        if molPred.getFileName().endswith('.cif'):
+            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            cifToPdb(molPred.getFileName(), inpFile)
+        else:
+            inpFile = molPred.getFileName()
+
+
+        with open(paramsFile, 'w') as f:
+            f.write(f"output = {os.path.abspath(outputFolder)}\n")
+            f.write(f"mol_pred = {os.path.abspath(inpFile)}\n")
+
+            if self.tests.get() == 1:
+                f.write(f"test = distance_geometry\n")
+                f.write(f"threshold_bad_bond_length = {self.thrBadB.get()}\n")
+                f.write(f"threshold_clash = {self.thrClash.get()}\n")
+                f.write(f"threshold_bad_angle = {self.thrBadAngle.get()}\n")
+                f.write(f"ignore_hydrogens = {self.ignoreH.get()}\n")
+                f.write(f"sanitize = {self.sanitize.get()}\n")
+                f.write(f"symmetrize_conjugated_terminal_groups = {self.symmetrize.get()}\n")
+            elif self.tests.get() == 2:
+                f.write(f"test = check_energy_ratio\n")
+                f.write(f"threshold_energy_ratio = {self.thrEnergyRatio.get()}\n")
+                f.write(f"ensemble_number_conformations = {self.ensNumConf.get()}\n")
+            elif self.tests.get() == 3:
+                f.write(f"test = check_flatness\n")
+                f.write(f"threshold_flatness = {self.thrFlatness.get()}\n")
+                f.write(f"check_nonflat = {self.nonFlat.get()}\n")
+            elif self.tests.get() == 4:
+                f.write(f"test = check_identity\n")
+                inpFile = self.getTrueMol()
+                f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
+            elif self.tests.get() == 5:
+                f.write(f"test = check_intermolecular_distance\n")
+                inpFile = self.getProt()
+                f.write(f"mol_cond = {inpFile}\n")
+                if self.radType.get() == 0:
+                    radType = 'vdw'
+                else:
+                    radType = self.getEnumText(self.radType.get())
+
+                f.write(f"radius_type = {radType}\n")
+                f.write(f"radius_scale = {self.radScale.get()}\n")
+                f.write(f"clash_cutoff = {self.thrClash.get()}\n")
+                types = self.ignoreTypes.get().replace(' ', '_').split(',')
+                types = self.ignoreTypes.get().replace('[', '')
+                f.write(f"ignore_types = {types}\n")
+                f.write(f"max_distance = {self.maxDist.get()}\n")
+            elif self.tests.get() == 6:
+                f.write(f"test = check_rmsd\n")
+                inpFile = self.getTrueMol()
+                f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
+                f.write(f"rmsd_threshold = {self.thrRMSD.get()}\n")
+                f.write(f"heavy_only = {self.heavyOnly.get()}\n")
+            elif self.tests.get() == 7:
+                f.write(f"test = check_volume_overlap\n")
+                inpFile = self.getProt()
+                f.write(f"mol_cond = {inpFile}\n")
+                f.write(f"clash_cutoff = {self.thrClash.get()}\n")
+                f.write(f"vdw_scale = {self.vdwScale.get()}\n")
+                types = self.ignoreTypes.get().replace(' ', '_').split(',')
+                types = self.ignoreTypes.get().replace('[', '')
+                f.write(f"ignore_types = {types}\n")
+
+
     def indivTestsStep(self):
-        #todo differentiate between tests and run them through the repo classes
-        if self.tests.get() == 1: #distance geometry
-            script = 'distance_geometry.py'
-            molPred = self.getSpecifiedMol('pred')
+        paramsFile = self._getExtraPath('testParams.txt')
+
+        Plugin.runScript(self, 'posebusters_tests.py', args=f'{os.path.abspath(paramsFile)}', env=SCORCH2_DIC,
+                         cwd=self._getPath())
+
 
 
     def createOutputStep(self):
-        if (self.outputFormat.get() == 2):
-            resultsFile = self._getPath('results.csv')
+        if self.tests.get() == 0:
+            if (self.outputFormat.get() == 2):
+                resultsFile = self._getPath('results.csv')
+            else:
+                resultsFile = self._getPath('results.txt')
         else:
-            resultsFile = self._getPath('results.txt')
+            resultsFile = self._getPath('posebusters_results')
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
 
@@ -234,6 +376,26 @@ class ProtocolPoseBusters(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def getTrueMol(self):
+        molTrue = self.getSpecifiedMol('true')
+        basename = os.path.basename(molTrue.getFileName()).split('.')[0]
+        if molTrue.getFileName().endswith('.cif'):
+            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            cifToPdb(molTrue.getFileName(), inpFile)
+        else:
+            inpFile = molTrue.getFileName()
+        return inpFile
+
+    def getProt(self):
+        molCond = self.molCond.get()
+        basename = os.path.basename(molCond.getFileName()).split('.')[0]
+        if molCond.getFileName().endswith('.cif'):
+            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            cifToPdb(molCond.getFileName(), inpFile)
+        else:
+            inpFile = molCond.getFileName()
+        return inpFile
+
     def getSpecifiedMol(self, string):
         myMol = None
         if string == 'pred':
