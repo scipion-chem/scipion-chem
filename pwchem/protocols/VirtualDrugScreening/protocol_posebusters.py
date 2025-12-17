@@ -48,7 +48,13 @@ from pwem.convert import cifToPdb
 class ProtocolPoseBusters(EMProtocol):
     """
     Performs plausibility checks for generated molecule poses.
-    #todo poner definiciones de tests
+    Distance geometry: Use RDKit distance geometry bounds to check the geometry of a molecule.
+    Energy ratio: Check whether the internal energy of a molecular conformation is too far from its ground state.
+    Flatness: Check whether substructures of molecule are flat.
+    Identity: Check two molecules are identical (docking relevant identity).
+    Intermolecular distance: Check that predicted molecule is not too close and not too far away from conditioning molecule.
+    RMSD: Calculate RMSD and related metrics between predicted molecule and closest ground truth molecule.
+    Volume overlap: Check volume overlap between ligand and protein.
     More info about each test: https://posebusters.readthedocs.io/en/latest/api.html
     """
     _label = 'PoseBusters docking tests'
