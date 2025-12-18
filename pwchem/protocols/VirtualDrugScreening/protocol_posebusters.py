@@ -168,15 +168,15 @@ class ProtocolPoseBusters(EMProtocol):
         form.addParam('molPred', params.StringParam,
                         label='Predicted molecule: ', condition='oneFile',
                         help='Choose the predicted molecule (docked ligand).')
-        form.addParam('inputMoleculesRefSets', params.PointerParam, condition='oneFile and tests in [0, 4, 6]',
+        form.addParam('inputMoleculesRefSets', params.PointerParam, condition='tests in [0, 4, 6]',
                       pointerClass='SetOfSmallMolecules', allowsNull=True,
                       label="Input Reference Small Molecules: ",
                       help='Select the reference molecules to be tested against.')
         form.addParam('molTrue', params.StringParam,
-                      label='True molecule: ', condition='tests in [0, 4, 6] and oneFile',
+                      label='True molecule: ', condition='tests in [0, 4, 6]',
                       help='Choose the ground truth molecule (crystal ligand).')
         form.addParam('molCond', params.PointerParam, pointerClass="AtomStruct",
-                      condition='tests in [0, 5, 7] and oneFile', allowsNull=True,
+                      condition='tests in [0, 5, 7]', allowsNull=True,
                        label='Protein:', help='Choose the conditioning molecule (protein).')
 
         distGroup = form.addGroup('Distance geometry', condition='tests in [1]')
@@ -207,8 +207,10 @@ class ProtocolPoseBusters(EMProtocol):
         if self.tests.get() == 0:
             self._insertFunctionStep(self.allTestsStep)
         else:
-            self._insertFunctionStep(self.createParamsFileStep)
-            self._insertFunctionStep(self.indivTestsStep)
+            if self.oneFile.get():
+                self._insertFunctionStep(self.indivTestsStep)
+            else:
+                self._insertFunctionStep(self.indivTestsAllMolsStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def allTestsStep(self):
@@ -223,19 +225,18 @@ class ProtocolPoseBusters(EMProtocol):
             if self.inputMoleculesRefSets.get() is not None:
                 #true molecule
                 molTrue = self.getSpecifiedMol('true')
-                inpFile = self.convertFormat(molTrue)
+                inpFile = self.convertFormat(molTrue, type='crystal')
                 args.append(f'-l {os.path.abspath(inpFile)}')
 
             if self.molCond.get() is not None:
                 #protein
                 molCond = self.molCond.get()
-                inpFile = self.convertFormat(molCond)
+                inpFile = self.convertFormat(molCond, type='AtomStruct')
                 args.append(f'-p {os.path.abspath(inpFile)}')
 
         else:
             for dockedMol in self.inputMoleculesSets.get():
                 inpFile = self.convertFormat(dockedMol)
-                print(inpFile)
                 args.append(os.path.abspath(inpFile))
 
         outputFormat = self.getEnumText('outputFormat')
@@ -258,11 +259,12 @@ class ProtocolPoseBusters(EMProtocol):
             cwd=os.path.abspath(Plugin.getVar(POSEB_DIC['home']))
         )
 
-    def createParamsFileStep(self):
-        """Write test parameters to TXT file."""
-        paramsFile = self._getExtraPath('testParams.txt')
-        molPred = self.getSpecifiedMol('pred')
-        outputFolder = self._getPath('posebusters_results')
+    def runPoseBustersForMol(self, molPred, molTrue=None, suffix=""):
+        """
+        Ejecuta PoseBusters para UNA molécula concreta
+        """
+        paramsFile = self._getExtraPath(f'testParams_{suffix}.txt')
+        outputFolder = self._getPath(f'posebusters_results/{suffix}')
 
         inpFile = self.convertFormat(molPred)
 
@@ -288,11 +290,12 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"check_nonflat = {self.nonFlat.get()}\n")
             elif self.tests.get() == 4:
                 f.write(f"test = check_identity\n")
-                inpFile = self.convertFormat(self.molTrue.get())
+                #molTrue = self.getSpecifiedMol('true')
+                inpFile = self.convertFormat(molTrue, type='crystal')
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
             elif self.tests.get() == 5:
                 f.write(f"test = check_intermolecular_distance\n")
-                inpFile = self.convertFormat(self.molCond.get())
+                inpFile = self.convertFormat(self.molCond.get(), type='AtomStruct')
                 f.write(f"mol_cond = {inpFile}\n")
                 if self.radType.get() == 0:
                     radType = 'vdw'
@@ -308,13 +311,14 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"max_distance = {self.maxDist.get()}\n")
             elif self.tests.get() == 6:
                 f.write(f"test = check_rmsd\n")
-                inpFile = self.convertFormat(self.molTrue.get())
+                #molTrue = self.getSpecifiedMol('true')
+                inpFile = self.convertFormat(molTrue, type='crystal')
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
                 f.write(f"rmsd_threshold = {self.thrRMSD.get()}\n")
                 f.write(f"heavy_only = {self.heavyOnly.get()}\n")
             elif self.tests.get() == 7:
                 f.write(f"test = check_volume_overlap\n")
-                inpFile = self.convertFormat(self.molCond.get())
+                inpFile = self.convertFormat(self.molCond.get(), type='AtomStruct')
                 f.write(f"mol_cond = {inpFile}\n")
                 f.write(f"clash_cutoff = {self.thrClash.get()}\n")
                 f.write(f"vdw_scale = {self.vdwScale.get()}\n")
@@ -322,13 +326,44 @@ class ProtocolPoseBusters(EMProtocol):
                 types = self.ignoreTypes.get().replace('[', '')
                 f.write(f"ignore_types = {types}\n")
 
+        Plugin.runScript(
+            self,
+            'posebustersTesting.py',
+            args=os.path.abspath(paramsFile),
+            env=SCORCH2_DIC,
+            cwd=self._getPath())
+
 
     def indivTestsStep(self):
-        paramsFile = self._getExtraPath('testParams.txt')
+        molPred = self.getSpecifiedMol('pred')
+        molName = os.path.splitext(os.path.basename(molPred.getPoseFile()))[0]
+        molTrue = None
+        if self.molTrue.get() and self.inputMoleculesRefSets.get():
+            for mol in self.inputMoleculesRefSets.get():
+                if mol.__str__() == self.molTrue.get():
+                    molTrue = mol.clone()
+                    break
+        self.runPoseBustersForMol(
+            molPred,
+            molTrue=molTrue,
+            suffix=f'{molName}'
+        )
 
-        Plugin.runScript(self, 'posebustersTesting.py', args=f'{os.path.abspath(paramsFile)}', env=SCORCH2_DIC,
-                         cwd=self._getPath())
+    def indivTestsAllMolsStep(self):
+        molTrue = None
+        if self.molTrue.get() and self.inputMoleculesRefSets.get():
+            for mol in self.inputMoleculesRefSets.get():
+                if mol.__str__() == self.molTrue.get():
+                    molTrue = mol.clone()
+                    break
 
+        for mol in self.inputMoleculesSets.get():
+            molName = os.path.splitext(os.path.basename(mol.getPoseFile()))[0]
+            self.runPoseBustersForMol(
+                mol,
+                molTrue=molTrue,
+                suffix=f'{molName}'
+            )
 
 
     def createOutputStep(self):
@@ -338,26 +373,30 @@ class ProtocolPoseBusters(EMProtocol):
             else:
                 resultsFile = self._getPath('results.txt')
         else:
-            resultsFile = self._getPath('posebusters_results')
+            resultsFileGeneral = self._getPath('posebusters_results')
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
 
+        predPose = self.getSpecifiedMol('pred')
+        predPoseFile = predPose.getPoseFile() if predPose else None
         for mol in self.inputMoleculesSets.get():
-            mol.PoseBusters_file = String()
+            newMol = mol.clone()
+            molName = os.path.splitext(os.path.basename(newMol.getPoseFile()))[0]
+            if self.tests.get() != 0:
+                resultsFile = os.path.join(resultsFileGeneral, f'{molName}')
+            newMol.PoseBusters_file = String()
             if self.oneFile.get():
-                predPose = self.getSpecifiedMol('pred').getPoseFile()
-                if mol.getPoseFile() == predPose:
-                    mol.setAttributeValue('PoseBusters_file', resultsFile)
+                if newMol.getPoseFile() == predPoseFile:
+                    newMol.setAttributeValue('PoseBusters_file', resultsFile)
             else:
-                mol.setAttributeValue('PoseBusters_file', resultsFile)
-            newMols.append(mol)
+                newMol.setAttributeValue('PoseBusters_file', resultsFile)
+            newMols.append(newMol)
 
         self._defineOutputs(outputSmallMolecules=newMols)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = ["The results have been saved in the extra folder as scorch2.results.tsv.",
-                   "Features and normalized features have been saved in the extra/results folder, along with the aggregated results and target results."]
+        summary = []
         return summary
 
     def _methods(self):
@@ -365,35 +404,40 @@ class ProtocolPoseBusters(EMProtocol):
         return methods
 
     def _validate(self):
-        def _validate(self):
-            errors = []
+        validations = []
+        molSet = self.inputMoleculesSets.get()
+        if not molSet.isDocked():
+            validations += ['{} is not docked yet'.format(molSet)]
 
-            if self.tests.get() in [4, 6, 7] and not self.molTrue.get():
-                errors.append("Selected test requires a crystal ligand (True molecule).")
-
-            if self.tests.get() in [5, 7] and not self.molCond.get():
-                errors.append("Selected test requires a protein structure (Protein).")
-
-            return errors
+        return validations
 
     def _warnings(self):
         warnings = []
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def convertFormat(self, molPred):
-        basename = os.path.basename(molPred.getPoseFile()).split('.')[0]
-        if molPred.getPoseFile().endswith('.cif'):
-            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            cifToPdb(molPred.getPoseFile(), inpFile)
-        elif (molPred.getPoseFile().endswith('.pdbqt')):
-            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
-            pdbqt2other(self, molPred.getPoseFile(), inpFile)
+    def convertFormat(self, molPred, type=''):
+        if 'AtomStruct' in type:
+            basename = os.path.basename(molPred.getFileName()).split('.')[0]
+            file = molPred.getFileName()
+        elif 'crystal' in type:
+            basename = os.path.basename(molPred.getFileName()).split('.')[0]
+            file = molPred.getFileName()
         else:
-            inpFile = molPred.getPoseFile()
+            basename = os.path.basename(molPred.getPoseFile()).split('.')[0]
+            file = molPred.getPoseFile()
+
+        if file.endswith('.cif'):
+            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            cifToPdb(file, inpFile)
+        elif (file.endswith('.pdbqt')):
+            inpFile = os.path.abspath(self._getExtraPath(basename + '.pdb'))
+            pdbqt2other(self, file, inpFile)
+        else:
+            inpFile = file
         return inpFile
 
-    def getSpecifiedMol(self, string):
+    def getSpecifiedMol(self, string, one=False):
         myMol = None
         if string == 'pred':
             for mol in self.inputMoleculesSets.get():

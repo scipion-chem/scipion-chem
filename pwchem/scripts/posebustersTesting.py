@@ -16,7 +16,8 @@ and writes results to a JSON file.
 import numpy as np
 import os
 import sys
-
+import pandas as pd
+import pprint
 from rdkit import Chem
 
 
@@ -72,17 +73,30 @@ def loadMolecule(molfile):
 
     return mol
 
+def toNative(val):
+    """Convert numpy types to native Python types recursively."""
+    if isinstance(val, np.integer):
+        return int(val)
+    elif isinstance(val, np.floating):
+        return float(val)
+    elif isinstance(val, dict):
+        return {k: toNative(v) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [toNative(v) for v in val]
+    elif isinstance(val, tuple):
+        return tuple(toNative(v) for v in val)
+    else:
+        return val
+
 def writeResults(results, outputDir):
     """Write PoseBusters results: summary in TXT, details tables as CSV."""
-    import os
-    import pandas as pd
-    import pprint
 
     os.makedirs(outputDir, exist_ok=True)
 
     # --- summary ---
     summary = results.get('results', {})
     summary = cleanSummary(summary)
+    summary = toNative(summary)
 
     summaryFile = os.path.join(outputDir, 'summary.txt')
     with open(summaryFile, 'w') as f:
@@ -94,6 +108,7 @@ def writeResults(results, outputDir):
         if isinstance(details, dict):
             for key, df in details.items():
                 if isinstance(df, pd.DataFrame):
+                    df = df.applymap(toNative)
                     csvFile = os.path.join(outputDir, f"{key}.csv")
                     df.to_csv(csvFile, index=False)
                 else:
@@ -102,6 +117,7 @@ def writeResults(results, outputDir):
                         f.write(pprint.pformat(df, indent=2))
 
         elif isinstance(details, pd.DataFrame):
+            details = details.applymap(toNative)
             csvFile = os.path.join(outputDir, 'details.csv')
             details.to_csv(csvFile, index=False)
         else:

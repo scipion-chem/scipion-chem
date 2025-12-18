@@ -289,14 +289,25 @@ class TestPoseBusters(TestScoreDocking):
             return cls.protFilter
 
         def _runPB(self, dockProt):
-                protPB = self.newProtocol(ProtocolPoseBusters,
-                                          tests=0,
-                                          oneFile=False,
-                                          inputMoleculesSets=dockProt.outputSmallMolecules,
-                                          )
+            protPB = self.newProtocol(ProtocolPoseBusters,
+                                      tests=0,
+                                      oneFile=False,
+                                      inputMoleculesSets=dockProt.outputSmallMolecules,
+                                      )
 
-                self.proj.launchProtocol(protPB, wait=True)
-                return protPB
+            self.proj.launchProtocol(protPB, wait=True)
+            return protPB
+
+        def _runPBDistGeom(self, dockProt):
+            protPB = self.newProtocol(
+                ProtocolPoseBusters,
+                tests=3,
+                oneFile=False,
+                inputMoleculesSets=dockProt.outputSmallMolecules
+            )
+
+            self.proj.launchProtocol(protPB, wait=True)
+            return protPB
 
         def test(self):
             protPockets = self._runDefStructROIs(defRoiStr)
@@ -305,9 +316,12 @@ class TestPoseBusters(TestScoreDocking):
             inputDockProts = self._runDockings(protPockets)
             if len(inputDockProts) >= 1:
                 for protDock in inputDockProts:
-                    pScore = self._runPB(protDock)
-                    assertHandle(self.assertIsNotNone, getattr(pScore, 'outputSmallMolecules', None),
-                                 cwd=pScore.getWorkingDir())
+                    test = self._runPB(protDock)
+                    assertHandle(self.assertIsNotNone, getattr(test, 'outputSmallMolecules', None),
+                                 cwd=test.getWorkingDir())
+                    test2 = self._runPBDistGeom(protDock)
+                    assertHandle(self.assertIsNotNone, getattr(test2, 'outputSmallMolecules', None),
+                                 cwd=test2.getWorkingDir())
 
             else:
                 print('No docking plugins found installed. Try installing AutoDock or LePhar')
