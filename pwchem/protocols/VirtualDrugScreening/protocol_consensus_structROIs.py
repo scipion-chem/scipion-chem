@@ -48,6 +48,8 @@ from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, 
 from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
 import networkx as nx
+# todo: externalize networkx and luvin packages or install them in scipion3 env in _init__
+# check why dirichelt not running dcoid
 from typing import List, Dict
 from collections import Counter
 
@@ -73,15 +75,15 @@ class ResidueGroup:
         return np.mean(self.coords, axis=0) if len(self.coords) > 0 else None
 
 
-def jaccardSimilarity(group1: ResidueGroup, group2: ResidueGroup) -> float:
+def residuesSimilarity(group1: ResidueGroup, group2: ResidueGroup) -> float:
     """Set similarity based on residue IDs."""
     set1 = set(group1.residueIds)
     set2 = set(group2.residueIds)
 
     intersection = len(set1 & set2)
-    union = len(set1 | set2)
+    smallOne = min(len(set1), len(set2))
 
-    return intersection / union if union > 0 else 0.0
+    return intersection / smallOne
 
 
 def spatialSimilarity(group1: ResidueGroup, group2: ResidueGroup, max_distance: float = 20.0) -> float:
@@ -97,7 +99,7 @@ def combinedSimilarity(group1: ResidueGroup, group2: ResidueGroup, spatialWeight
     Combined similarity metric.
     spatialWeight: 0 = only set similarity, 1 = only spatial similarity
     """
-    jaccard = jaccardSimilarity(group1, group2)
+    jaccard = residuesSimilarity(group1, group2)
     spatial = spatialSimilarity(group1, group2)
 
     return (1 - spatialWeight) * jaccard + spatialWeight * spatial
@@ -236,7 +238,7 @@ def analyzeResults(results: List[Dict], nComms):
 
     if not results:
         s += "\nNo clusters passed the class filter."
-        return
+        return s
 
     # Summary statistics
     avg_classes = np.mean([r['n_classes'] for r in results])
