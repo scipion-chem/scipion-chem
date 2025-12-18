@@ -273,7 +273,7 @@ class ProtocolPoseBusters(EMProtocol):
             f.write(f"mol_pred = {os.path.abspath(inpFile)}\n")
 
             if self.tests.get() == 1:
-                f.write(f"test = distance_geometry\n")
+                f.write("test = distance_geometry\n")
                 f.write(f"threshold_bad_bond_length = {self.thrBadB.get()}\n")
                 f.write(f"threshold_clash = {self.thrClash.get()}\n")
                 f.write(f"threshold_bad_angle = {self.thrBadAngle.get()}\n")
@@ -281,20 +281,19 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"sanitize = {self.sanitize.get()}\n")
                 f.write(f"symmetrize_conjugated_terminal_groups = {self.symmetrize.get()}\n")
             elif self.tests.get() == 2:
-                f.write(f"test = check_energy_ratio\n")
+                f.write("test = check_energy_ratio\n")
                 f.write(f"threshold_energy_ratio = {self.thrEnergyRatio.get()}\n")
                 f.write(f"ensemble_number_conformations = {self.ensNumConf.get()}\n")
             elif self.tests.get() == 3:
-                f.write(f"test = check_flatness\n")
+                f.write("test = check_flatness\n")
                 f.write(f"threshold_flatness = {self.thrFlatness.get()}\n")
                 f.write(f"check_nonflat = {self.nonFlat.get()}\n")
             elif self.tests.get() == 4:
-                f.write(f"test = check_identity\n")
-                #molTrue = self.getSpecifiedMol('true')
+                f.write("test = check_identity\n")
                 inpFile = self.convertFormat(molTrue, type='crystal')
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
             elif self.tests.get() == 5:
-                f.write(f"test = check_intermolecular_distance\n")
+                f.write("test = check_intermolecular_distance\n")
                 inpFile = self.convertFormat(self.molCond.get(), type='AtomStruct')
                 f.write(f"mol_cond = {inpFile}\n")
                 if self.radType.get() == 0:
@@ -310,14 +309,13 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"ignore_types = {types}\n")
                 f.write(f"max_distance = {self.maxDist.get()}\n")
             elif self.tests.get() == 6:
-                f.write(f"test = check_rmsd\n")
-                #molTrue = self.getSpecifiedMol('true')
+                f.write("test = check_rmsd\n")
                 inpFile = self.convertFormat(molTrue, type='crystal')
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
                 f.write(f"rmsd_threshold = {self.thrRMSD.get()}\n")
                 f.write(f"heavy_only = {self.heavyOnly.get()}\n")
             elif self.tests.get() == 7:
-                f.write(f"test = check_volume_overlap\n")
+                f.write("test = check_volume_overlap\n")
                 inpFile = self.convertFormat(self.molCond.get(), type='AtomStruct')
                 f.write(f"mol_cond = {inpFile}\n")
                 f.write(f"clash_cutoff = {self.thrClash.get()}\n")
@@ -417,10 +415,7 @@ class ProtocolPoseBusters(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def convertFormat(self, molPred, type=''):
-        if 'AtomStruct' in type:
-            basename = os.path.basename(molPred.getFileName()).split('.')[0]
-            file = molPred.getFileName()
-        elif 'crystal' in type:
+        if 'AtomStruct' or 'crystal' in type:
             basename = os.path.basename(molPred.getFileName()).split('.')[0]
             file = molPred.getFileName()
         else:
