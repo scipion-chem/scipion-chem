@@ -284,7 +284,9 @@ def getRepresentativeBigger(
     Args:
         tie_breaker: How to handle ties ("random", "first", "centroid")
     """
-    communityGroups = [g for g in communityGroups if g.groupClass == specificClass]
+    if specificClass is not None:
+        communityGroups = [g for g in communityGroups if g.groupClass == specificClass]
+
     if not communityGroups:
         return None, set()
 
@@ -515,14 +517,14 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 groupDic[group] = newPock.clone()
 
         pocketClusters, nComms = self.generatePocketClusters(residueGroups)
-        self.consensusPockets = self.buildStructROIs(pocketClusters, groupDic)
+        self.consensusPockets, pocketClusters = self.buildStructROIs(pocketClusters, groupDic)
         self.buildSummary(pocketClusters, self.consensusPockets, nComms)
 
         if self.outIndv.get() and self.repChoice.get() != INTERSEC:
             self.indepConsensusSets = {}
             for inSetId in range(len(self.inputStructROIsSets)):
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.buildStructROIs(pocketClusters, groupDic, inSetId)
+                self.indepConsensusSets[inSetId], _ = self.buildStructROIs(pocketClusters, groupDic, inSetId)
 
     def createOutputStep(self):
         self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
@@ -622,7 +624,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def buildStructROIs(self, clustersGroups, groupDic, specificClass=None):
-        outPockets = []
+        outPockets, newGroups = [], []
         asFile = self.inputStructROIsSets[0].get().getProteinFile()
         repMethod = self.getEnumText('repChoice').lower()
 
@@ -633,6 +635,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
             if repId is not None:
                 outPocket = groupDic[cluster[repId]]
                 outPockets.append(outPocket)
+                newGroups.append(cluster)
             else:
                 if len(repResidues) > 0:
                     pocketFile = self._getExtraPath(f'pocketFile_{i+1}.cif')
@@ -641,7 +644,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     outPocket = StructROI(pocketFile, asFile)
                     outPocket.calculateContacts()
                     outPockets.append(outPocket)
-        return outPockets
+                    newGroups.append(cluster)
+        return outPockets, newGroups
 
     def getInputChainSequences(self):
         '''Returns a dict: {inpIndex: {chainId: protSeq, ...}, ...}
