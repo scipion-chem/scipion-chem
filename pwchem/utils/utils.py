@@ -881,21 +881,71 @@ class CleanStructureSelect(Select):
 def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseName(structFile)
-  if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
-    struct = PDBParser().get_structure(structName, structFile)
+  ext = os.path.splitext(structFile)[1]
+  if ext in ['.pdb', '.ent', '.pdbqt']:
+      struct = PDBParser().get_structure(structName, structFile)
+      if singleModel is not None:
+          struct = struct[singleModel]
+      io = PDBIO()
+      io.set_structure(struct)
+      io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+
   elif structFile.endswith('.cif'):
-    struct = MMCIFParser().get_structure(structName, structFile)
+      # Detect multiple blocks
+      with open(structFile) as f:
+          block_count = sum(1 for line in f if line.startswith("data_"))
+
+      if block_count > 1:
+          # Call new multi-block handler
+          return cleanMultiBlockCIF(structFile, outFn, waters, hetatm, chainIds, het2keep, het2rem)
+      else:
+          # Single block, normal MMCIFParser
+          struct = MMCIFParser().get_structure(structName, structFile)
+          if singleModel is not None:
+              struct = struct[singleModel]
+          io = MMCIFIO()
+          io.set_structure(struct)
+          io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
   else:
-    print('Unknown format for file ', structFile)
-    exit()
-
-  if singleModel is not None:
-    struct = struct[singleModel]
-
-  io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
-  io.set_structure(struct)
-  io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+      print('Unknown format for file ', structFile)
+      exit()
   return outFn
+
+def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
+    """ Keep all blocks, optionally filter atoms within each block """
+    with open(infile) as f:
+        blocks = []
+        current_block = []
+        for line in f:
+            if line.startswith("data_"):
+                if current_block:
+                    blocks.append(current_block)
+                current_block = [line]
+            else:
+                current_block.append(line)
+        if current_block:
+            blocks.append(current_block)
+
+    processed_blocks = []
+    for block in blocks:
+        new_block = []
+        for line in block:
+            if line.startswith("ATOM"):
+                new_block.append(line)
+            elif line.startswith("HETATM"):
+                if hetatm:
+                    new_block.append(line)
+                elif line[17:20].strip() == "HOH" and waters:
+                    new_block.append(line)
+            else:
+                new_block.append(line)
+        processed_blocks.append(new_block)
+
+    with open(outfile, "w") as out:
+        for block in processed_blocks:
+            out.writelines(block)
+
+    return outfile
 
 def removeStartWithLines(inFile, start):
   '''Remove the lines in a file starting with a certain string'''
