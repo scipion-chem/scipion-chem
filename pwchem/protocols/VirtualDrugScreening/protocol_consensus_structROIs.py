@@ -48,7 +48,6 @@ from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, 
 from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
 import networkx as nx
-# todo: externalize networkx and luvin packages or install them in scipion3 env in _init__
 from typing import List, Dict
 from collections import Counter
 
