@@ -491,8 +491,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        self._insertFunctionStep('consensusStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.consensusStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def consensusStep(self):
         self.doMap = False
@@ -589,8 +589,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
         if os.path.exists(self.getSummaryFile()):
             with open(self.getSummaryFile()) as f:
                 summary += [f.read()]
-        else:
-            print('no summaryyyyy')
 
         return summary
 

@@ -52,6 +52,7 @@ __version__ = version.__version__
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        cls.addNetworkX(env)
         cls.addRDKitPackage(env)
         cls.addOpenbabelPackage(env)
         cls.addMGLToolsPackage(env)
@@ -110,6 +111,17 @@ class Plugin(pwem.Plugin):
         return os.path.join(envBasePath, innerPath) if innerPath else envBasePath
 
 ######################## PACKAGES #########################
+    @classmethod
+    def addNetworkX(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(NETWORKX_DIC['name'], packageHome=cls.getVar(NETWORKX_DIC['home']),
+                                  packageVersion=NETWORKX_DIC['version'])
+
+        # Installing package
+        installer.addCommand(f'conda install -y conda-forge::networkx={NETWORKX_DIC["version"]} '
+                             f'conda-forge::python-louvain=0.16') \
+            .addPackage(env, dependencies=['conda'], default=default)
+
     @classmethod
     def addRDKitPackage(cls, env, default=True):
         # Instantiating install helper
