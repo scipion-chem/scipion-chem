@@ -133,4 +133,4 @@ class ProtChemPrepareReceptor(EMProtocol):
     def getCleanedFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
         ext = os.path.splitext(inFile)[1]
-        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}_clean{ext}'))
+        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}{ext}'))

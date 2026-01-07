@@ -911,38 +911,121 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
       exit()
   return outFn
 
-def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[]):
-    """ Keep all blocks, optionally filter atoms within each block """
-    with open(infile) as f:
-        blocks = []
-        current_block = []
-        for line in f:
-            if line.startswith("data_"):
-                if current_block:
-                    blocks.append(current_block)
-                current_block = [line]
-            else:
-                current_block.append(line)
-        if current_block:
-            blocks.append(current_block)
+def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
+                       chainIds=None, het2keep=None, het2rem=None):
 
-    processed_blocks = []
+    chainIds = [c.upper() for c in chainIds] if chainIds else None
+    het2keep = set(het2keep or [])
+    het2rem = set(het2rem or [])
+
+    with open(infile) as f:
+        lines = f.readlines()
+
+    blocks = []
+    current = []
+    for line in lines:
+        if line.startswith("data_"):
+            if current:
+                blocks.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
+
+    out_blocks = []
+
     for block in blocks:
         new_block = []
-        for line in block:
-            if line.startswith("ATOM"):
-                new_block.append(line)
-            elif line.startswith("HETATM"):
-                if hetatm:
-                    new_block.append(line)
-                elif line[17:20].strip() == "HOH" and waters:
-                    new_block.append(line)
-            else:
-                new_block.append(line)
-        processed_blocks.append(new_block)
+        i = 0
+
+        while i < len(block):
+            line = block[i]
+
+            if (
+                line.startswith("loop_")
+                and i + 1 < len(block)
+                and block[i + 1].startswith("_atom_site.")
+            ):
+                header = ["loop_\n"]
+                cols = []
+
+                j = i + 1
+                while j < len(block) and block[j].startswith("_atom_site."):
+                    cols.append(block[j].strip())
+                    header.append(block[j])
+                    j += 1
+
+                col_idx = {c.replace("_atom_site.", ""): idx
+                           for idx, c in enumerate(cols)}
+
+                kept_atoms = []
+
+                while (
+                    j < len(block)
+                    and not block[j].startswith("loop_")
+                    and not block[j].startswith("#")
+                ):
+                    fields = block[j].split()
+                    if len(fields) < len(cols):
+                        j += 1
+                        continue
+
+                    group = fields[col_idx["group_PDB"]]
+                    resname = fields[col_idx["label_comp_id"]]
+                    chain = fields[col_idx["label_asym_id"]].upper()
+
+                    is_water = resname in ("HOH", "WAT", "H2O")
+                    is_het = (group == "HETATM")
+
+                    keep = True
+
+                    if chainIds and chain not in chainIds:
+                        keep = False
+                    if waters and is_water:
+                        keep = False
+                    if is_het:
+                        if hetatm:
+                            if resname not in het2keep:
+                                keep = False
+                        else:
+                            if resname in het2rem:
+                                keep = False
+
+                    if keep:
+                        kept_atoms.append(block[j])
+
+                    j += 1
+
+                if kept_atoms:
+                    new_block.extend(header)
+                    new_block.extend(kept_atoms)
+                    new_block.append("#\n")
+
+                i = j
+                continue
+
+            if line.startswith("loop_"):
+                new_block.append("loop_\n")
+                i += 1
+                while i < len(block):
+                    new_block.append(block[i])
+                    if block[i].startswith("#"):
+                        break
+                    i += 1
+                i += 1
+                continue
+
+            new_block.append(line)
+            i += 1
+
+        if not new_block[-1].strip() == "#":
+            new_block.append("#\n")
+
+        out_blocks.append(new_block)
 
     with open(outfile, "w") as out:
-        for block in processed_blocks:
+        for block in out_blocks:
             out.writelines(block)
 
     return outfile
