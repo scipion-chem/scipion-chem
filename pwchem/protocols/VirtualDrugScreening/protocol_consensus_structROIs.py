@@ -468,7 +468,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                          'cluster size')
 
         g3 = form.addGroup('Representative')
-        g3.addParam('repChoice', params.EnumParam, default=CENTROID,
+        g3.addParam('repChoice', params.EnumParam, default=INTERSEC,
                     label='Representant choice: ', choices=self.repChoices,
                     help='How to choose the representative ROI from a cluster of overlapping ROIs. \n'
                          'Centroid: chooses the ROI with bigger similarity to the rest in the cluster.\n'
