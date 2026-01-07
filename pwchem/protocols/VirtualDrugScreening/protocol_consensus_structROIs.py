@@ -44,12 +44,11 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName
+from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName, invertDic
 from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
 import networkx as nx
 # todo: externalize networkx and luvin packages or install them in scipion3 env in _init__
-# check why dirichelt not running dcoid
 from typing import List, Dict
 from collections import Counter
 
@@ -412,7 +411,7 @@ LOUV, CONNECT = 0, 1
 
 def mapMsaResidues(alFile):
     '''Return the mapping of the residues resNumber -> AlignPos
-    {seqIdx: {resNum: alignPos}}
+    {seqIdx: {originalPos: alignPos}}
     '''
     alignment = AlignIO.read(alFile, "clustal")
     align2Ori = {}
@@ -500,7 +499,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         if self.checkDifferentInput():
             self.chainsMapDic = self.buildChainsMapDic()
             self.residuesMapDic = self.buildResiduesMapDic()
-            self.resPositionMapDic = self.buildResPositionMapDic()
+            self.resId2PositionDic, self.resPosition2IdDic = self.buildResPositionMapDic()
             self.doMap = True
 
         self.pocketDic = self.buildPocketDic()
@@ -715,8 +714,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         Second level is a mapping where the key is the chainId of that input and the value is the reference chainId.
         Therefore, first item will be just the first input mapped to itself
 
-        :return: {  refChain0: {seqIdx: {resNum: alignPos}, seqIdx2: {resNum: alignPos}, ...}
-                    refChain1: {seqIdx: {resNum: alignPos}, seqIdx2: {resNum: alignPos}, ...},
+        :return: {  refChain0: {seqIdx: {originalPos: alignPos}, seqIdx2: {originalPos: alignPos}, ...}
+                    refChain1: {seqIdx: {originalPos: alignPos}, seqIdx2: {originalPos: alignPos}, ...},
                   }
         '''
         chainGroups = self.getChainGroups()
@@ -730,14 +729,19 @@ class ProtocolConsensusStructROIs(EMProtocol):
         return resMap
 
     def buildResPositionMapDic(self):
-        '''Builds a dictionary that maps the ID of each residue in the inputs to their position index in the sequence
+        '''Builds a dictionary that maps the ID of each residue in the inputs to their position index in the sequence.
         {seqIdx: {chainID: {resId: resPos}}}
+        Also returns the inverse dic:
+        {seqIdx: {chainID: {resPos: resId}}}
         '''
-        dic = {}
+        dic, invDic = {}, {}
         for i, pPointer in enumerate(self.inputStructROIsSets):
             pSet = pPointer.get()
             dic[i] = pSet.getProteinSequencesResIdsDic()
-        return dic
+            invDic[i] = {}
+            for chain in dic[i]:
+                invDic[i][chain] = invertDic(dic[i][chain])
+        return dic, invDic
 
     def performMSA(self, inpChainDic, group, refChain):
         iFile, oFile = self._getTmpPath(f'chains_{refChain}.fa'), \
@@ -978,10 +982,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
         mapResList = []
         for resId in resList:
             chain, res = resId.split('_')
-            resIdx = self.resPositionMapDic[setId][chain][int(res)]
+            resIdx = self.resId2PositionDic[setId][chain][int(res)]
             if chain in self.chainsMapDic[setId]:
                 refChain = self.chainsMapDic[setId][chain]
-                refRes = self.residuesMapDic[refChain][setId][resIdx]
+                refPos = self.residuesMapDic[refChain][setId][resIdx]
+                refRes = self.resPosition2IdDic[setId][refChain][refPos]
             else:
                 refChain, refRes = setId, setId
             mapResList.append(f'{refChain}_{refRes}')
