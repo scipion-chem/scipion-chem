@@ -893,9 +893,9 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
   elif structFile.endswith('.cif'):
       # Detect multiple blocks
       with open(structFile) as f:
-          block_count = sum(1 for line in f if line.startswith("data_"))
+          blockCount = sum(1 for line in f if line.startswith("data_"))
 
-      if block_count > 1:
+      if blockCount > 1:
           # Call new multi-block handler
           return cleanMultiBlockCIF(structFile, outFn, waters, hetatm, chainIds, het2keep, het2rem)
       else:
