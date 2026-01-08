@@ -92,6 +92,7 @@ class ProtChemPrepareReceptor(EMProtocol):
         self._insertFunctionStep(self.createOutputStep)
 
     def preparationStep(self):
+        print('-----CLEAN PDB BRANCH')
         chainModelIds = None
         if self.rchains.get():
             chainJson = json.loads(self.chain_name.get())  # From wizard dictionary
