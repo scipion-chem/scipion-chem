@@ -967,8 +967,8 @@ def keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
     if chainIds and chain not in chainIds:
         return False
 
-    is_water = resname in ("HOH", "WAT", "H2O")
-    if waters and is_water:
+    isWater = resname in ("HOH", "WAT", "H2O")
+    if waters and isWater:
         return False
 
     if group == "HETATM":
