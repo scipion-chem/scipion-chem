@@ -948,8 +948,7 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
         outBlocks.append(newBlock)
 
     with open(outfile, "w") as out:
-        for block in outBlocks:
-            out.writelines(block)
+        out.writelines(line for block in outBlocks for line in block)
 
     return outfile
 
