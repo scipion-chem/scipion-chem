@@ -911,8 +911,7 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
       exit()
   return outFn
 
-def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
-                       chainIds=None, het2keep=None, het2rem=None):
+def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=None, het2keep=None, het2rem=None):
 
     chainIds = [c.upper() for c in chainIds] if chainIds else None
     het2keep = set(het2keep or [])
@@ -986,12 +985,9 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
                         keep = False
                     if is_het:
                         if hetatm:
-                            if resname not in het2keep:
-                                keep = False
+                            keep = resname in het2keep
                         else:
-                            if resname in het2rem:
-                                keep = False
-
+                            keep = resname not in het2rem
                     if keep:
                         kept_atoms.append(block[j])
 
