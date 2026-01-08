@@ -912,7 +912,6 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
   return outFn
 
 def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=None, het2keep=None, het2rem=None):
-
     chainIds = [c.upper() for c in chainIds] if chainIds else None
     het2keep = set(het2keep or [])
     het2rem = set(het2rem or [])
@@ -932,10 +931,10 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=Non
     if current:
         blocks.append(current)
 
-    out_blocks = []
+    outBlocks = []
 
     for block in blocks:
-        new_block = []
+        newBlock = []
         i = 0
 
         while i < len(block):
@@ -955,10 +954,10 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=Non
                     header.append(block[j])
                     j += 1
 
-                col_idx = {c.replace("_atom_site.", ""): idx
+                colIdx = {c.replace("_atom_site.", ""): idx
                            for idx, c in enumerate(cols)}
 
-                kept_atoms = []
+                keptAtoms = []
 
                 while (
                     j < len(block)
@@ -970,58 +969,58 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=Non
                         j += 1
                         continue
 
-                    group = fields[col_idx["group_PDB"]]
-                    resname = fields[col_idx["label_comp_id"]]
-                    chain = fields[col_idx["label_asym_id"]].upper()
+                    group = fields[colIdx["group_PDB"]]
+                    resname = fields[colIdx["label_comp_id"]]
+                    chain = fields[colIdx["label_asym_id"]].upper()
 
-                    is_water = resname in ("HOH", "WAT", "H2O")
-                    is_het = (group == "HETATM")
+                    isWater = resname in ("HOH", "WAT", "H2O")
+                    isHet = (group == "HETATM")
 
                     keep = True
 
                     if chainIds and chain not in chainIds:
                         keep = False
-                    if waters and is_water:
+                    if waters and isWater:
                         keep = False
-                    if is_het:
+                    if isHet:
                         if hetatm:
                             keep = resname in het2keep
                         else:
                             keep = resname not in het2rem
                     if keep:
-                        kept_atoms.append(block[j])
+                        keptAtoms.append(block[j])
 
                     j += 1
 
-                if kept_atoms:
-                    new_block.extend(header)
-                    new_block.extend(kept_atoms)
-                    new_block.append("#\n")
+                if keptAtoms:
+                    newBlock.extend(header)
+                    newBlock.extend(keptAtoms)
+                    newBlock.append("#\n")
 
                 i = j
                 continue
 
             if line.startswith("loop_"):
-                new_block.append("loop_\n")
+                newBlock.append("loop_\n")
                 i += 1
                 while i < len(block):
-                    new_block.append(block[i])
+                    newBlock.append(block[i])
                     if block[i].startswith("#"):
                         break
                     i += 1
                 i += 1
                 continue
 
-            new_block.append(line)
+            newBlock.append(line)
             i += 1
 
-        if not new_block[-1].strip() == "#":
-            new_block.append("#\n")
+        if not newBlock[-1].strip() == "#":
+            newBlock.append("#\n")
 
-        out_blocks.append(new_block)
+        outBlocks.append(newBlock)
 
     with open(outfile, "w") as out:
-        for block in out_blocks:
+        for block in outBlocks:
             out.writelines(block)
 
     return outfile
