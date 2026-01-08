@@ -929,7 +929,7 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
         while i < len(block):
             line = block[i]
 
-            if line.startswith("loop_") and i + 1 < len(block) and block[i + 1].startswith("_atom_site."):
+            if isAtomSiteLoop(block, i):
                 kept, header, i = processAtomSite(
                     block, i, chainIds, waters, hetatm, het2keep, het2rem
                 )
@@ -952,6 +952,13 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
             out.writelines(block)
 
     return outfile
+
+def isAtomSiteLoop(block, i):
+    return (
+        block[i].startswith("loop_")
+        and i + 1 < len(block)
+        and block[i + 1].startswith("_atom_site.")
+    )
 
 def keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
     group = fields[colIdx["group_PDB"]]
