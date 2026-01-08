@@ -911,104 +911,32 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
       exit()
   return outFn
 
-def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=None, het2keep=None, het2rem=None):
+def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
+                       chainIds=None, het2keep=None, het2rem=None):
+
     chainIds = [c.upper() for c in chainIds] if chainIds else None
     het2keep = set(het2keep or [])
     het2rem = set(het2rem or [])
 
     with open(infile) as f:
-        lines = f.readlines()
-
-    blocks = []
-    current = []
-    for line in lines:
-        if line.startswith("data_"):
-            if current:
-                blocks.append(current)
-            current = [line]
-        else:
-            current.append(line)
-    if current:
-        blocks.append(current)
+        blocks = splitCifBlocks(f.readlines())
 
     outBlocks = []
 
     for block in blocks:
-        newBlock = []
-        i = 0
+        newBlock, i = [], 0
 
         while i < len(block):
             line = block[i]
 
-            if (
-                line.startswith("loop_")
-                and i + 1 < len(block)
-                and block[i + 1].startswith("_atom_site.")
-            ):
-                header = ["loop_\n"]
-                cols = []
-
-                j = i + 1
-                while j < len(block) and block[j].startswith("_atom_site."):
-                    cols.append(block[j].strip())
-                    header.append(block[j])
-                    j += 1
-
-                colIdx = {c.replace("_atom_site.", ""): idx
-                           for idx, c in enumerate(cols)}
-
-                keptAtoms = []
-
-                while (
-                    j < len(block)
-                    and not block[j].startswith("loop_")
-                    and not block[j].startswith("#")
-                ):
-                    fields = block[j].split()
-                    if len(fields) < len(cols):
-                        j += 1
-                        continue
-
-                    group = fields[colIdx["group_PDB"]]
-                    resname = fields[colIdx["label_comp_id"]]
-                    chain = fields[colIdx["label_asym_id"]].upper()
-
-                    isWater = resname in ("HOH", "WAT", "H2O")
-                    isHet = (group == "HETATM")
-
-                    keep = True
-
-                    if chainIds and chain not in chainIds:
-                        keep = False
-                    if waters and isWater:
-                        keep = False
-                    if isHet:
-                        if hetatm:
-                            keep = resname in het2keep
-                        else:
-                            keep = resname not in het2rem
-                    if keep:
-                        keptAtoms.append(block[j])
-
-                    j += 1
-
-                if keptAtoms:
+            if line.startswith("loop_") and i + 1 < len(block) and block[i + 1].startswith("_atom_site."):
+                kept, header, i = processAtomSite(
+                    block, i, chainIds, waters, hetatm, het2keep, het2rem
+                )
+                if kept:
                     newBlock.extend(header)
-                    newBlock.extend(keptAtoms)
+                    newBlock.extend(kept)
                     newBlock.append("#\n")
-
-                i = j
-                continue
-
-            if line.startswith("loop_"):
-                newBlock.append("loop_\n")
-                i += 1
-                while i < len(block):
-                    newBlock.append(block[i])
-                    if block[i].startswith("#"):
-                        break
-                    i += 1
-                i += 1
                 continue
 
             newBlock.append(line)
@@ -1024,6 +952,59 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False, chainIds=Non
             out.writelines(block)
 
     return outfile
+
+def keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
+    group = fields[colIdx["group_PDB"]]
+    resname = fields[colIdx["label_comp_id"]]
+    chain = fields[colIdx["label_asym_id"]].upper()
+
+    if chainIds and chain not in chainIds:
+        return False
+
+    is_water = resname in ("HOH", "WAT", "H2O")
+    if waters and is_water:
+        return False
+
+    if group == "HETATM":
+        if hetatm:
+            return resname in het2keep
+        return resname not in het2rem
+
+    return True
+
+def splitCifBlocks(lines):
+    blocks, current = [], []
+    for line in lines:
+        if line.startswith("data_"):
+            if current:
+                blocks.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
+    return blocks
+
+def processAtomSite(block, start, chainIds, waters, hetatm, het2keep, het2rem):
+    header, cols = ["loop_\n"], []
+    i = start + 1
+
+    while i < len(block) and block[i].startswith("_atom_site."):
+        cols.append(block[i].strip().replace("_atom_site.", ""))
+        header.append(block[i])
+        i += 1
+
+    colIdx = {c: idx for idx, c in enumerate(cols)}
+    kept = []
+
+    while i < len(block) and not block[i].startswith(("loop_", "#")):
+        fields = block[i].split()
+        if len(fields) >= len(cols):
+            if keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
+                kept.append(block[i])
+        i += 1
+
+    return kept, header, i
 
 def removeStartWithLines(inFile, start):
   '''Remove the lines in a file starting with a certain string'''
