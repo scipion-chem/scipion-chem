@@ -942,7 +942,7 @@ def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
             newBlock.append(line)
             i += 1
 
-        if not newBlock[-1].strip() == "#":
+        if newBlock[-1].strip() != "#":
             newBlock.append("#\n")
 
         outBlocks.append(newBlock)
