@@ -190,6 +190,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
 
     # --------------------------- UTILS functions -----------------------------------
+    def isPocketInside(self, small, big):
+        resSmall = set(small.getDecodedCResidues())
+        resBig = set(big.getDecodedCResidues())
+        return resSmall.issubset(resBig)
+
     def getInputChainSequences(self):
         '''Returns a dict: {inpIndex: {chainId: protSeq, ...}, ...}
         '''
@@ -402,14 +407,17 @@ class ProtocolConsensusStructROIs(EMProtocol):
                             outPocket = self.getIntersectionPocket(clust, i)
                         representatives.append(outPocket)
                     else:
-                        # Keep only small pockets inside others
-                        bigPocket = max(clust, key=lambda p: p.getSurfaceConvexVolume())
+                        # Keep only pockets that are strictly contained in another one
                         for pock in clust:
-                            if pock is bigPocket:
-                                continue  # not present in the output
-                            overlap = self.calculateResiduesOverlap(pock, bigPocket)
-                            if overlap >= self.overlap.get():
-                                representatives.append(pock)
+                            is_inside = False
+                            for other in clust:
+                                if pock is other:
+                                    continue
+                                if self.isPocketInside(pock, other):
+                                    is_inside = True
+                                    break
+                            if is_inside:
+                                representatives.append(pock.clone())
         return representatives
 
     def filterPocketsBySet(self, pockets, setId):
