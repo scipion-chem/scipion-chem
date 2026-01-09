@@ -115,7 +115,7 @@ class ProtExtractLigands(EMProtocol):
         outputSet.setProteinFile(cleanedPDB)
         outputSet.setDocked(True)
         for i, lFile in enumerate(ligandFiles):
-            molName = getBaseName(lFile).split('-')[0]
+            molName = getBaseName(lFile)
             oMol = SmallMolecule(smallMolFilename=lFile, molName=molName, poseFile=lFile, poseId=1)
             oMol.setGridId(i+1)
             oMol.setConfId(i+1)
