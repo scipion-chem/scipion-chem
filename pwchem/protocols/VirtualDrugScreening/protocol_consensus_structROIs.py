@@ -139,7 +139,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
-            newPock.setVolume(newPock.getPocketVolume())
+            if newPock.getVolume() is None:
+                newPock.setVolume(newPock.getPocketVolume())
             outPockets.append(newPock)
         if outPockets.getSize() > 0:
             outPockets.buildPDBhetatmFile(suffix='_All')
@@ -409,14 +410,14 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     else:
                         # Keep only pockets that are strictly contained in another one
                         for pock in clust:
-                            is_inside = False
+                            isInside = False
                             for other in clust:
                                 if pock is other:
                                     continue
                                 if self.isPocketInside(pock, other):
-                                    is_inside = True
+                                    isInside = True
                                     break
-                            if is_inside:
+                            if isInside:
                                 representatives.append(pock.clone())
         return representatives
 
