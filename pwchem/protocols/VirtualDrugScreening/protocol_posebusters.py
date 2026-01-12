@@ -175,9 +175,9 @@ class ProtocolPoseBusters(EMProtocol):
         form.addParam('molTrue', params.StringParam,
                       label='True molecule: ', condition='tests in [0, 4, 6]',
                       help='Choose the ground truth molecule (crystal ligand).')
-        form.addParam('molCond', params.PointerParam, pointerClass="AtomStruct",
-                      condition='tests in [0, 5, 7]', allowsNull=True,
-                       label='Protein:', help='Choose the conditioning molecule (protein).')
+        form.addParam('molCond', params.BooleanParam, default=False, condition='tests in [0]',
+                       label="Use protein to run tests: ",
+                       help='Choose whether to output use protein to run tests. (If True, it will be used to run all default tests that require the protein as input.)')
 
         distGroup = form.addGroup('Distance geometry', condition='tests in [1]')
         self._defineDistanceGeom(distGroup)
@@ -228,10 +228,9 @@ class ProtocolPoseBusters(EMProtocol):
                 inpFile = self.convertFormat(molTrue, type='crystal')
                 args.append(f'-l {os.path.abspath(inpFile)}')
 
-            if self.molCond.get() is not None:
+            if self.molCond.get():
                 #protein
-                molCond = self.molCond.get()
-                inpFile = self.convertFormat(molCond, type='AtomStruct')
+                inpFile = self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file')
                 args.append(f'-p {os.path.abspath(inpFile)}')
 
         else:
@@ -261,7 +260,7 @@ class ProtocolPoseBusters(EMProtocol):
 
     def runPoseBustersForMol(self, molPred, molTrue=None, suffix=""):
         """
-        Ejecuta PoseBusters para UNA molécula concreta
+        Run PoseBusters over ONE specific molecule.
         """
         paramsFile = self._getExtraPath(f'testParams_{suffix}.txt')
         outputFolder = self._getPath(f'posebusters_results/{suffix}')
@@ -294,7 +293,7 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
             elif self.tests.get() == 5:
                 f.write("test = check_intermolecular_distance\n")
-                inpFile = self.convertFormat(self.molCond.get(), type='AtomStruct')
+                inpFile = os.path.abspath(self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file'))
                 f.write(f"mol_cond = {inpFile}\n")
                 if self.radType.get() == 0:
                     radType = 'vdw'
@@ -316,7 +315,7 @@ class ProtocolPoseBusters(EMProtocol):
                 f.write(f"heavy_only = {self.heavyOnly.get()}\n")
             elif self.tests.get() == 7:
                 f.write("test = check_volume_overlap\n")
-                inpFile = self.convertFormat(self.molCond.get(), type='AtomStruct')
+                inpFile = os.path.abspath(self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file'))
                 f.write(f"mol_cond = {inpFile}\n")
                 f.write(f"clash_cutoff = {self.thrClash.get()}\n")
                 f.write(f"vdw_scale = {self.vdwScale.get()}\n")
@@ -415,9 +414,12 @@ class ProtocolPoseBusters(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def convertFormat(self, molPred, type=''):
-        if 'AtomStruct' or 'crystal' in type:
+        if type in ('AtomStruct', 'crystal'):
             basename = os.path.basename(molPred.getFileName()).split('.')[0]
             file = molPred.getFileName()
+        elif type == 'file':
+            file = molPred
+            basename = os.path.splitext(os.path.basename(file))[0]
         else:
             basename = os.path.basename(molPred.getPoseFile()).split('.')[0]
             file = molPred.getPoseFile()
