@@ -207,10 +207,7 @@ class ProtocolPoseBusters(EMProtocol):
         if self.tests.get() == 0:
             self._insertFunctionStep(self.allTestsStep)
         else:
-            if self.oneFile.get():
-                self._insertFunctionStep(self.indivTestsStep)
-            else:
-                self._insertFunctionStep(self.indivTestsAllMolsStep)
+            self._insertFunctionStep(self.individualTestsStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def allTestsStep(self):
@@ -258,109 +255,98 @@ class ProtocolPoseBusters(EMProtocol):
             cwd=os.path.abspath(Plugin.getVar(POSEB_DIC['home']))
         )
 
-    def runPoseBustersForMol(self, molPred, molTrue=None, suffix=""):
+    def individualTestsStep(self):
+        molTrue = None
+        if self.molTrue.get() and self.inputMoleculesRefSets.get():
+            for mol in self.inputMoleculesRefSets.get():
+                if mol.__str__() == self.molTrue.get():
+                    molTrue = mol.clone()
+                    break
+
+        if self.oneFile.get():
+            # Single molecule test
+            molPred = self.getSpecifiedMol('pred')
+            molName = os.path.splitext(os.path.basename(molPred.getPoseFile()))[0]
+            self.runPoseBustersForMol(molPred, molTrue=molTrue, suffix=f'{molName}')
+        else:
+            # All molecules in the set test
+            self.runPoseBustersForMol(self.inputMoleculesSets.get(), molTrue=molTrue, suffix='')
+
+    def runPoseBustersForMol(self, molsPred, molTrue=None, suffix=""):
         """
         Run PoseBusters over ONE specific molecule.
         """
-        paramsFile = self._getExtraPath(f'testParams_{suffix}.txt')
-        outputFolder = self._getPath(f'posebusters_results/{suffix}')
+        for molPred in molsPred:
+            suffix = os.path.splitext(os.path.basename(molPred.getPoseFile()))[0]
 
-        inpFile = self.convertFormat(molPred)
+            paramsFile = self._getExtraPath(f'testParams_{suffix}.txt')
+            outputFolder = self._getPath(f'posebusters_results/{suffix}')
 
-        with open(paramsFile, 'w') as f:
-            f.write(f"output = {os.path.abspath(outputFolder)}\n")
-            f.write(f"mol_pred = {os.path.abspath(inpFile)}\n")
+            inpFile = self.convertFormat(molPred)
 
-            if self.tests.get() == 1:
-                f.write("test = distance_geometry\n")
-                f.write(f"threshold_bad_bond_length = {self.thrBadB.get()}\n")
-                f.write(f"threshold_clash = {self.thrClash.get()}\n")
-                f.write(f"threshold_bad_angle = {self.thrBadAngle.get()}\n")
-                f.write(f"ignore_hydrogens = {self.ignoreH.get()}\n")
-                f.write(f"sanitize = {self.sanitize.get()}\n")
-                f.write(f"symmetrize_conjugated_terminal_groups = {self.symmetrize.get()}\n")
-            elif self.tests.get() == 2:
-                f.write("test = check_energy_ratio\n")
-                f.write(f"threshold_energy_ratio = {self.thrEnergyRatio.get()}\n")
-                f.write(f"ensemble_number_conformations = {self.ensNumConf.get()}\n")
-            elif self.tests.get() == 3:
-                f.write("test = check_flatness\n")
-                f.write(f"threshold_flatness = {self.thrFlatness.get()}\n")
-                f.write(f"check_nonflat = {self.nonFlat.get()}\n")
-            elif self.tests.get() == 4:
-                f.write("test = check_identity\n")
-                inpFile = self.convertFormat(molTrue, type='crystal')
-                f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
-            elif self.tests.get() == 5:
-                f.write("test = check_intermolecular_distance\n")
-                inpFile = os.path.abspath(self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file'))
-                f.write(f"mol_cond = {inpFile}\n")
-                if self.radType.get() == 0:
-                    radType = 'vdw'
-                else:
-                    radType = self.getEnumText(self.radType.get())
+            with open(paramsFile, 'w') as f:
+                f.write(f"output = {os.path.abspath(outputFolder)}\n")
+                f.write(f"mol_pred = {os.path.abspath(inpFile)}\n")
 
-                f.write(f"radius_type = {radType}\n")
-                f.write(f"radius_scale = {self.radScale.get()}\n")
-                f.write(f"clash_cutoff = {self.thrClash.get()}\n")
-                types = self.ignoreTypes.get().replace(' ', '_').split(',')
-                types = self.ignoreTypes.get().replace('[', '')
-                f.write(f"ignore_types = {types}\n")
-                f.write(f"max_distance = {self.maxDist.get()}\n")
-            elif self.tests.get() == 6:
-                f.write("test = check_rmsd\n")
-                inpFile = self.convertFormat(molTrue, type='crystal')
-                f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
-                f.write(f"rmsd_threshold = {self.thrRMSD.get()}\n")
-                f.write(f"heavy_only = {self.heavyOnly.get()}\n")
-            elif self.tests.get() == 7:
-                f.write("test = check_volume_overlap\n")
-                inpFile = os.path.abspath(self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file'))
-                f.write(f"mol_cond = {inpFile}\n")
-                f.write(f"clash_cutoff = {self.thrClash.get()}\n")
-                f.write(f"vdw_scale = {self.vdwScale.get()}\n")
-                types = self.ignoreTypes.get().replace(' ', '_').split(',')
-                types = self.ignoreTypes.get().replace('[', '')
-                f.write(f"ignore_types = {types}\n")
+                if self.tests.get() == 1:
+                    f.write("test = distance_geometry\n")
+                    f.write(f"threshold_bad_bond_length = {self.thrBadB.get()}\n")
+                    f.write(f"threshold_clash = {self.thrClash.get()}\n")
+                    f.write(f"threshold_bad_angle = {self.thrBadAngle.get()}\n")
+                    f.write(f"ignore_hydrogens = {self.ignoreH.get()}\n")
+                    f.write(f"sanitize = {self.sanitize.get()}\n")
+                    f.write(f"symmetrize_conjugated_terminal_groups = {self.symmetrize.get()}\n")
+                elif self.tests.get() == 2:
+                    f.write("test = check_energy_ratio\n")
+                    f.write(f"threshold_energy_ratio = {self.thrEnergyRatio.get()}\n")
+                    f.write(f"ensemble_number_conformations = {self.ensNumConf.get()}\n")
+                elif self.tests.get() == 3:
+                    f.write("test = check_flatness\n")
+                    f.write(f"threshold_flatness = {self.thrFlatness.get()}\n")
+                    f.write(f"check_nonflat = {self.nonFlat.get()}\n")
+                elif self.tests.get() == 4:
+                    f.write("test = check_identity\n")
+                    inpFile = self.convertFormat(molTrue, type='crystal')
+                    f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
+                elif self.tests.get() == 5:
+                    f.write("test = check_intermolecular_distance\n")
+                    inpFile = os.path.abspath(self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file'))
+                    f.write(f"mol_cond = {inpFile}\n")
+                    if self.radType.get() == 0:
+                        radType = 'vdw'
+                    else:
+                        radType = self.getEnumText(self.radType.get())
 
-        Plugin.runScript(
-            self,
-            'posebustersTesting.py',
-            args=os.path.abspath(paramsFile),
-            env=SCORCH2_DIC,
-            cwd=self._getPath())
+                    f.write(f"radius_type = {radType}\n")
+                    f.write(f"radius_scale = {self.radScale.get()}\n")
+                    f.write(f"clash_cutoff = {self.thrClash.get()}\n")
+                    types = self.ignoreTypes.get().replace(' ', '_').split(',')
+                    types = self.ignoreTypes.get().replace('[', '')
+                    f.write(f"ignore_types = {types}\n")
+                    f.write(f"max_distance = {self.maxDist.get()}\n")
+                elif self.tests.get() == 6:
+                    f.write("test = check_rmsd\n")
+                    inpFile = self.convertFormat(molTrue, type='crystal')
+                    f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
+                    f.write(f"rmsd_threshold = {self.thrRMSD.get()}\n")
+                    f.write(f"heavy_only = {self.heavyOnly.get()}\n")
+                elif self.tests.get() == 7:
+                    f.write("test = check_volume_overlap\n")
+                    inpFile = os.path.abspath(self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file'))
+                    f.write(f"mol_cond = {inpFile}\n")
+                    f.write(f"clash_cutoff = {self.thrClash.get()}\n")
+                    f.write(f"vdw_scale = {self.vdwScale.get()}\n")
+                    types = self.ignoreTypes.get().replace(' ', '_').split(',')
+                    types = self.ignoreTypes.get().replace('[', '')
+                    f.write(f"ignore_types = {types}\n")
 
+            Plugin.runScript(
+                self,
+                'posebustersTesting.py',
+                args=os.path.abspath(paramsFile),
+                env=SCORCH2_DIC,
+                cwd=self._getPath())
 
-    def indivTestsStep(self):
-        molPred = self.getSpecifiedMol('pred')
-        molName = os.path.splitext(os.path.basename(molPred.getPoseFile()))[0]
-        molTrue = None
-        if self.molTrue.get() and self.inputMoleculesRefSets.get():
-            for mol in self.inputMoleculesRefSets.get():
-                if mol.__str__() == self.molTrue.get():
-                    molTrue = mol.clone()
-                    break
-        self.runPoseBustersForMol(
-            molPred,
-            molTrue=molTrue,
-            suffix=f'{molName}'
-        )
-
-    def indivTestsAllMolsStep(self):
-        molTrue = None
-        if self.molTrue.get() and self.inputMoleculesRefSets.get():
-            for mol in self.inputMoleculesRefSets.get():
-                if mol.__str__() == self.molTrue.get():
-                    molTrue = mol.clone()
-                    break
-
-        for mol in self.inputMoleculesSets.get():
-            molName = os.path.splitext(os.path.basename(mol.getPoseFile()))[0]
-            self.runPoseBustersForMol(
-                mol,
-                molTrue=molTrue,
-                suffix=f'{molName}'
-            )
 
 
     def createOutputStep(self):
