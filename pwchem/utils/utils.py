@@ -24,6 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import tempfile
 
 # General imports
 import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
@@ -897,9 +898,39 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
 
       if blockCount > 1:
           # Call new multi-block handler
-          return cleanMultiBlockCIF(structFile, outFn, waters, hetatm, chainIds, het2keep, het2rem)
+          tmpBlocks = splitCIFBlocksToTempFiles(structFile)
+          cleanedBlocks = []
+
+          for i, tmp in enumerate(tmpBlocks):
+              with open(tmp) as fh:
+                  text = fh.read()
+
+              if "_atom_site." not in text:
+                  print("DEBUG: Skipping non-atomic CIF block:", tmp)
+                  cleanedBlocks.append(tmp)
+                  continue
+
+              base, ext = os.path.splitext(outFn)
+              tmpOut = f"{base}.block{i}{ext}"
+
+              cleanPDB(
+                  tmp, tmpOut,
+                  waters=waters,
+                  hetatm=hetatm,
+                  chainIds=chainIds,
+                  het2keep=het2keep,
+                  het2rem=het2rem,
+                  singleModel=singleModel
+              )
+              cleanedBlocks.append(tmpOut)
+
+          with open(outFn, "w") as out:
+              for fn in cleanedBlocks:
+                  with open(fn) as f:
+                      out.writelines(f.readlines())
+                  out.write("#\n")
+
       else:
-          # Single block, normal MMCIFParser
           struct = MMCIFParser().get_structure(structName, structFile)
           if singleModel is not None:
               struct = struct[singleModel]
@@ -911,46 +942,20 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
       exit()
   return outFn
 
-def cleanMultiBlockCIF(infile, outfile, waters=False, hetatm=False,
-                       chainIds=None, het2keep=None, het2rem=None):
-
-    chainIds = [c.upper() for c in chainIds] if chainIds else None
-    het2keep = set(het2keep or [])
-    het2rem = set(het2rem or [])
-
-    with open(infile) as f:
+def splitCIFBlocksToTempFiles(cifFile):
+    with open(cifFile) as f:
         blocks = splitCifBlocks(f.readlines())
 
-    outBlocks = []
-
+    tmpFiles = []
     for block in blocks:
-        newBlock, i = [], 0
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".cif", delete=False, mode="w"
+        )
+        tmp.writelines(block)
+        tmp.close()
+        tmpFiles.append(tmp.name)
 
-        while i < len(block):
-            line = block[i]
-
-            if isAtomSiteLoop(block, i):
-                kept, header, i = processAtomSite(
-                    block, i, chainIds, waters, hetatm, het2keep, het2rem
-                )
-                if kept:
-                    newBlock.extend(header)
-                    newBlock.extend(kept)
-                    newBlock.append("#\n")
-                continue
-
-            newBlock.append(line)
-            i += 1
-
-        if newBlock[-1].strip() != "#":
-            newBlock.append("#\n")
-
-        outBlocks.append(newBlock)
-
-    with open(outfile, "w") as out:
-        out.writelines(line for block in outBlocks for line in block)
-
-    return outfile
+    return tmpFiles
 
 def isAtomSiteLoop(block, i):
     return (
