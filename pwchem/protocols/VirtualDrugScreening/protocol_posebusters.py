@@ -204,58 +204,10 @@ class ProtocolPoseBusters(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        if self.tests.get() == 0:
-            self._insertFunctionStep(self.allTestsStep)
-        else:
-            self._insertFunctionStep(self.individualTestsStep)
+        self._insertFunctionStep(self.poseBustersStep)
         self._insertFunctionStep(self.createOutputStep)
 
-    def allTestsStep(self):
-        args = ['bust ']
-
-        if self.oneFile.get():
-            #docked molecule
-            molPred = self.getSpecifiedMol('pred')
-            inpFile = self.convertFormat(molPred)
-            args.append(os.path.abspath(inpFile))
-
-            if self.inputMoleculesRefSets.get() is not None:
-                #true molecule
-                molTrue = self.getSpecifiedMol('true')
-                inpFile = self.convertFormat(molTrue, type='crystal')
-                args.append(f'-l {os.path.abspath(inpFile)}')
-
-            if self.molCond.get():
-                #protein
-                inpFile = self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file')
-                args.append(f'-p {os.path.abspath(inpFile)}')
-
-        else:
-            for dockedMol in self.inputMoleculesSets.get():
-                inpFile = self.convertFormat(dockedMol)
-                args.append(os.path.abspath(inpFile))
-
-        outputFormat = self.getEnumText('outputFormat')
-        args.append(f'--outfmt {outputFormat}')
-
-        if (self.fullReport.get()):
-            args.append('--full-report')
-
-        if (self.outputFormat.get() == 2):
-            resultsFile = self._getPath('results.csv')
-        else:
-            resultsFile = self._getPath('results.txt')
-        args.append(f'--output {os.path.abspath(resultsFile)}')
-
-        Plugin.runCondaCommand(
-            self,
-            args=" ".join(args),
-            condaDic=SCORCH2_DIC,
-            program="",
-            cwd=os.path.abspath(Plugin.getVar(POSEB_DIC['home']))
-        )
-
-    def individualTestsStep(self):
+    def poseBustersStep(self):
         molTrue = None
         if self.molTrue.get() and self.inputMoleculesRefSets.get():
             for mol in self.inputMoleculesRefSets.get():
@@ -264,15 +216,16 @@ class ProtocolPoseBusters(EMProtocol):
                     break
 
         if self.oneFile.get():
-            # Single molecule test
             molPred = self.getSpecifiedMol('pred')
-            molName = os.path.splitext(os.path.basename(molPred.getPoseFile()))[0]
-            self.runPoseBustersForMol(molPred, molTrue=molTrue, suffix=f'{molName}')
+            molsPred = [molPred]
         else:
-            # All molecules in the set test
-            self.runPoseBustersForMol(self.inputMoleculesSets.get(), molTrue=molTrue, suffix='')
+            molsPred = self.inputMoleculesSets.get()
 
-    def runPoseBustersForMol(self, molsPred, molTrue=None, suffix=""):
+        molCond = self.molCond.get()
+
+        self.runPoseBustersForMol(molsPred, molTrue=molTrue, molCond=molCond)
+
+    def runPoseBustersForMol(self, molsPred, molTrue=None, molCond=False):
         """
         Run PoseBusters over ONE specific molecule.
         """
@@ -285,10 +238,29 @@ class ProtocolPoseBusters(EMProtocol):
             inpFile = self.convertFormat(molPred)
 
             with open(paramsFile, 'w') as f:
-                f.write(f"output = {os.path.abspath(outputFolder)}\n")
+                if self.tests.get() != 0:
+                    f.write(f"output = {os.path.abspath(outputFolder)}\n")
                 f.write(f"mol_pred = {os.path.abspath(inpFile)}\n")
 
-                if self.tests.get() == 1:
+                if self.tests.get() == 0:
+                    f.write("test = all\n")
+                    if molTrue is not None:
+                        inpFile = self.convertFormat(molTrue, type='crystal')
+                        f.write(f"mol_true = {os.path.abspath(inpFile)}\n")
+                    if molCond:
+                        inpFile = self.convertFormat(self.inputMoleculesSets.get().getProteinFile(), type='file')
+                        f.write(f"mol_cond = {inpFile}\n")
+                    outputFormat = self.getEnumText('outputFormat')
+                    f.write(f"output_format = {outputFormat}\n")
+                    if (self.fullReport.get()):
+                        f.write(f"full_report = True\n")
+                    if (self.outputFormat.get() == 2):
+                        resultsFile = self._getPath('results.csv')
+                    else:
+                        resultsFile = self._getPath('results.txt')
+                    f.write(f'output = {os.path.abspath(resultsFile)}\n')
+                    #todo pass this to script that will handle normal opt
+                elif self.tests.get() == 1:
                     f.write("test = distance_geometry\n")
                     f.write(f"threshold_bad_bond_length = {self.thrBadB.get()}\n")
                     f.write(f"threshold_clash = {self.thrClash.get()}\n")

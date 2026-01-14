@@ -13,6 +13,10 @@ Loads and transforms molecules internally,
 runs the selected PoseBusters test,
 and writes results to a JSON file.
 """
+import subprocess
+
+import shlex
+
 import numpy as np
 import os
 import sys
@@ -76,17 +80,18 @@ def loadMolecule(molfile):
 def toNative(val):
     """Convert numpy types to native Python types recursively."""
     if isinstance(val, np.integer):
-        return int(val)
+        value = int(val)
     elif isinstance(val, np.floating):
-        return float(val)
+        value = float(val)
     elif isinstance(val, dict):
-        return {k: toNative(v) for k, v in val.items()}
+        value = {k: toNative(v) for k, v in val.items()}
     elif isinstance(val, list):
-        return [toNative(v) for v in val]
+        value = [toNative(v) for v in val]
     elif isinstance(val, tuple):
-        return tuple(toNative(v) for v in val)
+        value = tuple(toNative(v) for v in val)
     else:
-        return val
+        value = val
+    return value
 
 def writeResults(results, outputDir):
     """Write PoseBusters results: summary in TXT, details tables as CSV."""
@@ -131,13 +136,14 @@ def writeResults(results, outputDir):
 def cleanSummary(d):
     """Recursively convert numpy types to native Python types."""
     if isinstance(d, dict):
-        return {k: cleanSummary(v) for k, v in d.items()}
+        clean = {k: cleanSummary(v) for k, v in d.items()}
     elif isinstance(d, list):
-        return [cleanSummary(v) for v in d]
+        clean = [cleanSummary(v) for v in d]
     elif isinstance(d, np.generic):
-        return d.item()
+        clean = d.item()
     else:
-        return d
+        clean = d
+    return clean
 # -------------------------------------------------------------------------
 # PoseBusters tests
 # -------------------------------------------------------------------------
@@ -287,23 +293,50 @@ def runTest(params):
     test = params.get('test')
 
     if test == 'distance_geometry':
-        return ruDdistanceGeometry(params)
-
+        opt = ruDdistanceGeometry(params)
     elif test == 'check_energy_ratio':
-        return runEnergyRatio(params)
+        opt = runEnergyRatio(params)
     elif test == 'check_flatness':
-        return runFlatness(params)
+        opt = runFlatness(params)
     elif test == 'check_identity':
-        return runIdentity(params)
+        opt = runIdentity(params)
     elif test == 'check_intermolecular_distance':
-        return runIntermolDistance(params)
+        opt = runIntermolDistance(params)
     elif test == 'check_rmsd':
-        return runRmsd(params)
+        opt = runRmsd(params)
     elif test == 'check_volume_overlap':
-        return runVolOverlap(params)
-
+        opt = runVolOverlap(params)
     else:
         raise NotImplementedError(f"Unknown or unsupported test: {test}")
+    return opt
+
+def runAll(params):
+    args = ['bust']
+
+    mol_preds = params.get('mol_pred')
+    if isinstance(mol_preds, list):
+        args.extend(mol_preds)
+    else:
+        args.append(mol_preds)
+
+    if 'mol_true' in params:
+        args.extend(['-l', params['mol_true']])
+
+    if 'mol_cond' in params:
+        args.extend(['-p', params['mol_cond']])
+
+    if 'output_format' in params:
+        args.extend(['--outfmt', params['output_format']])
+
+    if str2bool(params.get('full_report', 'False')):
+        args.append('--full-report')
+
+    args.extend(['--output', params['output']])
+
+    print("Running PoseBusters CLI:")
+    print(" ".join(shlex.quote(a) for a in args))
+
+    subprocess.run(args, check=True)
 
 
 # -------------------------------------------------------------------------
@@ -317,10 +350,13 @@ def main():
 
     params = readParams(paramsFile)
 
-    results = runTest(params)
-
-    outDir = params['output']
-    writeResults(results, outDir)
+    test = params.get('test')
+    if test == 'all':
+        runAll(params)
+    else:
+        results = runTest(params)
+        outDir = params['output']
+        writeResults(results, outDir)
 
 
 
