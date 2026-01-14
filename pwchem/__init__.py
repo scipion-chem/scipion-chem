@@ -253,8 +253,7 @@ class Plugin(pwem.Plugin):
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "git clone --branch v0.6.3 --depth 1 https://github.com/maabuu/posebusters.git && "
             "pip install --editable ./posebusters ",
-            #"posebusters"
-            "POSEBUSTERS_INSTALLED" # todo ver como hago esto
+            "posebusters"
         )
 
         installer.addPackage(env, dependencies=['pip', 'git'], default=default)
