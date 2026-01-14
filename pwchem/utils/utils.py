@@ -957,13 +957,6 @@ def splitCIFBlocksToTempFiles(cifFile):
 
     return tmpFiles
 
-def isAtomSiteLoop(block, i):
-    return (
-        block[i].startswith("loop_")
-        and i + 1 < len(block)
-        and block[i + 1].startswith("_atom_site.")
-    )
-
 def keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
     group = fields[colIdx["group_PDB"]]
     resname = fields[colIdx["label_comp_id"]]
@@ -995,27 +988,6 @@ def splitCifBlocks(lines):
     if current:
         blocks.append(current)
     return blocks
-
-def processAtomSite(block, start, chainIds, waters, hetatm, het2keep, het2rem):
-    header, cols = ["loop_\n"], []
-    i = start + 1
-
-    while i < len(block) and block[i].startswith("_atom_site."):
-        cols.append(block[i].strip().replace("_atom_site.", ""))
-        header.append(block[i])
-        i += 1
-
-    colIdx = {c: idx for idx, c in enumerate(cols)}
-    kept = []
-
-    while i < len(block) and not block[i].startswith(("loop_", "#")):
-        fields = block[i].split()
-        if len(fields) >= len(cols):
-            if keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
-                kept.append(block[i])
-        i += 1
-
-    return kept, header, i
 
 def removeStartWithLines(inFile, start):
   '''Remove the lines in a file starting with a certain string'''
