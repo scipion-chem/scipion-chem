@@ -29,17 +29,18 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
-from pwchem.utils import fillEmptyAttributes
 
 
-class ProtChemGroupByPocket(EMProtocol):
-    """Group small molecules by pocket ID."""
+class ProtChemGroupByAtt(EMProtocol):
+    """Group small molecules by attribute."""
     _label = 'group by pocket id'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputMols', params.PointerParam, pointerClass="SetOfSmallMolecules", label='Input molecules: ',
                       help='Set of small molecules to group by pocket id.')
+        form.addParam('refColumn', params.StringParam, label='Grouping column: ', default='',
+                       help='Attribute for the grouping operation.')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -89,6 +90,6 @@ class ProtChemGroupByPocket(EMProtocol):
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
-    def getNumPockets(self):
+    def getNumPockets(self): #todo change and get the number of indiv values of the att
         uniquePockets = {mol.getGridId() for mol in self.inputMols.get()}
         return sorted(uniquePockets)
