@@ -75,7 +75,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
-        cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(SCORCH2_DIC))
+        cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
 
         # Common enviroments
@@ -253,7 +253,7 @@ class Plugin(pwem.Plugin):
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "git clone --branch v0.6.3 --depth 1 https://github.com/maabuu/posebusters.git && "
             "pip install --editable ./posebusters ",
-            "posebusters"
+            "POSEBUSTERS_INSTALLED"
         )
 
         installer.addPackage(env, dependencies=['pip', 'git'], default=default)
