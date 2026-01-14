@@ -259,7 +259,6 @@ class ProtocolPoseBusters(EMProtocol):
                     else:
                         resultsFile = self._getPath('results.txt')
                     f.write(f'output = {os.path.abspath(resultsFile)}\n')
-                    #todo pass this to script that will handle normal opt
                 elif self.tests.get() == 1:
                     f.write("test = distance_geometry\n")
                     f.write(f"threshold_bad_bond_length = {self.thrBadB.get()}\n")
