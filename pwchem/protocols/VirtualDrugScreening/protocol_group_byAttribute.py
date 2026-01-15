@@ -31,7 +31,7 @@ from pyworkflow.protocol import params
 
 
 class ProtChemGroupByAtt(EMProtocol):
-    """Group small molecules by attribute."""
+    """Group sets by attribute."""
     _label = 'group by attribute'
 
     def _defineParams(self, form):
@@ -43,7 +43,6 @@ class ProtChemGroupByAtt(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        # Insert processing steps
         self._insertFunctionStep('defineOutputStep')
 
     # --------------------------- STEPS subfunctions ------------------------------
@@ -62,7 +61,7 @@ class ProtChemGroupByAtt(EMProtocol):
 
             for item in inputSet:
                 if self.getAttrValue(item, attr) == i:
-                    newItem = item.clone()  # generic clone for any item type
+                    newItem = item.clone()
                     outputSet.append(newItem)
 
 
@@ -71,7 +70,7 @@ class ProtChemGroupByAtt(EMProtocol):
             if hasattr(inputSet, 'proteinFile') and hasattr(outputSet, 'proteinFile'):
                 outputSet.setProteinFile(inputSet.proteinFile.get())
 
-            outputName = f'outputSet_{j}'
+            outputName = f'outputSet{j}'
             self._defineOutputs(**{outputName: outputSet})
             self._defineSourceRelation(inputSet, outputSet)
 
