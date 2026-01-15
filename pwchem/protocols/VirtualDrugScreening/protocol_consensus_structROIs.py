@@ -160,7 +160,8 @@ def detectClusters(G: nx.Graph, method: str = "louvain", resolution: float = 1.0
 
 
 def getClusterRep(communityGroups: List[ResidueGroup], method: str, classWeighted: bool, spatialWeight: float,
-                  minFreq: float, minClasses: int, specificClass: int = None):
+                  minFreq: float, minClasses: int, specificClass: int = None,
+                  controlSize: bool = True, sizeThres: float = 0.2):
     """
     Extract a spatially dense representative set of residues for a community.
 
@@ -175,7 +176,7 @@ def getClusterRep(communityGroups: List[ResidueGroup], method: str, classWeighte
     if method == 'centroid':
         repId, repResidues = getRepresentativeCentroid(communityGroups, classWeighted, spatialWeight, specificClass)
     elif method == 'intersection':
-        repId, repResidues = getRepresentativeIntersection(communityGroups, minFreq, minClasses)
+        repId, repResidues = getRepresentativeIntersection(communityGroups, minFreq, minClasses, controlSize, sizeThres)
     else:
         repId, repResidues = getRepresentativeBigger(communityGroups, specificClass)
 
@@ -319,12 +320,18 @@ def getRepresentativeBigger(
 def getRepresentativeIntersection(
         communityGroups: List[ResidueGroup],
         minFreq: float = 0.7,
-        minClasses: int = 2):
+        minClasses: int = 2,
+        controlSize: bool = True,
+        sizeThres: float = 0.2):
     """
     Intersection representative with class awareness.
 
     Args:
         minFreq: minimum frequency in a cluster for a residue to be considered intersection
+        controlSize: the output representative size is controled to be as much as the average of the community groups
+        sizeThres: if not None, the output group size should be close to the average of the community groups size.
+                      This threshold establishes how flexible this limit is.
+                      0.2 means it cannot be bigger than 20% of average
         minClasses: minimum number of classes a residue needs to appear in to be considered
     """
     if not communityGroups:
@@ -332,9 +339,10 @@ def getRepresentativeIntersection(
 
     # Count occurrences and track classes
     residue_info = {}  # residue_id -> {'count': 0, 'classes': set()}
-
+    groupSizes = []
     for group in communityGroups:
         groupClass = group.groupClass
+        groupSizes.append(len(group.residueIds))
         for residue_id in group.residueIds:
             if residue_id not in residue_info:
                 residue_info[residue_id] = {'count': 0, 'classes': set()}
@@ -343,15 +351,24 @@ def getRepresentativeIntersection(
 
     total_groups = len(communityGroups)
     threshold = minFreq * total_groups
+    communitySize = sum(groupSizes) / len(groupSizes)
+    sizeThreshold = communitySize * (1 + sizeThres)
+
+    sorted_items = sorted(residue_info.items(), key=lambda item: item[1]['count'], reverse=True)
 
     # Filter residues
+    prevFreq = total_groups
     representative = set()
-    for residue_id, info in residue_info.items():
+    for residue_id, info in sorted_items:
         if info['count'] >= threshold:
-            if len(info['classes']) >= minClasses:
+            toAdd = True
+            if controlSize and not ((info['count'] < prevFreq and len(representative) < communitySize)
+                                or (info['count'] == prevFreq and len(representative) < sizeThreshold)):
+                toAdd = False
+
+            if toAdd and len(info['classes']) >= minClasses:
                 representative.add(residue_id)
-            else:
-                representative.add(residue_id)
+                prevFreq = info['count']
 
     return None, representative
 
@@ -480,6 +497,12 @@ class ProtocolConsensusStructROIs(EMProtocol):
         g3.addParam('minFreq', params.FloatParam, default=0.75, label='Minimum frequency for intersection: ',
                     expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC}',
                     help='Minimum frequency a residue bust appear in a cluster to be considered intersection.')
+        g3.addParam('controlSize', params.BooleanParam, default=True, label='Control intersection size: ',
+                    expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC}',
+                    help='Control intersection size so it does not grow far from the cluster average.')
+        g3.addParam('sizeThres', params.FloatParam, default=0.2, label='Control size threshold: ',
+                    expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC} and controlSize',
+                    help='Hard threshold to control the size so it does not grow x over the cluster average.')
     
         g3.addParam('outIndv', params.BooleanParam, default=False, condition=f'repChoice!={INTERSEC}',
                     label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
@@ -626,7 +649,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
         for i, cluster in enumerate(clustersGroups):
             repId, repResidues = getClusterRep(cluster, repMethod, not self.sameClust.get(), self.spatialW.get(),
-                                               self.minFreq.get(), self.numOfOverlap.get(), specificClass)
+                                               self.minFreq.get(), self.numOfOverlap.get(), specificClass,
+                                               self.controlSize.get(), self.sizeThres.get())
 
             if repId is not None:
                 outPocket = groupDic[cluster[repId]]
