@@ -28,7 +28,6 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 
 class ProtChemGroupByAtt(EMProtocol):
@@ -37,7 +36,7 @@ class ProtChemGroupByAtt(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputMols', params.PointerParam, pointerClass="SetOfSmallMolecules", label='Input molecules: ',
+        form.addParam('inputMols', params.PointerParam, pointerClass="EMSet", label='Input set: ',
                       help='Set of small molecules to group by pocket id.')
         form.addParam('refColumn', params.StringParam, label='Grouping column: ', default='',
                        help='Attribute for the grouping operation.')
@@ -49,7 +48,7 @@ class ProtChemGroupByAtt(EMProtocol):
 
     # --------------------------- STEPS subfunctions ------------------------------
     def defineOutputStep(self):
-        inputMols = self.inputMols.get()
+        inputSet = self.inputMols.get()
         attr = self.refColumn.get()
 
         groupingValues = self.getGroupingVals()
@@ -59,18 +58,22 @@ class ProtChemGroupByAtt(EMProtocol):
             outputPath = self._getPath(f'group{j}')
             os.makedirs(outputPath, exist_ok=True)
 
-            outputMols = SetOfSmallMolecules().create(outputPath=outputPath)
-            for mol in inputMols:
-                if self.getAttrValue(mol, attr) == i:
-                    newMol = SmallMolecule()
-                    newMol.copy(mol)
-                    outputMols.append(newMol)
-            outputName = f"outputSmallMolecules{j}"
-            outputMols.setDocked()
-            outputMols.proteinFile.set(inputMols.getProteinFile())
+            outputSet = inputSet.getClass()().create(outputPath=outputPath)
 
-            self._defineOutputs(**{outputName: outputMols})
-            self._defineSourceRelation(inputMols, outputMols)
+            for item in inputSet:
+                if self.getAttrValue(item, attr) == i:
+                    newItem = item.clone()  # generic clone for any item type
+                    outputSet.append(newItem)
+
+                # Optional: preserve docked status if attribute exists
+            if hasattr(inputSet, 'isDocked') and hasattr(outputSet, 'setDocked'):
+                outputSet.setDocked(inputSet.isDocked())
+            if hasattr(inputSet, 'proteinFile') and hasattr(outputSet, 'proteinFile'):
+                outputSet.proteinFile.set(inputSet.proteinFile.get())
+
+            outputName = f'outputSet_{j}'
+            self._defineOutputs(**{outputName: outputSet})
+            self._defineSourceRelation(inputSet, outputSet)
 
 
 
@@ -87,7 +90,7 @@ class ProtChemGroupByAtt(EMProtocol):
     def _validate(self):
         validations = []
         molSet = self.inputMols.get()
-        if not molSet.isDocked():
+        if molSet.getClass() == 'SetOfSmallMols' and not molSet.isDocked():
             validations += ['{} is not docked yet'.format(molSet)]
 
         return validations
