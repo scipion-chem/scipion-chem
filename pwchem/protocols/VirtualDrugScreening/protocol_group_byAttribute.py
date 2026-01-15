@@ -36,7 +36,7 @@ class ProtChemGroupByAtt(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputMols', params.PointerParam, pointerClass="EMSet", label='Input set: ',
+        form.addParam('inputSet', params.PointerParam, pointerClass="EMSet", label='Input set: ',
                       help='Set of small molecules to group by pocket id.')
         form.addParam('refColumn', params.StringParam, label='Grouping column: ', default='',
                        help='Attribute for the grouping operation.')
@@ -48,7 +48,7 @@ class ProtChemGroupByAtt(EMProtocol):
 
     # --------------------------- STEPS subfunctions ------------------------------
     def defineOutputStep(self):
-        inputSet = self.inputMols.get()
+        inputSet = self.inputSet.get()
         attr = self.refColumn.get()
 
         groupingValues = self.getGroupingVals()
@@ -89,7 +89,7 @@ class ProtChemGroupByAtt(EMProtocol):
 
     def _validate(self):
         validations = []
-        molSet = self.inputMols.get()
+        molSet = self.inputSet.get()
         if molSet.getClass() == 'SetOfSmallMols' and not molSet.isDocked():
             validations += ['{} is not docked yet'.format(molSet)]
 
@@ -107,7 +107,7 @@ class ProtChemGroupByAtt(EMProtocol):
         attr = self.refColumn.get()
         values = set()
 
-        for mol in self.inputMols.get():
+        for mol in self.inputSet.get():
             values.add(self.getAttrValue(mol, attr))
 
         return sorted(values)
