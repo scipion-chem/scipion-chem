@@ -65,11 +65,11 @@ class ProtChemGroupByAtt(EMProtocol):
                     newItem = item.clone()  # generic clone for any item type
                     outputSet.append(newItem)
 
-                # Optional: preserve docked status if attribute exists
+
             if hasattr(inputSet, 'isDocked') and hasattr(outputSet, 'setDocked'):
                 outputSet.setDocked(inputSet.isDocked())
             if hasattr(inputSet, 'proteinFile') and hasattr(outputSet, 'proteinFile'):
-                outputSet.proteinFile.set(inputSet.proteinFile.get())
+                outputSet.setProteinFile(inputSet.proteinFile.get())
 
             outputName = f'outputSet_{j}'
             self._defineOutputs(**{outputName: outputSet})
@@ -89,10 +89,6 @@ class ProtChemGroupByAtt(EMProtocol):
 
     def _validate(self):
         validations = []
-        molSet = self.inputSet.get()
-        if molSet.getClass() == 'SetOfSmallMols' and not molSet.isDocked():
-            validations += ['{} is not docked yet'.format(molSet)]
-
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
