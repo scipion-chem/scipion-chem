@@ -134,7 +134,7 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       outputs=['defineScore'])
 SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtChemGroupByAtt,
                                       targets=['refColumn'],
-                                      inputs=['inputMols'],
+                                      inputs=['inputSet'],
                                       outputs=['refColumn'])
 
 
