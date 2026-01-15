@@ -33,7 +33,7 @@ from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 
 class ProtChemGroupByAtt(EMProtocol):
     """Group small molecules by attribute."""
-    _label = 'group by pocket id'
+    _label = 'group by attribute'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -50,19 +50,22 @@ class ProtChemGroupByAtt(EMProtocol):
     # --------------------------- STEPS subfunctions ------------------------------
     def defineOutputStep(self):
         inputMols = self.inputMols.get()
-        numPockets = self.getNumPockets()
+        attr = self.refColumn.get()
 
-        for i in (numPockets):
-            outputPath = self._getPath(f'pocket{i}')
+        groupingValues = self.getGroupingVals()
+
+        for j, i in enumerate(groupingValues):
+            print(f' j: {j} ; i: {i}')
+            outputPath = self._getPath(f'group{j}')
             os.makedirs(outputPath, exist_ok=True)
 
             outputMols = SetOfSmallMolecules().create(outputPath=outputPath)
             for mol in inputMols:
-                newMol = SmallMolecule()
-                newMol.copy(mol)
-                if newMol.getGridId() == i:
+                if self.getAttrValue(mol, attr) == i:
+                    newMol = SmallMolecule()
+                    newMol.copy(mol)
                     outputMols.append(newMol)
-            outputName = f"outputSmallMolecules{i}"
+            outputName = f"outputSmallMolecules{j}"
             outputMols.setDocked()
             outputMols.proteinFile.set(inputMols.getProteinFile())
 
@@ -90,6 +93,18 @@ class ProtChemGroupByAtt(EMProtocol):
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
-    def getNumPockets(self): #todo change and get the number of indiv values of the att
-        uniquePockets = {mol.getGridId() for mol in self.inputMols.get()}
-        return sorted(uniquePockets)
+    def getAttrValue(self, item, opAttr):
+        try:
+            opId = getattr(item, opAttr).get()
+        except:
+            opId = getattr(item, opAttr)
+        return opId
+
+    def getGroupingVals(self):
+        attr = self.refColumn.get()
+        values = set()
+
+        for mol in self.inputMols.get():
+            values.add(self.getAttrValue(mol, attr))
+
+        return sorted(values)
