@@ -662,7 +662,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     coords = self.getResidueCoords(repResidues, asFile, avgResidue=False)
                     createPocketFile(coords, i+1, pocketFile)
                     outPocket = StructROI(pocketFile, asFile)
-                    outPocket.calculateContacts()
+                    outPocket.setContactResidues(outPocket.encodeIds(repResidues))
                     outPockets.append(outPocket)
                     newGroups.append(cluster)
         return outPockets, newGroups
