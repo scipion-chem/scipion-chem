@@ -34,6 +34,7 @@ import csv
 import logging
 from ctypes.wintypes import SMALL_RECT
 from pathlib import Path
+from pwem.convert import cifToPdb
 
 from pyworkflow.object import Float
 from pyworkflow.protocol import params, STEPS_PARALLEL
@@ -300,17 +301,25 @@ class ProtocolSCORCH2(EMProtocol):
                 return True, files
 
     def convertFiles(self, fileList, baseDir):
-        """Convert PDB to PDBQT, keeping output in the same folder as the input file"""
+        """Convert PDB or CIF to PDBQT, keeping output in the same folder as the input file"""
         for file in fileList:
-            if file.suffix.lower() == ".pdb":
-                basename = file.stem
-                pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
+            suffix = file.suffix.lower()
+            basename = file.stem
 
-                inputAbs = str(file.resolve())
-                outputAbs = str(pdbqtFile.resolve())
+            if suffix == ".pdbqt":
+                continue
 
-                args = f"-ipdb {inputAbs} -opdbqt -O {outputAbs}"
-                runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+            pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
+            outputPath = str(pdbqtFile.resolve())
+            inputPath = str(file.resolve())
+
+            if suffix == ".cif":
+                pdbFile = Path(baseDir) / f"{basename}.pdb"
+                cifToPdb(inputPath, str(pdbFile.resolve()))
+                inputPath = str(pdbFile.resolve())
+
+            args = f"-ipdb {inputPath} -opdbqt -O {outputPath}"
+            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
 
 
     def removePdbFiles(self, directory):
