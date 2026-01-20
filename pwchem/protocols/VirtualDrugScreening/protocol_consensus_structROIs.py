@@ -467,7 +467,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     help='Clustering method based on graph communities based on residues overlapping.'
                          '\nLouvain selects the best partition of communities.'
                          '\nConnected components select those clusters with enough similarity.')
-        g2.addParam('minSimil', params.FloatParam, default=0.75, label='Minimum similarity: ',
+        g2.addParam('minSimil', params.FloatParam, default=0.8, label='Minimum similarity: ',
                     help="Minimum similarity for two ROIs to be considered in the same cluster. "
                          "It is calculated as the weighted sum of residue proportion of overlap and spatial similarity")
         g2.addParam('spatialW', params.FloatParam, default=0.4, label='Spatial weight: ',
@@ -494,7 +494,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     label='Minimun number of overlapping structural regions: ',
                     help="Min number of structural regions to be considered consensus StructROIs")
 
-        g3.addParam('minFreq', params.FloatParam, default=0.75, label='Minimum frequency for intersection: ',
+        g3.addParam('minFreq', params.FloatParam, default=0.6, label='Minimum frequency for intersection: ',
                     expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC}',
                     help='Minimum frequency a residue bust appear in a cluster to be considered intersection.')
         g3.addParam('controlSize', params.BooleanParam, default=True, label='Control intersection size: ',
