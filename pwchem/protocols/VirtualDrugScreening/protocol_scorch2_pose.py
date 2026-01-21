@@ -82,7 +82,7 @@ class ProtocolSCORCH2(EMProtocol):
                         label='PS weight: ', help="Weight for SC2-PS predictions")
         iGroup.addParam('pbWeight', params.FloatParam, default=0.3, expertLevel=params.LEVEL_ADVANCED,
                         label='PB weight: ', help="Weight for SC2-PB predictions")
-        iGroup.addParam('numCores', params.IntParam, default=25, expertLevel=params.LEVEL_ADVANCED, condition='not useFeatures',
+        iGroup.addParam('numCores', params.IntParam, default=5, expertLevel=params.LEVEL_ADVANCED, condition='not useFeatures',
                         label='Cores to use: ', help="NUmber of CPU cores to use for feature extraction.")
 
     # --------------------------- STEPS functions ------------------------------
