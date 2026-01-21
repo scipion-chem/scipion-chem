@@ -418,8 +418,7 @@ class ProtDefineStructROIs(EMProtocol):
                     ])
 
                 for (ch1, res1, ch2, res2), dists in residuePairs.items():
-                    meanDist = sum(dists) / len(dists)
-                    writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
+                    writer.writerow([ch1, res1, ch2, res2, f'{min(dists):.2f}'])
 
 
         elif roiKey == 'Near_Residues:':
