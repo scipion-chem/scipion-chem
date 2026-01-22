@@ -404,9 +404,8 @@ class ProtDefineStructROIs(EMProtocol):
                         resName2 = atom2.get_parent().get_resname()
 
                         key = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
-                        residuePairs[key].append(dist)
-
-                        break
+                        if not key in residuePairs or dist < residuePairs[key]:
+                          residuePairs[key] = dist
 
             with open(interactionsFile, mode='a', newline='') as f:
                 writer = csv.writer(f)
@@ -414,12 +413,11 @@ class ProtDefineStructROIs(EMProtocol):
                     writer.writerow([
                         'Chain1', 'Residue1',
                         'Chain2', 'Residue2',
-                        'Mean distance'
+                        'Min distance'
                     ])
 
-                for (ch1, res1, ch2, res2), dists in residuePairs.items():
-                    meanDist = sum(dists) / len(dists)
-                    writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
+                for (ch1, res1, ch2, res2), dist in residuePairs.items():
+                    writer.writerow([ch1, res1, ch2, res2, f'{dist:.2f}'])
 
 
         elif roiKey == 'Near_Residues:':
