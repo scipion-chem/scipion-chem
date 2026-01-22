@@ -55,6 +55,7 @@ class ProtocolSCORCH2(EMProtocol):
     """
     _label = 'SCORCH2 rescoring'
     _defaultName = 'prot'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
