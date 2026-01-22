@@ -65,10 +65,7 @@ class ProtChemGroupByAtt(EMProtocol):
                     outputSet.append(newItem)
 
 
-            if hasattr(inputSet, 'isDocked') and hasattr(outputSet, 'setDocked'):
-                outputSet.setDocked(inputSet.isDocked())
-            if hasattr(inputSet, 'proteinFile') and inputSet.getProteinFile() is not None:
-                outputSet.setProteinFile(inputSet.getProteinFile())
+            outputSet.copyInfo(inputSet)
 
             outputName = f'outputSet{j}'
             self._defineOutputs(**{outputName: outputSet})
