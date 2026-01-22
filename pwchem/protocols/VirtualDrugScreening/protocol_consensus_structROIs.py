@@ -136,8 +136,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
         # Getting the representative of the clusters from any of the inputs
         ref = 0 if self.doMap else None
 
-        print(f'fromSet: {self.fromSet.get()}')
-
         self.consensusPockets = self.cluster2representative(pocketClusters, onlyRef=ref)
 
         if self.outIndv.get():
@@ -208,7 +206,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
     def getSetId(self):
         """Return the index of the set whose name matches fromSet"""
         targetName = self.fromSet.get()
-        for idx, setPointer in enumerate(self.inputStructROIsSets.get()):
+        for idx, setPointer in enumerate(self.inputStructROIsSets):
             roiSet = setPointer.get()
             if str(roiSet) == targetName:
                 return idx
@@ -416,15 +414,12 @@ class ProtocolConsensusStructROIs(EMProtocol):
         representatives = []
         for i, clust in enumerate(clusters):
             # Check if cluster is big enough
-            print(self.countPocketsInCluster(clust) >= minSize)
             if self.countPocketsInCluster(clust) >= minSize:
                 # Representative only from reference (first) protein if they are different
 
                 # Filter based on fromSet
-                print(f'fromSet: {self.fromSet.get()}')
                 if self.fromSet.get() != '':
                     setId = self.getSetId()
-                    print(f'set id: {setId}')
                     if setId is not None:
                         clustFiltered = self.filterPocketsBySet(clust, setId)
                     else:
