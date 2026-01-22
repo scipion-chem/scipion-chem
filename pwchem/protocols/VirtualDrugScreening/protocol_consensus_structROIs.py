@@ -95,8 +95,13 @@ class ProtocolConsensusStructROIs(EMProtocol):
                            'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
                            '\nIntersection creates a new standard pocket with the interecting residues from the '
                            'ROIs in the cluster (if any)')
+        #todo create fromSet to choose the input set where the representatives will be from
+        # continue w/ this
+        form.addParam('fromSet', params.StringParam, label="Representative from: ", default='',
+                       help='Select where the representative is from ')
+
         form.addParam('numOfOverlap', params.IntParam, default=2,
-                      label='Minimun number of overlapping structural regions: ',
+                      label='Minimum number of overlapping structural regions: ',
                       help="Min number of structural regions to be considered consensus StructROIs")
         form.addParam('sameClust', params.BooleanParam, default=False,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
@@ -105,6 +110,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addParam('keepSmall', params.BooleanParam, default=False,
                       label='Keep small ROIs: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to keep as output the smaller ROIs if they overlap.')
+
+
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
