@@ -95,10 +95,14 @@ class ProtocolConsensusStructROIs(EMProtocol):
                            'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
                            '\nIntersection creates a new standard pocket with the interecting residues from the '
                            'ROIs in the cluster (if any)')
-        #todo create fromSet to choose the input set where the representatives will be from
-        # continue w/ this
-        form.addParam('fromSet', params.StringParam, label="Representative from: ", default='',
-                       help='Select where the representative is from ')
+        #todo finish this
+        form.addParam('chooseSet', params.BooleanParam, default=True,
+                      label='Output only from one set: ',
+                      help='Whether to select the representative only from one input set.')
+        #todo method to retrieve object
+        form.addParam('fromSet', params.StringParam, label="Representative set: ",
+                       default='', condition='chooseSet',
+                       help='Select the representative set that will be used for output generation.')
 
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimum number of overlapping structural regions: ',
@@ -131,6 +135,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
         pocketClusters = self.generatePocketClusters()
         # Getting the representative of the clusters from any of the inputs
         ref = 0 if self.doMap else None
+
+        print(f'fromSet: {self.fromSet.get()}')
+
         self.consensusPockets = self.cluster2representative(pocketClusters, onlyRef=ref)
 
         if self.outIndv.get():
@@ -198,6 +205,15 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
 
     # --------------------------- UTILS functions -----------------------------------
+    def getSetId(self):
+        """Return the index of the set whose name matches fromSet"""
+        targetName = self.fromSet.get()
+        for idx, setPointer in enumerate(self.inputStructROIsSets.get()):
+            roiSet = setPointer.get()
+            if str(roiSet) == targetName:
+                return idx
+        return None
+
     def isPocketInside(self, small, big):
         resSmall = set(small.getDecodedCResidues())
         resBig = set(big.getDecodedCResidues())
@@ -400,12 +416,25 @@ class ProtocolConsensusStructROIs(EMProtocol):
         representatives = []
         for i, clust in enumerate(clusters):
             # Check if cluster is big enough
+            print(self.countPocketsInCluster(clust) >= minSize)
             if self.countPocketsInCluster(clust) >= minSize:
                 # Representative only from reference (first) protein if they are different
-                if onlyRef is not None:
-                    clust = self.filterPocketsBySet(clust, onlyRef)
 
-                if clust:
+                # Filter based on fromSet
+                print(f'fromSet: {self.fromSet.get()}')
+                if self.fromSet.get() != '':
+                    setId = self.getSetId()
+                    print(f'set id: {setId}')
+                    if setId is not None:
+                        clustFiltered = self.filterPocketsBySet(clust, setId)
+                    else:
+                        clustFiltered = []
+                elif onlyRef is not None:
+                    clustFiltered = self.filterPocketsBySet(clust, onlyRef)
+                else:
+                    clustFiltered = clust
+
+                if clustFiltered:
                     if not self.keepSmall.get():
                         if self.repChoice.get() == MAXVOL:
                             outPocket = self.getMaxVolumePocket(clust)
@@ -416,9 +445,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
                         representatives.append(outPocket)
                     else:
                         # Keep only pockets that are strictly contained in another one
-                        for pock in clust:
+                        for pock in clustFiltered:
                             isInside = False
-                            for other in clust:
+                            for other in clustFiltered:
                                 if pock is other:
                                     continue
                                 if self.isPocketInside(pock, other):
