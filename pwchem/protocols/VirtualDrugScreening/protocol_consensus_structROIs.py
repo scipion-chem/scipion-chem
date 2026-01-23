@@ -418,25 +418,25 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 # Representative only from reference (first) protein if they are different
 
                 # Filter based on fromSet
-                if self.fromSet.get() != '':
+                if self.chooseSet.get():
                     setId = self.getSetId()
-                    if setId is not None:
+                    if setId is not 0:
                         clustFiltered = self.filterPocketsBySet(clust, setId)
                     else:
-                        clustFiltered = []
+                        clustFiltered = clust
                 elif onlyRef is not None:
                     clustFiltered = self.filterPocketsBySet(clust, onlyRef)
                 else:
                     clustFiltered = clust
 
                 if clustFiltered:
-                    if not self.keepSmall.get():
+                    if not self.keepSmall.get() or (self.keepSmall.get() and self.chooseSet.get()):
                         if self.repChoice.get() == MAXVOL:
-                            outPocket = self.getMaxVolumePocket(clust)
+                            outPocket = self.getMaxVolumePocket(clustFiltered)
                         elif self.repChoice.get() == MAXSURF:
-                            outPocket = self.getMaxSurfacePocket(clust)
+                            outPocket = self.getMaxSurfacePocket(clustFiltered)
                         elif self.repChoice.get() == INTERSEC:
-                            outPocket = self.getIntersectionPocket(clust, i)
+                            outPocket = self.getIntersectionPocket(clustFiltered, i)
                         representatives.append(outPocket)
                     else:
                         # Keep only pockets that are strictly contained in another one
