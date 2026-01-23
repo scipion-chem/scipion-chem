@@ -426,7 +426,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     if setId is not None:
                         clustFiltered = self.filterPocketsBySet(clust, setId)
                         if not clustFiltered:
-                            print(f'----no ha encontrado clust de este set')
                             if self.fallbackToOtherSets.get():
                                 clustFiltered = clust
                             else:
