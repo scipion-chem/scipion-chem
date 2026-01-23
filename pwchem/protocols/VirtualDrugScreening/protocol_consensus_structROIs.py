@@ -103,6 +103,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
         form.addParam('fromSet', params.StringParam, label="Representative set: ",
                        default='', condition='chooseSet',
                        help='Select the representative set that will be used for output generation.')
+        form.addParam('fallbackToOtherSets', params.BooleanParam, default=False,
+                      label='Add pockets from other sets if none in chosen set: ',  condition='chooseSet',
+                      help='If True, choose representative from any other input set when the chosen set has no pockets in the cluster. If False, ignore cluster.')
 
         form.addParam('numOfOverlap', params.IntParam, default=2,
                       label='Minimum number of overlapping structural regions: ',
@@ -420,10 +423,19 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 # Filter based on fromSet
                 if self.chooseSet.get():
                     setId = self.getSetId()
-                    if setId is not 0:
+                    if setId is not None:
                         clustFiltered = self.filterPocketsBySet(clust, setId)
+                        if not clustFiltered:
+                            print(f'----no ha encontrado clust de este set')
+                            if self.fallbackToOtherSets.get():
+                                clustFiltered = clust
+                            else:
+                                continue
                     else:
-                        clustFiltered = clust
+                        if self.fallbackToOtherSets.get():
+                            clustFiltered = clust
+                        else:
+                            continue
                 elif onlyRef is not None:
                     clustFiltered = self.filterPocketsBySet(clust, onlyRef)
                 else:
