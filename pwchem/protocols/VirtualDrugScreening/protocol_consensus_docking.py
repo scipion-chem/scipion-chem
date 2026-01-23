@@ -92,12 +92,16 @@ class ProtocolConsensusDocking(EMProtocol):
                       help="Min number of docked molecules to be considered consensus docking")
 
         group = form.addGroup('Representative')
-        group.addParam('repAttr', params.StringParam, default='',
-                      label='Criteria to choose cluster representative: ',
-                      help='Criteria to follow on docking clusters to choose a representative. '
+        group.addParam('repMode', params.EnumParam, default=0, choices=['Centroid', 'By attribute'],
+                       label='Representative choice mode: ',
+                       help='How to choose the representative from the clusters')
+        group.addParam('repAttr', params.StringParam, default='', condition='repMode==1',
+                      label='Attribute to choose cluster representative: ',
+                      help='Criteria attribute  to follow on docking clusters to choose a representative. '
                            'It will extract the representative as the pose with max/min (next argument) value '
                            'of this attribute')
-        group.addParam('maxmin', params.EnumParam, default=MAX, choices=['Minimum', 'Maximum'], label='Keep values: ',
+        group.addParam('maxmin', params.EnumParam, default=MAX, choices=['Minimum', 'Maximum'],
+                       label='Keep values: ', condition='repMode==1',
                        help='Whether to keep the minimum or maximum values of the criteria attribute to select the '
                             'representative')
 
@@ -195,7 +199,7 @@ class ProtocolConsensusDocking(EMProtocol):
                 validations.append('Sets of input molecules must be docked first.\n'
                                 'Set: {} has not been docked'.format(pSet))
 
-        if not self.repAttr.get() or not self.repAttr.get().strip():
+        if self.repMode.get() == 1 and (not self.repAttr.get() or not self.repAttr.get().strip()):
             validations.append('You must specify an attribute to choose a ligand representative of the generated '
                                'cluster. Typically, the energy or the score, to choose the best out of the cluster')
 
@@ -383,15 +387,71 @@ class ProtocolConsensusDocking(EMProtocol):
                 representatives.append(repr)
         return representatives
 
+    def getCentroidMolecule(self, molecules, method='medoid'):
+        """
+        Find the centroid molecule from a set based on RMSD.
+
+        Parameters:
+        -----------
+        molecules : list
+            List of molecules (can be coordinates, molecule objects, etc.)
+
+        method : str
+            Method to find centroid:
+            - 'medoid': molecule with minimum average RMSD to all others
+            - 'minimax': molecule with minimum maximum RMSD to any other
+
+        Returns:
+        --------
+        centroid : mol
+            Centroid molecule in the input list
+
+        centroid_rmsd : float
+            Average RMSD from centroid to all other molecules
+
+        """
+
+        n_molecules = len(molecules)
+
+        # Compute distance matrix if not provided
+        distance_matrix = np.zeros((n_molecules, n_molecules))
+
+        # Fill the distance matrix
+        for i in range(n_molecules):
+            for j in range(i + 1, n_molecules):
+                rmsd = self.calculateMolsRMSD(molecules[i], molecules[j])
+                distance_matrix[i, j] = rmsd
+                distance_matrix[j, i] = rmsd
+
+        if method == 'medoid':
+            # Calculate average RMSD for each molecule
+            avg_distances = np.mean(distance_matrix, axis=1)
+            centroid_idx = np.argmin(avg_distances)
+
+        elif method == 'minimax':
+            # Find molecule with minimum maximum distance to any other
+            max_distances = np.max(distance_matrix, axis=1)
+            centroid_idx = np.argmin(max_distances)
+
+        else:
+            raise ValueError(f"Unknown method: {method}. Use 'medoid', 'minimax'")
+
+        centroid = molecules[centroid_idx]
+        return centroid
+
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
-        maxScore = -10e15 if self.maxmin.get() == MAX else 10e15
-        for mol in cluster:
-            molScore = getattr(mol, self.repAttr.get())
-            if (molScore > maxScore and self.maxmin.get() == MAX) or \
-                    (molScore < maxScore and self.maxmin.get() == MIN):
-                maxScore = molScore
-                outMol = mol.clone()
+        if self.repMode.get() == 0:
+            centroidMol = self.getCentroidMolecule(cluster)
+            outMol = centroidMol.clone()
+        else:
+            maxScore = -10e15 if self.maxmin.get() == MAX else 10e15
+            for mol in cluster:
+                molScore = getattr(mol, self.repAttr.get())
+                if (molScore > maxScore and self.maxmin.get() == MAX) or \
+                        (molScore < maxScore and self.maxmin.get() == MIN):
+                    maxScore = molScore
+                    outMol = mol.clone()
         return outMol
 
     def getMinEnergyMolecule(self, cluster):
