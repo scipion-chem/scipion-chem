@@ -95,11 +95,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
                            'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
                            '\nIntersection creates a new standard pocket with the interecting residues from the '
                            'ROIs in the cluster (if any)')
-        #todo finish this
         form.addParam('chooseSet', params.BooleanParam, default=True,
                       label='Output only from one set: ',
                       help='Whether to select the representative only from one input set.')
-        #todo method to retrieve object
         form.addParam('fromSet', params.StringParam, label="Representative set: ",
                        default='', condition='chooseSet',
                        help='Select the representative set that will be used for output generation.')
