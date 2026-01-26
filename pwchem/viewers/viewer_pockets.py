@@ -40,6 +40,7 @@ from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.protocols import ProtocolConsensusStructROIs
 
+MIN_DIST = 'Min distance'
 
 class StructROIPointsViewer(pwviewer.Viewer):
   _label = 'Viewer structural ROIs'
@@ -106,15 +107,15 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
         form.addParam('distanceMinThreshold', params.FloatParam,
                       label='Min distance to display (Å)',
                       default=0.0,
-                      help='Only show residue pairs with mean distance above this threshold.')
+                      help='Only show residue pairs with min distance above this threshold.')
         form.addParam('distanceMaxThreshold', params.FloatParam,
                       label='Max distance to display (Å)',
                       default=5.0,
-                      help='Only show residue pairs with mean distance below this threshold.')
+                      help='Only show residue pairs with min distance below this threshold.')
         form.addParam('labelDistances', params.BooleanParam,
                       label='Label distances',
                       default=True,
-                      help='Display mean distance labels on the connecting lines.')
+                      help='Display min distance labels on the connecting lines.')
 
   def _getVisualizeDict(self):
     return {
@@ -215,12 +216,12 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
 
       data.dtype.names = tuple(n.strip().replace(' ', '_') for n in data.dtype.names)
 
-      required_cols = {'Chain1', 'Residue1', 'Chain2', 'Residue2', 'Mean_distance'}
+      required_cols = {'Chain1', 'Residue1', 'Chain2', 'Residue2', 'Min_distance'}
       missing = required_cols - set(data.dtype.names)
       if missing:
           raise ValueError(f"Missing expected columns in CSV: {missing}")
 
-      distances = data['Mean_distance'].astype(float)
+      distances = data['Min_distance'].astype(float)
       mask = (distances >= minDistance) & (distances <= maxDistance)
       filtered = data[mask]
 
@@ -293,10 +294,10 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
         res1 = row['Residue1']
         res2 = row['Residue2']
 
-        if 'Mean distance' in df.dtype.names:
-            meanDist = float(row['Mean distance'])
+        if MIN_DIST in df.dtype.names:
+            meanDist = float(row[MIN_DIST])
         else:
-            meanDist = float(row['Mean_distance'])
+            meanDist = float(row['Min_distance'])
 
         if (ch1, res1) not in nodeArtists or (ch2, res2) not in nodeArtists:
             continue
