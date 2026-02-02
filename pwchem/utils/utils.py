@@ -934,9 +934,10 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
           struct = MMCIFParser().get_structure(structName, structFile)
           if singleModel is not None:
               struct = struct[singleModel]
-          io = PDBIO()
+          io = MMCIFIO()  # Use MMCIFIO for CIF output
           io.set_structure(struct)
           io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+
   else:
       print('Unknown format for file ', structFile)
       exit()
