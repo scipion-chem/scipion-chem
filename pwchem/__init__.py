@@ -89,7 +89,7 @@ class Plugin(pwem.Plugin):
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
     def getEnvName(cls, packageDictionary):
-        """ This function returns the name of the conda enviroment for a given package. """
+        """ This function returns the name of the conda environment for a given package. """
         return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
 
     @classmethod
