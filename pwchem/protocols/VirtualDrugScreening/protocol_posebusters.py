@@ -146,7 +146,7 @@ class ProtocolPoseBusters(EMProtocol):
 
         form.addParam('filterOp', params.EnumParam, label='Filter operation: ',
                        condition='chooseFilterLongTxt==1', default=3,
-                       choices=['==', '>', '>=', '<', '<=', '!=', 'between'])
+                       choices=['==', '>', '>=', '<', '<=', 'between'])
 
         form.addParam('energyRatio', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and ((not molCond and not useTrueMol and filterColLongTxt == 0) or (not molCond and useTrueMol and filterColLongTxtTrueMol == 0) or (molCond and not useTrueMol and filterColLongTxtProt == 0) or \
@@ -474,8 +474,6 @@ class ProtocolPoseBusters(EMProtocol):
             return val < threshold
         elif op == '<=':
             return val <= threshold
-        elif op == '!=':
-            return val != threshold
         else:
             return val < threshold
 
