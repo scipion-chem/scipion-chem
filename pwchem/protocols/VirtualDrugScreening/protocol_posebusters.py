@@ -45,8 +45,16 @@ from pwchem.utils import *
 from pwem.convert import cifToPdb
 
 class ProtocolPoseBusters(EMProtocol):
-    normalAndOnlyProt = ['energy_ratio', 'number_clashes', 'aromatic_ring_maximum_distance_from_plane']
-    large = ['energy_ratio', 'number_clashes', 'aromatic_ring_maximum_distance_from_plane', 'kabsch_rmsd', 'centroid_distance']
+    FILTER_COLUMNS = {
+        "normal": ['energy_ratio', 'number_clashes', 'aromatic_ring_maximum_distance_from_plane'],
+        "true": ['energy_ratio', 'number_clashes', 'aromatic_ring_maximum_distance_from_plane',
+                 'kabsch_rmsd', 'centroid_distance'],
+        "prot": ['energy_ratio', 'number_clashes', 'aromatic_ring_maximum_distance_from_plane',
+                 'volume_overlap_protein', 'smallest_distance_protein'],
+        "true_prot": ['energy_ratio', 'number_clashes', 'aromatic_ring_maximum_distance_from_plane',
+                      'kabsch_rmsd', 'centroid_distance',
+                      'volume_overlap_protein', 'smallest_distance_protein']
+    }
 
     normalTests = 12
     trueMolTests = 18
@@ -91,7 +99,7 @@ class ProtocolPoseBusters(EMProtocol):
         form.addParam('outputFormat', params.EnumParam, choices=['short', 'long', 'csv'], default=2,
                        label="Output format: ",
                        help='Choose whether to output full report or not.')
-        form.addParam('fullReport', params.BooleanParam, default=True, condition='outputFormat == 2',
+        form.addParam('fullReport', params.BooleanParam, default=True, condition='outputFormat != 0',
                       label="Output full report: ",
                       help='Choose whether to output full report or not.')
         form.addParam('filter', params.BooleanParam, default=False,
@@ -120,34 +128,51 @@ class ProtocolPoseBusters(EMProtocol):
                       help='Number of tests passed to keep the molecules.')
 
         form.addParam('filterColLongTxt', params.EnumParam, default=0,
-                      condition=' chooseFilterLongTxt == 1 and not molCond',
-                      label="Column: ", choices=self.normalAndOnlyProt,
+                      condition=' chooseFilterLongTxt == 1 and not molCond and not useTrueMol',
+                      label="Column: ", choices=self.FILTER_COLUMNS["normal"],
+                      help='Choose how to apply the filter over the results.')
+        form.addParam('filterColLongTxtTrueMol', params.EnumParam, default=0,
+                      condition='chooseFilterLongTxt == 1 and not molCond and useTrueMol',
+                      label="Column: ", choices=self.FILTER_COLUMNS["true"],
                       help='Choose how to apply the filter over the results.')
         form.addParam('filterColLongTxtProt', params.EnumParam, default=0,
-                      condition='chooseFilterLongTxt == 1 and molCond',
-                      label="Column: ", choices=self.large,
+                      condition='chooseFilterLongTxt == 1 and molCond and not useTrueMol',
+                      label="Column: ", choices=self.FILTER_COLUMNS["prot"],
+                      help='Choose how to apply the filter over the results.')
+        form.addParam('filterColLongTxtAll', params.EnumParam, default=0,
+                      condition='chooseFilterLongTxt == 1 and molCond and useTrueMol',
+                      label="Column: ", choices=self.FILTER_COLUMNS["true_prot"],
                       help='Choose how to apply the filter over the results.')
 
         form.addParam('energyRatio', params.FloatParam,
-                      condition='chooseFilterLongTxt == 1 and ((not molCond and filterColLongTxt == 0) or (molCond and filterColLongTxtProt == 0))',
+                      condition='chooseFilterLongTxt == 1 and ((not molCond and not useTrueMol and filterColLongTxt == 0) or (not molCond and useTrueMol and filterColLongTxtTrueMol == 0) or (molCond and not useTrueMol and filterColLongTxtProt == 0) or \
+                              (molCond and useTrueMol and filterColLongTxtAll == 0))',
                       label='Energy ratio threshold: ', default=2.0,
                       help='Threshold to keep molecules with energy ratio below it.')
         form.addParam('numClashes', params.IntParam,
-                      condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 1 or filterColLongTxtProt==1)',
+                      condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 1 or filterColLongTxtTrueMol==1 or filterColLongTxtProt==1 or filterColLongTxtAll==1)',
                       label='Number of clashes threshold: ', default=0,
                       help='Threshold to keep molecules with number or clashes below it.')
         form.addParam('ringPlanarity', params.FloatParam,
-                      condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 2 or filterColLongTxtProt==2)',
+                      condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 2 or filterColLongTxtTrueMol==2 or filterColLongTxtProt==2 or filterColLongTxtAll==2)',
                       label='Ring planarity threshold: ', default=0.05,
                       help='Threshold to keep molecules with ring planarity below it.')
         form.addParam('rmsd', params.FloatParam,
-                      condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 2 or filterColLongTxtProt==3)',
+                      condition='chooseFilterLongTxt == 1 and (filterColLongTxtTrueMol==3) or filterColLongTxtAll==3',
                       label='RMSD threshold: ', default=2.5,
                       help='Threshold to keep molecules with rmsd below it.')
         form.addParam('centroidDist', params.FloatParam,
-                      condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 2 or filterColLongTxtProt==4)',
-                      label='Centroid distance threshold: ', default=8.0,
+                      condition='chooseFilterLongTxt == 1 and (filterColLongTxtTrueMol==4) or filterColLongTxtAll==4',
+                      label='Centroid distance threshold: ', default=12.0,
                       help='Threshold to keep molecules with centroid distance below it.')
+        form.addParam('volOverlap', params.FloatParam,
+                      condition='chooseFilterLongTxt == 1 and (filterColLongTxtProt==3) or filterColLongTxtAll==5',
+                      label='Volume overlap threshold: ', default=0.05,
+                      help='Threshold to keep molecules with volume overlap below it.')
+        form.addParam('smallDist', params.FloatParam,
+                      condition='chooseFilterLongTxt == 1 and (filterColLongTxtProt==4) or filterColLongTxtAll==5',
+                      label='Smallest distance threshold: ', default=6.0,
+                      help='Threshold to keep molecules with smallest distance to protein below it.')
 
 
 
@@ -267,12 +292,46 @@ class ProtocolPoseBusters(EMProtocol):
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
 
         csvRows = {}
+        txtRows = {}
         if resultsFile.endswith('.csv'):
             with open(resultsFile) as f:
                 reader = csv.DictReader(f, delimiter=',')
                 for row in reader:
                     poseName = os.path.basename(row['molecule'])
                     csvRows[poseName] = row
+        else:
+            if self.outputFormat.get() == 0:
+                with open(resultsFile) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        poseFile = line.split()[0]
+                        poseName = os.path.basename(poseFile)
+                        txtRows[poseName] = line
+            else:
+                with open(resultsFile) as f:
+                    currentPose = None
+                    buffer = []
+                    for line in f:
+                        line = line.rstrip()
+                        if line.startswith("Long summary for "):
+                            # save previous block
+                            if currentPose is not None and buffer:
+                                txtRows[currentPose] = "\n".join(buffer)
+                            # extract pose name correctly
+                            posePath = line[len("Long summary for "):].strip()
+                            poseFile = posePath.split()[0]
+                            currentPose = os.path.basename(poseFile).split('.')[0]
+                            buffer = [line]
+                        else:
+                            if currentPose is not None:
+                                buffer.append(line)
+                    # save last block
+                    if currentPose is not None and buffer:
+                        txtRows[currentPose] = "\n".join(buffer)
+                    print(f'keys: {txtRows.keys()}')
+
 
         predPose = self.getSpecifiedMol('pred')
         predPoseFile = predPose.getPoseFile() if predPose else None
@@ -299,9 +358,28 @@ class ProtocolPoseBusters(EMProtocol):
                         keep = self.rowPassesShortCsvTests(csvRows[poseName])
                     else:
                         keep = self.rowPassesColValue(csvRows[poseName])
-                else: #todo filter txt files
-                    if self.outputFormat.get() == 0: #short txt
-                        keep = self.molPassesShortTxtTests()
+                else:
+                    if self.outputFormat.get() == 0:  # short txt
+                        poseLine = None
+                        poseBase = os.path.splitext(poseName)[0]
+                        for key, line in txtRows.items():
+                            txtBase = os.path.splitext(os.path.basename(line.split()[1]))[0]
+                            if poseBase == txtBase:
+                                poseLine = line
+                                break
+                        if poseLine is not None:
+                            keep = self.molPassesShortTxtTests(poseLine)
+                    else:  # long txt
+                        if self.chooseFilterLongTxt.get() == 1: #filter value w/ threshold
+                            poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
+                            poseLine = txtRows.get(poseName)
+                            if poseLine is not None:
+                                keep = self.rowPassesColValueTxt(poseLine)
+                        else:
+                            poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
+                            poseLine = txtRows.get(poseName)
+                            if poseLine is not None:
+                                keep = self.rowPassesColTxt(poseLine)
 
             if keep and add:
                 newMols.append(newMol)
@@ -310,7 +388,7 @@ class ProtocolPoseBusters(EMProtocol):
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = []
+        summary = ['A results file has been created in the extra folder with the results of the tests.']
         return summary
 
     def _methods(self):
@@ -323,6 +401,200 @@ class ProtocolPoseBusters(EMProtocol):
         if not molSet.isDocked():
             validations += ['{} is not docked yet'.format(molSet)]
 
+        tests, testNum = self.getTestInfo()
+
+        if tests > testNum or tests < 1:
+            validations += [f'only {testNum} tests are performed.']
+
+        return validations
+
+    def _warnings(self):
+        warnings = []
+        return warnings
+
+    # --------------------------- UTILS functions -----------------------------------
+    def getMode(self):
+        if self.useTrueMol.get() and self.molCond.get():
+            return "true_prot"
+        elif self.useTrueMol.get():
+            return "true"
+        elif self.molCond.get():
+            return "prot"
+        else:
+            return "normal"
+
+    def getSelectedColumnAndThreshold(self):
+        mode = self.getMode()
+        if mode == "normal":
+            idx = self.filterColLongTxt.get()
+        elif mode == "true":
+            idx = self.filterColLongTxtTrueMol.get()
+        elif mode == "prot":
+            idx = self.filterColLongTxtProt.get()
+        else:
+            idx = self.filterColLongTxtAll.get()
+
+        colName = self.FILTER_COLUMNS[mode][idx]
+
+        thrMap = {
+            'energy_ratio': self.energyRatio.get(),
+            'number_clashes': self.numClashes.get(),
+            'aromatic_ring_maximum_distance_from_plane': self.ringPlanarity.get(),
+            'kabsch_rmsd': self.rmsd.get(),
+            'centroid_distance': self.centroidDist.get(),
+            'volume_overlap_protein': self.volOverlap.get(),
+            'smallest_distance_protein': self.smallDist.get()
+        }
+
+        threshold = thrMap.get(colName)
+        return colName, threshold
+
+    def valuePasses(self, value):
+        colName, threshold = self.getSelectedColumnAndThreshold()
+        if value is None:
+            return False
+        try:
+            return float(value) < threshold
+        except:
+            return False
+
+    def rowPassesColTxt(self, txtBlock):
+        testsToCheck, testsRequired = self.getTestsToPassTxt()
+        passed = 0
+        for line in txtBlock.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            for test in testsToCheck:
+                if line.startswith(test):
+                    if '.' in line and 'Fail' not in line:
+                        passed += 1
+                    break
+        return passed >= testsRequired
+
+    def getTestsToPassTxt(self):
+        if self.useTrueMol.get() and not self.molCond.get():
+            tests = [
+                'MOL_PRED loaded',
+                'MOL_TRUE loaded',
+                'Sanitization',
+                'InChI convertible',
+                'All atoms connected',
+                'No radicals',
+                'Molecular formula',
+                'Molecular bonds',
+                'Double bond stereochemistry',
+                'Tetrahedral chirality',
+                'Bond lengths',
+                'Bond angles',
+                'Internal steric clash',
+                'Aromatic ring flatness',
+                'Non-aromatic ring non-flatness',
+                'Double bond flatness',
+                'Internal energy',
+                'RMSD ≤ 2Å'
+            ]
+            testNum = self.testsPassedTrueMol.get()
+        elif self.useTrueMol.get() and self.molCond.get():
+            tests = [
+                'MOL_PRED loaded',
+                'MOL_COND loaded',
+                'Sanitization',
+                'InChI convertible',
+                'All atoms connected',
+                'No radicals',
+                'Molecular formula',
+                'Molecular bonds',
+                'molecular_bonds',
+                'Double bond stereochemistry',
+                'Tetrahedral chirality',
+                'Bond lengths',
+                'Bond angles',
+                'Internal steric clash',
+                'Aromatic ring flatness',
+                'Non-aromatic ring non-flatness',
+                'Double bond flatness',
+                'Internal energy',
+                'Protein-ligand maximum distance',
+                'Minimum distance to protein',
+                'Minimum distance to organic cofactors',
+                'Minimum distance to inorganic cofactors',
+                'Minimum distance to waters',
+                'Volume overlap with protein',
+                'Volume overlap with organic cofactors',
+                'Volume overlap with inorganic cofactors',
+                'Volume overlap with waters',
+                'RMSD ≤ 2Å'
+            ]
+            testNum = self.testsPassedTrueMolProt.get()
+        elif self.molCond.get() and not self.useTrueMol.get():
+            tests = [
+                'MOL_PRED loaded',
+                'MOL_COND loaded',
+                'Sanitization',
+                'InChI convertible',
+                'All atoms connected',
+                'No radicals',
+                'Bond lengths',
+                'Bond angles',
+                'Internal steric clash',
+                'Aromatic ring flatness',
+                'Non-aromatic ring non-flatness',
+                'Double bond flatness',
+                'Internal energy',
+                'Protein-ligand maximum distance',
+                'Minimum distance to protein',
+                'Minimum distance to organic cofactors',
+                'Minimum distance to inorganic cofactors',
+                'Minimum distance to waters',
+                'Volume overlap with protein',
+                'Volume overlap with organic cofactors',
+                'Volume overlap with inorganic cofactors ',
+                'Volume overlap with waters'
+            ]
+            testNum = self.testsPassedProt.get()
+        else:
+            tests = [
+                'MOL_PRED loaded',
+                'Sanitization',
+                'InChI convertible',
+                'All atoms connected',
+                'No radicals',
+                'Bond lengths',
+                'Bond angles',
+                'Internal steric clash',
+                'Aromatic ring flatness',
+                'Non-aromatic ring non-flatness',
+                'Double bond flatness',
+                'Internal energy'
+            ]
+            testNum = self.testsPassedNormal.get()
+
+        return tests, testNum
+
+    def rowPassesColValueTxt(self, txtBlock):
+        metrics = {}
+
+        for line in txtBlock.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            parts = line.rsplit(maxsplit=1)
+            if len(parts) != 2:
+                continue
+
+            key, val = parts
+            metrics[key.strip()] = val.strip()
+
+        colName, threshold = self.getSelectedColumnAndThreshold()
+        if colName is None:
+            return False
+
+        val = metrics.get(colName)
+        return self.valuePasses(val)
+
+    def getTestInfo(self):
         if self.useTrueMol.get() and not self.molCond.get():
             testNum = self.trueMolTests
             tests = self.testsPassedTrueMol.get()
@@ -335,17 +607,23 @@ class ProtocolPoseBusters(EMProtocol):
         else:
             testNum= self.normalTests
             tests = self.testsPassedNormal.get()
+        return tests, testNum
 
-        if tests > testNum or tests < 1:
-            validations += [f'only {testNum} tests are performed.']
+    def molPassesShortTxtTests(self, txtLine):
+        txtLine = txtLine.strip()
+        if not txtLine:
+            return False
+        import re
+        match = re.search(r'\((\d+)\s*/\s*(\d+)\)', txtLine)
+        if not match:
+            print(f"Warning: Could not parse test counts from line:\n{txtLine}")
+            return False
 
-        return validations
+        passed = int(match.group(1))
+        tests, _ = self.getTestInfo()
 
-    def _warnings(self):
-        warnings = []
-        return warnings
+        return passed >= tests
 
-    # --------------------------- UTILS functions -----------------------------------
     def mergeResultFiles(self, files):
         finalFile = self._getPath(
             'results.csv' if self.outputFormat.get() == 2 else 'results.txt'
@@ -394,10 +672,10 @@ class ProtocolPoseBusters(EMProtocol):
                 'inchi_convertible',
                 'all_atoms_connected',
                 'no_radicals',
+                'molecular_formula',
                 'molecular_bonds',
                 'double_bond_stereochemistry',
                 'tetrahedral_chirality',
-                'stereochemistry_preserved',
                 'bond_lengths',
                 'bond_angles',
                 'internal_steric_clash',
@@ -407,7 +685,7 @@ class ProtocolPoseBusters(EMProtocol):
                 'internal_energy',
                 'rmsd_≤_2å'
             ]
-            testNum = self.trueMolTests
+            testNum = self.testsPassedTrueMol.get()
         elif self.useTrueMol.get() and self.molCond.get():
             tests = [
                 'mol_pred_loaded',
@@ -421,7 +699,6 @@ class ProtocolPoseBusters(EMProtocol):
                 'molecular_bonds',
                 'double_bond_stereochemistry',
                 'tetrahedral_chirality',
-                'stereochemistry_preserved',
                 'bond_lengths',
                 'bond_angles',
                 'internal_steric_clash',
@@ -429,6 +706,7 @@ class ProtocolPoseBusters(EMProtocol):
                 'non-aromatic_ring_non-flatness',
                 'double_bond_flatness',
                 'internal_energy',
+                'protein-ligand_maximum_distance',
                 'minimum_distance_to_protein',
                 'minimum_distance_to_organic_cofactors',
                 'minimum_distance_to_inorganic_cofactors',
@@ -439,7 +717,7 @@ class ProtocolPoseBusters(EMProtocol):
                 'volume_overlap_with_waters',
                 'rmsd_≤_2å'
             ]
-            testNum = self.trueMolProtTests
+            testNum = self.testsPassedTrueMolProt.get()
         elif self.molCond.get() and not self.useTrueMol.get():
             tests = [
                 'mol_pred_loaded',
@@ -455,6 +733,7 @@ class ProtocolPoseBusters(EMProtocol):
                 'non-aromatic_ring_non-flatness',
                 'double_bond_flatness',
                 'internal_energy',
+                'protein-ligand_maximum_distance',
                 'minimum_distance_to_protein',
                 'minimum_distance_to_organic_cofactors',
                 'minimum_distance_to_inorganic_cofactors',
@@ -462,10 +741,9 @@ class ProtocolPoseBusters(EMProtocol):
                 'volume_overlap_with_protein',
                 'volume_overlap_with_organic_cofactors',
                 'volume_overlap_with_inorganic_cofactors',
-                'volume_overlap_with_waters',
-                'rmsd_≤_2å'
+                'volume_overlap_with_waters'
             ]
-            testNum = self.protTests
+            testNum = self.testsPassedProt.get()
         else:
             tests = [
                 'mol_pred_loaded',
@@ -481,43 +759,20 @@ class ProtocolPoseBusters(EMProtocol):
                 'double_bond_flatness',
                 'internal_energy'
             ]
-            testNum = self.normalTests
+            testNum = self.testsPassedNormal.get()
 
         return tests, testNum
 
     def rowPassesColValue(self, row):
-        if not self.molCond.get():
-            test = self.filterColLongTxt.get()
-            if test == 0:
-                colName = self.normalAndOnlyProt[0]
-                value = self.energyRatio.get()
-            elif test == 1:
-                colName = self.normalAndOnlyProt[1]
-                value = self.numClashes.get()
-            else:
-                colName = self.normalAndOnlyProt[2]
-                value = self.ringPlanarity.get()
-        else:
-            test = self.filterColLongTxtProt.get()
-            if test == 0:
-                colName = self.large[0]
-                value = self.energyRatio.get()
-            elif test == 1:
-                colName = self.large[1]
-                value = self.numClashes.get()
-            elif test == 2:
-                colName = self.large[2]
-                value = self.ringPlanarity.get()
-            elif test == 3:
-                colName = self.large[3]
-                value = self.rmsd.get()
-            else:
-                colName = self.large[4]
-                value = self.centroidDist.get()
+        colName, threshold = self.getSelectedColumnAndThreshold()
+        if colName is None:
+            return False
 
         csvVal = row.get(colName)
-        keep = True if float(csvVal) < value else False
-        return keep
+        if csvVal is None:
+            return False
+
+        return self.valuePasses(csvVal)
 
 
     def convertFormat(self, molPred, type=''):
@@ -541,7 +796,7 @@ class ProtocolPoseBusters(EMProtocol):
             inpFile = file
         return inpFile
 
-    def getSpecifiedMol(self, string, one=False):
+    def getSpecifiedMol(self, string):
         myMol = None
         if string == 'pred':
             for mol in self.inputMoleculesSets.get():
