@@ -131,19 +131,19 @@ class ProtocolPoseBusters(EMProtocol):
         form.addParam('filterColLongTxt', params.EnumParam, default=0,
                       condition=' chooseFilterLongTxt == 1 and not molCond and not useTrueMol',
                       label="Column: ", choices=self.FILTER_COLUMNS["normal"],
-                      help='Choose how to apply the filter over the results.')
+                      help='Filtering columns options.')
         form.addParam('filterColLongTxtTrueMol', params.EnumParam, default=0,
                       condition='chooseFilterLongTxt == 1 and not molCond and useTrueMol',
                       label="Column: ", choices=self.FILTER_COLUMNS["true"],
-                      help='Choose how to apply the filter over the results.')
+                      help='Filtering columns options.')
         form.addParam('filterColLongTxtProt', params.EnumParam, default=0,
                       condition='chooseFilterLongTxt == 1 and molCond and not useTrueMol',
                       label="Column: ", choices=self.FILTER_COLUMNS["prot"],
-                      help='Choose how to apply the filter over the results.')
+                      help='Filtering columns options.')
         form.addParam('filterColLongTxtAll', params.EnumParam, default=0,
                       condition='chooseFilterLongTxt == 1 and molCond and useTrueMol',
                       label="Column: ", choices=self.FILTER_COLUMNS["true_prot"],
-                      help='Choose how to apply the filter over the results.')
+                      help='Filtering columns options.')
 
         form.addParam('filterOp', params.EnumParam, label='Filter operation: ',
                        condition='chooseFilterLongTxt==1', default=3,
@@ -192,7 +192,6 @@ class ProtocolPoseBusters(EMProtocol):
         self._insertFunctionStep(self.createOutputStep)
 
     def poseBustersStep(self):
-
         outputFormat = self.getEnumText('outputFormat')
         resultsFile = self._getPath(
             'results.csv' if self.outputFormat.get() == 2 else 'results.txt'
@@ -301,6 +300,93 @@ class ProtocolPoseBusters(EMProtocol):
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
 
+        csvRows, txtRows = self.getFileInfo(resultsFile)
+
+        predPose = self.getSpecifiedMol('pred')
+        predPoseFile = predPose.getPoseFile() if predPose else None
+
+        for mol in self.inputMoleculesSets.get():
+            keep = True
+            add = True
+
+            newMol = mol.clone()
+            newMol.PoseBusters_file = String()
+            if self.oneFile.get():
+                if newMol.getPoseFile() == predPoseFile:
+                    newMol.setAttributeValue('PoseBusters_file', resultsFile)
+                else:
+                    add = False
+            else:
+                newMol.setAttributeValue('PoseBusters_file', resultsFile)
+
+            #filter
+            if self.filter.get():
+                keep = self.filterMolecules(resultsFile, csvRows, txtRows, mol)
+
+            if keep and add:
+                newMols.append(newMol)
+
+        self._defineOutputs(outputSmallMolecules=newMols)
+
+    # --------------------------- INFO functions -----------------------------------
+    def _summary(self):
+        summary = ['A results file has been created in the extra folder with the results of the tests.']
+        return summary
+
+    def _methods(self):
+        methods = []
+        return methods
+
+    def _validate(self):
+        validations = []
+        molSet = self.inputMoleculesSets.get()
+        if not molSet.isDocked():
+            validations += ['{} is not docked yet'.format(molSet)]
+
+        tests, testNum = self.getTestInfo()
+
+        if tests > testNum or tests < 1:
+            validations += [f'only {testNum} tests are performed.']
+
+        return validations
+
+    def _warnings(self):
+        warnings = []
+        return warnings
+
+    # --------------------------- UTILS functions -----------------------------------
+    def filterMolecules(self, resultsFile, csvRows, txtRows, mol):
+        poseName = os.path.basename(mol.getPoseFile())
+        if resultsFile.endswith('.csv'):
+            if not self.fullReport.get() or (self.fullReport.get() and self.chooseFilterLongTxt.get() == 0):
+                keep = self.rowPassesShortCsvTests(csvRows[poseName])
+            else:
+                keep = self.rowPassesColValue(csvRows[poseName])
+        else:
+            if self.outputFormat.get() == 0:  # short txt
+                poseLine = None
+                poseBase = os.path.splitext(poseName)[0]
+                for key, line in txtRows.items():
+                    txtBase = os.path.splitext(os.path.basename(line.split()[1]))[0]
+                    if poseBase == txtBase:
+                        poseLine = line
+                        break
+                if poseLine is not None:
+                    keep = self.molPassesShortTxtTests(poseLine)
+            else:  # long txt
+                if self.chooseFilterLongTxt.get() == 1:  # filter value w/ threshold
+                    poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
+                    poseLine = txtRows.get(poseName)
+                    if poseLine is not None:
+                        keep = self.rowPassesColValueTxt(poseLine)
+                else:
+                    poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
+                    poseLine = txtRows.get(poseName)
+                    if poseLine is not None:
+                        keep = self.rowPassesColTxt(poseLine)
+        return keep
+
+    def getFileInfo(self, resultsFile):
         csvRows = {}
         txtRows = {}
         if resultsFile.endswith('.csv'):
@@ -341,87 +427,8 @@ class ProtocolPoseBusters(EMProtocol):
                     if currentPose is not None and buffer:
                         txtRows[currentPose] = "\n".join(buffer)
 
+        return csvRows, txtRows
 
-        predPose = self.getSpecifiedMol('pred')
-        predPoseFile = predPose.getPoseFile() if predPose else None
-
-        for mol in self.inputMoleculesSets.get():
-            keep = True
-            add = True
-            poseName = os.path.basename(mol.getPoseFile())
-
-            newMol = mol.clone()
-            newMol.PoseBusters_file = String()
-            if self.oneFile.get():
-                if newMol.getPoseFile() == predPoseFile:
-                    newMol.setAttributeValue('PoseBusters_file', resultsFile)
-                else:
-                    add = False
-            else:
-                newMol.setAttributeValue('PoseBusters_file', resultsFile)
-                
-            #filter
-            if self.filter.get():
-                if resultsFile.endswith('.csv'):
-                    if not self.fullReport.get() or (self.fullReport.get() and self.chooseFilterLongTxt.get() == 0):
-                        keep = self.rowPassesShortCsvTests(csvRows[poseName])
-                    else:
-                        keep = self.rowPassesColValue(csvRows[poseName])
-                else:
-                    if self.outputFormat.get() == 0:  # short txt
-                        poseLine = None
-                        poseBase = os.path.splitext(poseName)[0]
-                        for key, line in txtRows.items():
-                            txtBase = os.path.splitext(os.path.basename(line.split()[1]))[0]
-                            if poseBase == txtBase:
-                                poseLine = line
-                                break
-                        if poseLine is not None:
-                            keep = self.molPassesShortTxtTests(poseLine)
-                    else:  # long txt
-                        if self.chooseFilterLongTxt.get() == 1: #filter value w/ threshold
-                            poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
-                            poseLine = txtRows.get(poseName)
-                            if poseLine is not None:
-                                keep = self.rowPassesColValueTxt(poseLine)
-                        else:
-                            poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
-                            poseLine = txtRows.get(poseName)
-                            if poseLine is not None:
-                                keep = self.rowPassesColTxt(poseLine)
-
-            if keep and add:
-                newMols.append(newMol)
-
-        self._defineOutputs(outputSmallMolecules=newMols)
-
-    # --------------------------- INFO functions -----------------------------------
-    def _summary(self):
-        summary = ['A results file has been created in the extra folder with the results of the tests.']
-        return summary
-
-    def _methods(self):
-        methods = []
-        return methods
-
-    def _validate(self):
-        validations = []
-        molSet = self.inputMoleculesSets.get()
-        if not molSet.isDocked():
-            validations += ['{} is not docked yet'.format(molSet)]
-
-        tests, testNum = self.getTestInfo()
-
-        if tests > testNum or tests < 1:
-            validations += [f'only {testNum} tests are performed.']
-
-        return validations
-
-    def _warnings(self):
-        warnings = []
-        return warnings
-
-    # --------------------------- UTILS functions -----------------------------------
     def getMode(self):
         if self.useTrueMol.get() and self.molCond.get():
             mode = "true_prot"
@@ -460,7 +467,7 @@ class ProtocolPoseBusters(EMProtocol):
         return colName, threshold
 
     def valuePasses(self, value):
-        colName, threshold = self.getSelectedColumnAndThreshold()
+        _, threshold = self.getSelectedColumnAndThreshold()
 
         val = float(value)
 
@@ -614,7 +621,7 @@ class ProtocolPoseBusters(EMProtocol):
             key, val = parts
             metrics[key.strip()] = val.strip()
 
-        colName, threshold = self.getSelectedColumnAndThreshold()
+        colName, _ = self.getSelectedColumnAndThreshold()
 
         val = metrics.get(colName)
         return self.valuePasses(val)
@@ -651,28 +658,42 @@ class ProtocolPoseBusters(EMProtocol):
         finalFile = self._getPath(
             'results.csv' if self.outputFormat.get() == 2 else 'results.txt'
         )
+
         if finalFile.endswith('.csv'):
-            header_written = False
-            with open(finalFile, 'w', newline='') as fout:
-                writer = None
-                for f in files:
-                    if not os.path.exists(f):
-                        continue
-                    with open(f) as fin:
-                        reader = csv.DictReader(fin)
-                        if not header_written:
-                            writer = csv.DictWriter(fout, fieldnames=reader.fieldnames)
-                            writer.writeheader()
-                            header_written = True
-                        for row in reader:
-                            writer.writerow(row)
+            self._mergeCsvFiles(files, finalFile)
         else:
-            with open(finalFile, 'w') as fout:
-                for f in files:
-                    if os.path.exists(f):
-                        with open(f) as fin:
-                            fout.write(fin.read())
-                            fout.write('\n')
+            self.mergeTxtFiles(files, finalFile)
+
+    def mergeCsvFiles(self, files, finalFile):
+        headerWritten = False
+
+        with open(finalFile, 'w', newline='') as fout:
+            writer = None
+
+            for f in files:
+                if not os.path.exists(f):
+                    continue
+
+                with open(f) as fin:
+                    reader = csv.DictReader(fin)
+
+                    if not headerWritten:
+                        writer = csv.DictWriter(fout, fieldnames=reader.fieldnames)
+                        writer.writeheader()
+                        headerWritten = True
+
+                    for row in reader:
+                        writer.writerow(row)
+
+    def mergeTxtFiles(self, files, finalFile):
+        with open(finalFile, 'w') as fout:
+            for f in files:
+                if not os.path.exists(f):
+                    continue
+
+                with open(f) as fin:
+                    fout.write(fin.read())
+                    fout.write('\n')
 
     def getResultFileForMol(self, mol):
         base = os.path.splitext(os.path.basename(mol.getPoseFile()))[0]
@@ -787,7 +808,7 @@ class ProtocolPoseBusters(EMProtocol):
         return tests, testNum
 
     def rowPassesColValue(self, row):
-        colName, threshold = self.getSelectedColumnAndThreshold()
+        colName, _ = self.getSelectedColumnAndThreshold()
         csvVal = row.get(colName)
 
         return self.valuePasses(csvVal)
