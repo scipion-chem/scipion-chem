@@ -204,23 +204,7 @@ class ProtocolPoseBusters(EMProtocol):
 
         # Case 1: oneFile - always single run
         if self.oneFile.get():
-            args = ['bust']
-
-            molPred = self.getSpecifiedMol('pred')
-            inpFile = self.convertFormat(molPred)
-            args.append(os.path.abspath(inpFile))
-
-            if self.useTrueMol.get():
-                molTrue = self.getSpecifiedMol('true')
-                trueFile = self.convertFormat(molTrue, type='crystal')
-                args.append(f'-l {os.path.abspath(trueFile)}')
-
-            if self.molCond.get():
-                protFile = self.convertFormat(
-                    self.inputMoleculesSets.get().getProteinFile(),
-                    type='file'
-                )
-                args.append(f'-p {os.path.abspath(protFile)}')
+            args = self.case1Args()
 
             args.extend(baseArgs)
 
@@ -236,34 +220,8 @@ class ProtocolPoseBusters(EMProtocol):
         else:
             if self.useTrueMol.get() or self.molCond.get():
 
-                resultFiles = []
-
                 for dockedMol in self.inputMoleculesSets.get():
-                    args = ['bust']
-
-                    inpFile = self.convertFormat(dockedMol)
-                    args.append(os.path.abspath(inpFile))
-
-                    if self.useTrueMol.get():
-                        molTrue = self.getSpecifiedMol('true')
-                        trueFile = self.convertFormat(molTrue, type='crystal')
-                        args.append(f'-l {os.path.abspath(trueFile)}')
-
-                    if self.molCond.get():
-                        protFile = self.convertFormat(
-                            self.inputMoleculesSets.get().getProteinFile(),
-                            type='file'
-                        )
-                        args.append(f'-p {os.path.abspath(protFile)}')
-
-                    resultsFile = self.getResultFileForMol(dockedMol)
-                    resultFiles.append(resultsFile)
-
-                    args.append(f'--outfmt {outputFormat}')
-                    args.append(f'--output {os.path.abspath(resultsFile)}')
-
-                    if self.fullReport.get():
-                        args.append('--full-report')
+                    args , resultFiles = self.case2Args(dockedMol)
 
                     Plugin.runCondaCommand(
                         self,
@@ -353,6 +311,56 @@ class ProtocolPoseBusters(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def case1Args(self):
+        args = ['bust']
+
+        molPred = self.getSpecifiedMol('pred')
+        inpFile = self.convertFormat(molPred)
+        args.append(os.path.abspath(inpFile))
+
+        if self.useTrueMol.get():
+            molTrue = self.getSpecifiedMol('true')
+            trueFile = self.convertFormat(molTrue, type='crystal')
+            args.append(f'-l {os.path.abspath(trueFile)}')
+
+        if self.molCond.get():
+            protFile = self.convertFormat(
+                self.inputMoleculesSets.get().getProteinFile(),
+                type='file'
+            )
+            args.append(f'-p {os.path.abspath(protFile)}')
+        return args
+
+    def case2Args(self, dockedMol):
+        args = ['bust']
+        resultFiles = []
+        outputFormat = self.getEnumText('outputFormat')
+
+        inpFile = self.convertFormat(dockedMol)
+        args.append(os.path.abspath(inpFile))
+
+        if self.useTrueMol.get():
+            molTrue = self.getSpecifiedMol('true')
+            trueFile = self.convertFormat(molTrue, type='crystal')
+            args.append(f'-l {os.path.abspath(trueFile)}')
+
+        if self.molCond.get():
+            protFile = self.convertFormat(
+                self.inputMoleculesSets.get().getProteinFile(),
+                type='file'
+            )
+            args.append(f'-p {os.path.abspath(protFile)}')
+
+        resultsFile = self.getResultFileForMol(dockedMol)
+        resultFiles.append(resultsFile)
+
+        args.append(f'--outfmt {outputFormat}')
+        args.append(f'--output {os.path.abspath(resultsFile)}')
+
+        if self.fullReport.get():
+            args.append('--full-report')
+        return args, resultFiles
+
     def getResultsFile(self):
         return self._getPath(
             'results.csv' if self.outputFormat.get() == 2 else 'results.txt'
