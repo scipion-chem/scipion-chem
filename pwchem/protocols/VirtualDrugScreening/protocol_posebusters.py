@@ -467,19 +467,22 @@ class ProtocolPoseBusters(EMProtocol):
 
         op = self.filterOp.get()
 
-        if op == '==':
-            result = val == threshold
-        elif op == '>':
-            result = val > threshold
-        elif op == '>=':
-            result = val >= threshold
-        elif op == '<':
-            result = val < threshold
-        elif op == '<=':
-            result = val <= threshold
-        elif op == 'between':
+        result = False
+
+        if op == 0:
+            result = (val == threshold)
+        elif op == 1:
+            result = (val > threshold)
+        elif op == 2:
+            result = (val >= threshold)
+        elif op == 3:
+            result = (val < threshold)
+        elif op == 4:
+            result = (val <= threshold)
+        elif op == 5:
             upper = self.upper.get()
-            result = threshold <= val <= upper
+            result = (threshold <= val <= upper)
+
         return result
 
 
