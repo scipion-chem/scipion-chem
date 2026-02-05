@@ -144,6 +144,10 @@ class ProtocolPoseBusters(EMProtocol):
                       label="Column: ", choices=self.FILTER_COLUMNS["true_prot"],
                       help='Choose how to apply the filter over the results.')
 
+        form.addParam('filterOp', params.EnumParam, label='Filter operation: ',
+                       condition='chooseFilterLongTxt==1', default=3,
+                       choices=['==', '>', '>=', '<', '<=', '!=', 'between'])
+
         form.addParam('energyRatio', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and ((not molCond and not useTrueMol and filterColLongTxt == 0) or (not molCond and useTrueMol and filterColLongTxtTrueMol == 0) or (molCond and not useTrueMol and filterColLongTxtProt == 0) or \
                               (molCond and useTrueMol and filterColLongTxtAll == 0))',
@@ -451,12 +455,30 @@ class ProtocolPoseBusters(EMProtocol):
 
     def valuePasses(self, value):
         colName, threshold = self.getSelectedColumnAndThreshold()
-        if value is None:
+        if value is None or colName is None or threshold is None:
             return False
         try:
-            return float(value) < threshold
+            val = float(value)
         except:
             return False
+
+        op = self.filterOp.get()
+
+        if op == '==':
+            return val == threshold
+        elif op == '>':
+            return val > threshold
+        elif op == '>=':
+            return val >= threshold
+        elif op == '<':
+            return val < threshold
+        elif op == '<=':
+            return val <= threshold
+        elif op == '!=':
+            return val != threshold
+        else:
+            return val < threshold
+
 
     def rowPassesColTxt(self, txtBlock):
         testsToCheck, testsRequired = self.getTestsToPassTxt()
