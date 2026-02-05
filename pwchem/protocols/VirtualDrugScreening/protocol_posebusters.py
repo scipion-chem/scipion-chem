@@ -193,9 +193,7 @@ class ProtocolPoseBusters(EMProtocol):
 
     def poseBustersStep(self):
         outputFormat = self.getEnumText('outputFormat')
-        resultsFile = self._getPath(
-            'results.csv' if self.outputFormat.get() == 2 else 'results.txt'
-        )
+        resultsFile = self.getResultsFile()
 
         baseArgs = []
         baseArgs.append(f'--outfmt {outputFormat}')
@@ -204,7 +202,7 @@ class ProtocolPoseBusters(EMProtocol):
         if self.fullReport.get():
             baseArgs.append('--full-report')
 
-        # Case 1: oneFile ? always single run
+        # Case 1: oneFile - always single run
         if self.oneFile.get():
             args = ['bust']
 
@@ -277,7 +275,7 @@ class ProtocolPoseBusters(EMProtocol):
 
                 self.mergeResultFiles(resultFiles)
 
-            # Case 3: no -l, no -p ? batch allowed
+            # Case 3: no -l, no -p - batch allowed
             else:
                 args = ['bust']
 
@@ -296,7 +294,7 @@ class ProtocolPoseBusters(EMProtocol):
                 )
 
     def createOutputStep(self):
-        resultsFile = self._getPath('results.csv' if self.outputFormat.get() == 2 else 'results.txt')
+        resultsFile = self.getResultsFile()
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSets.get(), self._getPath(), copyInfo=True)
 
@@ -355,6 +353,11 @@ class ProtocolPoseBusters(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def getResultsFile(self):
+        return self._getPath(
+            'results.csv' if self.outputFormat.get() == 2 else 'results.txt'
+        )
+
     def filterMolecules(self, resultsFile, csvRows, txtRows, mol):
         poseName = os.path.basename(mol.getPoseFile())
         if resultsFile.endswith('.csv'):
