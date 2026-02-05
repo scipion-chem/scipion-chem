@@ -32,7 +32,7 @@ This protocol is used to perform tests oer predicted molecule poses (https://git
 """
 import os.path
 
-import csv
+import csv, re
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -43,6 +43,7 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 from pwem.convert import cifToPdb
+
 
 class ProtocolPoseBusters(EMProtocol):
     FILTER_COLUMNS = {
@@ -152,31 +153,36 @@ class ProtocolPoseBusters(EMProtocol):
                       condition='chooseFilterLongTxt == 1 and ((not molCond and not useTrueMol and filterColLongTxt == 0) or (not molCond and useTrueMol and filterColLongTxtTrueMol == 0) or (molCond and not useTrueMol and filterColLongTxtProt == 0) or \
                               (molCond and useTrueMol and filterColLongTxtAll == 0))',
                       label='Energy ratio threshold: ', default=2.0,
-                      help='Threshold to keep molecules with energy ratio below it.')
+                      help='Threshold to keep molecules with energy ratio below it. Acts as a lower threshold when filtering "between".')
         form.addParam('numClashes', params.IntParam,
                       condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 1 or filterColLongTxtTrueMol==1 or filterColLongTxtProt==1 or filterColLongTxtAll==1)',
                       label='Number of clashes threshold: ', default=0,
-                      help='Threshold to keep molecules with number or clashes below it.')
+                      help='Threshold to keep molecules with number or clashes below it. Acts as a lower threshold when filtering "between".')
         form.addParam('ringPlanarity', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and (filterColLongTxt == 2 or filterColLongTxtTrueMol==2 or filterColLongTxtProt==2 or filterColLongTxtAll==2)',
                       label='Ring planarity threshold: ', default=0.05,
-                      help='Threshold to keep molecules with ring planarity below it.')
+                      help='Threshold to keep molecules with ring planarity below it. Acts as a lower threshold when filtering "between".')
         form.addParam('rmsd', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and (filterColLongTxtTrueMol==3) or filterColLongTxtAll==3',
                       label='RMSD threshold: ', default=2.5,
-                      help='Threshold to keep molecules with rmsd below it.')
+                      help='Threshold to keep molecules with rmsd below it. Acts as a lower threshold when filtering "between".')
         form.addParam('centroidDist', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and (filterColLongTxtTrueMol==4) or filterColLongTxtAll==4',
                       label='Centroid distance threshold: ', default=12.0,
-                      help='Threshold to keep molecules with centroid distance below it.')
+                      help='Threshold to keep molecules with centroid distance below it. Acts as a lower threshold when filtering "between".')
         form.addParam('volOverlap', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and (filterColLongTxtProt==3) or filterColLongTxtAll==5',
                       label='Volume overlap threshold: ', default=0.05,
-                      help='Threshold to keep molecules with volume overlap below it.')
+                      help='Threshold to keep molecules with volume overlap below it. Acts as a lower threshold when filtering "between".')
         form.addParam('smallDist', params.FloatParam,
                       condition='chooseFilterLongTxt == 1 and (filterColLongTxtProt==4) or filterColLongTxtAll==5',
                       label='Smallest distance threshold: ', default=6.0,
-                      help='Threshold to keep molecules with smallest distance to protein below it.')
+                      help='Threshold to keep molecules with smallest distance to protein below it. Acts as a lower threshold when filtering "between".')
+
+        form.addParam('upper', params.FloatParam,
+                      condition='filterOp==5',
+                      label='Upper threshold: ', default='0',
+                      help='Upper threshold to keep molecules.')
 
 
 
@@ -419,13 +425,14 @@ class ProtocolPoseBusters(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def getMode(self):
         if self.useTrueMol.get() and self.molCond.get():
-            return "true_prot"
+            mode = "true_prot"
         elif self.useTrueMol.get():
-            return "true"
+            mode = "true"
         elif self.molCond.get():
-            return "prot"
+            mode = "prot"
         else:
-            return "normal"
+            mode = "normal"
+        return mode
 
     def getSelectedColumnAndThreshold(self):
         mode = self.getMode()
@@ -455,27 +462,25 @@ class ProtocolPoseBusters(EMProtocol):
 
     def valuePasses(self, value):
         colName, threshold = self.getSelectedColumnAndThreshold()
-        if value is None or colName is None or threshold is None:
-            return False
-        try:
-            val = float(value)
-        except:
-            return False
+
+        val = float(value)
 
         op = self.filterOp.get()
 
         if op == '==':
-            return val == threshold
+            result = val == threshold
         elif op == '>':
-            return val > threshold
+            result = val > threshold
         elif op == '>=':
-            return val >= threshold
+            result = val >= threshold
         elif op == '<':
-            return val < threshold
+            result = val < threshold
         elif op == '<=':
-            return val <= threshold
-        else:
-            return val < threshold
+            result = val <= threshold
+        elif op == 'between':
+            upper = self.upper.get()
+            result = threshold <= val <= upper
+        return result
 
 
     def rowPassesColTxt(self, txtBlock):
@@ -608,8 +613,6 @@ class ProtocolPoseBusters(EMProtocol):
             metrics[key.strip()] = val.strip()
 
         colName, threshold = self.getSelectedColumnAndThreshold()
-        if colName is None:
-            return False
 
         val = metrics.get(colName)
         return self.valuePasses(val)
@@ -631,9 +634,7 @@ class ProtocolPoseBusters(EMProtocol):
 
     def molPassesShortTxtTests(self, txtLine):
         txtLine = txtLine.strip()
-        if not txtLine:
-            return False
-        import re
+
         match = re.search(r'\((\d+)\s*/\s*(\d+)\)', txtLine)
         if not match:
             print(f"Warning: Could not parse test counts from line:\n{txtLine}")
@@ -785,12 +786,7 @@ class ProtocolPoseBusters(EMProtocol):
 
     def rowPassesColValue(self, row):
         colName, threshold = self.getSelectedColumnAndThreshold()
-        if colName is None:
-            return False
-
         csvVal = row.get(colName)
-        if csvVal is None:
-            return False
 
         return self.valuePasses(csvVal)
 
