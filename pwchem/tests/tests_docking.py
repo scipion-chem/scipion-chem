@@ -276,22 +276,11 @@ class TestSCORCH2(TestScoreDocking):
 
 
 class TestPoseBusters(TestScoreDocking):
-        @classmethod
-        def _runSetFilter(cls, inProt, number, property):
-            cls.protFilter = cls.newProtocol(
-              ProtSetFilter,
-                operation=ProtSetFilter.CHOICE_RANKED,
-                threshold=number, rankingField=property)
-            cls.protFilter.inputSet.set(inProt)
-            cls.protFilter.inputSet.setExtended('outputStructROIs')
-
-            cls.proj.launchProtocol(cls.protFilter, wait=True)
-            return cls.protFilter
-
         def _runPB(self, dockProt):
             protPB = self.newProtocol(ProtocolPoseBusters,
                                       oneFile=False,
                                       inputMoleculesSets=dockProt.outputSmallMolecules,
+                                      fullReport=False
                                       )
 
             self.proj.launchProtocol(protPB, wait=True)
@@ -300,7 +289,12 @@ class TestPoseBusters(TestScoreDocking):
             protPB2 = self.newProtocol(ProtocolPoseBusters,
                                       oneFile=False,
                                       inputMoleculesSets=dockProt.outputSmallMolecules,
-                                      molCond=True
+                                      outputFormat=1,
+                                      molCond=True,
+                                      filter=True,
+                                      chooseFilterLongTxt= 1,
+                                      filterColLongTxtProt=2,
+                                      ringPlanarity=0.002
                                       )
 
             self.proj.launchProtocol(protPB2, wait=True)

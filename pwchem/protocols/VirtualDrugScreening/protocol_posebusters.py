@@ -340,7 +340,6 @@ class ProtocolPoseBusters(EMProtocol):
                     # save last block
                     if currentPose is not None and buffer:
                         txtRows[currentPose] = "\n".join(buffer)
-                    print(f'keys: {txtRows.keys()}')
 
 
         predPose = self.getSpecifiedMol('pred')
