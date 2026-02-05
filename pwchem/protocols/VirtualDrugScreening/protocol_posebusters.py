@@ -368,6 +368,8 @@ class ProtocolPoseBusters(EMProtocol):
 
     def filterMolecules(self, resultsFile, csvRows, txtRows, mol):
         poseName = os.path.basename(mol.getPoseFile())
+
+        keep = True
         if resultsFile.endswith('.csv'):
             if not self.fullReport.get() or (self.fullReport.get() and self.chooseFilterLongTxt.get() == 0):
                 keep = self.rowPassesShortCsvTests(csvRows[poseName])
