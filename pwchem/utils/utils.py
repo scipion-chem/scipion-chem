@@ -648,6 +648,18 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
 
   return sdfFile
 
+def getExtensionsFiles(molList, formats):
+  '''Return in different lists the files with the specified formats
+  and the rest'''
+  extMols, otherMols = [], []
+  for mol in molList:
+    molFile = os.path.abspath(mol.getPoseFile())
+    if molFile.endswith(formats):
+      extMols.append(molFile)
+    else:
+      otherMols.append(molFile)
+  return extMols, otherMols
+
 def getMAEMoleculeFiles(molList):
   '''Return in different lists the mae and non-mae files'''
   maeMols, otherMols = [], []
@@ -1055,6 +1067,62 @@ def calculateRMSDKeys(coordDic1, coordDic2):
         rmsd += (x1 - x2) ** 2
       count += 1
   return (rmsd / count) ** (1 / 2)
+
+def buildMolDic(mols):
+  '''Builds two dictionaries dividing the molecules by molNames such as:
+  molFileDic = {molName1: [molFiles2], molName2: [molFiles2]}
+  molDic = {molName1: [mols1], molName2: [mols2]}
+  '''
+  molFileDic, molDic = {}, {}
+  for mol in mols:
+    molName = mol.getMolName()
+    if not molName in molFileDic:
+      molFileDic[molName] = [os.path.abspath(mol.getPoseFile())]
+      molDic[molName] = [mol]
+    else:
+      molFileDic[molName].append(os.path.abspath(mol.getPoseFile()))
+      molDic[molName].append(mol)
+  return molFileDic, molDic
+
+def parseRMSDs(rmsdFile):
+  '''Parse RMSDs from a file geenrated by runRdkitRMSD'''
+  rmsds = []
+  with open(rmsdFile) as f:
+    f.readline()
+    for line in f:
+      rmsds.append(float(line.strip().split()[-1]))
+  return rmsds
+
+def runRdkitRMSD(protocol, mols, referenceFile=None):
+  molFileDic, _ = buildMolDic(mols)
+  rmsdDic = {}
+  for molName, targetFiles in molFileDic.items():
+      if referenceFile:
+        filesDic = {referenceFile: targetFiles}
+      else:
+        filesDic = {}
+        for i, refFile in enumerate(targetFiles):
+            restTargets = targetFiles[i+1:]
+            if restTargets:
+                filesDic[refFile] = restTargets
+
+      rmsdDic[molName] = []
+      for refFile, targetFiles in filesDic.items():
+          programCall = 'python -m spyrmsd '
+          try:
+            result = pwchemPlugin.runCondaCommand(protocol, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
+                                                  programCall, retOut=True, cwd=protocol._getExtraPath())
+          except:
+            try:
+              programCall = 'python -m spyrmsd -n '
+              result = pwchemPlugin.runCondaCommand(protocol, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
+                                                    programCall, retOut=True, cwd=protocol._getExtraPath())
+            except Exception as e:
+              result = ' '.join(['1000'] * len(targetFiles))
+
+          rmsdDic[molName] += list(map(float, result.split()))
+
+  return rmsdDic
 
 ################# UTILS Sequence Object ################
 def getSequenceFastaName(sequence):

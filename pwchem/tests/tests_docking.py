@@ -58,10 +58,10 @@ class TestExtractLigand(BaseTest):
 		cls.protImportPDB = protImportPDB
 
 	@classmethod
-	def _runExtractLigand(cls, inputProt):
+	def _runExtractLigand(cls, inputProt, chainStr):
 		protExtLig = cls.newProtocol(
 			ProtExtractLigands,
-			cleanPDB=True, rchains=True, chain_name='{"model": 0, "chain": "C", "residues": 141}')
+			cleanPDB=True, rchains=True, chain_name=chainStr)
 
 		protExtLig.inputStructure.set(inputProt)
 		protExtLig.inputStructure.setExtended('outputPdb')
@@ -71,7 +71,7 @@ class TestExtractLigand(BaseTest):
 		return protExtLig
 
 	def test(self):
-		protExtract = self._runExtractLigand(self.protImportPDB)
+		protExtract = self._runExtractLigand(self.protImportPDB, '{"model": 0, "chain": "C", "residues": 141}')
 		self._waitOutput(protExtract, 'outputSmallMolecules')
 		assertHandle(self.assertIsNotNone, getattr(protExtract, 'outputSmallMolecules', None), cwd=protExtract.getWorkingDir())
 
@@ -192,11 +192,9 @@ class TestScoreDocking(TestDefineStructROIs):
 		return protLeDock
 
 	def _runScoreDocking(self, inputDockProts):
-		protScoreDocks = self.newProtocol(ProtocolScoreDocking,
-																			numberOfThreads=4,
-																			summarySteps='1) Score: Vina\n'
-																										'2) Score: RFScore, version 1. PDBbind 2016',
-																			workFlowSteps=wSteps)
+		protScoreDocks = self.newProtocol(ProtocolScoreDocking, numberOfThreads=4, workFlowSteps=wSteps,
+										  summarySteps='1) Score: Vina\n'
+													   '2) Score: RFScore, version 1. PDBbind 2016')
 
 		for i in range(len(inputDockProts)):
 			protScoreDocks.inputMoleculesSets.append(inputDockProts[i])
@@ -309,15 +307,15 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 	def _runImportPDB(cls):
 		protImportPDB = cls.newProtocol(
 			ProtImportPdb,
-			inputPdbData=1, pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
+			inputPdbData=0, pdbId='4r5n')
 		cls.launchProtocol(protImportPDB)
 		cls.protImportPDB = protImportPDB
 
 	@classmethod
-	def _runPrepareTarget(cls, inProt):
+	def _runPrepareTarget(cls, inProt, hetm=True):
 		protPrepRec = cls.newProtocol(
 			ProtChemPrepareReceptor,
-			HETATM=False, rchains=True, chain_name=prepRec)
+			HETATM=hetm, rchains=True, chain_name='{"model": 0, "chain": "A", "residues": 393}')
 
 		protPrepRec.inputAtomStruct.set(inProt)
 		protPrepRec.inputAtomStruct.setExtended('outputPdb')
@@ -353,8 +351,7 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 		return protDef
 
 	def _runRMSDDocking(self, inputMolsProt, inputProt, mode=0):
-		pRMSD = self.newProtocol(ProtocolRMSDDocking,
-														 refOrigin=mode)
+		pRMSD = self.newProtocol(ProtocolRMSDDocking, refOrigin=mode)
 
 		pRMSD.inputSmallMolecules.set(inputMolsProt)
 		pRMSD.inputSmallMolecules.setExtended('outputSmallMolecules')
@@ -362,7 +359,7 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 		if mode == 0:
 			pRMSD.refAtomStruct.set(inputProt)
 			pRMSD.refAtomStruct.setExtended('outputStructure')
-			pRMSD.refLigName.set('0R3')
+			pRMSD.refLigName.set('3J9')
 		else:
 			pRMSD.refSmallMolecules.set(inputProt)
 			pRMSD.refSmallMolecules.setExtended('outputSmallMolecules')
@@ -373,14 +370,15 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 		return pRMSD
 
 	def test(self):
-		protPrep = self._runPrepareTarget(self.protImportPDB)
-		self.protPrepareReceptor = protPrep
-		protExtLig = self._runExtractLigand(self.protImportPDB)
+		self.protPrepareReceptor = self._runPrepareTarget(self.protImportPDB)
+		protComplex = self._runPrepareTarget(self.protImportPDB, hetm=False)
+		protExtLig = self._runExtractLigand(self.protImportPDB, '{"model": 0, "chain": "A", "residues": 393}')
 
-		self._waitOutput(protPrep, 'outputStructure')
+		self._waitOutput(self.protPrepareReceptor, 'outputStructure')
+		self._waitOutput(protComplex, 'outputStructure')
 		self._waitOutput(protExtLig, 'outputSmallMolecules')
 
-		protPockets = self._runDefStructROIs(protPrep, protExtLig, defRoiStrLig)
+		protPockets = self._runDefStructROIs(self.protPrepareReceptor, protExtLig, defRoiStrLig)
 		self.protOBabel = self._runPrepareLigandsOBabel(protExtLig)
 
 		self._waitOutput(protPockets, 'outputStructROIs')
@@ -388,14 +386,15 @@ class TestRMSDDocking(TestScoreDocking, TestExtractLigand):
 
 		inputDockProts = self._runDockings(protPockets)
 		if len(inputDockProts) >= 1:
-			pRMSDs = []
-			pInputs = [protPrep, protExtLig]
-			for i in range(2):
-				pRMSDs.append(self._runRMSDDocking(inputDockProts[0], pInputs[i], mode=i))
+			for dockProt in inputDockProts:
+				pRMSDs = []
+				pInputs = [protComplex, protExtLig]
+				for i in range(2):
+					pRMSDs.append(self._runRMSDDocking(dockProt, pInputs[i], mode=i))
 
-			for p in pRMSDs:
-				self._waitOutput(p, 'outputSmallMolecules')
-				assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
+				for p in pRMSDs:
+					self._waitOutput(p, 'outputSmallMolecules')
+					assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 		else:
 			print('No docking plugins found installed. Try installing AutoDock')
 

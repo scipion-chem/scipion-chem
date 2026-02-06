@@ -34,15 +34,22 @@ from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.utils import Message
 from pyworkflow.protocol import params
-from pwem.protocols import EMProtocol
-from pwem.objects import AtomStruct
 
-from pwchem.objects import SetOfSmallMolecules, SmallMolecule
+from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
+from pwchem.protocols import ProtocolConsensusDocking
 
 AS, MOLS = 0, 1
 
-class ProtocolRMSDDocking(EMProtocol):
+
+class ResidueNameSelect(Select):
+    def __init__(self, resname):
+        self.resname = resname
+
+    def accept_residue(self, residue):
+        return residue.get_resname() == self.resname
+
+class ProtocolRMSDDocking(ProtocolConsensusDocking):
     """
     Calculates the RMSD between a docked molecule and another molecule in the same receptor, either from an AtomStruct
     or a docked SetOfSmallMolecules
@@ -78,51 +85,32 @@ class ProtocolRMSDDocking(EMProtocol):
                       label='Use only heavy atoms for RMSD: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Use only non-hydrogen atoms for RMSD calculation')
 
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('rmsdStep')
-        self._insertFunctionStep('createOutputStep')
+        cStep = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
+        self._insertFunctionStep(self.createOutputStep, prerequisites=[cStep])
 
-    def rmsdStep(self):
-        rmsdDic = {}
+    def createOutputStep(self):
         if self.refOrigin.get() == AS:
-            refPosDic = self.getLigandPosDic(self.refAtomStruct.get(), self.refLigName.get())
+            refFile = self.writeRefMol(self.refAtomStruct.get().getFileName(), self.refLigName.get())
         else:
             for mol in self.refSmallMolecules.get():
                 if self.refMolName.get() == mol.__str__():
-                    refPosDic = self.getLigandPosDic(mol)
+                    refFile = mol.getPoseFile() if mol.getPoseFile() is not None else mol.getFileName()
+                    refFile = os.path.abspath(refFile)
                     break
-        
-        for mol in self.inputSmallMolecules.get():
-            posDic = self.getLigandPosDic(mol)
-            if hasattr(mol, '_mappingFile'):
-                posDic = self.mapLabels(mol, posDic)
 
-            k1, k2 = list(posDic.keys()), list(refPosDic.keys())
-            k1.sort(), k2.sort()
-            if self.checkSameKeys(posDic, refPosDic):
-                rmsd = calculateRMSDKeys(posDic, refPosDic)
-                rmsdDic[mol.getPoseFile()] = rmsd
-                print('Mol: {}. RMSD: {}'.format(os.path.basename(mol.getPoseFile()), rmsd))
-            else:
-                rmsd = 10000
-        with open(self._getExtraPath('rmsd.tsv'), 'w') as f:
-            for k in rmsdDic:
-                f.write('{}\t{}\n'.format(k, rmsdDic[k]))
+        rmsdDic = runRdkitRMSD(self, self.getAllInputMols(), referenceFile=refFile)
 
-    def createOutputStep(self):
-        rmsdDic = {}
-        with open(self._getExtraPath('rmsd.tsv')) as f:
-            for line in f:
-                rmsdDic[line.split()[0]] = line.split()[1]
 
         newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
         for mol in self.inputSmallMolecules.get():
-            #Specific attribute name for each score?
-            k = mol.getPoseFile()
-            if k in rmsdDic:
-                setattr(mol, "_rmsdToRef", Float(rmsdDic[k]))
+            molName = mol.getMolName()
+            if molName in rmsdDic and len(rmsdDic[molName]) > 0:
+                newRMSD = rmsdDic[molName].pop(0)
+                setattr(mol, "_rmsdToRef", Float(newRMSD))
             else:
                 setattr(mol, "_rmsdToRef", Float(10000))
             newMols.append(mol)
@@ -158,33 +146,36 @@ class ProtocolRMSDDocking(EMProtocol):
             pDic[mapDic[prevLabel.upper()]] = posDic[prevLabel.upper()]
         return pDic
 
-    def getLigandPosDic(self, item, molName=None):
-        onlyHeavy = self.onlyHeavy.get()
-        if issubclass(type(item), SmallMolecule):
-            posDic = item.getAtomsPosDic(onlyHeavy)
+    def writeRefMol(self, ASFile, molName):
+        if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
+            pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+            structure = PDBParser().get_structure(pdb_code, ASFile)
+        elif ASFile.endswith('.cif'):
+            pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
+            structure = MMCIFParser().get_structure(pdb_code, ASFile)
+        else:
+            print('Unknown AtomStruct file format')
 
-        elif issubclass(type(item), AtomStruct):
-            posDic = {}
-            ASFile = item.getFileName()
-            if ASFile.endswith('.pdb') or ASFile.endswith('.ent'):
-                pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-                parser = PDBParser().get_structure(pdb_code, ASFile)
-            elif ASFile.endswith('.cif'):
-                pdb_code = os.path.basename(os.path.splitext(ASFile)[0])
-                parser = MMCIFParser().get_structure(pdb_code, ASFile)
-            else:
-                print('Unknown AtomStruct file format')
+        oFile = os.path.abspath(self._getExtraPath(f"{molName}.pdb"))
+        io = PDBIO()
+        io.set_structure(structure)
+        io.save(oFile, ResidueNameSelect(molName))
 
-            for model in parser:
-                for chain in model:
-                    for residue in chain:
-                        if isHet(residue) and residue.resname == molName:
-                            for atom in residue:
-                                atomId, coords = atom.get_id(), atom.get_coord()
-                                if not atomId.startswith('H') or not onlyHeavy:
-                                    posDic[atomId] = list(map(float, coords))
-
-        return posDic
+        return oFile
 
     def checkSameKeys(self, d1, d2):
         return set(d1.keys()) == set(d2.keys())
+
+    def getAllInputMols(self):
+        mols = []
+        convMolNames = self.getConvMolNames()
+        for mol in self.inputSmallMolecules.get():
+            newMol = mol.clone()
+            molFileName = getBaseName(mol.getPoseFile())
+            if molFileName in convMolNames:
+                newMol.setPoseFile(os.path.relpath(convMolNames[molFileName]))
+            mols.append(newMol)
+        return mols
+
+    def getOriginalReceptorFile(self):
+        return self.inputSmallMolecules.get().getProteinFile()
