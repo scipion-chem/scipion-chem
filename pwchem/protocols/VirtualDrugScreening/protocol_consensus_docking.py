@@ -110,22 +110,48 @@ class ProtocolConsensusDocking(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        cStep = self._insertFunctionStep('convertInputStep', prerequisites=[])
-        conStep = self._insertFunctionStep('consensusStep', prerequisites=[cStep])
-        self._insertFunctionStep('createOutputStep', prerequisites=[conStep])
+        cStep = self._insertFunctionStep(self.convertInputStep, prerequisites=[])
+        conStep = self._insertFunctionStep(self.consensusStep, prerequisites=[cStep])
+        self._insertFunctionStep(self.createOutputStep, prerequisites=[conStep])
+
+    def convertPDBFiles(self, pdbDir, outDir):
+        pdbFiles = list(os.listdir(pdbDir))
+        if len(pdbFiles) > 0:
+            args = f' --multiFiles -iD "{pdbDir}" --pattern "*" -of sdf --outputDir "{outDir}"'
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
+
+    def convertMAEFiles(self, maeDir, outDir):
+        try:
+            from pwchemSchrodinger.utils.utils import convertMAE2Mol2File
+        except ImportError:
+            print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+            return
+
+        maeFiles = list(os.listdir(maeDir))
+        if len(maeFiles) > 0:
+            for maeFile in maeFiles:
+                convertMAE2Mol2File(maeFile, outDir)
 
     def convertInputStep(self):
         allMols = self.getAllInputMols()
         outDir = self.getInputMolsDir()
         os.mkdir(outDir)
 
-        maeMols, _ = getMAEMoleculeFiles(allMols)
-        if len(maeMols) > 0:
-            try:
-                from pwchemSchrodinger.utils.utils import convertMAEMolSet
-                convertMAEMolSet(maeMols, outDir, self.numberOfThreads.get(), updateSet=False, subset=False)
-            except ImportError:
-                print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+        tmpDirPdb, tmpDirMae = (os.path.abspath(self._getTmpPath('pdbFiles')),
+                                os.path.abspath(self._getTmpPath('maeFiles')))
+        os.mkdir(tmpDirPdb), os.mkdir(tmpDirMae)
+        for mol in allMols:
+            molFile = os.path.abspath(mol.getPoseFile())
+            _, ext = os.path.splitext(molFile)
+            if ext in ('.pdbqt', '.pdb'):
+                iDir = tmpDirPdb
+            elif ext in ('.mae', '.maegz'):
+                iDir = tmpDirMae
+            else:
+                iDir = outDir
+            shutil.copy(molFile, os.path.join(iDir, mol.getUniqueName() + ext))
+        self.convertPDBFiles(tmpDirPdb, outDir)
+        self.convertMAEFiles(tmpDirMae, outDir)
 
     def consensusStep(self):
         molDic = self.buildMolDic()
@@ -309,37 +335,25 @@ class ProtocolConsensusDocking(EMProtocol):
     def generateDockingClustersScipy(self):
         '''Generate the docking clusters based on the RMSD of the ligands
         Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
-        allMols = self.getAllInputMols()
-        posArrays, molsDic = {}, {}
-        for mol in allMols:
-            posDic = mol.getAtomsPosDic()
-            keys = ''.join(sorted(list(posDic.keys())))
-            if keys in posArrays:
-                posArrays[keys].append([x for coord in sorted(posDic.items()) for x in coord[1]])   # flattening coords
-                molsDic[keys].append(mol)
-            else:
-                posArrays[keys] = [[x for coord in sorted(posDic.items()) for x in coord[1]]]  # flattening coords
-                molsDic[keys] = [mol]
+        allMols = self.getAllInputMols(conv=True)
+        _, molDic = buildMolDic(allMols)
 
         finalClusters = []
-        for keys in posArrays:
-            if len(posArrays[keys]) > 1: #Needed more than 1 mol to cluster
-                # Matrix distance and clustering perform over different molecules separatedly
-                rmsds = pairwise_distances(posArrays[keys], metric=self.calculateFlattenRMSD,
-                                           n_jobs=self.numberOfThreads.get())   # Parallel distance matrix calculation
-
+        rmsdDic = runRdkitRMSD(self, allMols)
+        for molName, rmsds in rmsdDic.items():
+            if rmsds: #Needed more than 1 mol to cluster
                 linked = linkage(rmsds, self.getEnumText('linkage').lower())
                 clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
 
                 clusterMol = {}
                 for i, cl in enumerate(clusters):
                     if cl in clusterMol:
-                        clusterMol[cl] += [molsDic[keys][i]]
+                        clusterMol[cl] += [molDic[molName][i]]
                     else:
-                        clusterMol[cl] = [molsDic[keys][i]]
+                        clusterMol[cl] = [molDic[molName][i]]
                 finalClusters += list(clusterMol.values())
             else:
-                finalClusters += [molsDic[keys]]
+                finalClusters += [molDic[molName]]
 
         return finalClusters
 
@@ -578,16 +592,28 @@ class ProtocolConsensusDocking(EMProtocol):
             convMolsName[getBaseName(molFile)] = molFile
         return convMolsName
 
-    def getAllInputMols(self):
+    def getAllInputMols(self, conv=False):
+        if conv:
+            convMolsDic = self.getConvMolsDic()
+
         mols = []
-        convMolNames = self.getConvMolNames()
         for molSet in self.inputMoleculesSets:
             for mol in molSet.get():
                 newMol = mol.clone()
-                if mol.getUniqueName() in convMolNames:
-                    newMol.setPoseFile(os.path.relpath(convMolNames[newMol.getUniqueName()]))
+                if conv:
+                    newMol.setPoseFile(convMolsDic[newMol.getUniqueName()])
                 mols.append(newMol)
         return mols
+
+    def getConvMolsDic(self):
+        convMolsDic = {}
+        inDir = self.getInputMolsDir()
+        for molSet in self.inputMoleculesSets:
+            for mol in molSet.get():
+                molUName = mol.getUniqueName()
+                molFile = glob.glob(os.path.join(inDir, f"{molUName}.*"))[0]
+                convMolsDic[molUName] = molFile
+        return convMolsDic
 
 
 
