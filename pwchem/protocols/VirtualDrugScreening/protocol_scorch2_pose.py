@@ -151,7 +151,6 @@ class ProtocolSCORCH2(EMProtocol):
                 "--num-cores", str(self.numberOfThreads.get()),
                 "--ps_weight", str(self.psWeight.get()),
                 "--pb_weight", str(self.pbWeight.get()),
-                "--keep-temp",
                 "--res-dir", str('results')
             ]
         else:
