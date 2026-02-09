@@ -40,7 +40,7 @@ from pwchem import Plugin, POSEB_DIC, SCORCH2_DIC
 
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import *
 from pwem.convert import cifToPdb
 
@@ -56,6 +56,7 @@ class ProtocolPoseBusters(EMProtocol):
                       'kabsch_rmsd', 'centroid_distance',
                       'volume_overlap_protein', 'smallest_distance_protein']
     }
+
 
     normalTests = 12
     trueMolTests = 18
@@ -220,8 +221,12 @@ class ProtocolPoseBusters(EMProtocol):
         else:
             if self.useTrueMol.get() or self.molCond.get():
 
+                resultFiles = []
+
                 for dockedMol in self.inputMoleculesSets.get():
-                    args , resultFiles = self.case2Args(dockedMol)
+                    args, molResultFiles = self.case2Args(dockedMol)
+
+                    resultFiles.extend(molResultFiles)
 
                     Plugin.runCondaCommand(
                         self,
@@ -274,10 +279,15 @@ class ProtocolPoseBusters(EMProtocol):
                     add = False
             else:
                 newMol.setAttributeValue('PoseBusters_file', resultsFile)
-
             #filter
             if self.filter.get():
-                keep = self.filterMolecules(resultsFile, csvRows, txtRows, mol)
+                keep, passed = self.filterMolecules(resultsFile, csvRows, txtRows, mol)
+                if self.chooseFilterLongTxt.get() == 0: #add testsPassed column
+                    newMol.PoseBusters_testsPassed = String()
+                    value = self.getPassedValues(passed)
+                    newMol.setAttributeValue('PoseBusters_testsPassed', value)
+                elif self.chooseFilterLongTxt.get() == 1: #add value column
+                    self.createColumnMol(newMol, passed)
 
             if keep and add:
                 newMols.append(newMol)
@@ -311,6 +321,64 @@ class ProtocolPoseBusters(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def createColumnMol(self, newMol, passed):
+        mode = self.getMode()
+        colMap = {
+            "normal": {
+                0: "energyRatio",
+                1: "numClashes",
+                2: "aromaticRingMaxDistFromPlane"
+            },
+            "true": {
+                0: "energyRatio",
+                1: "numClashes",
+                2: "aromaticRingMaxDistFromPlane",
+                3: "kabschRmsd",
+                4: "centroidDistance"
+            },
+            "prot": {
+                0: "energyRatio",
+                1: "numClashes",
+                2: "aromaticRingMaxDistFromPlane",
+                3: "volOverlapProtein",
+                4: "smallestDistanceProtein"
+            },
+            "true_prot": {
+                0: "energyRatio",
+                1: "numClashes",
+                2: "aromaticRingMaxDistFromPlane",
+                3: "kabschRmsd",
+                4: "centroidDistance",
+                5: "volOverlapProtein",
+                6: "smallestDistanceProtein"
+            }
+        }
+        idxMap = {
+            "normal": self.filterColLongTxt.get(),
+            "true": self.filterColLongTxtTrueMol.get(),
+            "prot": self.filterColLongTxtProt.get(),
+            "true_prot": self.filterColLongTxtAll.get()
+        }
+        selected = idxMap[mode]
+        attrName = colMap[mode].get(selected)
+
+        if attrName:
+            if not hasattr(newMol, attrName):
+                setattr(newMol, attrName, Float())
+            newMol.setAttributeValue(attrName, passed)
+
+
+    def getPassedValues(self, passed):
+        if self.useTrueMol.get() and not self.molCond.get():
+            value = f'{passed}/{self.trueMolTests}'
+        elif self.useTrueMol.get() and self.molCond.get():
+            value = f'{passed}/{self.trueMolProtTests}'
+        elif self.molCond.get() and not self.useTrueMol.get():
+            value = f'{passed}/{self.protTests}'
+        else:
+            value = f'{passed}/{self.normalTests}'
+        return value
+
     def case1Args(self):
         args = ['bust']
 
@@ -370,11 +438,12 @@ class ProtocolPoseBusters(EMProtocol):
         poseName = os.path.basename(mol.getPoseFile())
 
         keep = True
+        passed = 0.0
         if resultsFile.endswith('.csv'):
             if not self.fullReport.get() or (self.fullReport.get() and self.chooseFilterLongTxt.get() == 0):
-                keep = self.rowPassesShortCsvTests(csvRows[poseName])
+                keep, passed = self.rowPassesShortCsvTests(csvRows[poseName])
             else:
-                keep = self.rowPassesColValue(csvRows[poseName])
+                keep, passed = self.rowPassesColValue(csvRows[poseName])
         else:
             if self.outputFormat.get() == 0:  # short txt
                 poseLine = None
@@ -385,19 +454,19 @@ class ProtocolPoseBusters(EMProtocol):
                         poseLine = line
                         break
                 if poseLine is not None:
-                    keep = self.molPassesShortTxtTests(poseLine)
+                    keep, passed = self.molPassesShortTxtTests(poseLine)
             else:  # long txt
                 if self.chooseFilterLongTxt.get() == 1:  # filter value w/ threshold
                     poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
                     poseLine = txtRows.get(poseName)
                     if poseLine is not None:
-                        keep = self.rowPassesColValueTxt(poseLine)
+                        keep, passed = self.rowPassesColValueTxt(poseLine)
                 else:
                     poseName = os.path.basename(mol.getPoseFile()).split('.')[0]
                     poseLine = txtRows.get(poseName)
                     if poseLine is not None:
-                        keep = self.rowPassesColTxt(poseLine)
-        return keep
+                        keep, passed = self.rowPassesColTxt(poseLine)
+        return keep, float(passed)
 
     def getFileInfo(self, resultsFile):
         csvRows = {}
@@ -517,7 +586,7 @@ class ProtocolPoseBusters(EMProtocol):
                     if '.' in line and 'Fail' not in line:
                         passed += 1
                     break
-        return passed >= testsRequired
+        return passed >= testsRequired, float(passed)
 
     def getTestsToPassTxt(self):
         if self.useTrueMol.get() and not self.molCond.get():
@@ -637,7 +706,7 @@ class ProtocolPoseBusters(EMProtocol):
         colName, _ = self.getSelectedColumnAndThreshold()
 
         val = metrics.get(colName)
-        return self.valuePasses(val)
+        return self.valuePasses(val), float(val)
 
     def getTestInfo(self):
         if self.useTrueMol.get() and not self.molCond.get():
@@ -665,7 +734,7 @@ class ProtocolPoseBusters(EMProtocol):
         passed = int(match.group(1))
         tests, _ = self.getTestInfo()
 
-        return passed >= tests
+        return passed >= tests, float(passed)
 
     def mergeResultFiles(self, files):
         finalFile = self._getPath(
@@ -673,7 +742,7 @@ class ProtocolPoseBusters(EMProtocol):
         )
 
         if finalFile.endswith('.csv'):
-            self._mergeCsvFiles(files, finalFile)
+            self.mergeCsvFiles(files, finalFile)
         else:
             self.mergeTxtFiles(files, finalFile)
 
@@ -718,7 +787,7 @@ class ProtocolPoseBusters(EMProtocol):
 
         passed = sum(row.get(test) == 'True' for test in testsToPass)
 
-        return passed >= tests
+        return passed >= tests, float(passed)
 
     def getTestsToPass(self):
         if self.useTrueMol.get() and not self.molCond.get():
@@ -824,7 +893,7 @@ class ProtocolPoseBusters(EMProtocol):
         colName, _ = self.getSelectedColumnAndThreshold()
         csvVal = row.get(colName)
 
-        return self.valuePasses(csvVal)
+        return self.valuePasses(csvVal), float(csvVal)
 
 
     def convertFormat(self, molPred, type=''):
