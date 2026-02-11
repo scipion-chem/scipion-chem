@@ -64,20 +64,12 @@ class ProtocolConsensusDocking(EMProtocol):
                        help='Select the pocket sets to make the consensus')
 
         group = form.addGroup('Clustering')
-        group.addParam('doScipy', params.BooleanParam, default=True,
-                      label='Use scipy for clustering: ',
-                      help='Whether to use scipy hierarchical clustering methods or an '
-                           'aggregative approach (usually slower).')
         group.addParam('linkage', params.EnumParam, default=0,
                        choices=['Single', 'Complete', 'Average', 'Ward', 'Centroid', 'Median'],
-                       label='Hyerarchical clustering linkage: ', condition='doScipy',
-                       help='Hyerarchical clustering linkage used on scipy clutering.\n'
+                       label='Hierarchical clustering linkage: ',
+                       help='Hierarchical clustering linkage used on scipy clustering.\n'
                             'https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html')
-        group.addParam('checkRep', params.BooleanParam, default=True,
-                       label='Check only cluster representative: ', condition='not doScipy',
-                       help='If True, the RMSD is only calculated on the cluster representative, speeding up '
-                            'the process but making it less restrictive')
-        form.addParam('outIndv', params.BooleanParam, default=False, condition='doScipy or not checkRep',
+        form.addParam('outIndv', params.BooleanParam, default=False,
                       label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Creates an output set related to each input set, with the elements from each input'
                            'present in the consensus clusters')
@@ -154,28 +146,21 @@ class ProtocolConsensusDocking(EMProtocol):
         self.convertMAEFiles(tmpDirMae, outDir)
 
     def consensusStep(self):
-        molDic = self.buildMolDic()
+        molSetDic = self.buildMolSetDic()
         minSize = self.numOfOverlap.get()
 
-        doInd = True
-        if self.doScipy:
-            molClusters = self.generateDockingClustersScipy()
-            self.consensusMols = self.cluster2representative(molClusters, molDic, minSize)
-        else:
-            if not self.checkRep:
-                molClusters = self.generateDockingClusters()
-                self.consensusMols = self.cluster2representative(molClusters, molDic, minSize)
-            else:
-                self.consensusMols = self.buildRepresentativeClusters(molDic)
-                doInd = False
+        #todo: paralelize consensus step on molecules
+        molClusters = self.generateDockingClusters()
+        self.consensusMols = self.cluster2representative(molClusters, molSetDic, minSize)
 
-        if self.outIndv.get() and doInd:
+        if self.outIndv.get():
             self.indepConsensusSets = {}
             #Separating clusters by input set
-            indepClustersDic = self.getIndepClusters(molClusters, molDic)
+            indepClustersDic = self.getIndepClusters(molClusters, molSetDic)
             for inSetId in indepClustersDic:
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId], molDic, minSize=1)
+                self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId],
+                                                                               molSetDic, minSize=1)
 
 
     def createOutputStep(self):
@@ -235,7 +220,7 @@ class ProtocolConsensusDocking(EMProtocol):
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
 
-    def buildMolDic(self):
+    def buildMolSetDic(self):
         dic = {}
         for i, pSet in enumerate(self.inputMoleculesSets):
             for mol in pSet.get():
@@ -264,77 +249,36 @@ class ProtocolConsensusDocking(EMProtocol):
         pdbFile = self.inputMoleculesSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
         return pdbFile.split('_out')[0]
 
+    def sumDistancesVectorized(self, clusters, flat_distances):
+        """
+        Vectorized version for better performance with larger datasets.
+        """
+        n = len(clusters)
+
+        # Create full distance matrix
+        dist_matrix = np.zeros((n, n))
+        triu_indices = np.triu_indices(n, k=1)
+        dist_matrix[triu_indices] = flat_distances
+        dist_matrix = dist_matrix + dist_matrix.T
+
+        sums = []
+        for cluster_id in set(clusters):
+            mask = np.array(clusters) == cluster_id
+            cluster_indices = np.where(mask)[0]
+
+            for i in cluster_indices:
+                # Sum distances to all other elements in same cluster
+                sum_dist = np.sum(dist_matrix[i, cluster_indices]) - dist_matrix[i, i]
+                sums.append(sum_dist)
+
+        return sums
+
     def generateDockingClusters(self):
         '''Generate the docking clusters based on the RMSD of the ligands
-        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
-        clusters = []
-        #For each set of molecules
-        for i, molSet in enumerate(self.inputMoleculesSets):
-            #For each of the molecules in the set
-            for newMol in molSet.get():
-                newClusters, newClust = [], [newMol.clone()]
-                #Check for each of the clusters
-                for clust in clusters:
-                    #Check for each of the molecules in the cluster
-                    append2Cluster = False
-                    for cMol in clust:
-                        curRMSD = self.calculateMolsRMSD(newMol, cMol)
+        Return the clusters of molecules, where each molecule item is a tuple with the mol object and its associated
+        of RMSDs to evaluate its centrality in the cluster.
 
-                        #If the RMSD threshold is passed
-                        if curRMSD <= self.maxRMSD.get():
-                            append2Cluster = True
-                            break
-
-                    #newClust: Init with only the newPocket, grow with each clust which overlaps with newPocket
-                    if append2Cluster:
-                        newClust += clust
-                    #If no overlap, the clust keeps equal
-                    else:
-                        newClusters.append(clust)
-                #Add new cluster containing newPocket + overlapping previous clusters
-                newClusters.append(newClust)
-                clusters = newClusters.copy()
-        return clusters
-
-    def buildRepresentativeClusters(self, molDic):
-        clusters = []
-        # For each set of molecules
-        for i, molSet in enumerate(self.inputMoleculesSets):
-            # For each of the molecules in the set
-            for newMol in molSet.get():
-                newClusters, newClust = [], [newMol.clone()]
-                # Check for each of the clusters
-                for clust in clusters:
-                    # Check for each of the molecules in the cluster
-                    repMol = clust[0] #Only checking first element (representative)
-                    repRMSD = self.calculateMolsRMSD(newMol, repMol)
-                    # If the RMSD threshold is passed
-                    if repRMSD <= self.maxRMSD.get():
-                        repScore, newScore = getattr(repMol, self.repAttr.get()), getattr(newMol, self.repAttr.get())
-                        if (newScore > repScore and self.maxmin.get() == MAX) or \
-                                (newScore < repScore and self.maxmin.get() == MIN):
-                            # Becomes new representative (first position)
-                            newClust += clust
-                        else:
-                            newClust = clust + newClust
-                    else:
-                        # newClust: Init with only the newPocket, grow with each clust which overlaps with newPocket
-                        newClusters.append(clust)
-
-                # Add new cluster containing newPocket + overlapping previous clusters
-                newClusters.append(newClust)
-                clusters = newClusters.copy()
-
-        #Getting representatives
-        reps = []
-        for cl in clusters:
-            if self.countMolsInCluster(cl, molDic) >= self.numOfOverlap.get():
-                reps.append(cl[0])
-        return reps
-
-    def generateDockingClustersScipy(self):
-        '''Generate the docking clusters based on the RMSD of the ligands
-        Return (clusters): [[dock1, dock2], [dock3], [dock4, dock5, dock6]]'''
+        Return (clusters): [[(dock1, sRMSD1), (dock2, sRMSD2)], [(dock3, sRMSD3)],...]'''
         allMols = self.getAllInputMols(conv=True)
         _, molDic = buildMolDic(allMols)
 
@@ -344,123 +288,65 @@ class ProtocolConsensusDocking(EMProtocol):
             if rmsds: #Needed more than 1 mol to cluster
                 linked = linkage(rmsds, self.getEnumText('linkage').lower())
                 clusters = fcluster(linked, self.maxRMSD.get(), 'distance')
+                rmsdSums = self.sumDistancesVectorized(clusters, rmsds)
 
                 clusterMol = {}
                 for i, cl in enumerate(clusters):
                     if cl in clusterMol:
-                        clusterMol[cl] += [molDic[molName][i]]
+                        clusterMol[cl] += [(molDic[molName][i], rmsdSums[i])]
                     else:
-                        clusterMol[cl] = [molDic[molName][i]]
+                        clusterMol[cl] = [(molDic[molName][i], rmsdSums[i])]
                 finalClusters += list(clusterMol.values())
             else:
-                finalClusters += [molDic[molName]]
+                finalClusters += [(molDic[molName][0], 0)]
 
         return finalClusters
 
-    def calculateFlattenRMSD(self, u, v):
-        '''From a flat vector of 3D coords, unflattens it into a matrix and calculates the RMSD of those coordinates'''
-        return calculateRMSD(self.unflattenCoords(u), self.unflattenCoords(v))
 
-    def unflattenCoords(self, v):
-        return [v[i:i+3] for i in range(0,len(v),3)]
-
-
-    def getIndepClusters(self, clusters, molDic):
+    def getIndepClusters(self, clusters, molSetDic):
         indepClustersDic = {}
         for clust in clusters:
-            if self.countMolsInCluster(clust, molDic) >= self.numOfOverlap.get():
+            if self.countMolsInCluster(clust, molSetDic) >= self.numOfOverlap.get():
                 curIndepCluster = {}
-                for mol in clust:
+                for mol, sRMSD in clust:
                     curMolFile = mol.getPoseFile()
-                    inSetId = molDic[curMolFile]
+                    inSetId = molSetDic[curMolFile]
                     if inSetId in curIndepCluster:
-                        curIndepCluster[inSetId] += [mol]
+                        curIndepCluster[inSetId] += [(mol, sRMSD)]
                     else:
-                        curIndepCluster[inSetId] = [mol]
+                        curIndepCluster[inSetId] = [(mol, sRMSD)]
 
-                for inSetId in curIndepCluster:
+                for inSetId, setMols in curIndepCluster.items():
                     if inSetId in indepClustersDic:
-                        indepClustersDic[inSetId] += [curIndepCluster[inSetId]]
+                        indepClustersDic[inSetId] += [setMols]
                     else:
-                        indepClustersDic[inSetId] = [curIndepCluster[inSetId]]
+                        indepClustersDic[inSetId] = [setMols]
         return indepClustersDic
 
-    def countMolsInCluster(self, cluster, molDic):
+    def countMolsInCluster(self, cluster, molSetDic):
         setIds = []
-        for mol in cluster:
-            setId = molDic[mol.getUniqueName()]
+        for mol, _ in cluster:
+            setId = molSetDic[mol.getUniqueName()]
             if self.sameClust.get() or not setId in setIds:
                 setIds.append(setId)
         return len(setIds)
 
-    def cluster2representative(self, clusters, molDic, minSize):
+    def cluster2representative(self, clusters, molSetDic, minSize):
         representatives = []
         for clust in clusters:
-            if self.countMolsInCluster(clust, molDic) >= minSize:
+            if self.countMolsInCluster(clust, molSetDic) >= minSize:
                 repr = self.getRepresentativeMolecule(clust)
                 representatives.append(repr)
         return representatives
 
-    def getCentroidMolecule(self, molecules, method='medoid'):
-        """
-        Find the centroid molecule from a set based on RMSD.
-
-        Parameters:
-        -----------
-        molecules : list
-            List of molecules (can be coordinates, molecule objects, etc.)
-
-        method : str
-            Method to find centroid:
-            - 'medoid': molecule with minimum average RMSD to all others
-            - 'minimax': molecule with minimum maximum RMSD to any other
-
-        Returns:
-        --------
-        centroid : mol
-            Centroid molecule in the input list
-
-        centroid_rmsd : float
-            Average RMSD from centroid to all other molecules
-
-        """
-
-        n_molecules = len(molecules)
-
-        # Compute distance matrix if not provided
-        distance_matrix = np.zeros((n_molecules, n_molecules))
-
-        # Fill the distance matrix
-        for i in range(n_molecules):
-            for j in range(i + 1, n_molecules):
-                rmsd = self.calculateMolsRMSD(molecules[i], molecules[j])
-                distance_matrix[i, j] = rmsd
-                distance_matrix[j, i] = rmsd
-
-        if method == 'medoid':
-            # Calculate average RMSD for each molecule
-            avg_distances = np.mean(distance_matrix, axis=1)
-            centroid_idx = np.argmin(avg_distances)
-
-        elif method == 'minimax':
-            # Find molecule with minimum maximum distance to any other
-            max_distances = np.max(distance_matrix, axis=1)
-            centroid_idx = np.argmin(max_distances)
-
-        else:
-            raise ValueError(f"Unknown method: {method}. Use 'medoid', 'minimax'")
-
-        centroid = molecules[centroid_idx]
-        return centroid
-
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''
         if self.repMode.get() == 0:
-            centroidMol = self.getCentroidMolecule(cluster)
-            outMol = centroidMol.clone()
+            medoid = min(cluster, key=lambda x: x[1])[0]
+            outMol = medoid.clone()
         else:
             maxScore = -10e15 if self.maxmin.get() == MAX else 10e15
-            for mol in cluster:
+            for mol, _ in cluster:
                 molScore = getattr(mol, self.repAttr.get())
                 if (molScore > maxScore and self.maxmin.get() == MAX) or \
                         (molScore < maxScore and self.maxmin.get() == MIN):
@@ -468,27 +354,6 @@ class ProtocolConsensusDocking(EMProtocol):
                     outMol = mol.clone()
         return outMol
 
-    def getMinEnergyMolecule(self, cluster):
-        '''Return the docked molecule with min energy in a cluster'''
-        minEnergy = 10000
-        for mol in cluster:
-            molEnergy = mol.getEnergy()
-            if molEnergy < minEnergy:
-                minEnergy = molEnergy
-                outMol = mol.clone()
-        return outMol
-
-    def calculateMolsRMSD(self, mol1, mol2):
-        posDic1, posDic2 = mol1.getAtomsPosDic(), mol2.getAtomsPosDic()
-        if self.checkSameKeys(posDic1, posDic2):
-            rmsd = calculateRMSDKeys(posDic1, posDic2)
-            return rmsd
-        else:
-            return 100
-
-
-    def checkSameKeys(self, d1, d2):
-        return set(d1.keys()) == set(d2.keys())
 
     def getAllPocketAttributes(self, pocketSets):
         '''Return a dic with {attrName: ScipionObj=None}'''
@@ -519,41 +384,6 @@ class ProtocolConsensusDocking(EMProtocol):
             idsDic[i+1] = item.getObjId()
             item.setObjId(i+1)
         return inSet, idsDic
-
-    def getTemplateOutPDB(self):
-        templatePocket = None
-        for pock in self.consensusPockets:
-            if pock.getPocketClass() != 'AutoLigand':
-                templatePocket = pock
-                break
-        if templatePocket == None:
-            templatePocket = self.consensusPockets[0]
-        return self.parseATOMlines(templatePocket.getProteinFile())
-
-    def parseHETATM(self, pdbFile, oldId, newId):
-        outStr = ''
-        with open(pdbFile) as f:
-            for line in f:
-                if line.startswith('HETATM') and int(splitPDBLine(line)[5]) == int(oldId):
-                    outStr += self.pdbLineReplacement(line, str(oldId), str(newId))
-        return outStr
-
-    def parseATOMlines(self, pdbFile):
-        outStr = ''
-        with open(pdbFile) as f:
-            for line in f:
-                if line.startswith('ATOM'):
-                    outStr += line
-                elif line.startswith('HETATM') and splitPDBLine(line)[2] != 'APOL':
-                    outStr += line
-        return outStr
-
-    def pdbLineReplacement(self, line, oldId, newId):
-        oldLen, newLen = len(oldId), len(newId)
-        oldStr = 'APOL STP C{}'.format((4-oldLen)*' ' + oldId)
-        newStr = 'APOL STP C{}'.format((4-newLen)*' ' + newId)
-        line = line.replace(oldStr, newStr)
-        return line
 
     def getOriginalReceptorFile(self):
         return self.inputMoleculesSets[0].get().getProteinFile()
