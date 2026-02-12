@@ -42,7 +42,7 @@ class ProtocolLigandCharacterization(EMProtocol):
     _label = 'Ligand characterization'
 
     def _defineParams(self, form):
-        form.addSection(label='Parameters')
+        form.addSection(label='Parameters COSS')
         form.addParam('inputSmallMolecules', params.PointerParam,
                       pointerClass='SetOfSmallMolecules, SmallMoleculesLibrary', allowsNull=False,
                       label="Input Small Molecules",

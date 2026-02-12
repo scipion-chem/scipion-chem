@@ -1890,3 +1890,12 @@ class PharmacophoreChem(data.EMSet):
 
 class PredictStructROIsOutput(enum.Enum):
   outputStructROIs = SetOfStructROIs
+
+# ---------------------------
+# ROI Sequence (NEW OBJECT)
+# ---------------------------
+from pwem.objects import EMObject
+
+class ROISequence(EMObject):
+    """Minimal class to allow importing ROISequence."""
+    pass

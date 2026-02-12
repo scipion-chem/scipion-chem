@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://app.tamarind.bio/
+HostUrl=https://alphafold-dbs-tamarind.s3.us-west-1.amazonaws.com/irene02septiembre%40gmail.com/Protein_Ig_V1/best.pdb?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAY5HXAV7WPR3UDJIE%2F20250721%2Fus-west-1%2Fs3%2Faws4_request&X-Amz-Date=20250721T075545Z&X-Amz-Expires=3600&X-Amz-Signature=a249c9ed029d35e3b4c717933abf2a0674cf0c39e210e8b0dbea8ccafb174645&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject

@@ -23,6 +23,86 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
 from .base import *
 from .reactions import *
+
+
+# ================================================================
+# Custom ROI voting objects (Irene Sánchez, 2025)
+# ================================================================
+
+import pyworkflow.object as pwobj
+from pwem.objects import EMObject, EMSet, Pointer
+
+
+class ROIVote(EMObject):
+    """Objeto individual: residuo + frecuencia + porcentaje."""
+    _possibleAttributes = ['_residue', '_frequency', '_percentage']
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._residue = pwobj.String()
+        self._frequency = pwobj.Integer()
+        self._percentage = pwobj.Float()
+
+
+class SetOfROIVotes(EMSet):
+    """Set global para ROI Voting."""
+    _targets = [ROIVote]
+    _label = 'Set of ROI Votes'
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._itemType = ROIVote
+
+
+# ================================================================
+# Custom ROI color mapping objects (Irene Sánchez, 2025)
+# ================================================================
+
+class ROIColorItem(EMObject):
+    """Single residue with color intensity information."""
+    _possibleAttributes = ['_residue', '_frequency', '_percentage', '_color']
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._residue = pwobj.String()
+        self._frequency = pwobj.Integer()
+        self._percentage = pwobj.Float()
+        self._color = pwobj.String()  # e.g., 'red', 'blue', etc.
+
+
+class SetOfROIColorMap(EMSet):
+    """Set for color-mapped residues."""
+    _targets = [ROIColorItem]
+    _label = 'Set of ROI Color Map'
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._itemType = ROIColorItem
+
+
+# ================================================================
+# Custom ROI frequency filter objects (Irene Sánchez, 2025)
+# ================================================================
+
+class ROIFilterItem(EMObject):
+    """Single filtered residue with frequency and percentage."""
+    _possibleAttributes = ['_residue', '_frequency', '_percentage']
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._residue = pwobj.String()
+        self._frequency = pwobj.Integer()
+        self._percentage = pwobj.Float()
+
+
+class SetOfROIFiltered(EMSet):
+    """Clean set with only 3 columns (residue, frequency, percentage)."""
+    _targets = [ROIFilterItem]
+    _label = 'Set of ROI Filtered Residues'
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._itemType = ROIFilterItem
+

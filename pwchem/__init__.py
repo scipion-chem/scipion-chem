@@ -30,6 +30,8 @@ This package contains the protocols for
 manipulation of atomic struct objects
 """
 
+__packageName__ = 'pwchem'
+
 # General imports
 import os, subprocess
 from subprocess import run
