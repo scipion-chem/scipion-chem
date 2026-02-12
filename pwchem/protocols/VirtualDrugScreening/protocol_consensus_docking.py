@@ -106,24 +106,6 @@ class ProtocolConsensusDocking(EMProtocol):
         conStep = self._insertFunctionStep(self.consensusStep, prerequisites=[cStep])
         self._insertFunctionStep(self.createOutputStep, prerequisites=[conStep])
 
-    def convertPDBFiles(self, pdbDir, outDir):
-        pdbFiles = list(os.listdir(pdbDir))
-        if len(pdbFiles) > 0:
-            args = f' --multiFiles -iD "{pdbDir}" --pattern "*" -of sdf --outputDir "{outDir}"'
-            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
-
-    def convertMAEFiles(self, maeDir, outDir):
-        try:
-            from pwchemSchrodinger.utils.utils import convertMAE2Mol2File
-        except ImportError:
-            print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
-            return
-
-        maeFiles = list(os.listdir(maeDir))
-        if len(maeFiles) > 0:
-            for maeFile in maeFiles:
-                convertMAE2Mol2File(maeFile, outDir)
-
     def convertInputStep(self):
         allMols = self.getAllInputMols()
         outDir = self.getInputMolsDir()
@@ -149,7 +131,6 @@ class ProtocolConsensusDocking(EMProtocol):
         molSetDic = self.buildMolSetDic()
         minSize = self.numOfOverlap.get()
 
-        #todo: paralelize consensus step on molecules
         molClusters = self.generateDockingClusters()
         self.consensusMols = self.cluster2representative(molClusters, molSetDic, minSize)
 
@@ -161,7 +142,6 @@ class ProtocolConsensusDocking(EMProtocol):
                 # Getting independent representative for each input set
                 self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId],
                                                                                molSetDic, minSize=1)
-
 
     def createOutputStep(self):
         inputProteinFile = self.inputMoleculesSets[0].get().getProteinFile()
@@ -217,6 +197,24 @@ class ProtocolConsensusDocking(EMProtocol):
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
+    def convertPDBFiles(self, pdbDir, outDir):
+        pdbFiles = list(os.listdir(pdbDir))
+        if len(pdbFiles) > 0:
+            args = f' --multiFiles -iD "{pdbDir}" --pattern "*" -of sdf --outputDir "{outDir}"'
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
+
+    def convertMAEFiles(self, maeDir, outDir):
+        try:
+            from pwchemSchrodinger.utils.utils import convertMAE2Mol2File
+        except ImportError:
+            print('Conversion of MAE input files could not be performed because schrodinger plugin is not installed')
+            return
+
+        maeFiles = list(os.listdir(maeDir))
+        if len(maeFiles) > 0:
+            for maeFile in maeFiles:
+                convertMAE2Mol2File(maeFile, outDir)
+
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
 
@@ -244,10 +242,6 @@ class ProtocolConsensusDocking(EMProtocol):
         for inpSet in self.inputMoleculesSets:
             inpProteinFiles.append(inpSet.get().getProteinFile())
         return inpProteinFiles
-
-    def getPDBName(self):
-        pdbFile = self.inputMoleculesSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
-        return pdbFile.split('_out')[0]
 
     def sumDistancesVectorized(self, clusters, flat_distances):
         """
@@ -283,7 +277,7 @@ class ProtocolConsensusDocking(EMProtocol):
         _, molDic = buildMolDic(allMols)
 
         finalClusters = []
-        rmsdDic = runRdkitRMSD(self, allMols)
+        rmsdDic = runParallelRdkitRMSD(allMols, nJobs=self.numberOfThreads.get())
         for molName, rmsds in rmsdDic.items():
             if rmsds: #Needed more than 1 mol to cluster
                 linked = linkage(rmsds, self.getEnumText('linkage').lower())

@@ -1093,34 +1093,37 @@ def parseRMSDs(rmsdFile):
       rmsds.append(float(line.strip().split()[-1]))
   return rmsds
 
-def runRdkitRMSD(protocol, mols, referenceFile=None):
+def runRdkitRMSD(inputFiles):
+    refFile, targetFiles = inputFiles
+    programCall = 'python -m spyrmsd '
+    try:
+      result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
+                                            programCall, retOut=True)
+    except:
+      try:
+        programCall = 'python -m spyrmsd -n '
+        result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
+                                              programCall, retOut=True)
+      except Exception as e:
+        result = ' '.join(['1000'] * len(targetFiles))
+
+    result = list(map(float, result.split()))
+    return result
+
+def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
   molFileDic, _ = buildMolDic(mols)
   rmsdDic = {}
   for molName, targetFiles in molFileDic.items():
       if referenceFile:
-        filesDic = {referenceFile: targetFiles}
+        inputIter = [(referenceFile, targetFiles)]
       else:
-        filesDic = {}
+        inputIter = []
         for i, refFile in enumerate(targetFiles):
             restTargets = targetFiles[i+1:]
             if restTargets:
-                filesDic[refFile] = restTargets
-
-      rmsdDic[molName] = []
-      for refFile, targetFiles in filesDic.items():
-          programCall = 'python -m spyrmsd '
-          try:
-            result = pwchemPlugin.runCondaCommand(protocol, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                                  programCall, retOut=True, cwd=protocol._getExtraPath())
-          except:
-            try:
-              programCall = 'python -m spyrmsd -n '
-              result = pwchemPlugin.runCondaCommand(protocol, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                                    programCall, retOut=True, cwd=protocol._getExtraPath())
-            except Exception as e:
-              result = ' '.join(['1000'] * len(targetFiles))
-
-          rmsdDic[molName] += list(map(float, result.split()))
+                inputIter.append([refFile, restTargets])
+      results = runInParallel(runRdkitRMSD, paramList=inputIter, jobs=nJobs)
+      rmsdDic[molName] = [item for sublist in results for item in sublist]
 
   return rmsdDic
 

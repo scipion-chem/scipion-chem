@@ -102,7 +102,8 @@ class ProtocolRMSDDocking(ProtocolConsensusDocking):
                     refFile = os.path.abspath(refFile)
                     break
 
-        rmsdDic = runRdkitRMSD(self, self.getAllInputMols(), referenceFile=refFile)
+        rmsdDic = runParallelRdkitRMSD(self.getAllInputMols(), referenceFile=refFile,
+                                       nJobs=self.numberOfThreads.get())
 
 
         newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
