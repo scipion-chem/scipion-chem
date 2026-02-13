@@ -121,7 +121,7 @@ class Plugin(pwem.Plugin):
         # Installing package
         rdkitEnvName = cls.getEnvName(RDKIT_DIC)
         installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
-                             f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
+                             f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 spyrmsd -y', 'RDKIT_ENV_CREATED')\
             .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
             .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
@@ -300,16 +300,21 @@ class Plugin(pwem.Plugin):
                 subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
     @classmethod
-    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True):
+    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True, retOut=False):
         """ General function to run conda commands """
+        result = None
         fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
-        if not popen:
+        if not popen and not retOut:
             protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
         else:
-            kwargs = {}
-            if silent:
-                kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-            run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+            if not retOut:
+                kwargs = {}
+                if silent:
+                    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+                run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+            else:
+                result = subprocess.check_output(fullProgram + args, cwd=cwd, shell=True, text=True)
+        return result
 
     @classmethod
     def runShapeIt(cls, protocol, args, cwd=None):
