@@ -313,10 +313,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
             inpProteinFiles.append(inpSet.get().getProteinFile())
         return inpProteinFiles
 
-    def getPDBName(self):
-        pdbFile = self.inputStructROIsSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
-        return pdbFile.split('_out')[0]
-
     def generatePocketClusters(self):
         '''Generate the pocket clusters based on the overlapping residues
         Return (clusters): [[pock1, pock2], [pock3], [pock4, pock5, pock6]]'''

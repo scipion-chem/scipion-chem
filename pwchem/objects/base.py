@@ -391,11 +391,11 @@ class SmallMolecule(data.EMObject):
   def setMolName(self, value):
     self.molName.set(value)
 
-  def guessMolName(self):
+  def guessMolName(self, useConfId=True):
     molName = None
     if self.getFileName():
       fBase = self.getFileName().split('/')[-1].split('.')[0]
-      if self.getConfId():
+      if self.getConfId() and useConfId:
         molName = '-'.join(fBase.split('-')[:-1])
       else:
         molName = fBase
@@ -492,7 +492,7 @@ class SmallMolecule(data.EMObject):
       name += '_{}'.format(self.getDockId())
     return name
 
-  def getAtomsPosDic(self, onlyHeavy=True):
+  def getAtomsPosDic(self, onlyHeavy=True, doMap=False):
     '''Returns a dictionary with the atoms coordinates:
         {atomId: [c1, c2, c3], ...}'''
     molFile = self.getFileName()
@@ -501,12 +501,20 @@ class SmallMolecule(data.EMObject):
 
     posDic = {}
     if '.pdb' in molFile:
+      numType = {}
       with open(molFile) as fIn:
         for line in fIn:
           if line.startswith('ATOM') or line.startswith('HETATM'):
             elements = splitPDBLine(line)
             atomId, coords = elements[2], elements[6:9]
             atomType = removeNumberFromStr(atomId)
+            if atomType == atomId:
+                if atomId not in numType:
+                  numType[atomType] = 0
+
+                numType[atomType] += 1
+                atomId = '{}{}'.format(atomType, numType[atomType])
+
             if atomType != 'H' or not onlyHeavy:
               posDic[atomId] = list(map(float, coords))
 
@@ -545,6 +553,10 @@ class SmallMolecule(data.EMObject):
                 posDic[atomId] = list(map(float, coords))
             else:
               break
+
+    if doMap and self.getMapDic():
+      mapDic = self.getMapDic()
+      posDic = {mapDic[atomId]: posDic[atomId] for atomId in posDic}
 
     return posDic
 
