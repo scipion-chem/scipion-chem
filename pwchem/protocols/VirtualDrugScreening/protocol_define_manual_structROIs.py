@@ -51,6 +51,7 @@ from pwchem.constants import *
 COORDS, RESIDUES, LIGANDS, PPI, NRES = 0, 1, 2, 3, 4
 INTERACTIONSFILENAME = "interacting_residues.csv"
 
+
 class ProtDefineStructROIs(EMProtocol):
     """
     Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
@@ -236,6 +237,20 @@ class ProtDefineStructROIs(EMProtocol):
             interactionsFile = Path(self._getExtraPath(INTERACTIONSFILENAME))
             if interactionsFile.exists():
                 outPockets.setInteractingResiduesFile(interactionsFile)
+            
+                table = self.build_contiguous_regions(interactionsFile)
+                if table:
+                    tableFile = self._getExtraPath("antibody_regions.md")
+                    with open(tableFile, "w") as f:
+                        f.write(table)
+            
+                # --- LOG EN run.stdout ---
+                self.info("\n" + "="*80)
+                self.info("Protein-Protein interaction regions (all chains)")
+                self.info("="*80)
+                for line in table.splitlines():
+                    self.info(line)
+
             self._defineOutputs(outputStructROIs=outPockets)
 
 
@@ -403,9 +418,12 @@ class ProtDefineStructROIs(EMProtocol):
                         resName1 = atom1.get_parent().get_resname()
                         resName2 = atom2.get_parent().get_resname()
 
-                        key = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
-                        if not key in residuePairs or dist < residuePairs[key]:
-                          residuePairs[key] = dist
+                        key12 = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
+                        key21 = (chain2Id, f'{resName2}:{resNum2}', chain1Id, f'{resName1}:{resNum1}')
+
+                        for key in (key12, key21):
+                            if key not in residuePairs or dist < residuePairs[key]:
+                                residuePairs[key] = dist
 
             with open(interactionsFile, mode='a', newline='') as f:
                 writer = csv.writer(f)
@@ -493,3 +511,50 @@ class ProtDefineStructROIs(EMProtocol):
     def _getInputName(self):
         return os.path.splitext(os.path.basename(self.inputAtomStruct.get().getFileName()))[0]
 
+    def build_contiguous_regions(self, interactions_csv):
+        """
+        Build a Markdown table of interacting residues per chain,
+        listing for each residue the residues it interacts with,
+        sorted by minimal distance.
+        """
+        # Diccionario: key = (Chain1, Residue1), value = list of tuples (Chain2, Residue2, min_distance)
+        interactions = defaultdict(list)
+
+        with open(interactions_csv, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                chain1 = row['Chain1']
+                res1 = row['Residue1']
+                chain2 = row['Chain2']
+                res2 = row['Residue2']
+                dist = float(row['Min distance'])
+                interactions[(chain1, res1)].append((chain2, res2, dist))
+
+        if not interactions:
+            return None
+
+        # Construir el Markdown
+        summary_blocks = []
+
+        # Agrupamos por chain de origen (Chain1)
+        chains = sorted(set(ch1 for ch1, _ in interactions.keys()))
+        for chain in chains:
+            summary_blocks.append(f"Regions of interaction - Chain {chain}")
+            summary_blocks.append("| Residue | Interacting residues |")
+            summary_blocks.append("|--------|-------------------|")
+
+            # Filtramos las claves de esta chain
+            residues_chain = [(res1, interactions[(chain, res1)]) for ch1, res1 in interactions if ch1 == chain]
+            
+            # Ordenamos por la menor distancia de interacción de cada residuo
+            residues_chain.sort(key=lambda x: min([dist for _, _, dist in x[1]]))
+
+            for res1, partners in residues_chain:
+                # Ordenar partners por distancia mínima
+                partners_sorted = sorted(partners, key=lambda x: x[2])
+                partners_str = ", ".join([f"{ch2}:{res2} ({dist:.2f} Å)" for ch2, res2, dist in partners_sorted])
+                summary_blocks.append(f"| {res1} | {partners_str} |")
+
+            summary_blocks.append("")  # línea en blanco entre cadenas
+
+        return "\n".join(summary_blocks)
