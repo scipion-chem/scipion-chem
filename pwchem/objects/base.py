@@ -509,7 +509,7 @@ class SmallMolecule(data.EMObject):
             atomId, coords = elements[2], elements[6:9]
             atomType = removeNumberFromStr(atomId)
             if atomType == atomId:
-                if not atomId in numType:
+                if atomId not in numType:
                   numType[atomType] = 0
 
                 numType[atomType] += 1

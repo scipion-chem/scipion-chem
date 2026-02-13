@@ -33,6 +33,7 @@ from pwchem.protocols import *
 from pwchem.tests import TestDefineStructROIs
 from pwchem.utils import assertHandle
 
+chainStr = '{"model": 0, "chain": "C", "residues": 141}'
 defRoiStr = '''1) Coordinate: {"X": 51, "Y": 76, "Z": 61}'''
 
 defRoiStrLig = '''1) Ext-Ligand: {"pointerIdx": "0", "ligName": "SmallMolecule (g1_4erf_0R3-1_1 molecule)"}'''
@@ -71,7 +72,7 @@ class TestExtractLigand(BaseTest):
 		return protExtLig
 
 	def test(self):
-		protExtract = self._runExtractLigand(self.protImportPDB, '{"model": 0, "chain": "C", "residues": 141}')
+		protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
 		self._waitOutput(protExtract, 'outputSmallMolecules')
 		assertHandle(self.assertIsNotNone, getattr(protExtract, 'outputSmallMolecules', None), cwd=protExtract.getWorkingDir())
 
@@ -436,7 +437,7 @@ class TestMapLigandContacts(TestExtractLigand):
 		return protDefContacts
 
 	def test(self):
-		protExtract = self._runExtractLigand(self.protImportPDB)
+		protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
 		self._waitOutput(protExtract, 'outputSmallMolecules')
 
 		protContacts = self._runDefineContacts(protExtract)

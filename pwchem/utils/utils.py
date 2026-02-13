@@ -1076,7 +1076,7 @@ def buildMolDic(mols):
   molFileDic, molDic = {}, {}
   for mol in mols:
     molName = mol.getMolName()
-    if not molName in molFileDic:
+    if molName not in molFileDic:
       molFileDic[molName] = [os.path.abspath(mol.getPoseFile())]
       molDic[molName] = [mol]
     else:
@@ -1104,7 +1104,7 @@ def runRdkitRMSD(inputFiles):
         programCall = 'python -m spyrmsd -n '
         result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
                                               programCall, retOut=True)
-      except Exception as e:
+      except Exception as _:
         result = ' '.join(['1000'] * len(targetFiles))
 
     result = list(map(float, result.split()))

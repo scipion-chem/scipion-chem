@@ -243,27 +243,27 @@ class ProtocolConsensusDocking(EMProtocol):
             inpProteinFiles.append(inpSet.get().getProteinFile())
         return inpProteinFiles
 
-    def sumDistancesVectorized(self, clusters, flat_distances):
+    def sumDistancesVectorized(self, clusters, flatDistances):
         """
         Vectorized version for better performance with larger datasets.
         """
         n = len(clusters)
 
         # Create full distance matrix
-        dist_matrix = np.zeros((n, n))
-        triu_indices = np.triu_indices(n, k=1)
-        dist_matrix[triu_indices] = flat_distances
-        dist_matrix = dist_matrix + dist_matrix.T
+        distMatrix = np.zeros((n, n))
+        triuIndices = np.triu_indices(n, k=1)
+        distMatrix[triuIndices] = flatDistances
+        distMatrix = distMatrix + distMatrix.T
 
         sums = []
-        for cluster_id in set(clusters):
-            mask = np.array(clusters) == cluster_id
-            cluster_indices = np.where(mask)[0]
+        for clusterId in set(clusters):
+            mask = np.array(clusters) == clusterId
+            clusterIndices = np.where(mask)[0]
 
-            for i in cluster_indices:
+            for i in clusterIndices:
                 # Sum distances to all other elements in same cluster
-                sum_dist = np.sum(dist_matrix[i, cluster_indices]) - dist_matrix[i, i]
-                sums.append(sum_dist)
+                sumDist = np.sum(distMatrix[i, clusterIndices]) - distMatrix[i, i]
+                sums.append(sumDist)
 
         return sums
 
@@ -305,16 +305,14 @@ class ProtocolConsensusDocking(EMProtocol):
                 for mol, sRMSD in clust:
                     curMolFile = mol.getPoseFile()
                     inSetId = molSetDic[curMolFile]
-                    if inSetId in curIndepCluster:
-                        curIndepCluster[inSetId] += [(mol, sRMSD)]
-                    else:
-                        curIndepCluster[inSetId] = [(mol, sRMSD)]
+                    if inSetId not in curIndepCluster:
+                        curIndepCluster[inSetId] = []
+                    curIndepCluster[inSetId] += [(mol, sRMSD)]
 
                 for inSetId, setMols in curIndepCluster.items():
-                    if inSetId in indepClustersDic:
-                        indepClustersDic[inSetId] += [setMols]
-                    else:
-                        indepClustersDic[inSetId] = [setMols]
+                    if inSetId not in indepClustersDic:
+                        indepClustersDic[inSetId] = []
+                    indepClustersDic[inSetId] += [setMols]
         return indepClustersDic
 
     def countMolsInCluster(self, cluster, molSetDic):
