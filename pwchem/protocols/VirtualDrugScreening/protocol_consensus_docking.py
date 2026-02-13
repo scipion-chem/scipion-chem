@@ -84,7 +84,7 @@ class ProtocolConsensusDocking(EMProtocol):
                       help="Min number of docked molecules to be considered consensus docking")
 
         group = form.addGroup('Representative')
-        group.addParam('repMode', params.EnumParam, default=0, choices=['Centroid', 'By attribute'],
+        group.addParam('repMode', params.EnumParam, default=0, choices=['Medoid', 'By attribute'],
                        label='Representative choice mode: ',
                        help='How to choose the representative from the clusters')
         group.addParam('repAttr', params.StringParam, default='', condition='repMode==1',
