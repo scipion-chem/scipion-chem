@@ -132,6 +132,10 @@ SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtocolRankDocking,
                                       targets=['defineScore'],
                                       inputs=['inputMoleculesSets', 'defineInput'],
                                       outputs=['defineScore'])
+SelectAttributeWizardChem().addTarget(protocol=chemprot.ProtChemGroupByAtt,
+                                      targets=['refColumn'],
+                                      inputs=['inputSet'],
+                                      outputs=['refColumn'])
 
 
 class SelectMultiPointerAttributeWizard(VariableWizard):
@@ -237,6 +241,7 @@ SelectAttributeWizardListOperate().addTarget(protocol=chemprot.ProtOperateSeqROI
                                       targets=['bestAttribute'],
                                       inputs=['operation', 'inputROIsSets', 'inputMultiSet'],
                                       outputs=['bestAttribute'])
+
 
 
 ########################## Sequence Attributes ####################################

@@ -112,8 +112,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         """ Assign the charges using a method available in the open-access program openbabel and
         Generate a number of conformers of the same small molecule with openbabel
         """
-        if not os.path.exists(self.getPrepDir()):
-          os.makedirs(self.getPrepDir())
+        os.makedirs(self.getPrepDir(), exist_ok=True)
 
         failedCharges, failedConfs = [], []
         for fnSmall in self.getInputMolFiles(it):
