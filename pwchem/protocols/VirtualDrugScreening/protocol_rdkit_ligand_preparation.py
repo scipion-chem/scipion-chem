@@ -176,7 +176,7 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
             mapFile = mol.writeMapFile(SmallMolecule(smallMolFilename=molFile), outDir=self._getExtraPath(),
                                        mapBy='order')
           if os.path.exists(molFile) and os.path.getsize(molFile) != 0:
-            confId = os.path.splitext(molFile)[0].split('-')[-1] if self.doConformers else 0
+            confId = os.path.splitext(molFile)[0].split('-')[-1] if self.doConformers else 1
 
             newSmallMol = SmallMolecule()
             if not self.useLibrary.get():
@@ -184,10 +184,10 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
               newSmallMol.setMappingFile(pwobj.String(mapFile))
             else:
               newSmallMol = self.addLibAttributes(newSmallMol, mol)
+              newSmallMol.guessMolName()
 
             newSmallMol.setFileName(molFile)
             newSmallMol.setConfId(confId)
-            newSmallMol.guessMolName()
 
             outMols.append(newSmallMol)
       molLists[it] = outMols
