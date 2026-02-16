@@ -93,7 +93,7 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
 
     def getInputDir(self):
-      return self._getExtraPath()
+      return os.path.abspath(self._getExtraPath())
 
     def getNSubsets(self):
       nt = self.numberOfThreads.get()
