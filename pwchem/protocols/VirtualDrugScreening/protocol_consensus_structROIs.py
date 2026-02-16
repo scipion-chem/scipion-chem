@@ -95,13 +95,28 @@ class ProtocolConsensusStructROIs(EMProtocol):
                            'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
                            '\nIntersection creates a new standard pocket with the interecting residues from the '
                            'ROIs in the cluster (if any)')
+        form.addParam('chooseSet', params.BooleanParam, default=True,
+                      label='Output only from one set: ',
+                      help='Whether to select the representative only from one input set.')
+        form.addParam('fromSet', params.StringParam, label="Representative set: ",
+                       default='', condition='chooseSet',
+                       help='Select the representative set that will be used for output generation.')
+        form.addParam('fallbackToOtherSets', params.BooleanParam, default=False,
+                      label='Add pockets from other sets if none in chosen set: ',  condition='chooseSet',
+                      help='If True, choose representative from any other input set when the chosen set has no pockets in the cluster. If False, ignore cluster.')
+
         form.addParam('numOfOverlap', params.IntParam, default=2,
-                      label='Minimun number of overlapping structural regions: ',
+                      label='Minimum number of overlapping structural regions: ',
                       help="Min number of structural regions to be considered consensus StructROIs")
         form.addParam('sameClust', params.BooleanParam, default=False,
                       label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
                       help='Whether to count overlapping structural ROIs from the same input set when calculating the '
                            'cluster size')
+        form.addParam('keepSmall', params.BooleanParam, default=False,
+                      label='Keep small ROIs: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Whether to keep as output the smaller ROIs if they overlap.')
+
+
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -121,6 +136,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         pocketClusters = self.generatePocketClusters()
         # Getting the representative of the clusters from any of the inputs
         ref = 0 if self.doMap else None
+
         self.consensusPockets = self.cluster2representative(pocketClusters, onlyRef=ref)
 
         if self.outIndv.get():
@@ -136,6 +152,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
+            if newPock.getVolume() is None:
+                newPock.setVolume(newPock.getPocketVolume())
             outPockets.append(newPock)
         if outPockets.getSize() > 0:
             outPockets.buildPDBhetatmFile(suffix='_All')
@@ -186,6 +204,20 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
 
     # --------------------------- UTILS functions -----------------------------------
+    def getSetId(self):
+        """Return the index of the set whose name matches fromSet"""
+        targetName = self.fromSet.get()
+        for idx, setPointer in enumerate(self.inputStructROIsSets):
+            roiSet = setPointer.get()
+            if str(roiSet) == targetName:
+                return idx
+        return None
+
+    def isPocketInside(self, small, big):
+        resSmall = set(small.getDecodedCResidues())
+        resBig = set(big.getDecodedCResidues())
+        return resSmall.issubset(resBig)
+
     def getInputChainSequences(self):
         '''Returns a dict: {inpIndex: {chainId: protSeq, ...}, ...}
         '''
@@ -381,18 +413,48 @@ class ProtocolConsensusStructROIs(EMProtocol):
             # Check if cluster is big enough
             if self.countPocketsInCluster(clust) >= minSize:
                 # Representative only from reference (first) protein if they are different
-                if onlyRef is not None:
-                    clust = self.filterPocketsBySet(clust, onlyRef)
 
-                if clust:
-                    if self.repChoice.get() == MAXVOL:
-                        outPocket = self.getMaxVolumePocket(clust)
-                    elif self.repChoice.get() == MAXSURF:
-                        outPocket = self.getMaxSurfacePocket(clust)
-                    elif self.repChoice.get() == INTERSEC:
-                        outPocket = self.getIntersectionPocket(clust, i)
+                # Filter based on fromSet
+                if self.chooseSet.get():
+                    setId = self.getSetId()
+                    if setId is not None:
+                        clustFiltered = self.filterPocketsBySet(clust, setId)
+                        if not clustFiltered:
+                            if self.fallbackToOtherSets.get():
+                                clustFiltered = clust
+                            else:
+                                continue
+                    else:
+                        if self.fallbackToOtherSets.get():
+                            clustFiltered = clust
+                        else:
+                            continue
+                elif onlyRef is not None:
+                    clustFiltered = self.filterPocketsBySet(clust, onlyRef)
+                else:
+                    clustFiltered = clust
 
-                    representatives.append(outPocket)
+                if clustFiltered:
+                    if not self.keepSmall.get() or (self.keepSmall.get() and self.chooseSet.get()):
+                        if self.repChoice.get() == MAXVOL:
+                            outPocket = self.getMaxVolumePocket(clustFiltered)
+                        elif self.repChoice.get() == MAXSURF:
+                            outPocket = self.getMaxSurfacePocket(clustFiltered)
+                        elif self.repChoice.get() == INTERSEC:
+                            outPocket = self.getIntersectionPocket(clustFiltered, i)
+                        representatives.append(outPocket)
+                    else:
+                        # Keep only pockets that are strictly contained in another one
+                        for pock in clustFiltered:
+                            isInside = False
+                            for other in clustFiltered:
+                                if pock is other:
+                                    continue
+                                if self.isPocketInside(pock, other):
+                                    isInside = True
+                                    break
+                            if isInside:
+                                representatives.append(pock.clone())
         return representatives
 
     def filterPocketsBySet(self, pockets, setId):
