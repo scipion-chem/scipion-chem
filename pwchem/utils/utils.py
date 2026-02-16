@@ -24,6 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import tempfile
 
 # General imports
 import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
@@ -893,21 +894,113 @@ class CleanStructureSelect(Select):
 def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseName(structFile)
-  if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
-    struct = PDBParser().get_structure(structName, structFile)
+  ext = os.path.splitext(structFile)[1]
+  if ext in ['.pdb', '.ent', '.pdbqt']:
+      struct = PDBParser().get_structure(structName, structFile)
+      if singleModel is not None:
+          struct = struct[singleModel]
+      io = PDBIO()
+      io.set_structure(struct)
+      io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+
   elif structFile.endswith('.cif'):
-    struct = MMCIFParser().get_structure(structName, structFile)
+      # Detect multiple blocks
+      with open(structFile) as f:
+          blockCount = sum(1 for line in f if line.startswith("data_"))
+
+      if blockCount > 1:
+          # Call new multi-block handler
+          tmpBlocks = splitCIFBlocksToTempFiles(structFile)
+          cleanedBlocks = []
+
+          for i, tmp in enumerate(tmpBlocks):
+              with open(tmp) as fh:
+                  text = fh.read()
+
+              if "_atom_site." not in text:
+                  print("DEBUG: Skipping non-atomic CIF block:", tmp)
+                  cleanedBlocks.append(tmp)
+                  continue
+
+              base, ext = os.path.splitext(outFn)
+              tmpOut = f"{base}.block{i}{ext}"
+
+              cleanPDB(
+                  tmp, tmpOut,
+                  waters=waters,
+                  hetatm=hetatm,
+                  chainIds=chainIds,
+                  het2keep=het2keep,
+                  het2rem=het2rem,
+                  singleModel=singleModel
+              )
+              cleanedBlocks.append(tmpOut)
+
+          with open(outFn, "w") as out:
+              for fn in cleanedBlocks:
+                  with open(fn) as f:
+                      out.writelines(f.readlines())
+                  out.write("#\n")
+
+      else:
+          struct = MMCIFParser().get_structure(structName, structFile)
+          if singleModel is not None:
+              struct = struct[singleModel]
+          io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
+          io.set_structure(struct)
+          io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+
   else:
-    print('Unknown format for file ', structFile)
-    exit()
-
-  if singleModel is not None:
-    struct = struct[singleModel]
-
-  io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
-  io.set_structure(struct)
-  io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+      print('Unknown format for file ', structFile)
+      exit()
   return outFn
+
+def splitCIFBlocksToTempFiles(cifFile):
+    with open(cifFile) as f:
+        blocks = splitCifBlocks(f.readlines())
+
+    tmpFiles = []
+    for block in blocks:
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".cif", delete=False, mode="w"
+        )
+        tmp.writelines(block)
+        tmp.close()
+        tmpFiles.append(tmp.name)
+
+    return tmpFiles
+
+def keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
+    group = fields[colIdx["group_PDB"]]
+    resname = fields[colIdx["label_comp_id"]]
+    chain = fields[colIdx["label_asym_id"]].upper()
+
+    if chainIds and chain not in chainIds:
+        return False
+
+    isWater = resname in ("HOH", "WAT", "H2O")
+    if waters and isWater:
+        return False
+
+    if group == "HETATM":
+        if hetatm:
+            return resname in het2keep
+        return resname not in het2rem
+
+    return True
+
+def splitCifBlocks(lines):
+    blocks, current = [], []
+    for line in lines:
+        if line.startswith("data_"):
+            if current:
+                blocks.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
+    return blocks
 
 def removeStartWithLines(inFile, start):
   '''Remove the lines in a file starting with a certain string'''
