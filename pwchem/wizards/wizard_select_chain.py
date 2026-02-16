@@ -607,6 +607,16 @@ SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
                                inputs=['inputSmallMolecules'],
                                outputs=['inputLigand'])
 
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['molPred'],
+                               inputs=['inputMoleculesSets'],
+                               outputs=['molPred'])
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['molTrue'],
+                               inputs=['inputMoleculesRefSets'],
+                               outputs=['molTrue'])
+
+
 SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayMoleculeDock'],
                                inputs=['moleculeLabels'],
