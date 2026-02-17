@@ -98,10 +98,11 @@ class Plugin(pwem.Plugin):
     def getEnvPath(cls, packageDictionary=None, innerPath=None):
         """ This function returns the root path for the env given it's dictionary. """
         # Command to extract the base path
-        condaCmd = f'{cls.getCondaActivationCmd()} conda activate && echo $CONDA_PREFIX'
+        condaCmd = f'{cls.getCondaActivationCmd()} conda activate {pwem.Config.getEnvName()} && echo $CONDA_PREFIX'
 
         # Getting the base path
         basePath = subprocess.run(condaCmd, shell=True, stdout=subprocess.PIPE).stdout.strip().decode('utf-8')
+        basePath = os.path.split(os.path.split(basePath)[0])[0]
 
         # Getting env base path
         envBasePath = os.path.join(basePath, 'envs', cls.getEnvName(packageDictionary)) if packageDictionary else basePath
