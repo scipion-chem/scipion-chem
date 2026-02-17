@@ -222,7 +222,7 @@ class Plugin(pwem.Plugin):
         installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
                                                             packageVersion=DEAP_DIC['version'])
 
-        scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
+        scipionEnvPath = cls.getEnvPath(innerPath=f'envs/{pwem.Config.getEnvName()}/lib/python3.8/site-packages/grape')
         installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate {pwem.Config.getEnvName()} && conda install conda-forge::deap -y')\
             .addCommand('git clone https://github.com/bdsul/grape.git') \
             .addCommand(f'mv grape {scipionEnvPath}') \
