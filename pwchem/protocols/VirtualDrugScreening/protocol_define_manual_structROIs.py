@@ -511,7 +511,7 @@ class ProtDefineStructROIs(EMProtocol):
     def _getInputName(self):
         return os.path.splitext(os.path.basename(self.inputAtomStruct.get().getFileName()))[0]
 
-    def build_contiguous_regions(self, interactions_csv):
+    def build_contiguous_regions(self, interactionsCsv):
         """
         Build a Markdown table of interacting residues per chain,
         listing for each residue the residues it interacts with,
@@ -520,7 +520,7 @@ class ProtDefineStructROIs(EMProtocol):
         # Diccionario: key = (Chain1, Residue1), value = list of tuples (Chain2, Residue2, min_distance)
         interactions = defaultdict(list)
 
-        with open(interactions_csv, newline="") as f:
+        with open(interactionsCsv, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 chain1 = row['Chain1']
@@ -534,14 +534,14 @@ class ProtDefineStructROIs(EMProtocol):
             return None
 
         # Construir el Markdown
-        summary_blocks = []
+        summaryBlocks = []
 
         # Agrupamos por chain de origen (Chain1)
         chains = sorted(set(ch1 for ch1, _ in interactions.keys()))
         for chain in chains:
-            summary_blocks.append(f"Regions of interaction - Chain {chain}")
-            summary_blocks.append("| Residue | Interacting residues |")
-            summary_blocks.append("|--------|-------------------|")
+            summaryBlocks.append(f"Regions of interaction - Chain {chain}")
+            summaryBlocks.append("| Residue | Interacting residues |")
+            summaryBlocks.append("|--------|-------------------|")
 
             # Filtramos las claves de esta chain
             residues_chain = [(res1, interactions[(chain, res1)]) for ch1, res1 in interactions if ch1 == chain]
@@ -553,8 +553,8 @@ class ProtDefineStructROIs(EMProtocol):
                 # Ordenar partners por distancia mínima
                 partners_sorted = sorted(partners, key=lambda x: x[2])
                 partners_str = ", ".join([f"{ch2}:{res2} ({dist:.2f} Å)" for ch2, res2, dist in partners_sorted])
-                summary_blocks.append(f"| {res1} | {partners_str} |")
+                summaryBlocks.append(f"| {res1} | {partners_str} |")
 
-            summary_blocks.append("")  # línea en blanco entre cadenas
+            summaryBlocks.append("")  # línea en blanco entre cadenas
 
-        return "\n".join(summary_blocks)
+        return "\n".join(summaryBlocks)
