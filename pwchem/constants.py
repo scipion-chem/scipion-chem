@@ -468,7 +468,7 @@ hide everything, not br. all within 3 of (byres polymer & name CA)
 set movie_fps, 15
 '''
 
-NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "borda"]
+NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "zmuv", "rank", "borda"]
 SCORE_BASED_METHODS = ["med", "anz"]
 RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 
