@@ -178,7 +178,10 @@ class ProtocolSCORCH2(EMProtocol):
         )
         if not preExtracted:
             resDir = Path(self._getExtraPath()) / "results"
-            shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results')), resDir)
+            srcDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results'))
+
+            if os.path.exists(srcDir):
+                shutil.move(srcDir, resDir)
 
     def createOutputStep(self):
         mols = self.inputPDBligandFiles.get()
