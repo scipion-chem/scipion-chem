@@ -34,6 +34,7 @@ import csv
 import logging
 from ctypes.wintypes import SMALL_RECT
 from pathlib import Path
+from pwem.convert import cifToPdb
 
 from pyworkflow.object import Float
 from pyworkflow.protocol import params, STEPS_PARALLEL
@@ -54,6 +55,7 @@ class ProtocolSCORCH2(EMProtocol):
     """
     _label = 'SCORCH2 rescoring'
     _defaultName = 'prot'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -81,6 +83,8 @@ class ProtocolSCORCH2(EMProtocol):
                         label='PS weight: ', help="Weight for SC2-PS predictions")
         iGroup.addParam('pbWeight', params.FloatParam, default=0.3, expertLevel=params.LEVEL_ADVANCED,
                         label='PB weight: ', help="Weight for SC2-PB predictions")
+
+        form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -144,9 +148,9 @@ class ProtocolSCORCH2(EMProtocol):
                 "--ps_scaler", str(psScaler),
                 "--pb_scaler", str(pbScaler),
                 "--output", str(outputFileFull),
+                "--num-cores", str(self.numberOfThreads.get()),
                 "--ps_weight", str(self.psWeight.get()),
                 "--pb_weight", str(self.pbWeight.get()),
-                "--keep-temp",
                 "--res-dir", str('results')
             ]
         else:
@@ -174,7 +178,10 @@ class ProtocolSCORCH2(EMProtocol):
         )
         if not preExtracted:
             resDir = Path(self._getExtraPath()) / "results"
-            shutil.move(os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results')), resDir)
+            srcDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results'))
+
+            if os.path.exists(srcDir):
+                shutil.move(srcDir, resDir)
 
     def createOutputStep(self):
         mols = self.inputPDBligandFiles.get()
@@ -297,17 +304,25 @@ class ProtocolSCORCH2(EMProtocol):
                 return True, files
 
     def convertFiles(self, fileList, baseDir):
-        """Convert PDB to PDBQT, keeping output in the same folder as the input file"""
+        """Convert PDB or CIF to PDBQT, keeping output in the same folder as the input file"""
         for file in fileList:
-            if file.suffix.lower() == ".pdb":
-                basename = file.stem
-                pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
+            suffix = file.suffix.lower()
+            basename = file.stem
 
-                inputAbs = str(file.resolve())
-                outputAbs = str(pdbqtFile.resolve())
+            if suffix == ".pdbqt":
+                continue
 
-                args = f"-ipdb {inputAbs} -opdbqt -O {outputAbs}"
-                runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+            pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
+            outputPath = str(pdbqtFile.resolve())
+            inputPath = str(file.resolve())
+
+            if suffix == ".cif":
+                pdbFile = Path(baseDir) / f"{basename}.pdb"
+                cifToPdb(inputPath, str(pdbFile.resolve()))
+                inputPath = str(pdbFile.resolve())
+
+            args = f"-ipdb {inputPath} -opdbqt -O {outputPath}"
+            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
 
 
     def removePdbFiles(self, directory):
