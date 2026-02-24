@@ -1186,6 +1186,43 @@ def parseRMSDs(rmsdFile):
       rmsds.append(float(line.strip().split()[-1]))
   return rmsds
 
+def originalToReversedIndex(n, i, j):
+  """
+  Map pair (i,j) in original list to pair in reversed list
+  where i < j
+  """
+  # In reversed list, molecule at position i goes to position n-1-i
+  i_rev = n - 1 - i
+  j_rev = n - 1 - j
+
+  # Ensure i_rev < j_rev for triangular indexing
+  if i_rev < j_rev:
+    return (i_rev, j_rev)
+  else:
+    return (j_rev, i_rev)
+
+def pairToFlatIndex(n, i, j):
+  """Convert pair (i,j) with i<j to flat triangular index"""
+  # Formula: k = i*n - i*(i+1)//2 + (j - i - 1)
+  return i * n - i * (i + 1) // 2 + (j - i - 1)
+
+
+def flatIndexToPair(n, k):
+  """Convert flat triangular index to pair (i,j) with i<j"""
+  i = 0
+  while k >= n - i - 1:
+    k -= n - i - 1
+    i += 1
+  j = i + 1 + k
+  return (i, j)
+
+def reverseIndex(n, k):
+  i, j = flatIndexToPair(n, k)
+  ir, jr = originalToReversedIndex(n, i, j)
+  ki = pairToFlatIndex(n, ir, jr)
+  return ki
+
+
 def runRdkitRMSD(inputFiles):
     refFile, targetFiles = inputFiles
     programCall = 'python -m spyrmsd '
@@ -1209,14 +1246,23 @@ def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
   for molName, targetFiles in molFileDic.items():
       if referenceFile:
         inputIter = [(referenceFile, targetFiles)]
+        inputIterRev = None
       else:
-        inputIter = []
-        for i, refFile in enumerate(targetFiles):
-            restTargets = targetFiles[i+1:]
+        inputIter, inputIterRev = [], []
+        targetFilesRev = targetFiles[::-1]
+        for i in range(len(targetFiles)):
+            refFile, refFileRev = targetFiles[i], targetFilesRev[i]
+            restTargets, restTargetsRev = targetFiles[i+1:], targetFilesRev[i+1:]
             if restTargets:
                 inputIter.append([refFile, restTargets])
+                inputIterRev.append([refFileRev, restTargetsRev])
+
       results = runInParallel(runRdkitRMSD, paramList=inputIter, jobs=nJobs)
-      rmsdDic[molName] = [item for sublist in results for item in sublist]
+      resultsRev = runInParallel(runRdkitRMSD, paramList=inputIterRev, jobs=nJobs)
+      rmsds, rmsdRev = ([item for sublist in results for item in sublist],
+                        [item for sublist in resultsRev for item in sublist])
+
+      rmsdDic[molName] = [min(rmsds[i], rmsdRev[reverseIndex(len(targetFiles), i)]) for i in range(len(rmsds))]
 
   return rmsdDic
 
