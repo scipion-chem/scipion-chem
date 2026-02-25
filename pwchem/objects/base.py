@@ -1618,62 +1618,29 @@ class SetOfStructROIs(data.EMSet):
           cifDic = MMCIF2Dict(protFile)
           cifDic = filterCifCols(cifDic, CIF_DEF_COLS)
 
-          max_id = max([int(i) for i in cifDic['_atom_site.id']])
-
-          new_ids = []
-          new_groups = []
-          new_type_symbols = []
-          new_label_atom_id = []
-          new_label_alt_id = []
-          new_label_comp_id = []
-          new_label_asym_id = []
-          new_label_entity_id = []
-          new_label_seq_id = []
-          new_x = []
-          new_y = []
-          new_z = []
-          new_auth_asym_id = []
-          new_auth_seq_id = []
-          new_ins_code = []
-          new_occupancy = []
-          new_biso = []
-          new_model_num = []
-
+          max_id = max(map(int, cifDic['_atom_site.id']))
           for pocket in self:
-              atoms = pocket.getPointsCoords()  # coords como [(x,y,z), ...]
-              for i, coord in enumerate(atoms):
+              for seq_id, (x, y, z) in enumerate(pocket.getPointsCoords(), start=1):
                   max_id += 1
-                  new_ids.append(str(max_id))
-                  new_groups.append('HETATM')
-                  new_type_symbols.append('C')  # ajusta según tu átomo
-                  new_label_atom_id.append(f'C{i + 1}')
-                  new_label_alt_id.append('.')
-                  new_label_comp_id.append('STP')  # nombre del pocket
-                  new_label_asym_id.append('A')
-                  new_label_entity_id.append('1')
-                  new_label_seq_id.append(str(i + 1))
-                  new_x.append(str(coord[0]))
-                  new_y.append(str(coord[1]))
-                  new_z.append(str(coord[2]))
-                  new_auth_asym_id.append('A')
-                  new_auth_seq_id.append(str(i + 1))
-                  new_ins_code.append('?')
-                  new_occupancy.append('1.00')
-                  new_biso.append('0.00')
-                  new_model_num.append('1')
 
-          for key, vals in zip(
-                  ['_atom_site.id', '_atom_site.group_PDB', '_atom_site.type_symbol',
-                   '_atom_site.label_atom_id', '_atom_site.label_alt_id', '_atom_site.label_comp_id',
-                   '_atom_site.label_asym_id', '_atom_site.label_entity_id', '_atom_site.label_seq_id',
-                   '_atom_site.Cartn_x', '_atom_site.Cartn_y', '_atom_site.Cartn_z',
-                   '_atom_site.auth_asym_id', '_atom_site.auth_seq_id', '_atom_site.pdbx_PDB_ins_code',
-                   '_atom_site.occupancy', '_atom_site.B_iso_or_equiv', '_atom_site.pdbx_PDB_model_num'],
-                  [new_ids, new_groups, new_type_symbols, new_label_atom_id, new_label_alt_id,
-                   new_label_comp_id, new_label_asym_id, new_label_entity_id, new_label_seq_id,
-                   new_x, new_y, new_z, new_auth_asym_id, new_auth_seq_id, new_ins_code,
-                   new_occupancy, new_biso, new_model_num]):
-              cifDic[key].extend(vals)
+                  cifDic['_atom_site.id'].append(str(max_id))
+                  cifDic['_atom_site.group_PDB'].append('HETATM')
+                  cifDic['_atom_site.type_symbol'].append('C')
+                  cifDic['_atom_site.label_atom_id'].append(f'C{seq_id}')
+                  cifDic['_atom_site.label_alt_id'].append('.')
+                  cifDic['_atom_site.label_comp_id'].append('STP')
+                  cifDic['_atom_site.label_asym_id'].append('A')
+                  cifDic['_atom_site.label_entity_id'].append('1')
+                  cifDic['_atom_site.label_seq_id'].append(str(seq_id))
+                  cifDic['_atom_site.Cartn_x'].append(str(x))
+                  cifDic['_atom_site.Cartn_y'].append(str(y))
+                  cifDic['_atom_site.Cartn_z'].append(str(z))
+                  cifDic['_atom_site.auth_asym_id'].append('A')
+                  cifDic['_atom_site.auth_seq_id'].append(str(seq_id))
+                  cifDic['_atom_site.pdbx_PDB_ins_code'].append('?')
+                  cifDic['_atom_site.occupancy'].append('1.00')
+                  cifDic['_atom_site.B_iso_or_equiv'].append('0.00')
+                  cifDic['_atom_site.pdbx_PDB_model_num'].append('1')
 
           f.write(writeCifBlocks(cifDic))
 
