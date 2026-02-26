@@ -275,26 +275,18 @@ class TestSCORCH2(TestScoreDocking):
 
 
 class TestPoseBusters(TestScoreDocking):
-        def _runPB(self, dockProt):
-            protPB = self.newProtocol(ProtocolPoseBusters,
-                                      oneFile=False,
-                                      inputMoleculesSets=dockProt.outputSmallMolecules,
-                                      fullReport=False
-                                      )
+        def _runPBSimple(self, dockProt):
+            protPB = self.newProtocol(ProtocolPoseBusters, molRec=False, testsPassed=12)
+            protPB.inputMoleculesSet.set(dockProt)
+            protPB.inputMoleculesSet.setExtended('outputSmallMolecules')
 
             self.proj.launchProtocol(protPB, wait=True)
             return protPB
-        def _runPB2(self, dockProt):
-            protPB2 = self.newProtocol(ProtocolPoseBusters,
-                                      oneFile=False,
-                                      inputMoleculesSets=dockProt.outputSmallMolecules,
-                                      outputFormat=1,
-                                      molCond=True,
-                                      filter=True,
-                                      chooseFilterLongTxt= 1,
-                                      filterColLongTxtProt=2,
-                                      ringPlanarity=0.002
-                                      )
+
+        def _runPBReceptor(self, dockProt):
+            protPB2 = self.newProtocol(ProtocolPoseBusters)
+            protPB2.inputMoleculesSet.set(dockProt)
+            protPB2.inputMoleculesSet.setExtended('outputSmallMolecules')
 
             self.proj.launchProtocol(protPB2, wait=True)
             return protPB2
@@ -306,10 +298,10 @@ class TestPoseBusters(TestScoreDocking):
             inputDockProts = self._runDockings(protPockets)
             if len(inputDockProts) >= 1:
                 for protDock in inputDockProts:
-                    test = self._runPB(protDock)
+                    test = self._runPBSimple(protDock)
                     assertHandle(self.assertIsNotNone, getattr(test, 'outputSmallMolecules', None),
                                  cwd=test.getWorkingDir())
-                    test2 = self._runPB2(protDock)
+                    test2 = self._runPBReceptor(protDock)
                     assertHandle(self.assertIsNotNone, getattr(test2, 'outputSmallMolecules', None),
                                  cwd=test.getWorkingDir())
             else:
