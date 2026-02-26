@@ -24,12 +24,14 @@
 # **************************************************************************
 
 """
-This protocol viualize the results from "protocol_structROI_voting" on a protein sequence
-using a color map depening on the frequency/percentage of each residue position.
+This protocol visualizes the results from "protocol_structROI_voting" on a protein sequence
+using a color map depending on the frequency/percentage of each residue position.
 """
+
 import pyworkflow.object as pwobj
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
+from pwem.objects import EMSet
 from pwchem.objects import SetOfROIColorMap, ROIColorItem
 
 
@@ -41,8 +43,8 @@ class ProtROIColorMap(EMProtocol):
         form.addSection(label='Input')
         form.addParam('inputVotes', params.PointerParam,
                       label='ROI Voting Output',
-                      pointerClass='SetOfROIVotes',
-                      help='Select the ROI voting result to visualize.')
+                      pointerClass='EMSet',
+                      help='Select the ROI voting result to visualize (currently stored as EMSet).')
         form.addParam('proteinSequence', params.StringParam,
                       label='Protein sequence (AA)',
                       help='Paste the full amino acid sequence here.')
@@ -57,30 +59,62 @@ class ProtROIColorMap(EMProtocol):
     # ---------------- MAIN STEP ----------------
     def createColorMapStep(self):
         votesSet = self.inputVotes.get()
-        sequence = self.proteinSequence.get().strip()
-        prefix = self.chainPrefix.get()
+        sequence = (self.proteinSequence.get() or '').strip()
+        prefix = (self.chainPrefix.get() or 'A_').strip()
 
-        # Crear diccionarios: frecuencia y porcentaje por posición
+        if not sequence:
+            self.warning("Protein sequence is empty. Please provide a valid amino acid sequence.")
+            return
+
+        # ---------------- Read voting set into dictionaries ----------------
+        # position (1-based) -> frequency / percentage
         res_freq = {}
         res_perc = {}
+
         for roi in votesSet:
-            try:
-                resName = roi._residue.get()
-                if resName.startswith(prefix):
-                    pos = int(resName.split('_')[1])
-                    res_freq[pos] = roi._frequency.get()
-                    res_perc[pos] = roi._percentage.get()
-            except Exception:
+            # Residue name can be stored as _residue or _sequence (depending on upstream object type)
+            resObj = getattr(roi, '_residue', None) or getattr(roi, '_sequence', None)
+            resName = resObj.get() if resObj is not None else ''
+            if not resName:
                 continue
 
-        outSet = SetOfROIColorMap(filename=self._getPath('ColorMap.sqlite'))
-        max_color = 100.0
+            # Determine position:
+            # Prefer _roiIdx if present, otherwise parse from "A_123"
+            idxObj = getattr(roi, '_roiIdx', None)
+            if idxObj is not None:
+                try:
+                    pos = int(idxObj.get())
+                except Exception:
+                    continue
+            else:
+                # Only take residues from the requested chain prefix
+                if not resName.startswith(prefix):
+                    continue
+                try:
+                    pos = int(resName.split('_')[1])
+                except Exception:
+                    continue
 
-        # Crear una entrada por cada AA de la secuencia
+            # Read frequency and percentage (pwobj -> python types)
+            freqObj = getattr(roi, '_frequency', None)
+            percObj = getattr(roi, '_percentage', None)
+            freqVal = freqObj.get() if freqObj is not None else 0
+            percVal = percObj.get() if percObj is not None else 0.0
+
+            res_freq[pos] = int(freqVal)
+            res_perc[pos] = float(percVal)
+
+        # ---------------- Build output colormap set ----------------
+        outSet = SetOfROIColorMap(filename=self._getPath('ColorMap.sqlite'))
+        max_color = 100.0  # percentages are expected in [0, 100]
+
         for i, aa in enumerate(sequence, start=1):
             freq = res_freq.get(i, 0)
             perc = res_perc.get(i, 0.0)
-            color = self._mapColor(perc / max_color)
+
+            # Normalize to [0, 1] safely
+            intensity = max(0.0, min(1.0, (perc / max_color) if max_color else 0.0))
+            color = self._mapColor(intensity)
 
             item = ROIColorItem()
             item._residue = pwobj.String(f"{prefix}{i}")
@@ -89,13 +123,15 @@ class ProtROIColorMap(EMProtocol):
             item._color = pwobj.String(color)
             outSet.append(item)
 
-        # Registrar output visible en Scipion
+        # ---------------- Register output ----------------
         if len(outSet) > 0:
+            outSet.setStore(True)
+            outSet.write()
             self._defineOutputs(outputColorMap=outSet)
             self._defineSourceRelation(self.inputVotes, self.outputColorMap)
             self.info(f"Color map created for {len(sequence)} residues.")
         else:
-            self.warning("No residues were mapped to the sequence.")
+            self.warning("No residues were mapped to the sequence (output set is empty).")
 
     # ---------------- COLOR UTILITY ----------------
     def _mapColor(self, intensity):
@@ -103,6 +139,8 @@ class ProtROIColorMap(EMProtocol):
         Map a normalized value in [0,1] to an RGB color string.
         Blue (low) → Red (high).
         """
+        # Clamp just in case
+        intensity = max(0.0, min(1.0, float(intensity)))
         r = int(255 * intensity)
         g = int(255 * (1 - intensity))
         b = 255 - r
@@ -117,5 +155,5 @@ class ProtROIColorMap(EMProtocol):
                 "Frequencies are read directly from the ROI Voting results."]
 
     def _methods(self):
-        return ["Each residue receives a color (blue→red) proportional to its voting percentage "
+        return ["Each residue receives a color (blue to red) proportional to its voting percentage "
                 "and frequency is preserved from the ROI Voting results."]

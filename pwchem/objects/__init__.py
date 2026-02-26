@@ -37,6 +37,7 @@ from pwem.objects import EMObject, EMSet, Pointer
 
 class ROIVote(EMObject):
     """Objeto individual: residuo + frecuencia + porcentaje."""
+    _className = 'ROIVote'
     _possibleAttributes = ['_residue', '_frequency', '_percentage']
 
     def __init__(self, **kwargs):
@@ -48,6 +49,7 @@ class ROIVote(EMObject):
 
 class SetOfROIVotes(EMSet):
     """Set global para ROI Voting."""
+    _className = 'SetOfROIVotes'
     _targets = [ROIVote]
     _label = 'Set of ROI Votes'
 

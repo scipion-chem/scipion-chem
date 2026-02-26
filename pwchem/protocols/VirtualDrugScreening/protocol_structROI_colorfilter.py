@@ -34,7 +34,6 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pwem.objects import EMSet, EMObject
 
-
 class ROIFilterItem(EMObject):
     """Single filtered residue with frequency and percentage."""
     _possibleAttributes = ['_residue', '_frequency', '_percentage']
@@ -60,7 +59,7 @@ class ProtROIFrequencyFilter(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputROIs', params.PointerParam,
-                      pointerClass='SetOfROIVotes',
+                      pointerClass='EMSet',
                       label='Input ROI Voting Results',
                       help='Select the ROI voting output to filter.')
         form.addParam('minFrequency', params.IntParam, default=10,
@@ -80,16 +79,31 @@ class ProtROIFrequencyFilter(EMProtocol):
         kept = 0
 
         for roi in input_set:
-            freq = getattr(roi, '_frequency', None)
-            if freq is not None and freq >= threshold:
-                new_roi = ROIFilterItem()
-                new_roi._residue = pwobj.String(getattr(roi, '_residue', ''))
-                new_roi._frequency = pwobj.Integer(freq)
-                new_roi._percentage = pwobj.Float(getattr(roi, '_percentage', 0.0))
-                outSet.append(new_roi)
-                kept += 1
+            # ---- frequency (pwobj.Integer -> int) ----
+            freqObj = getattr(roi, '_frequency', None)
+            freqVal = freqObj.get() if freqObj is not None else None
+            if freqVal is None or freqVal < threshold:
+                continue
+
+            # ---- residue name can be _residue or _sequence ----
+            resObj = getattr(roi, '_residue', None) or getattr(roi, '_sequence', None)
+            resVal = resObj.get() if resObj is not None else ''
+
+            # ---- percentage (pwobj.Float -> float) ----
+            percObj = getattr(roi, '_percentage', None)
+            percVal = percObj.get() if percObj is not None else 0.0
+
+            new_roi = ROIFilterItem()
+            new_roi._residue = pwobj.String(resVal)
+            new_roi._frequency = pwobj.Integer(freqVal)
+            new_roi._percentage = pwobj.Float(percVal)
+
+            outSet.append(new_roi)
+            kept += 1
 
         if kept > 0:
+            outSet.setStore(True)
+            outSet.write()
             self._defineOutputs(outputFilteredROIs=outSet)
             self._defineSourceRelation(self.inputROIs, self.outputFilteredROIs)
             self.info(f"Filter applied successfully — kept {kept} residues (freq ≥ {threshold}).")

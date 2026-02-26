@@ -95,6 +95,7 @@ class ProtROIVoting(EMProtocol):
 
         # Create clean Scipion Set
         outSet = SetOfROIVotes(filename=self._getPath('ROIVoting.sqlite'))
+        outSet.setObjLabel('SetOfROIVotes')
         for residue, count in self.top_residues:
             item = ROIVote()
             import pyworkflow.object as pwobj
@@ -105,8 +106,11 @@ class ProtROIVoting(EMProtocol):
 
         # Register output in Scipion (official blue output)
         if len(outSet) > 0:
+            outSet.setStore(True)
+            outSet.write()
+
             self._defineOutputs(outputSet=outSet)
-            self._defineSourceRelation(self.roisList, self.outputSet)
+            self._defineSourceRelation(self.roisList, self.outputROIVotes)
             self.info(f"Voting results saved ({len(outSet)} residues).")
         else:
             self.warning("No output generated after voting.")
