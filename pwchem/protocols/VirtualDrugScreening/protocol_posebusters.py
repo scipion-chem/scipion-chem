@@ -92,28 +92,6 @@ class ProtocolPoseBusters(EMProtocol):
                         help='List of tests to consider in the filtering.\nRemember to modify the "Min. tests passed" '
                              'param accordingly.')
         
-        #todo: make filters for further analysis (list of numerical + bool filters)
-        #fGroup.addParam('filterCol', params.StringParam, default='energy_ratio',
-        #               label="Column: ", 
-        #               help='Numerical columns in the PoseBuster output to use as filter.\n '
-        #                    'Use the wizard to select among the possible columns')
-
-        #fGroup.addParam('filterOp', params.EnumParam, label='Filter operation: ',
-        #               default=3, choices=['==', '>', '>=', '<', '<=', 'between'],
-        #               help='Operation to use for the filtering.')
-        #
-        #fGroup.addParam('filterValue', params.FloatParam,
-        #               label='Column threshold: ', default=2.0,
-        #               help='Numerical values to use as threshold for the filtering. '
-        #                    'Acts as a lower threshold when filtering "between".\n'
-        #                    'Use the wizard to set the default value for the selected column.')
-        #
-        #fGroup.addParam('upperFilterValue', params.FloatParam, condition='filterOp==5',
-        #               label='Upper threshold: ', default=3.0,
-        #               help='Upper threshold to use in the "between" filtering.')
-
-
-
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.poseBustersStep)
@@ -255,8 +233,6 @@ class ProtocolPoseBusters(EMProtocol):
                 csvVal = row.get(test)
                 resDic[poseName][test] = csvVal
 
-            #todo: parse also further analysis
-            #keep, passed = self.rowPassesColValue(csvRows[poseName])
         return resDic
 
     def getFileInfo(self, resultsFile):
@@ -301,73 +277,3 @@ class ProtocolPoseBusters(EMProtocol):
             print('The input ligand is not found')
         return myMol
 
-    # ------------------ Numerial and bool further analysis functions ------------------
-    #todo: add as advanced or delete
-    def getMode(self):
-        if self.useTrueMol.get() and self.molRec.get():
-            mode = "true_prot"
-        elif self.useTrueMol.get():
-            mode = "true"
-        elif self.molRec.get():
-            mode = "prot"
-        else:
-            mode = "normal"
-        return mode
-
-    def getSelectedColumnAndThreshold(self):
-        mode = self.getMode()
-        if mode == "normal":
-            idx = self.filterColLongTxt.get()
-        elif mode == "true":
-            idx = self.filterColLongTxtTrueMol.get()
-        elif mode == "prot":
-            idx = self.filterColLongTxtProt.get()
-        else:
-            idx = self.filterColLongTxtAll.get()
-
-        colName = self.FILTER_COLUMNS[mode][idx]
-
-        thrMap = {
-            'energy_ratio': self.energyRatio.get(),
-            'number_clashes': self.numClashes.get(),
-            'aromatic_ring_maximum_distance_from_plane': self.ringPlanarity.get(),
-            'kabsch_rmsd': self.rmsd.get(),
-            'centroid_distance': self.centroidDist.get(),
-            'volume_overlap_protein': self.volOverlap.get(),
-            'smallest_distance_protein': self.smallDist.get()
-        }
-
-        threshold = thrMap.get(colName)
-        return colName, threshold
-
-    def valuePasses(self, value):
-        _, threshold = self.getSelectedColumnAndThreshold()
-
-        val = float(value)
-
-        op = self.filterOp.get()
-
-        result = False
-
-        if op == 0:
-            result = (val == threshold)
-        elif op == 1:
-            result = (val > threshold)
-        elif op == 2:
-            result = (val >= threshold)
-        elif op == 3:
-            result = (val < threshold)
-        elif op == 4:
-            result = (val <= threshold)
-        elif op == 5:
-            upper = self.upper.get()
-            result = (threshold <= val <= upper)
-
-        return result
-
-
-    def rowPassesColValue(self, row):
-        colName, _ = self.getSelectedColumnAndThreshold()
-        csvVal = row.get(colName)
-
-        return self.valuePasses(csvVal), float(csvVal)
