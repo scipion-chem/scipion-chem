@@ -101,7 +101,7 @@ class ProtocolPoseBusters(EMProtocol):
         resultsFile = self.getResultsFile()
 
         baseArgs = []
-        baseArgs.append(f'--outfmt csv')
+        baseArgs.append('--outfmt csv')
         baseArgs.append(f'--output {os.path.abspath(resultsFile)}')
         baseArgs.append('--full-report')
 
