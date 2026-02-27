@@ -62,6 +62,7 @@ class Plugin(pwem.Plugin):
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
         cls.addSCORCHenv(env)
+        cls.addMDAnalaysisPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -74,6 +75,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
+        cls._defineEmVar(MDANALYSIS_DIC['home'], cls.getEnvName(MDANALYSIS_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -283,6 +285,26 @@ class Plugin(pwem.Plugin):
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
+    @classmethod
+    def addMDAnalaysisPackage(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(MDANALYSIS_DIC['name'],
+                                  packageHome=cls.getVar(MDANALYSIS_DIC['home']),
+                                  packageVersion=MDANALYSIS_DIC['version'])
+
+        # Create the environment and install MDAnalysis via conda-forge
+        installer.getCondaEnvCommand(
+            MDANALYSIS_DIC['name'],
+            binaryVersion=MDANALYSIS_DIC['version'],
+            pythonVersion='3.11'
+        ).addCondaPackages(
+            ['mdanalysis'],  # Package to install
+            channel='conda-forge',  # Install from conda-forge
+            targetName='MDANALYSIS_INSTALLED'
+        )
+
+        # Execute all installation commands
+        installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
     ##################### RUN CALLS ######################
     @classmethod
