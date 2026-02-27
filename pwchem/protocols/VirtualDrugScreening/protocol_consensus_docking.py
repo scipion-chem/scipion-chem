@@ -117,7 +117,7 @@ class ProtocolConsensusDocking(EMProtocol):
         for mol in allMols:
             molFile = os.path.abspath(mol.getPoseFile())
             _, ext = os.path.splitext(molFile)
-            if ext in ('.pdbqt', '.pdb'):
+            if ext in ('.pdbqt'):
                 iDir = tmpDirPdb
             elif ext in ('.mae', '.maegz'):
                 iDir = tmpDirMae
@@ -153,6 +153,8 @@ class ProtocolConsensusDocking(EMProtocol):
         outDocked = SetOfSmallMolecules(filename=self._getPath('consensusDocked_All.sqlite'))
         outDocked.setDocked(True)
         outDocked.setProteinFile(inputProteinFile)
+
+        self.consensusMols = self.setOriginalPoseFile(self.consensusMols)
         for outDock in self.consensusMols:
             newDock = outDock.clone()
             #newDock = self.relabelPosId(newDock)
@@ -427,15 +429,36 @@ class ProtocolConsensusDocking(EMProtocol):
                 mols.append(newMol)
         return mols
 
-    def getConvMolsDic(self):
+    def getConvMolsDic(self, reversed=False):
         convMolsDic = {}
         inDir = self.getInputMolsDir()
         for molSet in self.inputMoleculesSets:
             for mol in molSet.get():
                 molUName = mol.getUniqueName()
                 molFile = glob.glob(os.path.join(inDir, f"{molUName}.*"))[0]
-                convMolsDic[molUName] = molFile
+                if reversed:
+                    convMolsDic[molFile] = molUName
+                else:
+                    convMolsDic[molUName] = molFile
         return convMolsDic
+
+    def getUniqueNameDic(self):
+        uniqueNameDic = {}
+        for molSet in self.inputMoleculesSets:
+            for mol in molSet.get():
+                molUName = mol.getUniqueName()
+                uniqueNameDic[molUName] = mol.getPoseFile()
+        return uniqueNameDic
+
+    def setOriginalPoseFile(self, consMols):
+        convDic = self.getConvMolsDic(reversed=True)
+        uniqNameDic = self.getUniqueNameDic()
+
+        for mol in consMols:
+            uName = convDic[mol.getPoseFile()]
+            oldPoseFile = uniqNameDic[uName]
+            mol.setPoseFile(os.path.relpath(oldPoseFile))
+        return consMols
 
 
 
