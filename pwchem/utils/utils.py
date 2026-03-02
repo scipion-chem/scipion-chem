@@ -1225,15 +1225,14 @@ def reverseIndex(n, k):
 
 def runRdkitRMSD(inputFiles):
     refFile, targetFiles = inputFiles
-    programCall = 'python -m spyrmsd '
+    programCall = 'python -m spyrmsd -k '
+    args = f'{refFile} {" ".join(targetFiles)}'
     try:
-      result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                            programCall, retOut=True)
+      result = pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True)
     except:
       try:
-        programCall = 'python -m spyrmsd -n '
-        result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                              programCall, retOut=True)
+        programCall = 'python -m spyrmsd -k -n '
+        result = pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True)
       except Exception as _:
         result = ' '.join(['1000'] * len(targetFiles))
 
@@ -1246,23 +1245,17 @@ def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
   for molName, targetFiles in molFileDic.items():
       if referenceFile:
         inputIter = [(referenceFile, targetFiles)]
-        inputIterRev = None
       else:
-        inputIter, inputIterRev = [], []
-        targetFilesRev = targetFiles[::-1]
+        inputIter = []
         for i in range(len(targetFiles)):
-            refFile, refFileRev = targetFiles[i], targetFilesRev[i]
-            restTargets, restTargetsRev = targetFiles[i+1:], targetFilesRev[i+1:]
+            refFile = targetFiles[i]
+            restTargets = targetFiles[i+1:]
             if restTargets:
                 inputIter.append([refFile, restTargets])
-                inputIterRev.append([refFileRev, restTargetsRev])
 
       results = runInParallel(runRdkitRMSD, paramList=inputIter, jobs=nJobs)
-      resultsRev = runInParallel(runRdkitRMSD, paramList=inputIterRev, jobs=nJobs)
-      rmsds, rmsdRev = ([item for sublist in results for item in sublist],
-                        [item for sublist in resultsRev for item in sublist])
+      rmsdDic[molName] = [item for sublist in results for item in sublist]
 
-      rmsdDic[molName] = [min(rmsds[i], rmsdRev[reverseIndex(len(targetFiles), i)]) for i in range(len(rmsds))]
 
   return rmsdDic
 
@@ -1440,28 +1433,29 @@ def runInParallel(func, *args, paramList, jobs):
   Also returns a list with the failed commands.
   """
   # Create a pool of worker processes
-  nJobs = len(paramList) if len(paramList) < jobs else jobs
-  pool = multiprocessing.Pool(processes=nJobs)
+  if paramList:
+      nJobs = len(paramList) if len(paramList) < jobs else jobs
+      pool = multiprocessing.Pool(processes=nJobs)
 
-  # Apply the given function to the given param list using the pool
-  results = [pool.apply_async(func, args=(param, *args,)) for param in paramList]
+      # Apply the given function to the given param list using the pool
+      results = [pool.apply_async(func, args=(param, *args,)) for param in paramList]
 
-  # Initializing list of failed commands
-  failedCommands = []
+      # Initializing list of failed commands
+      failedCommands = []
 
-  # Check if any process encountered an error
-  for result in results:
-    if result.get():
-      failedCommands.append(result.get())
+      # Check if any process encountered an error
+      for result in results:
+        if result.get():
+          failedCommands.append(result.get())
 
-  # Close the pool to release resources
-  pool.close()
+      # Close the pool to release resources
+      pool.close()
 
-  # Join the pool, waiting for all processes to complete
-  pool.join()
+      # Join the pool, waiting for all processes to complete
+      pool.join()
 
-  # Return list of failed commands
-  return failedCommands
+      # Return list of failed commands
+      return failedCommands
 
 ################# Test utils #####################
 def assertHandle(func, *args, cwd='', message=''):

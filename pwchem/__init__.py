@@ -119,10 +119,19 @@ class Plugin(pwem.Plugin):
         env_path = os.environ.get('PATH', "")  # keep path since conda likely in there
 
         # Installing package
+        #todo: remove modifications of spyrmsd when PR from fork approved (https://github.com/RMeli/spyrmsd/pull/155)
+        spyrmsd = 'spyrmsd'
+        copyFiles = ['rmsd.py', '__main__.py']
+        oriFiles = [os.path.join(spyrmsd, spyrmsd, copyFile) for copyFile in copyFiles]
+        envFiles = [cls.getEnvPath(RDKIT_DIC, f'lib/python3.10/site-packages/{spyrmsd}/{copyFile}') for copyFile in copyFiles]
+
         rdkitEnvName = cls.getEnvName(RDKIT_DIC)
         installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
                              f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 spyrmsd -y', 'RDKIT_ENV_CREATED')\
-            .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
+            .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED') \
+            .addCommand(
+            f'{cls.getEnvActivationCommand(RDKIT_DIC)} && rm -rf spyrmsd && git clone https://github.com/DaniDelHoyo/spyrmsd.git && '
+            f'cp {oriFiles[0]} {envFiles[0]} && cp {oriFiles[1]} {envFiles[1]}', 'SPYRMSD_INSTALLED') \
             .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 
@@ -173,12 +182,12 @@ class Plugin(pwem.Plugin):
         # # Instantiating shape it install helper
         binariesDirectory = SHAPEIT_DIC['name']
         shapeItInstaller = InstallHelper(SHAPEIT_DIC['name'], packageHome=cls.getVar(SHAPEIT_DIC['home']),
-                                                                         packageVersion=SHAPEIT_DIC['version'])
+                                         packageVersion=SHAPEIT_DIC['version'])
 
         # Installing package
         shapeHome = cls.getProgramHome(SHAPEIT_DIC)
         shapeItInstaller.getCloneCommand(cls.getShapeItGithub(), binaryFolderName=binariesDirectory) \
-            .addCommand(f'cd {binariesDirectory} && mkdir build && cd build && '
+            .addCommand(f'cd {binariesDirectory} && mkdir -p build && cd build && rm -rf * && '
                                     f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                                     f'cmake -DCMAKE_INSTALL_PREFIX={shapeHome} -DOPENBABEL3_INCLUDE_DIR=$CONDA_PREFIX/include/openbabel3 '
                                     f'-DOPENBABEL3_LIBRARIES=$CONDA_PREFIX/lib/libopenbabel.so .. && '
