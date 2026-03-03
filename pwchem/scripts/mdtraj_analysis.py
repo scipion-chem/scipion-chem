@@ -65,7 +65,9 @@ if __name__ == "__main__":
 
     parser.add_argument('-sa', '--selectAtoms', type=str, help='Atoms to select for the analysis')
     parser.add_argument('-ha', '--heavyAtoms', default=False, action='store_true', help='Analysis only on heavy atoms')
-
+    parser.add_argument('-rg', default=False, action='store_true', help='Plots the Radius of gyration of the system through the trajectory')
+    parser.add_argument('-sasa', default=False, action='store_true',
+                        help='Plots the Solvent Accessible Surface Area (SASA) of the selected atoms')
 
     args = parser.parse_args()
     inpFile, outFile, trjFile = args.inputFilename, args.outputName, args.inputTraj
@@ -82,20 +84,39 @@ if __name__ == "__main__":
         plt.figure()
         if args.rmsd:
             rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
-            plt.plot(trajectory.time, rmsd, 'r', label='RMSD')
+            plt.plot(trajectory.time, rmsd * 10,  'r', label='RMSD')
             plt.title('RMSD')
             plt.xlabel('Simulation time (ps)')
-            plt.ylabel('RMSD (nm)')
+            plt.ylabel('RMSD (Å)')
 
         elif args.rmsf:
             rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
-            plt.plot(rmsf, 'r', label='RMSF')
+            plt.plot(rmsf * 10, 'r', label='RMSF')
             plt.title('RMSF')
             plt.xlabel('Protein sequence')
-            plt.ylabel('RMSF (nm)')
+            plt.ylabel('RMSF (Å)')
 
-        plt.legend()
+        elif args.rg:
+            rg = mdtraj.compute_rg(trajectory)
+            plt.plot(trajectory.time, rg * 10, 'b', label='Rg')
+            plt.title('Radius of Gyration')
+            plt.xlabel('Simulation time (ps)')
+            plt.ylabel('Rg (Å)')
+
+        elif args.sasa:
+            sasa_all = mdtraj.shrake_rupley(trajectory, mode='atom')
+
+            if args.selectAtoms == 'All':
+                sasa_over_time = sasa_all.sum(axis=1)
+            elif args.selectAtoms == 'Ligand':
+                print(index)
+                sasa_over_time = sasa_all[:, list(index)].sum(axis=1)
+
+            # Conversion: 1 nm^2 = 100 Å^2
+            plt.plot(trajectory.time, sasa_over_time, 'g', label=f'SASA ({args.selectAtoms})')
+
+            plt.title(f'Solvent Accessible Surface Area: {args.selectAtoms} atoms')
+            plt.xlabel('Simulation time (ps)')
+            plt.ylabel(r'SASA ($nm^2$)')
+
         plt.show()
-
-    else:
-        print('No atoms found for the atom selection')
