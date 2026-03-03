@@ -29,7 +29,7 @@
 """
 
 """
-import os
+import os, glob
 from Bio.PDB import PDBParser, MMCIFParser
 
 from pyworkflow.utils import Message
@@ -102,7 +102,7 @@ class ProtocolRMSDDocking(ProtocolConsensusDocking):
                     refFile = os.path.abspath(refFile)
                     break
 
-        rmsdDic = runParallelRdkitRMSD(self.getAllInputMols(), referenceFile=refFile,
+        rmsdDic = runParallelRdkitRMSD(self.getAllInputMols(conv=True), referenceFile=refFile,
                                        nJobs=self.numberOfThreads.get())
 
 
@@ -167,16 +167,29 @@ class ProtocolRMSDDocking(ProtocolConsensusDocking):
     def checkSameKeys(self, d1, d2):
         return set(d1.keys()) == set(d2.keys())
 
-    def getAllInputMols(self):
+    def getAllInputMols(self, conv=False):
+        if conv:
+            convMolsDic = self.getConvMolsDic()
+
         mols = []
-        convMolNames = self.getConvMolNames()
         for mol in self.inputSmallMolecules.get():
             newMol = mol.clone()
-            molFileName = getBaseName(mol.getPoseFile())
-            if molFileName in convMolNames:
-                newMol.setPoseFile(os.path.relpath(convMolNames[molFileName]))
+            if conv:
+                newMol.setPoseFile(convMolsDic[newMol.getUniqueName()])
             mols.append(newMol)
         return mols
+
+    def getConvMolsDic(self, reversed=False):
+        convMolsDic = {}
+        inDir = self.getInputMolsDir()
+        for mol in self.inputSmallMolecules.get():
+            molUName = mol.getUniqueName()
+            molFile = glob.glob(os.path.join(inDir, f"{molUName}.*"))[0]
+            if reversed:
+                convMolsDic[molFile] = molUName
+            else:
+                convMolsDic[molUName] = molFile
+        return convMolsDic
 
     def getOriginalReceptorFile(self):
         return self.inputSmallMolecules.get().getProteinFile()

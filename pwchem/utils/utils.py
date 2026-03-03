@@ -1228,15 +1228,22 @@ def runRdkitRMSD(inputFiles):
     programCall = 'python -m spyrmsd -k '
     args = f'{refFile} {" ".join(targetFiles)}'
     try:
-      result = pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True)
+      result = pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True).split()
     except:
       try:
         programCall = 'python -m spyrmsd -k -n '
-        result = pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True)
+        result = pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True).split()
       except Exception as _:
-        result = ' '.join(['1000'] * len(targetFiles))
+        result = []
+        programCall = 'python -m spyrmsd -k '
+        for tFile in targetFiles:
+            try:
+              args = f'{refFile} {tFile}'
+              result.append(pwchemPlugin.runCondaCommand(None, args, RDKIT_DIC, programCall, retOut=True))
+            except:
+              result.append('1000')
 
-    result = list(map(float, result.split()))
+    result = list(map(float, result))
     return result
 
 def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
