@@ -31,6 +31,18 @@ import prolif as plf
 import matplotlib.pyplot as plt
 import os
 
+def save_results(fp, ligMol, outPath, prefix):
+    df = fp.to_dataframe()
+    df.to_csv(os.path.join(outPath, f'{prefix}_interactions.csv'), index=False)
+    # Save Barcode
+    fp.plot_barcode()
+    plt.savefig(os.path.join(outPath, f'{prefix}_barcode.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Save LigNetwork
+    view = fp.plot_lignetwork(ligMol)
+    view.save(os.path.join(outPath, f'{prefix}_network.html'))
+
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputTopology <topFile> -t/--inputTraj [<trjFile>]
     -o/--outputName <outputName> 
@@ -39,40 +51,41 @@ if __name__ == "__main__":
     '''
     parser = argparse.ArgumentParser(description='Run ProLIF Ligand-Target interaction analysis')
     parser.add_argument('-i', '--inputFilename', type=str, help='Input system file (PDB or similar), reference')
-    parser.add_argument('-o', '--outpuPath', type=str, help='Output name')
+    parser.add_argument('-o', '--outpuPath', type=str, help='Output path')
     parser.add_argument('-t', '--inputTraj', type=str, help='Input trajectory file')
+    parser.add_argument('-n', '--outputName', type=str, help='Output name')
+    parser.add_argument('-wb', default=False, action='store_true', help='Run a water bridges analysis')
 
     args = parser.parse_args()
-    topoFile, outPath, trjFile = args.inputFilename, args.outpuPath, args.inputTraj
+    topoFile, outPath, trjFile, outName = args.inputFilename, args.outpuPath, args.inputTraj, args.outputName
 
     u = mda.Universe(topoFile, trjFile)
     ligSelection = u.select_atoms("resname LIG")
 
     # protSelection = u.select_atoms("protein and byres around 20.0 group ligand", ligand=ligSelection)
-    protSelection = plf.select_over_trajectory(u, u.trajectory[::10], "protein and byres around 6.0 resname LIG",
+    protSelection = plf.select_over_trajectory(u, u.trajectory[::10], "protein and byres around 6.0 group ligand",
                                                    ligand=ligSelection)
-    print(protSelection)
 
-    fp = plf.Fingerprint()
-    fp.run(u.trajectory[::10], ligSelection, protSelection)
+    if not args.wb:
+        fp = plf.Fingerprint()
+        fp.run(u.trajectory[::10], ligSelection, protSelection)
 
-    fp.to_pickle("fingerprint.pkl")
+    else:
+        water_selection = u.select_atoms(
+            "resname WAT and byres around 8 (group ligand or group pocket)",
+            ligand=ligSelection,
+            pocket=protSelection,
+            updating=True,
+        )
 
-    fig = fp.plot_barcode()
-    plt.savefig(os.path.join(outPath,'interaction_barcode.png'), dpi=300, bbox_inches='tight')
+        fp = plf.Fingerprint(
+            ["WaterBridge"], parameters={"WaterBridge": {"water": water_selection, "order": 3}}
+        )
+
+        # for MD trajectories
+        fp.run(u.trajectory[::10], ligSelection, protSelection)
 
     ligMol = plf.Molecule.from_mda(ligSelection)
-    view = fp.plot_lignetwork(ligMol)
-    view.save(os.path.join(outPath,'interaction_network.html'))
-    # view.save_png("") Solo funciona para notebooks dice
-
-    frame = 0
-    # seek specific frame
-    u.trajectory[frame]
-    ligand_mol = plf.Molecule.from_mda(ligSelection)
-    protein_mol = plf.Molecule.from_mda(protSelection)
-    # display
-    view = fp.plot_3d(ligand_mol, protein_mol, frame=frame, display_all=False)
-    view.save(os.path.join(outPath,'interaction_3d.html'))
+    save_results(fp, ligMol, outPath, outName)
 
 

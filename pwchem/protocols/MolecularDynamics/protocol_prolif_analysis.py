@@ -43,6 +43,9 @@ class ProtocolProlif(EMProtocol):
         form.addParam('inputMDSystem', params.PointerParam, pointerClass="MDSystem",
                       label='MD simulation: ', allowsNull=False,
                       help='It must be a Molecular Dynamics System with trajectory.')
+        form.addParam('type', params.EnumParam, choices=['Protein-Ligand', 'Water bridges'],
+                      label='Type of analysis: ', default=0,
+                      help='Analyize protein-ligand interactions over each frame or the water bridges.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self.runProlif)
@@ -52,11 +55,13 @@ class ProtocolProlif(EMProtocol):
         inputSystem = self.inputMDSystem.get()
         trajFile = inputSystem.getTrajectoryFile()
         topoFile = inputSystem.getTopologyFile()
-        outputFile = self._getExtraPath()
-        args = f'-i {topoFile} -t {trajFile} -o {outputFile}'
+        outputPath = self._getExtraPath()
+        outputName = inputSystem.getSystemName()
+        args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName}'
+        if self.getEnumText('type') == 'Water bridges':
+            args += ' -wb'
 
-
-        print(args)
+        args += ' 2>&1'
 
         pwchemPlugin.runScript(self, 'prolif_analysis.py', args, env=MDTRAJ_DIC, wait=False)
 
