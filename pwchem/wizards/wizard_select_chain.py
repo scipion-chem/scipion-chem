@@ -613,7 +613,7 @@ SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
                                outputs=['molPred'])
 SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
                                targets=['molTrue'],
-                               inputs=['inputMoleculesRefSets'],
+                               inputs=['inputMoleculesRefSet'],
                                outputs=['molTrue'])
 
 
@@ -631,6 +631,11 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayPymolPLIP'],
                                inputs=['singleLabels'],
                                outputs=['displayPymolPLIP'])
+
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['filterCol'],
+                               inputs=['getColumns'],
+                               outputs=['filterCol'])
 
 
 class SelectElementMultiPointWizard(SelectElementWizard):

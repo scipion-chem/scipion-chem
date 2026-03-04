@@ -24,6 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import tempfile
 
 # General imports
 import os, shutil, json, requests, time, subprocess, sys, multiprocessing, re
@@ -648,6 +649,18 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
 
   return sdfFile
 
+def getExtensionsFiles(molList, formats):
+  '''Return in different lists the files with the specified formats
+  and the rest'''
+  extMols, otherMols = [], []
+  for mol in molList:
+    molFile = os.path.abspath(mol.getPoseFile())
+    if molFile.endswith(formats):
+      extMols.append(molFile)
+    else:
+      otherMols.append(molFile)
+  return extMols, otherMols
+
 def getMAEMoleculeFiles(molList):
   '''Return in different lists the mae and non-mae files'''
   maeMols, otherMols = [], []
@@ -881,21 +894,113 @@ class CleanStructureSelect(Select):
 def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseName(structFile)
-  if os.path.splitext(structFile)[1] in ['.pdb', '.ent', '.pdbqt']:
-    struct = PDBParser().get_structure(structName, structFile)
+  ext = os.path.splitext(structFile)[1]
+  if ext in ['.pdb', '.ent', '.pdbqt']:
+      struct = PDBParser().get_structure(structName, structFile)
+      if singleModel is not None:
+          struct = struct[singleModel]
+      io = PDBIO()
+      io.set_structure(struct)
+      io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+
   elif structFile.endswith('.cif'):
-    struct = MMCIFParser().get_structure(structName, structFile)
+      # Detect multiple blocks
+      with open(structFile) as f:
+          blockCount = sum(1 for line in f if line.startswith("data_"))
+
+      if blockCount > 1:
+          # Call new multi-block handler
+          tmpBlocks = splitCIFBlocksToTempFiles(structFile)
+          cleanedBlocks = []
+
+          for i, tmp in enumerate(tmpBlocks):
+              with open(tmp) as fh:
+                  text = fh.read()
+
+              if "_atom_site." not in text:
+                  print("DEBUG: Skipping non-atomic CIF block:", tmp)
+                  cleanedBlocks.append(tmp)
+                  continue
+
+              base, ext = os.path.splitext(outFn)
+              tmpOut = f"{base}.block{i}{ext}"
+
+              cleanPDB(
+                  tmp, tmpOut,
+                  waters=waters,
+                  hetatm=hetatm,
+                  chainIds=chainIds,
+                  het2keep=het2keep,
+                  het2rem=het2rem,
+                  singleModel=singleModel
+              )
+              cleanedBlocks.append(tmpOut)
+
+          with open(outFn, "w") as out:
+              for fn in cleanedBlocks:
+                  with open(fn) as f:
+                      out.writelines(f.readlines())
+                  out.write("#\n")
+
+      else:
+          struct = MMCIFParser().get_structure(structName, structFile)
+          if singleModel is not None:
+              struct = struct[singleModel]
+          io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
+          io.set_structure(struct)
+          io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+
   else:
-    print('Unknown format for file ', structFile)
-    exit()
-
-  if singleModel is not None:
-    struct = struct[singleModel]
-
-  io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
-  io.set_structure(struct)
-  io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+      print('Unknown format for file ', structFile)
+      exit()
   return outFn
+
+def splitCIFBlocksToTempFiles(cifFile):
+    with open(cifFile) as f:
+        blocks = splitCifBlocks(f.readlines())
+
+    tmpFiles = []
+    for block in blocks:
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".cif", delete=False, mode="w"
+        )
+        tmp.writelines(block)
+        tmp.close()
+        tmpFiles.append(tmp.name)
+
+    return tmpFiles
+
+def keepAtom(fields, colIdx, chainIds, waters, hetatm, het2keep, het2rem):
+    group = fields[colIdx["group_PDB"]]
+    resname = fields[colIdx["label_comp_id"]]
+    chain = fields[colIdx["label_asym_id"]].upper()
+
+    if chainIds and chain not in chainIds:
+        return False
+
+    isWater = resname in ("HOH", "WAT", "H2O")
+    if waters and isWater:
+        return False
+
+    if group == "HETATM":
+        if hetatm:
+            return resname in het2keep
+        return resname not in het2rem
+
+    return True
+
+def splitCifBlocks(lines):
+    blocks, current = [], []
+    for line in lines:
+        if line.startswith("data_"):
+            if current:
+                blocks.append(current)
+            current = [line]
+        else:
+            current.append(line)
+    if current:
+        blocks.append(current)
+    return blocks
 
 def removeStartWithLines(inFile, start):
   '''Remove the lines in a file starting with a certain string'''
@@ -1055,6 +1160,65 @@ def calculateRMSDKeys(coordDic1, coordDic2):
         rmsd += (x1 - x2) ** 2
       count += 1
   return (rmsd / count) ** (1 / 2)
+
+def buildMolDic(mols):
+  '''Builds two dictionaries dividing the molecules by molNames such as:
+  molFileDic = {molName1: [molFiles2], molName2: [molFiles2]}
+  molDic = {molName1: [mols1], molName2: [mols2]}
+  '''
+  molFileDic, molDic = {}, {}
+  for mol in mols:
+    molName = mol.getMolName()
+    if molName not in molFileDic:
+      molFileDic[molName] = [os.path.abspath(mol.getPoseFile())]
+      molDic[molName] = [mol]
+    else:
+      molFileDic[molName].append(os.path.abspath(mol.getPoseFile()))
+      molDic[molName].append(mol)
+  return molFileDic, molDic
+
+def parseRMSDs(rmsdFile):
+  '''Parse RMSDs from a file geenrated by runRdkitRMSD'''
+  rmsds = []
+  with open(rmsdFile) as f:
+    f.readline()
+    for line in f:
+      rmsds.append(float(line.strip().split()[-1]))
+  return rmsds
+
+def runRdkitRMSD(inputFiles):
+    refFile, targetFiles = inputFiles
+    programCall = 'python -m spyrmsd '
+    try:
+      result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
+                                            programCall, retOut=True)
+    except:
+      try:
+        programCall = 'python -m spyrmsd -n '
+        result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
+                                              programCall, retOut=True)
+      except Exception as _:
+        result = ' '.join(['1000'] * len(targetFiles))
+
+    result = list(map(float, result.split()))
+    return result
+
+def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
+  molFileDic, _ = buildMolDic(mols)
+  rmsdDic = {}
+  for molName, targetFiles in molFileDic.items():
+      if referenceFile:
+        inputIter = [(referenceFile, targetFiles)]
+      else:
+        inputIter = []
+        for i, refFile in enumerate(targetFiles):
+            restTargets = targetFiles[i+1:]
+            if restTargets:
+                inputIter.append([refFile, restTargets])
+      results = runInParallel(runRdkitRMSD, paramList=inputIter, jobs=nJobs)
+      rmsdDic[molName] = [item for sublist in results for item in sublist]
+
+  return rmsdDic
 
 ################# UTILS Sequence Object ################
 def getSequenceFastaName(sequence):

@@ -31,6 +31,7 @@ from pwchem.protocols import ProtocolPharmacophoreGeneration, ProtocolPharmacoph
 from pwchem.tests import TestExtractLigand, TestRDKitLigandPreparation
 from pwchem.utils import assertHandle
 
+chainStr = '{"model": 0, "chain": "C", "residues": 93}'
 modStr = '''REMOVE | Set 0 | PharmFeature 4 (Type: Aromatic. Coords: (-31.98, 10.50, -54.42). Radius: 1.00)
 MODIFY | Set 0 | PharmFeature 2 TO: {"Type": "Acceptor", "Coords": "(-37.79, 9.96, -57.07)", "Radius": 2.0}'''
 
@@ -56,7 +57,7 @@ class TestPharmGeneration(TestExtractLigand):
 		return protGenPharm
 
 	def test(self):
-		protExtract = self._runExtractLigand(self.protImportPDB)
+		protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
 		self._waitOutput(protExtract, 'outputSmallMolecules', sleepTime=5)
 
 		protPharm = self._runGenPharm(inProt=protExtract)
@@ -78,7 +79,7 @@ class TestPharmModification(TestPharmGeneration):
 		return protModPharm
 
 	def test(self):
-		protExtract = self._runExtractLigand(self.protImportPDB)
+		protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
 		self._waitOutput(protExtract, 'outputSmallMolecules', sleepTime=5)
 
 		protPharm = self._runGenPharm(inProt=protExtract)
@@ -115,7 +116,7 @@ class TestPharmFiltering(TestPharmModification, TestRDKitLigandPreparation):
 
 	def test(self):
 		pPrep = self._runPrep(inProt=self.protImportSmallMols, mode=0)
-		protExtract = self._runExtractLigand(self.protImportPDB)
+		protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
 
 		self._waitOutput(pPrep, 'outputSmallMolecules', sleepTime=10)
 		self._waitOutput(protExtract, 'outputSmallMolecules', sleepTime=5)
