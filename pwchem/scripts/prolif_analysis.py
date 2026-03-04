@@ -33,6 +33,14 @@ import os
 
 def save_results(fp, ligMol, outPath, prefix):
     df = fp.to_dataframe()
+    # Check if the dataframe is empty
+    if df.empty:
+        print(f"!!! WARNING: No interactions were detected. Skipping plots.")
+        # Create a dummy text file so Scipion knows the job 'finished'
+        with open(os.path.join(outPath, 'no_interactions.txt'), 'w') as f:
+            f.write("ProLIF analysis finished but found 0 interactions.")
+        return
+
     df.to_csv(os.path.join(outPath, f'{prefix}_interactions.csv'), index=False)
     # Save Barcode
     fp.plot_barcode()
@@ -60,6 +68,8 @@ if __name__ == "__main__":
     topoFile, outPath, trjFile, outName = args.inputFilename, args.outpuPath, args.inputTraj, args.outputName
 
     u = mda.Universe(topoFile, trjFile)
+    u.guess_TopologyAttrs(to_guess=['elements'])
+
     ligSelection = u.select_atoms("resname LIG")
 
     # protSelection = u.select_atoms("protein and byres around 20.0 group ligand", ligand=ligSelection)
@@ -71,8 +81,9 @@ if __name__ == "__main__":
         fp.run(u.trajectory[::10], ligSelection, protSelection)
 
     else:
+        water_names = "WAT HOH SPC TIP3 T3P TIP4"
         water_selection = u.select_atoms(
-            "resname WAT and byres around 8 (group ligand or group pocket)",
+            f"resname {water_names} and byres around 8.0 (group ligand or group pocket)",
             ligand=ligSelection,
             pocket=protSelection,
             updating=True,

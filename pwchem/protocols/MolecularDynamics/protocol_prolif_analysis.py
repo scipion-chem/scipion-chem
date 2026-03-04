@@ -54,7 +54,7 @@ class ProtocolProlif(EMProtocol):
     def runProlif(self):
         inputSystem = self.inputMDSystem.get()
         trajFile = inputSystem.getTrajectoryFile()
-        topoFile = inputSystem.getTopologyFile()
+        topoFile = inputSystem.getFileName()
         outputPath = self._getExtraPath()
         outputName = inputSystem.getSystemName()
         args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName}'
