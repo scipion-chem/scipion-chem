@@ -1150,7 +1150,7 @@ class StructROI(data.EMFile):
       protAtoms = self.getProteinAtoms()
       for atom in protAtoms:
         atomId = atom.serial_number
-        if atomId in contactsIds:
+        if str(atomId) in contactsIds:
           contactAtoms.append(atom)
     else:
       # Manually calculate the contacts
@@ -1300,7 +1300,7 @@ class StructROI(data.EMFile):
   def getAtomsCoords(self, atoms):
     coords = []
     for atom in atoms:
-      coords.append(atom.getCoords())
+      coords.append(atom.get_coord())
     return coords
 
   def getAtomsIds(self, atoms):
@@ -1350,7 +1350,7 @@ class StructROI(data.EMFile):
     '''Returns the atoms sorted as they are close to the reference coordinate'''
     dists = []
     for at in atoms:
-      dists += [calculateDistance(refCoord, at.getCoords())]
+      dists += [calculateDistance(refCoord, at.get_coord())]
 
     zippedLists = sorted(zip(dists, atoms))
     dists, atoms = zip(*zippedLists)
@@ -1779,55 +1779,6 @@ class SetOfStructROIs(data.EMSet):
         outStr += pdbLine
 
     return outStr
-
-
-class ProteinAtom(data.EMObject):
-  def __init__(self, pdbLine, **kwargs):
-    data.EMObject.__init__(self, **kwargs)
-    self.parseLine(pdbLine)
-
-  def __str__(self):
-    return 'Atom: {}. Type: {}'.format(self.atomId, self.atomType)
-
-  def parseLine(self, pdbLine):
-    if not pdbLine.startswith('ATOM') and not pdbLine.startswith('HETATM'):
-      print('Passed line does not seems like an pdb ATOM line')
-    else:
-      self.line = pdbLine
-      line = splitPDBLine(pdbLine)
-      self.atomId = line[1]
-      self.atomType = line[2]
-      self.residueType = line[3]
-      self.proteinChain = line[4]
-      self.residueNumber = line[5]
-      self.residueId = '{}.{}'.format(self.proteinChain, self.residueNumber)
-      self.xCoord = line[6]
-      self.yCoord = line[7]
-      self.zCoord = line[8]
-      self.atomLetter = line[-1]
-
-  def getCoords(self):
-    return tuple(map(float, (self.xCoord, self.yCoord, self.zCoord)))
-
-
-class ProteinResidue(data.EMObject):
-  def __init__(self, pdbLine, **kwargs):
-    data.EMObject.__init__(self, **kwargs)
-    self.parseLine(pdbLine)
-
-  def __str__(self):
-    return 'Residue: {}. Type: {}'.format(self.residueId, self.residueType)
-
-  def parseLine(self, pdbLine):
-    if not pdbLine.startswith('ATOM'):
-      print('Passed line does not seems like an pdb ATOM line')
-    else:
-      line = splitPDBLine(pdbLine)
-      self.residueType = line[3]
-      self.proteinChain = line[4]
-      self.residueNumber = line[5]
-      self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
-
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
