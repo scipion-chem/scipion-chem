@@ -40,7 +40,6 @@ def save_results(fp, ligMol, outPath, prefix):
         with open(os.path.join(outPath, 'no_interactions.txt'), 'w') as f:
             f.write("ProLIF analysis finished but found 0 interactions.")
         return
-
     df.to_csv(os.path.join(outPath, f'{prefix}_interactions.csv'), index=False)
     # Save Barcode
     fp.plot_barcode()

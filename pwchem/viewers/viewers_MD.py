@@ -92,7 +92,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       group.addParam('displayMDTrajAnalysis', params.LabelParam,
                      label='Display MDTraj analysis: ', help='Display MDTraj defined analysis')
       group.addParam('displayMDTrajRGAnalysis', params.LabelParam,
-                     label='Display SASA analysis: ', help='Display evolution of the Radius of Gyration over the trajectory ')
+                     label='Display Rg analysis: ', help='Display evolution of the Radius of Gyration over the trajectory ')
       group.addParam('displayMDTrajSSAnalysis', params.EnumParam, default=0,
                      choices=['Per residue', 'Per frame', 'Heatmap'],
                      label='Display Secondary Structure analysis: ',
