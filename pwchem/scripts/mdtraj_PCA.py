@@ -16,13 +16,15 @@ def plot_pca_coords(traj):
         traj.xyz.reshape(traj.n_frames, traj.n_atoms * 3)
     )
 
+    time_ns = traj.time / 1000
+
     plt.figure(figsize=(8, 8))
-    plt.scatter(reduced_cartesian[:, 0], reduced_cartesian[:, 1], marker="x", c=traj.time)
+    plt.scatter(reduced_cartesian[:, 0], reduced_cartesian[:, 1], marker="x", c=time_ns)
     plt.xlabel("PC1")
     plt.ylabel("PC2")
     plt.title("Cartesian coordinate PCA")
     cbar = plt.colorbar()
-    cbar.set_label("Time [ps]")
+    cbar.set_label("Time [ns]")
     plt.show()
 
 
@@ -34,13 +36,15 @@ def plot_pca_dist(traj):
     pairwise_distances = mdtraj.geometry.compute_distances(traj, atom_pairs)
     reduced_distances = pca.fit_transform(pairwise_distances)
 
+    time_ns = traj.time / 1000
+
     plt.figure(figsize=(8, 8))
-    plt.scatter(reduced_distances[:, 0], reduced_distances[:, 1], marker="x", c=traj.time)
+    plt.scatter(reduced_distances[:, 0], reduced_distances[:, 1], marker="x", c=time_ns)
     plt.xlabel("PC1")
     plt.ylabel("PC2")
     plt.title("Pairwise distance PCA (backbone only)")
     cbar = plt.colorbar()
-    cbar.set_label("Time [ps]")
+    cbar.set_label("Time [ns]")
     plt.show()
 
 if __name__ == "__main__":

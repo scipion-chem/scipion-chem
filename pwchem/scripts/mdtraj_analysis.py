@@ -109,7 +109,6 @@ if __name__ == "__main__":
             if args.selectAtoms == 'All':
                 sasa_over_time = sasa_all.sum(axis=1)
             elif args.selectAtoms == 'Ligand':
-                print(index)
                 sasa_over_time = sasa_all[:, list(index)].sum(axis=1)
 
             # Conversion: 1 nm^2 = 100 Å^2

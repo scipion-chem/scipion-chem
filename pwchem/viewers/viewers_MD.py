@@ -97,15 +97,30 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                      choices=['Per residue', 'Per frame', 'Heatmap'],
                      label='Display Secondary Structure analysis: ',
                      help='Display secondary structure analysis with estimations obtained with DSSP')
-      group.addParam('selAtomsSASA', params.EnumParam, label='Selection of atoms: ', default=0,
-                     choices=['All', 'Ligand'],
-                     help='Selection of atoms to use in the analysis')
-      group.addParam('displayMDTrajSASAAnalysis', params.LabelParam, default=0,
-                     label='Display SASA analysis: ',
-                     help='Display evolution of the SASA over the trajectory. Computation time is long.')
+      group.addParam('displayMDTrajSASAAnalysis', params.EnumParam, default=0,
+                     label='Display SASA analysis: ', choices=['All', 'Ligand'],
+                     help='Display evolution of the SASA over the trajectory. Plot SASA of all atoms or only the Ligand atoms'
+                     'Computation time is long.')
       group.addParam('displayMDTrajPCAAnalysis', params.EnumParam, default=0,
                      label='Display PCA analysis: ', choices=['Coordinates', 'Pairwise distances'],
-                     help='Display a PCA analysis of the coordinates of the trajectory or the pairwise distances.')
+                     help='Display a PCA analysis of the coordinates of the trajectory or the pairwise distances of the backbone.')
+
+      # group = form.addGroup('Selection 1')
+      # group.addParam('type1', params.EnumParam, choices=['Atom','Residue','StructROI'],
+      #                label='Display MDTraj analysis: ')
+      # group.addParam('structuralROI', params.PointerParam, pointerClass='SetOfStructROIs')
+      # group.addParam('atom1', params.StringParam,
+      #                label='Atom 1: ', help='Atom to compute distance from.')
+      # group.addParam('type2', params.EnumParam, choices=['Atom', 'Residue', 'StructROI'],
+      #                label='Display MDTraj analysis: ')
+      # group.addParam('inputSetOfSmallMol', params.PointerParam, pointerClass='SetOfSmallMolecules',
+      #                label='Input Ligand')
+      # group.addParam('molName', params.StringParam, pointerClass='SetOfSmallMolecules',
+      #                label='Molecule name: ', help='')
+      # group.addParam('atom2', params.StringParam,
+      #                label='Atom 2: ', help='Atom to compute distance to.')
+      # group.addParam('displayMDTrajDistAnalysis', params.LabelParam,
+      #                label='Display MDTraj analysis: ')
 
     def _defineParams(self, form):
       form.addSection(label='Visualization of MD System')
@@ -183,7 +198,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} {ssFlags[type]}'
 
-        print(args)
         Plugin.runScript(self, 'mdtraj_SS.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajRGAnalysis(self, paramName=None):
@@ -194,16 +208,14 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                f' -sa {selAtoms} -rg '
         if self.heavyAtoms.get():
             args += '-ha '
-        print(args)
         Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajSASAAnalysis(self, paramName=None):
         system = self.getMDSystem()
-        selAtoms = self.getEnumText("selAtomsSASA")
+        selAtoms = self.getEnumText("displayMDTrajSASAAnalysis")
 
         args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
                f' -sa {selAtoms} -sasa '
-        print(args)
         Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajPCAAnalysis(self, paramName=None):
@@ -212,7 +224,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         pcaFags = ['--pca-coord', '--pca-dist']
         args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
                f' {pcaFags[pcaType]} '
-        print(args)
         Plugin.runScript(self, 'mdtraj_PCA.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
 

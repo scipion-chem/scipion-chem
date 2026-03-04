@@ -50,6 +50,8 @@ from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
+from pwchem.viewers.viewers_MD import MDSystemPViewer
+from pwchem.objects import SetOfStructROIs
 
 class SelectLigandAtom(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
@@ -164,6 +166,11 @@ SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
                                targets=['refLigName'],
                                inputs=['refAtomStruct'],
                                outputs=['refLigName'])
+
+SelectLigandWizard().addTarget(protocol=MDSystemPViewer,
+                               targets=['molName'],
+                               inputs=['inputSetOfSmallMol'],
+                               outputs=['molName'])
 
 class SelectMultiLigandWizard(SelectLigandWizard):
   def show(self, form, *params):
@@ -367,7 +374,15 @@ class SelectAtomWizardQT(SelectResidueWizardQT):
     intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
     form.setVar(outputParam[0], intervalStr)
 
+SelectAtomWizardQT().addTarget(protocol=MDSystemPViewer,
+                               targets=['atom1'],
+                               inputs=['inputAtomStruct'],
+                               outputs=['atom1'])
 
+SelectAtomWizardQT().addTarget(protocol=MDSystemPViewer,
+                               targets=['atom2'],
+                               inputs=['type'],
+                               outputs=['atom2'])
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
