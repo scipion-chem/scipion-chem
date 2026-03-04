@@ -168,10 +168,12 @@ class Plugin(pwem.Plugin):
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
             .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
+            .addCondaPackages(['mdanalysis'], channel='conda-forge',  targetName='MDANALYSIS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
             .addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
+
 
         # # Instantiating shape it install helper
         binariesDirectory = SHAPEIT_DIC['name']
@@ -302,7 +304,6 @@ class Plugin(pwem.Plugin):
         )
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
-
 
     ##################### RUN CALLS ######################
     @classmethod
