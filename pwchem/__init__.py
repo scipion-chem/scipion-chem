@@ -62,7 +62,6 @@ class Plugin(pwem.Plugin):
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
         cls.addSCORCHenv(env)
-        cls.addMDAnalaysisPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -75,7 +74,6 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
-        cls._defineEmVar(MDANALYSIS_DIC['home'], cls.getEnvName(MDANALYSIS_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -167,10 +165,12 @@ class Plugin(pwem.Plugin):
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
             .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
+            .addCondaPackages(['mdanalysis'], channel='conda-forge',  targetName='MDANALYSIS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
             .addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
+
 
         # # Instantiating shape it install helper
         binariesDirectory = SHAPEIT_DIC['name']
@@ -283,27 +283,6 @@ class Plugin(pwem.Plugin):
             'SCORCH2_REPO_CLONED'
         )
 
-        installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
-
-    @classmethod
-    def addMDAnalaysisPackage(cls, env, default=True):
-        # Instantiating install helper
-        installer = InstallHelper(MDANALYSIS_DIC['name'],
-                                  packageHome=cls.getVar(MDANALYSIS_DIC['home']),
-                                  packageVersion=MDANALYSIS_DIC['version'])
-
-        # Create the environment and install MDAnalysis via conda-forge
-        installer.getCondaEnvCommand(
-            MDANALYSIS_DIC['name'],
-            binaryVersion=MDANALYSIS_DIC['version'],
-            pythonVersion='3.11'
-        ).addCondaPackages(
-            ['mdanalysis'],  # Package to install
-            channel='conda-forge',  # Install from conda-forge
-            targetName='MDANALYSIS_INSTALLED'
-        )
-
-        # Execute all installation commands
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
     ##################### RUN CALLS ######################
