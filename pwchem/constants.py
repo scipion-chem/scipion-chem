@@ -37,6 +37,7 @@ BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
 DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
 RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RANKX_HOME'}
+POSEB_DIC =     {'name': 'posebusters',      'version': '0.6.3',           'home': 'POSEB_HOME'}
 SCORCH2_DIC = {'name': 'scorch2', 'version': '1.0', 'home': 'SCORCH2_HOME'}
 
 #Autoligand

@@ -61,7 +61,9 @@ class Plugin(pwem.Plugin):
         cls.addMDTrajPackage(env)
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
+
         cls.addSCORCHenv(env)
+        cls.addPoseBustersPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -73,6 +75,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+        cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
 
         # Common enviroments
@@ -86,7 +89,7 @@ class Plugin(pwem.Plugin):
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
     def getEnvName(cls, packageDictionary):
-        """ This function returns the name of the conda enviroment for a given package. """
+        """ This function returns the name of the conda environment for a given package. """
         return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
 
     @classmethod
@@ -237,6 +240,23 @@ class Plugin(pwem.Plugin):
         installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
             addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
             .addPackage(env, dependencies=['conda', 'pip'], default=default)
+
+    @classmethod
+    def addPoseBustersPackage(cls, env, default=True):
+        installer = InstallHelper(
+            POSEB_DIC['name'],
+            packageHome=cls.getVar(POSEB_DIC['home']),
+            packageVersion=POSEB_DIC['version']
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "git clone --branch v0.6.3 --depth 1 https://github.com/maabuu/posebusters.git && "
+            "pip install --editable ./posebusters ",
+            "POSEBUSTERS_INSTALLED"
+        )
+
+        installer.addPackage(env, dependencies=['pip', 'git'], default=default)
 
     @classmethod
     def addSCORCHenv(cls, env, default=True):
