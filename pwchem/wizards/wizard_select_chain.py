@@ -167,10 +167,6 @@ SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
                                inputs=['refAtomStruct'],
                                outputs=['refLigName'])
 
-SelectLigandWizard().addTarget(protocol=MDSystemPViewer,
-                               targets=['molName'],
-                               inputs=['inputSetOfSmallMol'],
-                               outputs=['molName'])
 
 class SelectMultiLigandWizard(SelectLigandWizard):
   def show(self, form, *params):
@@ -235,6 +231,7 @@ class SelectChainWizardQT(SelectChainWizard):
   @classmethod
   def getInputFilename(cls, protocol, inputObj, structureHandler):
     if type(inputObj) == str:
+      print('POR QUEEEEEEEEEEEEEEEEEEEEE')
       if os.path.exists(inputObj):
         fileName = inputObj
       else:
@@ -255,7 +252,11 @@ class SelectChainWizardQT(SelectChainWizard):
     elif str(type(inputObj).__name__) == 'SetOfStructROIs' or str(type(inputObj).__name__) == 'SetOfSmallMolecules':
         fileName = inputObj.getProteinFile()
 
+    elif str(type(inputObj).__name__) == 'MDSystem':
+        fileName = inputObj.getProteinFile()
+
     else:
+        print('VAMOS BEIN')
         fileName = os.path.abspath(inputObj.getFileName())
 
     if fileName.endswith('.pdbqt'):
@@ -374,16 +375,6 @@ class SelectAtomWizardQT(SelectResidueWizardQT):
     intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
     form.setVar(outputParam[0], intervalStr)
 
-SelectAtomWizardQT().addTarget(protocol=MDSystemPViewer,
-                               targets=['atom1'],
-                               inputs=['inputAtomStruct'],
-                               outputs=['atom1'])
-
-SelectAtomWizardQT().addTarget(protocol=MDSystemPViewer,
-                               targets=['atom2'],
-                               inputs=['type'],
-                               outputs=['atom2'])
-
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
@@ -427,6 +418,21 @@ SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=MDSystemPViewer,
+                              targets=['chainSel1'],
+                              inputs=['inputMDSystem'],
+                              outputs=['chainSel1'])
+
+SelectResidueWizardQT().addTarget(protocol=MDSystemPViewer,
+                                targets=['resPosition1'],
+                                inputs=['inputMDSystem', 'chainSel1'],
+                                outputs=['resPosition1'])
+
+SelectAtomWizardQT().addTarget(protocol=MDSystemPViewer,
+                                targets=['resPosition1'],
+                                inputs=['inputMDSystem', 'chainSel1', 'resPosition1'],
+                                outputs=['resPosition1'])
 
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,

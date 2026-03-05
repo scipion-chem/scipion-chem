@@ -1822,6 +1822,8 @@ class MDSystem(data.EMFile):
 
     self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
     self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
+    self._prolifFile = pwobj.String(kwargs.get('prolifFp', None))
+
 
   def __str__(self):
     return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
@@ -1885,6 +1887,11 @@ class MDSystem(data.EMFile):
   def setLigTopologyFile(self, value):
     self._ligTopFile.set(value)
 
+  def getProlifFile(self):
+    return self._prolifFile.get()
+
+  def setProlifFile(self, value):
+    self._prolifFile.set(value)
 
 class PharmFeature(data.EMObject):
   """ Represent a pharmacophore feature """

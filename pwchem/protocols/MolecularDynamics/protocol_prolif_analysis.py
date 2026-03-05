@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import os, json
+import pickle as pkl
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
@@ -66,5 +67,12 @@ class ProtocolProlif(EMProtocol):
         pwchemPlugin.runScript(self, 'prolif_analysis.py', args, env=MDTRAJ_DIC, wait=False)
 
     def createOutputStep(self):
-        return
+        inputSystem = self.inputMDSystem.get()
+        print(inputSystem)
+        baseName = inputSystem.getSystemName()
+        fpPath = self._getExtraPath(f'{baseName}_fingerprint.pkl')
+        outSystem = inputSystem.clone()
+        outSystem.setProlifFile(fpPath)
+        print(outSystem)
+        self._defineOutputs(outputSystem=outSystem)
 
