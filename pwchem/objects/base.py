@@ -1742,43 +1742,88 @@ class SetOfStructROIs(data.EMSet):
     return outStr
 
   def formatPocketStr(self, pocket):
-    outStr = ''
-    numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
-    rawStr = getRawPDBStr(pocketFile, ter=False).strip()
-    if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
-      for line in rawStr.split('\n'):
-        sline = splitPDBLine(line)
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      outStr = ''
+      numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
 
-    elif pocket.getPocketClass() == 'FPocket':
-      for line in rawStr.split('\n'):
-        sline = line.split()
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:], '', 'Ve']
-        try:
+      print(f'---file: {pocketFile}')
+
+      # --- Step 1: Get raw string ---
+      if pocketFile.endswith('.cif'):
+          rawStr = self.cifToPdbStr(pocketFile).strip()  # convert CIF ? PDB
+          isCIF = True
+      else:
+          rawStr = getRawPDBStr(pocketFile, ter=False).strip()  # use as-is
+          isCIF = False
+
+      pocketClass = pocket.getPocketClass()
+
+      # --- Step 2: Process each line ---
+      for raw_line in rawStr.split('\n'):
+
+          # --- Parse line ---
+          sline = splitPDBLine(raw_line)
+          if sline is None:
+              continue  # skip TER/END or non-ATOM lines
+
+          # Replace residue number
+          sline[5] = numId
+
+          # --- CIF-specific fixes ---
+          if isCIF:
+              # Sanitize coordinates (x, y, z), occupancy, tempFactor
+              for i in [6, 7, 8, 9, 10]:
+                  try:
+                      parts = sline[i].split()
+                      sline[i] = parts[-1]  # take last number if multiple
+                      float(sline[i])
+                  except:
+                      sline[i] = '0.0' if i < 9 else '1.00'
+
+              # Ensure segment identifier and element
+              if len(sline) < 12 or sline[11] in ('', None):
+                  sline[11] = ''
+              if len(sline) < 13 or sline[12] in ('', None):
+                  sline[12] = 'C'
+
+          # --- Step 3: Build replacements per pocket class ---
+          if pocketClass in ['AutoLigand', 'AutoSite']:
+              replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
+          elif pocketClass == 'FPocket':
+              replacements = [
+                  'HETATM',  # j[0] atomType
+                  sline[1],  # j[1] serial
+                  sline[2],  # j[2] atomName
+                  sline[3],  # j[3] resName
+                  sline[4],  # j[4] chain
+                  numId,  # j[5] resNumber
+                  sline[6],  # x
+                  sline[7],  # y
+                  sline[8],  # z
+                  sline[9],  # occupancy
+                  sline[10],  # tempFactor
+                  '',  # segmentIdentifier
+                  sline[11]  # elementSymbol
+              ]
+          elif pocketClass == 'SiteMap':
+              replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], '', 'Ve']
+          else:  # P2Rank, ElliPro, Standard...
+              replacements = sline  # already sanitized
+
+          # --- Step 4: Write line ---
           pdbLine = writePDBLine(replacements)
-        except:
-          sline = splitPDBLine(line)
-          replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:], '', 'Ve']
-          pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+          outStr += pdbLine
 
-    elif pocket.getPocketClass() == 'SiteMap':
-      for line in rawStr.split('\n'):
-        line = line.split()
-        replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      return outStr
 
-    else:  # (P2Rank, ElliPro, Standard...)
-      for line in rawStr.split('\n'):
-        line = splitPDBLine(line)
-        line[5] = numId
-        pdbLine = writePDBLine(line)
-        outStr += pdbLine
-
-    return outStr
+  def cifToPdbStr(self, cifFile):
+      parser = MMCIFParser(QUIET=True)
+      structure = parser.get_structure('pocket', cifFile)
+      io = PDBIO()
+      io.set_structure(structure)
+      from io import StringIO
+      s = StringIO()
+      io.save(s)
+      return s.getvalue()
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
