@@ -1745,8 +1745,6 @@ class SetOfStructROIs(data.EMSet):
       outStr = ''
       numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
 
-      print(f'---file: {pocketFile}')
-
       # --- Step 1: Get raw string ---
       if pocketFile.endswith('.cif'):
           rawStr = self.cifToPdbStr(pocketFile).strip()  # convert CIF ? PDB
