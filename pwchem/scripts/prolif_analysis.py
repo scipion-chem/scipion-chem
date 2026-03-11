@@ -76,7 +76,7 @@ def save_results(fp, ligMol, outPath, prefix):
         vmin=0,
         vmax=1,
         center=0.5,
-        xticklabels=max(1, len(df) // 10),  # Dynamic labels to avoid crowding
+        xticklabels=max(1, len(df) // 10),
         yticklabels=max(1, len(df) // 10),
     )
     ax.invert_yaxis()
@@ -104,7 +104,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     topoFile, outPath, trjFile, outName, frameNum = args.inputFilename, args.outpuPath, args.inputTraj, args.outputName, args.frameNum
 
-    u = mda.Universe(topoFile, trjFile)
+    _, extension = os.path.splitext(trjFile)
+    if extension.lower() == '.netcdf':
+        u = mda.Universe(topoFile, trjFile, format='NCDF')
+    else:
+        u = mda.Universe(topoFile, trjFile)
     u.guess_TopologyAttrs(to_guess=['elements'])
 
     ligSelection = u.select_atoms("resname LIG")

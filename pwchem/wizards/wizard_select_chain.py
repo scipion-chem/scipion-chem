@@ -231,7 +231,6 @@ class SelectChainWizardQT(SelectChainWizard):
   @classmethod
   def getInputFilename(cls, protocol, inputObj, structureHandler):
     if type(inputObj) == str:
-      print('POR QUEEEEEEEEEEEEEEEEEEEEE')
       if os.path.exists(inputObj):
         fileName = inputObj
       else:
@@ -253,7 +252,7 @@ class SelectChainWizardQT(SelectChainWizard):
         fileName = inputObj.getProteinFile()
 
     elif str(type(inputObj).__name__) == 'MDSystem':
-        fileName = inputObj.getProteinFile()
+        fileName = inputObj.getSystemFile()
 
     else:
         print('VAMOS BEIN')
@@ -418,21 +417,6 @@ SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
-
-SelectChainWizardQT().addTarget(protocol=MDSystemPViewer,
-                              targets=['chainSel1'],
-                              inputs=['inputMDSystem'],
-                              outputs=['chainSel1'])
-
-SelectResidueWizardQT().addTarget(protocol=MDSystemPViewer,
-                                targets=['resPosition1'],
-                                inputs=['inputMDSystem', 'chainSel1'],
-                                outputs=['resPosition1'])
-
-SelectAtomWizardQT().addTarget(protocol=MDSystemPViewer,
-                                targets=['resPosition1'],
-                                inputs=['inputMDSystem', 'chainSel1', 'resPosition1'],
-                                outputs=['resPosition1'])
 
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
@@ -996,3 +980,60 @@ AddSequenceWizard().addTarget(protocol=ProtDefineSetOfSequences,
                               inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
                                       'inpChain', 'inpPositions'],
                               outputs=['inputList', 'inputPointers'])
+
+
+class SelectAtomFromResidue(SelectAtomWizardQT):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getAtoms(self, form, inputObj, chainID, inputResID):
+        protocol = form.protocol
+        structureHandler = AtomicStructHandler()
+        parser = parseAtomStruct(self.getInputFilename(protocol, inputObj, structureHandler))
+
+        atomList = self.editionListOfAtoms(parser, chainID, inputResID)
+        finalAtomList = []
+        for i in atomList:
+            finalAtomList.append(String(i))
+        return finalAtomList
+
+    def editionListOfAtoms(self, parser, chainID, residueID):
+        atomList = []
+        modelID=1
+        for model in parser:
+            print(model)
+            if model.get_id() == modelID:
+                for chain in model.get_chains():
+                    if chain.get_id() in chainID:
+                        for residue in chain.get_residues():
+                            if residue.get_id()[1] == residueID:
+                                for i, atom in enumerate(residue.get_atoms()):
+                                    atomID = atom.get_id()
+                                    atomList.append(f'{{"index": {i + 1}, "atom": "{atomID}"}}')
+
+        return atomList
+
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+        inputObj = getattr(protocol, inputParam[0]).get()
+        inputResID = getattr(protocol, inputParam[1]).get()
+        chainID = 'A'
+        modelID = 1
+
+        finalAtomsList = self.getAtoms(form, inputObj, chainID, inputResID)
+
+        provider = ListTreeProviderString(finalAtomsList)
+        dlg = dialog.ListDialog(form.root, "Residue atoms", provider,
+                                "Select one atom (atom number, "
+                                "atom name)")
+
+        idx, atomID = json.loads(dlg.values[0].get())['index'], json.loads(dlg.values[0].get())['atom']
+
+        intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
+        form.setVar(outputParam[0], intervalStr)
+
+SelectAtomFromResidue().addTarget(protocol=MDSystemPViewer,
+                              targets=['atomPosition1'],
+                              inputs=['inputMDSystem', 'resPosition1'],
+                              outputs=['atomPosition1'])

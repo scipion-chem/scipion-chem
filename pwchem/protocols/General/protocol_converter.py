@@ -179,6 +179,7 @@ class ConvertStructures(EMProtocol):
             outSystem = MDSystem(filename=sysFile, topFile=topFile, systemName=sysFile)
 
             if inSystem.hasTopology():
+                topOut = inSystem.getTopologyFile()
                 if self.convTopFile.get():
                     outDir = os.path.abspath(self._getExtraPath())
                     outFormat = self.getEnumText('outputTopFormat').lower()
@@ -192,9 +193,10 @@ class ConvertStructures(EMProtocol):
                         args += ' -gtopdir {}'.format(gromacsTopDir)
 
                     Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
-                    outSystem.setTopologyFile(topOut)
+                outSystem.setTopologyFile(topOut)
             
             if inSystem.hasTrajectory():
+                trajOut = inSystem.getTrajectoryFile()
                 if self.convTrjFile.get():
                     trajFile = inSystem.getTrajectoryFile()
                     outDir = os.path.abspath(self._getExtraPath())
@@ -204,7 +206,7 @@ class ConvertStructures(EMProtocol):
 
                     args = ' -s {} -t {} -otj {}'.format(os.path.abspath(sysFile), os.path.abspath(trajFile), trajOut)
                     Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
-                    outSystem.setTrajectoryFile(trajOut)
+                outSystem.setTrajectoryFile(trajOut)
 
             self._defineOutputs(outputSystem=outSystem)
             self._defineSourceRelation(self.inputObject, outSystem)
