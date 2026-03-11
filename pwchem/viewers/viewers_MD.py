@@ -79,62 +79,59 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                             'Protein represented as NewCartoon and waters as dots')
 
     def _defineMDTrajParams(self, form):
-      group = form.addGroup('MDTraj analysis')
-      group.addParam('mdAnalChoices', params.EnumParam, label='Display trajectory analysis: ',
-                     choices=['RMSD', 'RMSF'], default=0,
-                     help='Uses MDTraj to display this analysis of the trajectory')
-      group.addParam('selAtoms', params.EnumParam, label='Selection of atoms: ', default=0,
-                     choices=['Protein', 'Backbone', 'CA', 'Sidechain', 'Ligand'],
-                     help='Selection of atoms to use in the analysis')
-      group.addParam('heavyAtoms', params.BooleanParam, label='Use only heavy atoms: ', default=True,
-                     help='Uses only heavy atoms in the analysis of the trajectory')
+        form.addSection(label='Trajectory analysis')
+        group = form.addGroup('MDTraj analysis')
+        group.addParam('mdAnalChoices', params.EnumParam, label='Display trajectory analysis: ',
+                       choices=['RMSD', 'RMSF'], default=0,
+                       help='Uses MDTraj to display this analysis of the trajectory')
+        group.addParam('selAtoms', params.EnumParam, label='Selection of atoms: ', default=0,
+                       choices=['Protein', 'Backbone', 'CA', 'Sidechain', 'Ligand'],
+                       help='Selection of atoms to use in the analysis')
+        group.addParam('heavyAtoms', params.BooleanParam, label='Use only heavy atoms: ', default=True,
+                       help='Uses only heavy atoms in the analysis of the trajectory')
+        group.addParam('displayMDTrajAnalysis', params.LabelParam,
+                       label='Display MDTraj analysis: ', help='Display MDTraj defined analysis')
 
-      group.addParam('displayMDTrajAnalysis', params.LabelParam,
-                     label='Display MDTraj analysis: ', help='Display MDTraj defined analysis')
-      group.addParam('displayMDTrajRGAnalysis', params.LabelParam,
-                     label='Display Rg analysis: ', help='Display evolution of the Radius of Gyration over the trajectory ')
-      group.addParam('displayMDTrajSSAnalysis', params.EnumParam, default=0,
-                     choices=['Per residue', 'Per frame', 'Heatmap'],
-                     label='Display Secondary Structure analysis: ',
-                     help='Display secondary structure analysis with estimations obtained with DSSP')
-      group.addParam('displayMDTrajSASAAnalysis', params.EnumParam, default=0,
-                     label='Display SASA analysis: ', choices=['All', 'Ligand'],
-                     help='Display evolution of the SASA over the trajectory. Plot SASA of all atoms or only the Ligand atoms'
-                     'Computation time is long.')
-      group.addParam('displayMDTrajPCAAnalysis', params.EnumParam, default=0,
-                     label='Display PCA analysis: ', choices=['Coordinates', 'Pairwise distances'],
-                     help='Display a PCA analysis of the coordinates of the trajectory or the pairwise distances of the backbone.')
+        group.addParam('displayMDTrajRGAnalysis', params.LabelParam,
+                       label='Display Rg analysis: ',
+                       help='Display evolution of the Radius of Gyration over the trajectory ')
+        group.addParam('displayMDTrajSSAnalysis', params.EnumParam, default=0,
+                       choices=['Per residue', 'Per frame', 'Heatmap'],
+                       label='Display Secondary Structure analysis: ',
+                       help='Display secondary structure analysis with estimations obtained with DSSP')
+        group.addParam('displayMDTrajSASAAnalysis', params.EnumParam, default=0,
+                       label='Display SASA analysis: ', choices=['All', 'Ligand'],
+                       help='Display evolution of the SASA over the trajectory. Plot SASA of all atoms or only the Ligand atoms'
+                            'Computation time is long.')
+        group.addParam('displayMDTrajPCAAnalysis', params.EnumParam, default=0,
+                       label='Display PCA analysis: ', choices=['Coordinates', 'Pairwise distances'],
+                       help='Display a PCA analysis of the coordinates of the trajectory or the pairwise distances of the backbone.')
 
-      group = form.addGroup('Selection 1')
-      # group.addParam('type1', params.EnumParam, choices=['Atom','Residue','StructROI'],
-      #                label='Display MDTraj analysis: ')
-      group.addParam('inputMDSystem', params.PointerParam, pointerClass='MDSystem',
-                     label='Input MD System', allowsNull=True)
-      group.addParam('chainSel1', params.StringParam,
-                     label='Chain 1: ', help='Specify the chain of the atom of interest')
-      group.addParam('resPosition1', params.StringParam, label='Residue 1',
-                     help='Specify the residue of the atom of interest.')
-      group.addParam('atomPosition1', params.StringParam,
-                      label='Atom 1: ', help='Atom to compute distance from.')
-      # group.addParam('type2', params.EnumParam, choices=['Atom', 'Residue', 'StructROI'],
-      #                label='Display MDTraj analysis: ')
-      # group.addParam('inputSetOfSmallMol', params.PointerParam, pointerClass='SetOfSmallMolecules',
-      #                label='Input Ligand')
-      # group.addParam('molName', params.StringParam, pointerClass='SetOfSmallMolecules',
-      #                label='Molecule name: ', help='')
-      # group.addParam('atom2', params.StringParam,
-      #                label='Atom 2: ', help='Atom to compute distance to.')
-      # group.addParam('displayMDTrajDistAnalysis', params.LabelParam,
-      #                label='Display MDTraj analysis: ')
+        group = form.addGroup('Selection 1')
+        # group.addParam('type1', params.EnumParam, choices=['Atom','Residue','StructROI'],
+        #                label='Display MDTraj analysis: ')
+        group.addParam('inputMDSystem', params.PointerParam, pointerClass='MDSystem',
+                       label='Input MD System', allowsNull=True)
+        group.addParam('chainSel1', params.StringParam,
+                       label='Chain 1: ', help='Specify the chain of the atom of interest')
+        group.addParam('resPosition1', params.StringParam, label='Residue 1',
+                       help='Specify the residue of the atom of interest.')
+        group.addParam('atomPosition1', params.StringParam,
+                       label='Atom 1: ', help='Atom to compute distance from.')
+
+        if self.getMDSystem().getProlifFile():
+            self._defineProlifParams(form)
 
 
     def _defineProlifParams(self, form):
-        form.addSection(label='Prolif visualization')
-        form.addParam('displayFingerprint', params.LabelParam, label='Show interaction fingerprint: ',
+        group = form.addGroup('Prolif visualization')
+        group.addParam('displayFingerprint', params.LabelParam, label='Show interaction fingerprint: ',
                        help='Display interaction fingerprint generated by ProLIF')
-        form.addParam('displayInterNetwork', params.LabelParam, label='Display interaction network: ',
-                      help='Display ligand interaction network generated by ProLIF')
-
+        group.addParam('displayInterNetwork', params.LabelParam, label='Display interaction network: ',
+                      help='Display ligand interaction network generated by ProLIF (web browser is opened).\n'
+                           'Only the interactions that are present in more than 30% of the frames are shown.')
+        group.addParam('displayProlifMatrix', params.LabelParam, label='Display similarity matrix: ',
+                      help='Display Tanimoto similarity matrix calculated using ligand-target interaction fingerprint.')
 
     def _defineParams(self, form):
       form.addSection(label='Visualization of MD System')
@@ -146,9 +143,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
       if self.getMDSystem().hasTrajectory():
           self._defineSimParams(form)
           self._defineMDTrajParams(form)
-
-      if self.getMDSystem().getProlifFile():
-          self._defineProlifParams(form)
 
     def getMDSystem(self, objType=MDSystem):
         if isinstance(self.protocol, objType):
@@ -168,7 +162,8 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         'displayMDTrajSASAAnalysis': self._showMDTrajSASAAnalysis,
         'displayMDTrajPCAAnalysis': self._showMDTrajPCAAnalysis,
         'displayFingerprint': self._showProlifFp,
-        'displayInterNetwork': self._showProlifNetwork
+        'displayInterNetwork': self._showProlifNetwork,
+        'displayProlifMatrix': self._showProlifMatrix
       }
 
     def _showPymol(self, paramName=None):
@@ -247,14 +242,18 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
     def _showProlifFp(self, paramName=None):
         fpPkl = self.getMDSystem().getProlifFile()
-        # Call with default mode (barcode)
         args = f'"{fpPkl}" --mode barcode'
         Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showProlifNetwork(self, paramName=None):
         fpPkl = self.getMDSystem().getProlifFile()
-        # Call with network mode
         args = f'"{fpPkl}" --mode network'
+        Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+
+    def _showProlifMatrix(self, paramName=None):
+        fpPkl = self.getMDSystem().getProlifFile()
+        args = f'"{fpPkl}" --mode matrix'
+        print(args)
         Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
 

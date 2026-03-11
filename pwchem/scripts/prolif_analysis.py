@@ -30,21 +30,27 @@ import MDAnalysis as mda
 import prolif as plf
 import matplotlib.pyplot as plt
 import os
+import pandas as pd
+import seaborn as sns
+from rdkit import DataStructs
 
 def save_results(fp, ligMol, outPath, prefix):
     df = fp.to_dataframe()
     # Check if the dataframe is empty
     if df.empty:
-        print(f"!!! WARNING: No interactions were detected. Skipping plots.")
+        print(f"!!! WARNING: No interactions were detected.")
         # Create a dummy text file so Scipion knows the job 'finished'
         with open(os.path.join(outPath, 'no_interactions.txt'), 'w') as f:
             f.write("ProLIF analysis finished but found 0 interactions.")
         return
-    fp.to_pickle(os.path.join(outPath,f"{prefix}_fingerprint.pkl"))
 
+    # Save Fingerprint
+    fp.to_pickle(os.path.join(outPath, f"{prefix}_fingerprint.pkl"))
     df.to_csv(os.path.join(outPath, f'{prefix}_interactions.csv'), index=False)
+
     # Save Barcode
     fp.plot_barcode()
+    plt.title("Ligand-Target Interaction Barcode")
     plt.savefig(os.path.join(outPath, f'{prefix}_barcode.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -52,9 +58,38 @@ def save_results(fp, ligMol, outPath, prefix):
     view = fp.plot_lignetwork(ligMol)
     view.save(os.path.join(outPath, f'{prefix}_network.html'))
 
+    # Save Tanimoto Similarity Matrix
+    bitvectors = fp.to_bitvectors()
+    similarity_matrix_data = []
+    for bv in bitvectors:
+        similarity_matrix_data.append(DataStructs.BulkTanimotoSimilarity(bv, bitvectors))
+    similarity_matrix = pd.DataFrame(similarity_matrix_data, index=df.index, columns=df.index)
+
+    fig, ax = plt.subplots(figsize=(6, 5), dpi=200)
+    colormap = sns.diverging_palette(300, 145, s=90, l=80, sep=30, center="dark", as_cmap=True)
+
+    sns.heatmap(
+        similarity_matrix,
+        ax=ax,
+        square=True,
+        cmap=colormap,
+        vmin=0,
+        vmax=1,
+        center=0.5,
+        xticklabels=max(1, len(df) // 10),  # Dynamic labels to avoid crowding
+        yticklabels=max(1, len(df) // 10),
+    )
+    ax.invert_yaxis()
+    plt.yticks(rotation="horizontal")
+    plt.title(f"Tanimoto Similarity Heatmap")
+    fig.patch.set_facecolor("white")
+    plt.savefig(os.path.join(outPath, f'{prefix}_matrix.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputTopology <topFile> -t/--inputTraj [<trjFile>]
-    -o/--outputName <outputName> 
+    -o/--outputName <outputName> -f/--frameNum <frameNum>
 
     Performs several analysis on a MD trajectory using MDTraj
     '''
@@ -64,9 +99,10 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--inputTraj', type=str, help='Input trajectory file')
     parser.add_argument('-n', '--outputName', type=str, help='Output name')
     parser.add_argument('-wb', default=False, action='store_true', help='Run a water bridges analysis')
+    parser.add_argument('-f', '--frameNum', type=int, help='Frame number', default=10)
 
     args = parser.parse_args()
-    topoFile, outPath, trjFile, outName = args.inputFilename, args.outpuPath, args.inputTraj, args.outputName
+    topoFile, outPath, trjFile, outName, frameNum = args.inputFilename, args.outpuPath, args.inputTraj, args.outputName, args.frameNum
 
     u = mda.Universe(topoFile, trjFile)
     u.guess_TopologyAttrs(to_guess=['elements'])
@@ -74,12 +110,12 @@ if __name__ == "__main__":
     ligSelection = u.select_atoms("resname LIG")
 
     # protSelection = u.select_atoms("protein and byres around 20.0 group ligand", ligand=ligSelection)
-    protSelection = plf.select_over_trajectory(u, u.trajectory[::10], "protein and byres around 6.0 group ligand",
-                                                   ligand=ligSelection)
+    protSelection = plf.select_over_trajectory(u, u.trajectory[::frameNum], "protein and byres around 6.0 group ligand",
+                                               ligand=ligSelection)
 
     if not args.wb:
         fp = plf.Fingerprint()
-        fp.run(u.trajectory[::10], ligSelection, protSelection)
+        fp.run(u.trajectory[::frameNum], ligSelection, protSelection)
 
     else:
         water_names = "WAT HOH SPC TIP3 T3P TIP4"
@@ -95,9 +131,7 @@ if __name__ == "__main__":
         )
 
         # for MD trajectories
-        fp.run(u.trajectory[::10], ligSelection, protSelection)
+        fp.run(u.trajectory[::frameNum], ligSelection, protSelection)
 
     ligMol = plf.Molecule.from_mda(ligSelection)
     save_results(fp, ligMol, outPath, outName)
-
-

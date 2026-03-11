@@ -47,6 +47,8 @@ class ProtocolProlif(EMProtocol):
         form.addParam('type', params.EnumParam, choices=['Protein-Ligand', 'Water bridges'],
                       label='Type of analysis: ', default=0,
                       help='Analyize protein-ligand interactions over each frame or the water bridges.')
+        form.addParam('frameNum', params.IntParam, label='Frame frequency', default=10,
+                      help='Every how many frames interactions are analyzed.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self.runProlif)
@@ -58,7 +60,7 @@ class ProtocolProlif(EMProtocol):
         topoFile = inputSystem.getTopologyFile()
         outputPath = self._getExtraPath()
         outputName = inputSystem.getSystemName()
-        args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName}'
+        args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName} -f {self.frameNum.get()}'
         if self.getEnumText('type') == 'Water bridges':
             args += ' -wb'
 
