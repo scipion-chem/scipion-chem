@@ -109,8 +109,10 @@ class ProtExtractLigands(EMProtocol):
 
         ligandFiles = self.extract_ligands(tmpCleanFile)
 
+        cleanFile = self._getPath('{}.cif'.format(getBaseName(inputStructureFile)))
+
         # Keep only structure chains selected, without ligands for reference structure
-        cleanedPDB = cleanPDB(inputStructureFile, tmpCleanFile, self.waters.get(), True, chain_id)
+        cleanedPDB = cleanPDB(inputStructureFile, cleanFile, self.waters.get(), True, chain_id)
 
         outputSet = SetOfSmallMolecules().create(outputPath=self._getPath())
         outputSet.setProteinFile(cleanedPDB)
