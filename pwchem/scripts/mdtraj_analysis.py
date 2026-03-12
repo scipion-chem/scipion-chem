@@ -28,6 +28,7 @@
 import argparse
 import mdtraj
 import matplotlib.pyplot as plt
+import numpy as np
 
 def getAtomSelection(selStr, ligName='LIG'):
     if selStr == 'CA':
@@ -69,6 +70,11 @@ if __name__ == "__main__":
     parser.add_argument('-sasa', default=False, action='store_true',
                         help='Plots the Solvent Accessible Surface Area (SASA) of the selected atoms')
 
+    parser.add_argument('-distance', default=False, action='store_true',
+                        help='Plots the distance between two specific atoms through the trajectory')
+    parser.add_argument('-a1', '--atom1', type=str, help='First atom selection for distance calculation')
+    parser.add_argument('-a2', '--atom2', type=str, help='Second atom selection for distance calculation')
+
     args = parser.parse_args()
     inpFile, outFile, trjFile = args.inputFilename, args.outputName, args.inputTraj
 
@@ -76,8 +82,8 @@ if __name__ == "__main__":
     trajectory = mdtraj.load(trjFile, top=topo)
 
     # Atom selection
-    index = getSelectionIndex(topo, args.selectAtoms)
-    if index:
+    if args.selectAtoms:
+        index = getSelectionIndex(topo, args.selectAtoms)
         if args.heavyAtoms:
             index = index.intersection(set([atom.index for atom in topo.topology.atoms if atom.element.symbol != 'H']))
 
@@ -96,13 +102,6 @@ if __name__ == "__main__":
             plt.xlabel('Protein sequence')
             plt.ylabel('RMSF (Å)')
 
-        elif args.rg:
-            rg = mdtraj.compute_rg(trajectory)
-            plt.plot(trajectory.time, rg * 10, 'b', label='Rg')
-            plt.title('Radius of Gyration')
-            plt.xlabel('Simulation time (ps)')
-            plt.ylabel('Rg (Å)')
-
         elif args.sasa:
             sasa_all = mdtraj.shrake_rupley(trajectory, mode='atom')
 
@@ -118,4 +117,27 @@ if __name__ == "__main__":
             plt.xlabel('Simulation time (ps)')
             plt.ylabel(r'SASA ($nm^2$)')
 
-        plt.show()
+    if args.rg:
+        rg = mdtraj.compute_rg(trajectory)
+        plt.plot(trajectory.time, rg * 10, 'b', label='Rg')
+        plt.title('Radius of Gyration')
+        plt.xlabel('Simulation time (ps)')
+        plt.ylabel('Rg (Å)')
+
+    elif args.distance:
+        if not args.atom1 or not args.atom2:
+            print('Error: Distance calculation requires both -a1 and -a2 arguments')
+        else:
+            atom_pairs = np.array([[int(args.atom1)-1, int(args.atom2)-1]])
+            atom1 = topo.topology.atom(int(args.atom1)-1)
+            atom2 = topo.topology.atom(int(args.atom2)-1)
+            distances = mdtraj.compute_distances(trajectory, atom_pairs)
+
+            plt.plot(trajectory.time, distances[:, 0] * 10, 'purple', label='Distance')
+            plt.title(
+                f'Distance: {atom1.residue.name}{atom1.residue.resSeq}:{atom1.name} - {atom2.residue.name}{atom2.residue.resSeq}:{atom2.name}')
+            plt.xlabel('Simulation time (ps)')
+            plt.ylabel('Distance (Å)')
+            plt.legend()
+
+    plt.show()

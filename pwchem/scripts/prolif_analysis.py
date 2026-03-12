@@ -113,7 +113,6 @@ if __name__ == "__main__":
 
     ligSelection = u.select_atoms("resname LIG")
 
-    # protSelection = u.select_atoms("protein and byres around 20.0 group ligand", ligand=ligSelection)
     protSelection = plf.select_over_trajectory(u, u.trajectory[::frameNum], "protein and byres around 6.0 group ligand",
                                                ligand=ligSelection)
 
