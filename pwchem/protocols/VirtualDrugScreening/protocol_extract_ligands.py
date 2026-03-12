@@ -109,7 +109,7 @@ class ProtExtractLigands(EMProtocol):
 
         ligandFiles = self.extract_ligands(tmpCleanFile)
 
-        cleanFile = self._getPath('{}.cif'.format(getBaseName(inputStructureFile)))
+        cleanFile = self._getPath('{}.pdb'.format(getBaseName(inputStructureFile)))
 
         # Keep only structure chains selected, without ligands for reference structure
         cleanedPDB = cleanPDB(inputStructureFile, cleanFile, self.waters.get(), True, chain_id)
