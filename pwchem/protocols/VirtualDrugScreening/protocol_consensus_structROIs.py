@@ -46,7 +46,7 @@ from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
 from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName
 from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
-MAXVOL, MAXSURF, INTERSEC = 0, 1, 2
+MAXVOL, MAXSURF, CONTAIN, INTERSEC = 0, 1, 2, 3
 
 def mapMsaResidues(alFile):
     '''Return the mapping of the residues resNumber -> AlignPos
@@ -70,38 +70,49 @@ class ProtocolConsensusStructROIs(EMProtocol):
     """
     _label = 'Consensus structural ROIs'
     _possibleOutputs = PredictStructROIsOutput
-    repChoices = ['MaxVolume', 'MaxSurface', 'Intersection']
+    repChoices = ['MaxVolume', 'MaxSurface', 'Contained', 'Intersection']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inputStructROIsSets', params.MultiPointerParam,
-                       pointerClass='SetOfStructROIs', allowsNull=False,
-                       label="Input Sets of Structural ROIs: ",
-                       help='Select the structural ROIs sets to make the consensus')
-        form.addParam('outIndv', params.BooleanParam, default=False,
-                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
-                      help='Creates an output set related to each input set, with the elements from each input'
-                           'present in the consensus clusters')
+        iGroup = form.addGroup('Input')
+        iGroup.addParam('inputStructROIsSets', params.MultiPointerParam,
+                        pointerClass='SetOfStructROIs', allowsNull=False,
+                        label="Input Sets of Structural ROIs: ",
+                        help='Select the structural ROIs sets to make the consensus')
+        iGroup.addParam('outIndv', params.BooleanParam, default=False,
+                        label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                        help='Creates an output set related to each input set, with the elements from each input'
+                             'present in the consensus clusters')
 
-        form.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping: ',
-                      help="Min proportion of residues (from the smaller) of two structural regions to be considered "
-                           "overlapping")
-        form.addParam('repChoice', params.EnumParam, default=MAXSURF,
-                      label='Representant choice: ', choices=self.repChoices,
-                      expertLevel=params.LEVEL_ADVANCED,
-                      help='How to choose the representative ROI from a cluster of overlapping ROIs. MaxSurface and '
-                           'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
-                           '\nIntersection creates a new standard pocket with the interecting residues from the '
-                           'ROIs in the cluster (if any)')
-        form.addParam('numOfOverlap', params.IntParam, default=2,
-                      label='Minimun number of overlapping structural regions: ',
-                      help="Min number of structural regions to be considered consensus StructROIs")
-        form.addParam('sameClust', params.BooleanParam, default=False,
-                      label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
-                      help='Whether to count overlapping structural ROIs from the same input set when calculating the '
-                           'cluster size')
+        pGroup = form.addGroup('Parameters')
+        pGroup.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping: ',
+                        help="Min proportion of residues (from the smaller) of two structural regions to be considered "
+                             "overlapping")
+        pGroup.addParam('numOfOverlap', params.IntParam, default=2, important=True,
+                        label='Minimum number of overlapping structural regions: ',
+                        help="Min number of structural regions to be considered consensus StructROIs")
+        pGroup.addParam('sameClust', params.BooleanParam, default=False,
+                        label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                        help='Whether to count overlapping structural ROIs from the same input set when calculating '
+                             'the cluster size')
+
+        rGroup = form.addGroup('Cluster representative')
+        rGroup.addParam('repChoice', params.EnumParam, default=INTERSEC,
+                        label='Representant choice: ', choices=self.repChoices,
+                        help='How to choose the representative ROI from a cluster of overlapping ROIs. MaxSurface and '
+                             'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
+                             '\nIntersection creates a new standard pocket with the interecting residues from the '
+                             'ROIs in the cluster (if any)')
+
+        rGroup.addParam('fromSet', params.StringParam, label="Preference set: ",
+                         default='', condition=f'repChoice<{INTERSEC}', expertLevel=params.LEVEL_ADVANCED,
+                         help='If not empty, output pockets will be chosen from those in this set.')
+        rGroup.addParam('fallbackToOtherSets', params.BooleanParam, default=True, expertLevel=params.LEVEL_ADVANCED,
+                        label='Add pockets from other sets if none in chosen set: ', condition=f'repChoice<{CONTAIN}',
+                        help='If True, choose representative from any other input set when the chosen set has no '
+                             'pockets in the cluster. If False, ignore cluster.')
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -119,8 +130,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
         self.pocketDic = self.buildPocketDic()
         pocketClusters = self.generatePocketClusters()
+
         # Getting the representative of the clusters from any of the inputs
-        ref = 0 if self.doMap else None
+        ref = None
+        if self.doMap:
+            ref = self.getPrefSetId() if self.getPrefSetId() else 0
         self.consensusPockets = self.cluster2representative(pocketClusters, onlyRef=ref)
 
         if self.outIndv.get():
@@ -136,6 +150,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
         for outPock in self.consensusPockets:
             newPock = outPock.clone()
+            if newPock.getVolume() is None:
+                newPock.setVolume(newPock.getPocketVolume())
             outPockets.append(newPock)
         if outPockets.getSize() > 0:
             outPockets.buildPDBhetatmFile(suffix='_All')
@@ -186,6 +202,21 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
 
     # --------------------------- UTILS functions -----------------------------------
+    def getPrefSetId(self):
+        """Return the index of the set whose name matches fromSet"""
+        targetName = self.fromSet.get()
+        if targetName:
+            for idx, setPointer in enumerate(self.inputStructROIsSets):
+                roiSet = setPointer.get()
+                if str(roiSet) == targetName:
+                    return idx
+        return None
+
+    def isPocketInside(self, small, big):
+        resSmall = set(small.getDecodedCResidues())
+        resBig = set(big.getDecodedCResidues())
+        return resSmall.issubset(resBig)
+
     def getInputChainSequences(self):
         '''Returns a dict: {inpIndex: {chainId: protSeq, ...}, ...}
         '''
@@ -380,19 +411,26 @@ class ProtocolConsensusStructROIs(EMProtocol):
         for i, clust in enumerate(clusters):
             # Check if cluster is big enough
             if self.countPocketsInCluster(clust) >= minSize:
-                # Representative only from reference (first) protein if they are different
+                # Representative only from reference protein if they are different or preferent set
+                filteredClust = clust
                 if onlyRef is not None:
-                    clust = self.filterPocketsBySet(clust, onlyRef)
+                    filteredClust = self.filterPocketsBySet(clust, onlyRef)
+                elif self.getPrefSetId() is not None:
+                    # If there is a Preference set, filter for it
+                    filteredClust = self.filterPocketsBySet(clust, self.getPrefSetId())
 
-                if clust:
-                    if self.repChoice.get() == MAXVOL:
-                        outPocket = self.getMaxVolumePocket(clust)
-                    elif self.repChoice.get() == MAXSURF:
-                        outPocket = self.getMaxSurfacePocket(clust)
-                    elif self.repChoice.get() == INTERSEC:
-                        outPocket = self.getIntersectionPocket(clust, i)
+                if self.repChoice.get() == MAXVOL and filteredClust:
+                    outPockets = [self.getMaxVolumePocket(filteredClust)]
+                elif self.repChoice.get() == MAXSURF and filteredClust:
+                    outPockets = [self.getMaxSurfacePocket(filteredClust)]
+                elif self.repChoice.get() == CONTAIN and filteredClust:
+                    # The contained must be in the filtered set, but can be contained by non filtered ones
+                    outPockets = self.getContainedPockets(filteredClust, clust)
+                elif self.repChoice.get() == INTERSEC:
+                    # As intersection creates a new pocket rather than choosing, it uses all pockets, no the filtered
+                    outPockets = [self.getIntersectionPocket(clust, i)]
+                representatives += outPockets
 
-                    representatives.append(outPocket)
         return representatives
 
     def filterPocketsBySet(self, pockets, setId):
@@ -407,7 +445,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
     def getMaxVolumePocket(self, cluster):
         '''Return the pocket with max volume in a cluster
         The volume is calculated from the convex hull of the contact atoms'''
-        maxVol = 0
+        maxVol = -1
         for pocket in cluster:
             pocketVol = pocket.getSurfaceConvexVolume()
             if pocketVol > maxVol:
@@ -439,6 +477,18 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 resCoordsDic[residueId] = [atom.coord.tolist() for atom in res.get_atoms()]
 
         return resCoordsDic
+
+    def getContainedPockets(self, filteredCluster, cluster):
+        reps = []
+        for pock in filteredCluster:
+            isInside = False
+            for other in cluster:
+                if pock.getFileName() != other.getFileName() and self.isPocketInside(pock, other):
+                    isInside = True
+                    break
+            if isInside:
+                reps.append(pock.clone())
+        return reps
 
     def getIntersectionPocket(self, cluster, i):
         '''Return the pocket as set of intersection residues in a cluster.'''

@@ -611,6 +611,16 @@ SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
                                inputs=['inputSmallMolecules'],
                                outputs=['inputLigand'])
 
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['molPred'],
+                               inputs=['inputMoleculesSets'],
+                               outputs=['molPred'])
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['molTrue'],
+                               inputs=['inputMoleculesRefSet'],
+                               outputs=['molTrue'])
+
+
 SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayMoleculeDock'],
                                inputs=['moleculeLabels'],
@@ -625,6 +635,11 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayPymolPLIP'],
                                inputs=['singleLabels'],
                                outputs=['displayPymolPLIP'])
+
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['filterCol'],
+                               inputs=['getColumns'],
+                               outputs=['filterCol'])
 
 
 class SelectElementMultiPointWizard(SelectElementWizard):
