@@ -255,7 +255,6 @@ class SelectChainWizardQT(SelectChainWizard):
         fileName = inputObj.getSystemFile()
 
     else:
-        print('VAMOS BEIN')
         fileName = os.path.abspath(inputObj.getFileName())
 
     if fileName.endswith('.pdbqt'):
@@ -1000,7 +999,6 @@ class SelectAtomFromResidue(SelectAtomWizardQT):
         atomList = []
         modelID=1
         for model in parser:
-            print(model)
             if model.get_id() == modelID:
                 for chain in model.get_chains():
                     if chain.get_id() in chainID:

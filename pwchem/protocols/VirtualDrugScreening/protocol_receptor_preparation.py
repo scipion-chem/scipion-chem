@@ -31,6 +31,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.utils import cleanPDB, getBaseName, removeStartWithLines
 from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import OPENBABEL_DIC
 
 class ProtChemPrepareReceptor(EMProtocol):
     """Prepare receptor by removing HETATM atoms, waters, keeping only specific chains..."""
@@ -105,14 +106,21 @@ class ProtChemPrepareReceptor(EMProtocol):
         cleanFile = self.getCleanedFile()
         cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep, singleModel=0)
 
+        output = os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
+        pymol_cmds = f"-c -d 'load {cleanFile}; save {output}; quit'"
+
+        self.runJob(self.getPymolBin(), pymol_cmds)
+
+
     def pdbFixerStep(self):
         addResStr = ' --add-residues' if self.addRes else ''
         repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
         addAtomsStr = self.getEnumText("addAtoms").lower()
 
+        inFile = self.inputAtomStruct.get().getFileName()
         prepFile = self.getPreparedFile()
-        cleanFile = self.getCleanedFile()
-        args = f'{cleanFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
+        inFile = os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
+        args = f'{inFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
         pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
 
         if self.extraClean.get():
@@ -130,7 +138,14 @@ class ProtChemPrepareReceptor(EMProtocol):
         inFile = self.inputAtomStruct.get().getFileName()
         return os.path.abspath(self._getPath(f'{getBaseName(inFile)}.pdb'))
 
+    def getTmpPDB(self):
+        inFile = self.inputAtomStruct.get().getFileName()
+        return os.path.abspath(self._getTmpPath(f'{getBaseName(inFile)}.pdb'))
+
     def getCleanedFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
         ext = os.path.splitext(inFile)[1]
         return os.path.abspath(self._getPath(f'{getBaseName(inFile)}{ext}'))
+
+    def getPymolBin(self):
+        return pwchemPlugin.getEnvPath(OPENBABEL_DIC, 'bin/pymol')
