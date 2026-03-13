@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, json
+import os, json, shutil
 
 from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
@@ -66,16 +66,15 @@ class ProtChemPrepareReceptor(EMProtocol):
         form.addParam('inputAtomStruct', params.PointerParam, pointerClass="AtomStruct",
                       label='Atomic Structure: ', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-        self.defineCleanParams(form)
 
         pGroup = form.addGroup('PDBFixer')
         pGroup.addParam("usePDBFixer", params.BooleanParam, label='Use PDBFixer: ', default=False, important=True,
-                        help='Whether to use PDBFixer to further.')
+                        help='Whether to use PDBFixer to replace nonstandard residues or add missing atoms.')
         pGroup.addParam('addAtoms', params.EnumParam, default=0, condition="usePDBFixer",
                         label="Add missing atoms: ", choices=['All', 'Heavy', 'Hydrogen', 'None'],
                         help='Use PDBFixer to add the missing atoms specified in the PDB atomic structure')
         pGroup.addParam('addRes', params.BooleanParam, default=True,
-                        label="Add missing residues: ",  condition="usePDBFixer",
+                        label="Add missing residues: ", condition="usePDBFixer",
                         help='Use PDBFixer to add missing residues')
         pGroup.addParam('repNonStd', params.BooleanParam, default=False,
                         label="Replace non-standard residues: ", condition="usePDBFixer",
@@ -86,10 +85,12 @@ class ProtChemPrepareReceptor(EMProtocol):
                         help='Perform extra cleaning round after PDBFixer has been used. Sometimes, PDBFixer will '
                              'point out some HETATMS that were originally labeled as ATOM.')
 
+        self.defineCleanParams(form)
+
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.preparationStep)
         if self.usePDBFixer.get():
           self._insertFunctionStep(self.pdbFixerStep)
+        self._insertFunctionStep(self.preparationStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def preparationStep(self):
@@ -102,14 +103,17 @@ class ProtChemPrepareReceptor(EMProtocol):
                 chainModelIds = [mChain.strip() for mChain in chainJson["model-chain"].upper().split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        inFile = self.inputAtomStruct.get().getFileName()
+
+        if self.usePDBFixer.get():
+            inFile = self.getPdbfixerFile()
+        else:
+            inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         cleanFile = self.getCleanedFile()
         cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep, singleModel=0)
 
-        output = os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
-        pymol_cmds = f"-c -d 'load {cleanFile}; save {output}; quit'"
-
-        self.runJob(self.getPymolBin(), pymol_cmds)
+        # output = os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
+        # pymol_cmds = f"-c -d 'load {cleanFile}; save {output}; quit'"
+        # self.runJob(self.getPymolBin(), pymol_cmds)
 
 
     def pdbFixerStep(self):
@@ -117,26 +121,27 @@ class ProtChemPrepareReceptor(EMProtocol):
         repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
         addAtomsStr = self.getEnumText("addAtoms").lower()
 
-        inFile = self.inputAtomStruct.get().getFileName()
-        prepFile = self.getPreparedFile()
-        inFile = os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
-        args = f'{inFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
+        inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
+        outFile = self.getPdbfixerFile()
+        args = f'{inFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {outFile}'
         pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
 
         if self.extraClean.get():
-          removeStartWithLines(prepFile, 'HETATM')
+          removeStartWithLines(outFile, 'HETATM')
 
     def createOutputStep(self):
-        fnOut = self.getPreparedFile() if self.usePDBFixer.get() else self.getCleanedFile()
-        fnOut = os.path.relpath(fnOut)
+        fnIn = self.getCleanedFile()
+        # fnIn = os.path.relpath(fnIn)
+        fnOut = self.getPreparedFile(fnIn)
+        shutil.copy(fnIn, fnOut)
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputAtomStruct, target)
 
-    def getPreparedFile(self):
+    def getPdbfixerFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
-        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}.pdb'))
+        return os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
 
     def getTmpPDB(self):
         inFile = self.inputAtomStruct.get().getFileName()
@@ -144,8 +149,15 @@ class ProtChemPrepareReceptor(EMProtocol):
 
     def getCleanedFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
+        if self.usePDBFixer.get():
+            ext = '.pdb'
+        else:
+            ext = os.path.splitext(inFile)[1]
+        return os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}{ext}'))
+
+    def getPreparedFile(self, inFile):
         ext = os.path.splitext(inFile)[1]
-        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}{ext}'))
+        return os.path.abspath(os.path.join(self._getPath(), f'{getBaseName(inFile)}{ext}'))
 
     def getPymolBin(self):
         return pwchemPlugin.getEnvPath(OPENBABEL_DIC, 'bin/pymol')
