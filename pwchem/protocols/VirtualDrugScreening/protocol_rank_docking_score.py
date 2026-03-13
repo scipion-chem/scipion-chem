@@ -150,7 +150,6 @@ class ProtocolRankDocking(EMProtocol):
 
     def rankVoting(self, mols, scoreAttribute, smallIsGood=True):
         scDic = {mol.clone(): getattr(mol, scoreAttribute).get() for mol in mols}
-        print('small is good: ', smallIsGood)
         scDic = dict(sorted(scDic.items(), key=lambda x:x[1], reverse=not smallIsGood))
         if self.useScore.get():
           normSc = normalizeToRange(scDic.values())
