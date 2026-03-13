@@ -47,6 +47,8 @@ from pwchem import Plugin, SCORCH2_DIC
 
 currentDir = Path(__file__).parent.resolve()
 
+
+
 class ProtocolSCORCH2(EMProtocol):
     """
     Computes the best poses of protein-ligand interactions using SCORCH2: https://github.com/LinCompbio/SCORCH2
@@ -73,7 +75,7 @@ class ProtocolSCORCH2(EMProtocol):
         iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
                         label='Input ligand: ', allowsNull=True,
                         condition='not useFeatures',
-                        help='Input folder with PDB ligand files.')
+                        help='Input docked small molecules to rescore')
         # Aggregate
         iGroup.addParam('aggregate', params.BooleanParam, default=False,
                         label="Aggregate results: ",
