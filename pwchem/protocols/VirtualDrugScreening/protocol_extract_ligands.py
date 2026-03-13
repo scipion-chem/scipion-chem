@@ -95,18 +95,21 @@ class ProtExtractLigands(EMProtocol):
             print('Unknown format for file ', inputStructureFile)
             exit()
 
-        if self.rchains.get():
-            chain = json.loads(self.chain_name.get())  # From wizard dictionary
-            chain_id = chain["chain"].upper().strip()
+        chain_id = None
+        if self.cleanPDB.get():
+            if self.rchains.get():
+                chain = json.loads(self.chain_name.get())  # From wizard dictionary
+                chain_id = chain["chain"].upper().strip()
+
+            tmpCleanFile = self._getTmpPath('{}.cif'.format(getBaseName(inputStructureFile)))
+            tmpCleanFile = cleanPDB(inputStructureFile, tmpCleanFile, self.waters.get(), False, chain_id)
+
         else:
-            chain_id = None
+            tmpCleanFile = inputStructureFile
 
-        cleanFile = self._getPath('{}.cif'.format(getBaseName(inputStructureFile)))
-        tmpCleanFile = self._getTmpPath('{}.cif'.format(getBaseName(inputStructureFile)))
-
-        # Keep only structure chains selected, with ligands for extraction
-        tmpCleanFile = cleanPDB(inputStructureFile, tmpCleanFile, self.waters.get(), False, chain_id)
         ligandFiles = self.extract_ligands(tmpCleanFile)
+
+        cleanFile = self._getPath('{}.pdb'.format(getBaseName(inputStructureFile)))
 
         # Keep only structure chains selected, without ligands for reference structure
         cleanedPDB = cleanPDB(inputStructureFile, cleanFile, self.waters.get(), True, chain_id)

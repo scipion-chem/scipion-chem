@@ -28,34 +28,65 @@
 
 import argparse, os
 import mdtraj
+import parmed
+
+
+def convertTopology(topFile, outFile, gromacs_topdir=None):
+    """Convert topology file using ParmEd"""
+    print(f"Converting topology: {topFile} -> {outFile}")
+
+    if topFile.endswith('.top') and gromacs_topdir:
+        parmed.gromacs.GROMACS_TOPDIR = gromacs_topdir
+
+    topology = parmed.load_file(topFile)
+    topology.save(outFile)
 
 def convertSystem(sysFile, outFile):
+    """Convert system file using MDTraj"""
+    print(f"Converting system: {sysFile} -> {outFile}")
     system = mdtraj.load(sysFile, top=sysFile)
     system.save(outFile)
 
 def convertTraj(trjFile, sysFile, outFile):
+    """Convert trajectory file using MDTraj"""
+    print(f"Converting trajectory: {trjFile} -> {outFile}")
     traj = mdtraj.load(trjFile, top=sysFile)
     traj.save(outFile)
 
 if __name__ == "__main__":
-    '''Use: python <scriptName> -i/--inputFilename <sysFile> -o/--outputName <outputName> 
-    -t/--inputTraj [<trjFile>]
-    If only an MD system file is provided, then the script will convert the system to the required format,
-    based on outputName.
-    If a trajectory file is provided too, then the script will convert the trajectory to the required format,
-    based on outputName, using the system file to load it.
     '''
-    parser = argparse.ArgumentParser(description='Handles the IO for molecule files using openbabel')
-    parser.add_argument('-s', '--inputSystem', type=str, help='Input system file')
-    parser.add_argument('-o', '--outputName', type=str, help='Output name')
-    parser.add_argument('-t', '--inputTraj', type=str, help='Input trajectory file', 
-                        required=False, default='')
+    Use: python <scriptName> -s <sysFile> [-top <topFile>] [-t <trjFile>] 
+         [-os <outputSystem>] [-otop <outputTopology>] [-otj <outputTraj>]
+    '''
+    parser = argparse.ArgumentParser(
+        description='Convert MD system, topology, and trajectory files')
+    parser.add_argument('-s', '--inputSystem', type=str,
+                        help='Input system file (e.g., .pdb, .gro)')
+    parser.add_argument('-top', '--inputTopology', type=str, default='',
+                        help='Input topology file (e.g., .top, .prmtop, .psf). If not provided, uses -s for topology operations')
+    parser.add_argument('-t', '--inputTraj', type=str, default='',
+                        help='Input trajectory file (e.g., .xtc, .dcd, .trr)')
+
+    # Output files (only run conversion if provided)
+    parser.add_argument('-os', '--outputSystem', type=str, default='',
+                        help='Output system filename (triggers system conversion)')
+    parser.add_argument('-otop', '--outputTopology', type=str, default='',
+                        help='Output topology filename (triggers topology conversion)')
+    parser.add_argument('-otj', '--outputTraj', type=str, default='',
+                        help='Output trajectory filename (triggers trajectory conversion)')
+
+    # GROMACS topology directory for .top files
+    parser.add_argument('-gtopdir', '--gromacs_topdir', type=str, default=None,
+                        help='GROMACS topology directory (needed for loading .top files)')
 
     args = parser.parse_args()
-    sysFile, outFile, trjFile = args.inputSystem, args.outputName, args.inputTraj
 
-    if trjFile == '':
-        convertSystem(sysFile, outFile)
-    else:
-        convertTraj(trjFile, sysFile, outFile)
+    if args.outputSystem:
+        convertSystem(args.inputSystem, args.outputSystem)
+
+    if args.outputTopology:
+        convertTopology(args.inputTopology, args.outputTopology, args.gromacs_topdir)
+
+    if args.outputTraj:
+        convertTraj(args.inputTraj, args.inputSystem, args.outputTraj)
 

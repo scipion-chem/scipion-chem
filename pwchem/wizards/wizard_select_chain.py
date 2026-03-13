@@ -50,6 +50,8 @@ from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
+from pwchem.viewers.viewers_MD import MDSystemPViewer
+from pwchem.objects import SetOfStructROIs
 
 class SelectLigandAtom(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
@@ -165,6 +167,7 @@ SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
                                inputs=['refAtomStruct'],
                                outputs=['refLigName'])
 
+
 class SelectMultiLigandWizard(SelectLigandWizard):
   def show(self, form, *params):
       protocol = form.protocol
@@ -247,6 +250,9 @@ class SelectChainWizardQT(SelectChainWizard):
 
     elif str(type(inputObj).__name__) == 'SetOfStructROIs' or str(type(inputObj).__name__) == 'SetOfSmallMolecules':
         fileName = inputObj.getProteinFile()
+
+    elif str(type(inputObj).__name__) == 'MDSystem':
+        fileName = inputObj.getSystemFile()
 
     else:
         fileName = os.path.abspath(inputObj.getFileName())
@@ -366,8 +372,6 @@ class SelectAtomWizardQT(SelectResidueWizardQT):
 
     intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
     form.setVar(outputParam[0], intervalStr)
-
-
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
@@ -990,3 +994,59 @@ AddSequenceWizard().addTarget(protocol=ProtDefineSetOfSequences,
                               inputs=[{'inputOrigin': ['inputSequence', 'inputAtomStruct', 'inputPDB']},
                                       'inpChain', 'inpPositions'],
                               outputs=['inputList', 'inputPointers'])
+
+
+class SelectAtomFromResidue(SelectAtomWizardQT):
+    _targets, _inputs, _outputs = [], {}, {}
+
+    def getAtoms(self, form, inputObj, chainID, inputResID):
+        protocol = form.protocol
+        structureHandler = AtomicStructHandler()
+        parser = parseAtomStruct(self.getInputFilename(protocol, inputObj, structureHandler))
+
+        atomList = self.editionListOfAtoms(parser, chainID, inputResID)
+        finalAtomList = []
+        for i in atomList:
+            finalAtomList.append(String(i))
+        return finalAtomList
+
+    def editionListOfAtoms(self, parser, chainID, residueID):
+        atomList = []
+        modelID=1
+        for model in parser:
+            if model.get_id() == modelID:
+                for chain in model.get_chains():
+                    if chain.get_id() in chainID:
+                        for residue in chain.get_residues():
+                            if residue.get_id()[1] == residueID:
+                                for i, atom in enumerate(residue.get_atoms()):
+                                    atomID = atom.get_id()
+                                    atomList.append(f'{{"index": {i + 1}, "atom": "{atomID}"}}')
+
+        return atomList
+
+
+    def show(self, form, *params):
+        inputParam, outputParam = self.getInputOutput(form)
+        protocol = form.protocol
+        inputObj = getattr(protocol, inputParam[0]).get()
+        inputResID = getattr(protocol, inputParam[1]).get()
+        chainID = 'A'
+        modelID = 1
+
+        finalAtomsList = self.getAtoms(form, inputObj, chainID, inputResID)
+
+        provider = ListTreeProviderString(finalAtomsList)
+        dlg = dialog.ListDialog(form.root, "Residue atoms", provider,
+                                "Select one atom (atom number, "
+                                "atom name)")
+
+        idx, atomID = json.loads(dlg.values[0].get())['index'], json.loads(dlg.values[0].get())['atom']
+
+        intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
+        form.setVar(outputParam[0], intervalStr)
+
+SelectAtomFromResidue().addTarget(protocol=MDSystemPViewer,
+                              targets=['atomPosition1'],
+                              inputs=['inputMDSystem', 'resPosition1'],
+                              outputs=['atomPosition1'])
