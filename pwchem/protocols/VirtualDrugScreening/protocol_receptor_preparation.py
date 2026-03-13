@@ -93,6 +93,19 @@ class ProtChemPrepareReceptor(EMProtocol):
         self._insertFunctionStep(self.preparationStep)
         self._insertFunctionStep(self.createOutputStep)
 
+    def pdbFixerStep(self):
+        addResStr = ' --add-residues' if self.addRes else ''
+        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
+        addAtomsStr = self.getEnumText("addAtoms").lower()
+
+        inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
+        outFile = self.getPdbfixerFile()
+        args = f'{inFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {outFile}'
+        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
+
+        if self.extraClean.get():
+          removeStartWithLines(outFile, 'HETATM')
+
     def preparationStep(self):
         chainModelIds = None
         if self.rchains.get():
@@ -111,27 +124,8 @@ class ProtChemPrepareReceptor(EMProtocol):
         cleanFile = self.getCleanedFile()
         cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep, singleModel=0)
 
-        # output = os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
-        # pymol_cmds = f"-c -d 'load {cleanFile}; save {output}; quit'"
-        # self.runJob(self.getPymolBin(), pymol_cmds)
-
-
-    def pdbFixerStep(self):
-        addResStr = ' --add-residues' if self.addRes else ''
-        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
-        addAtomsStr = self.getEnumText("addAtoms").lower()
-
-        inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
-        outFile = self.getPdbfixerFile()
-        args = f'{inFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {outFile}'
-        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
-
-        if self.extraClean.get():
-          removeStartWithLines(outFile, 'HETATM')
-
     def createOutputStep(self):
         fnIn = self.getCleanedFile()
-        # fnIn = os.path.relpath(fnIn)
         fnOut = self.getPreparedFile(fnIn)
         shutil.copy(fnIn, fnOut)
         if os.path.exists(fnOut):
@@ -142,10 +136,6 @@ class ProtChemPrepareReceptor(EMProtocol):
     def getPdbfixerFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
         return os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
-
-    def getTmpPDB(self):
-        inFile = self.inputAtomStruct.get().getFileName()
-        return os.path.abspath(self._getTmpPath(f'{getBaseName(inFile)}.pdb'))
 
     def getCleanedFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
