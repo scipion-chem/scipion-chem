@@ -29,7 +29,7 @@ from pyworkflow.protocol import params
 
 from pwchem.utils import fillEmptyAttributes
 
-UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK = list(range(7))
+UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK, BEST = list(range(8))
 
 class ProtChemOperateSet(EMProtocol):
     """Filter a set by a column value or keep just a few columns"""
@@ -39,23 +39,26 @@ class ProtChemOperateSet(EMProtocol):
         form.addSection(label='Input')
         group = form.addGroup('Operation')
         group.addParam('operation', params.EnumParam, label='Operation: ', default=0,
-                      choices=['Unique', 'Union', 'Intersection', 'Difference', 'Filter', 'Remove columns',  'Ranking'],
+                      choices=['Unique', 'Union', 'Intersection', 'Difference', 'Filter', 'Remove columns',  'Ranking', 'Best'],
                       help='-Sets operations: Duplicates share the same reference column value\n'
                            '\tUnique: keep just one item with the same reference column value. Similar to remove '
                            'duplicates.\n\tUnion: merges two or more sets.\n\tIntersection: keep only the items '
                            'repeated in all the input sets.\n\tDifference: keep only the items in the first set that '
                            'are not present in the second.\n\n-Modification operations:\n\tFilter: outputs only '
                            'those items passing the filter\n\tRemove columns: remove the specified columns\n\t'
-                           'Ranking: outputs only the top/bottom elements for the specified column.')
+                           'Ranking: outputs only the top/bottom elements for the specified column.\n\t'
+                           'Best: return the best element (defined as the one with the higher/lower values of the '
+                           'filter column) for each unique element of the reference column.')
 
         group.addParam('removeDuplicates', params.BooleanParam, default=False,
-                       label='Remove duplicates: ', condition='not operation in [0]',
+                       label='Remove duplicates: ', condition='not operation in [0, 7]',
                        help='Remove elements with the reference column value repeated')
         group.addParam('refColumn', params.StringParam, label='Reference column: ', default='',
                        condition='removeDuplicates or operation in [0, 1, 2, 3]',
                        help='Reference attribute for the set operation.')
 
-        group.addParam('filterColumn', params.StringParam, label='Filter column: ', condition='(operation in [4, 6])',
+        group.addParam('filterColumn', params.StringParam, label='Filter column: ',
+                       condition='(operation in [4, 6, 7])',
                        help='Attribute for the set filtering.')
         group.addParam('filterOp', params.EnumParam, label='Filter operation: ',
                       condition='(operation==4)', default=0,
@@ -67,6 +70,9 @@ class ProtChemOperateSet(EMProtocol):
         group.addParam('filterValue2', params.StringParam,
                        label='Lower Value: ', condition='(operation==4 and filterOp==6)',
                        help='Value to use in the filter')
+        group.addParam('smallerIsBetter', params.BooleanParam, label="Smaller is better?: ",
+                       default=True, condition='operation==7',
+                       help='Define the direction of the score, whether small values are prefered')
         
         group.addParam('remColumns', params.StringParam, label='Remove columns: ', condition='operation==5',
                        help='They must exist in the input database list. Separated by semicolons '
@@ -202,6 +208,25 @@ class ProtChemOperateSet(EMProtocol):
                 elif not descending and value<threshold:
                     self.addItem(outputDict, opId, item)
 
+        elif self.operation.get() == BEST:
+
+            for item in self.inputSet.get():
+                opId = self.getAttrValue(item, opAttr)
+                value = item.getAttributeValue(self.filterColumn.get())
+
+                isBetter = False
+                if opId not in outputDict:
+                    isBetter = True
+                else:
+                    prevValue = outputDict[opId][0].getAttributeValue(self.filterColumn.get())
+                    if (self.smallerIsBetter.get() and value < prevValue) or \
+                            (not self.smallerIsBetter.get() and value > prevValue):
+                        isBetter = True
+
+                if isBetter:
+                    outputDict[opId] = [item.clone()]
+
+
         if len(outputDict)>0:
             outputSet = self.getRepInputSet().createCopy(self._getPath(), copyInfo=True)
             i = 1
@@ -223,7 +248,7 @@ class ProtChemOperateSet(EMProtocol):
             return self.inputSet.get()
 
     def addItem(self, dic, itemId, item, allowDup=None):
-        allowDup = not self.removeDuplicates.get() if allowDup == None else allowDup
+        allowDup = not self.removeDuplicates.get() if allowDup is None else allowDup
 
         if itemId in dic and allowDup:
             dic[itemId] += [item.clone()]

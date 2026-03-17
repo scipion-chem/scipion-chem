@@ -98,7 +98,7 @@ class ProtocolRankDocking(EMProtocol):
         group.addParam('defineWeight', params.FloatParam, label="Select weight: ",
                        default=1.0, condition='defineScores',
                        help='Select a weight for the input with respect to the others defined')
-        group.addParam('defineDirection', params.BooleanParam, label="Small is good?: ",
+        group.addParam('defineDirection', params.BooleanParam, label="Smaller is better?: ",
                        default=True, condition='defineScores',
                        help='Define the direction of the score, whether small values are prefered')
 
