@@ -273,6 +273,10 @@ class TestOperateSet(BaseTest):
         protRank = self._runSingleInputOperation(inProts[0], op=6, refCol='molName', **kw)
         outProts.append(protRank)
 
+        kw = {'filterColumn': 'id', 'smallerIsBetter': True}
+        protRank = self._runSingleInputOperation(inProts[0], op=7, refCol='molName', **kw)
+        outProts.append(protRank)
+
         for p in outProts:
             self._waitOutput(p, 'outputSet', sleepTime=5)
             assertHandle(self.assertIsNotNone, getattr(p, 'outputSet', None), cwd=p.getWorkingDir())
