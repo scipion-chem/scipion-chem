@@ -92,10 +92,10 @@ if __name__ == "__main__":
 
     # 3. Conditional Plotting
     if args.per_residue:
-        plotResidueDist(dssp, nFrames, nRes, args.outputName)
+        plotResidueDist(dssp, nFrames, nRes)
 
     if args.per_frame:
-        plotSseTimecourse(dssp, time, nRes, args.outputName)
+        plotSseTimecourse(dssp, time, nRes)
 
     if args.heatmap:
-        plotDsspHeatmap(dssp, time, nRes, args.outputName)
+        plotDsspHeatmap(dssp, time, nRes)

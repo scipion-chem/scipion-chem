@@ -16,10 +16,10 @@ def plotPcCoords(traj):
         traj.xyz.reshape(traj.n_frames, traj.n_atoms * 3)
     )
 
-    time_ns = traj.time / 1000
+    timeNs = traj.time / 1000
 
     plt.figure(figsize=(8, 8))
-    plt.scatter(reducedCartesian[:, 0], reducedCartesian[:, 1], marker="x", c=time_ns)
+    plt.scatter(reducedCartesian[:, 0], reducedCartesian[:, 1], marker="x", c=timeNs)
     plt.xlabel("PC1")
     plt.ylabel("PC2")
     plt.title("Cartesian coordinate PCA")
@@ -32,8 +32,8 @@ def plotPcaDist(traj):
     """PCA of the distances"""
     pca = PCA(n_components=2, random_state=42)
     caIndices = traj.topology.select('backbone')
-    atom_pairs = list(combinations(caIndices, 2))
-    pairwiseDistances = mdtraj.geometry.compute_distances(traj, atom_pairs)
+    atomPairs = list(combinations(caIndices, 2))
+    pairwiseDistances = mdtraj.geometry.compute_distances(traj, atomPairs)
     reducedDistances = pca.fit_transform(pairwiseDistances)
 
     timeNs = traj.time / 1000
