@@ -34,11 +34,10 @@ import pandas as pd
 import seaborn as sns
 from rdkit import DataStructs
 
-def save_results(fp, ligMol, outPath, prefix):
+def saveResults(fp, ligMol, outPath, prefix):
     df = fp.to_dataframe()
-    # Check if the dataframe is empty
     if df.empty:
-        print(f"!!! WARNING: No interactions were detected.")
+        print("!!! WARNING: No interactions were detected.")
         # Create a dummy text file so Scipion knows the job 'finished'
         with open(os.path.join(outPath, 'no_interactions.txt'), 'w') as f:
             f.write("ProLIF analysis finished but found 0 interactions.")
@@ -60,16 +59,16 @@ def save_results(fp, ligMol, outPath, prefix):
 
     # Save Tanimoto Similarity Matrix
     bitvectors = fp.to_bitvectors()
-    similarity_matrix_data = []
+    similarityMatrixData = []
     for bv in bitvectors:
-        similarity_matrix_data.append(DataStructs.BulkTanimotoSimilarity(bv, bitvectors))
-    similarity_matrix = pd.DataFrame(similarity_matrix_data, index=df.index, columns=df.index)
+        similarityMatrixData.append(DataStructs.BulkTanimotoSimilarity(bv, bitvectors))
+    similarityMatrix = pd.DataFrame(similarityMatrixData, index=df.index, columns=df.index)
 
     fig, ax = plt.subplots(figsize=(6, 5), dpi=200)
     colormap = sns.diverging_palette(300, 145, s=90, l=80, sep=30, center="dark", as_cmap=True)
 
     sns.heatmap(
-        similarity_matrix,
+        similarityMatrix,
         ax=ax,
         square=True,
         cmap=colormap,
@@ -81,7 +80,7 @@ def save_results(fp, ligMol, outPath, prefix):
     )
     ax.invert_yaxis()
     plt.yticks(rotation="horizontal")
-    plt.title(f"Tanimoto Similarity Heatmap")
+    plt.title("Tanimoto Similarity Heatmap")
     fig.patch.set_facecolor("white")
     plt.savefig(os.path.join(outPath, f'{prefix}_matrix.png'), dpi=300, bbox_inches='tight')
     plt.close()
@@ -91,7 +90,7 @@ if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputTopology <topFile> -t/--inputTraj [<trjFile>]
     -o/--outputName <outputName> -f/--frameNum <frameNum>
 
-    Performs several analysis on a MD trajectory using MDTraj
+    Generates ProLIF interaction fingerprint
     '''
     parser = argparse.ArgumentParser(description='Run ProLIF Ligand-Target interaction analysis')
     parser.add_argument('-i', '--inputFilename', type=str, help='Input system file (PDB or similar), reference')
@@ -137,4 +136,4 @@ if __name__ == "__main__":
         fp.run(u.trajectory[::frameNum], ligSelection, protSelection)
 
     ligMol = plf.Molecule.from_mda(ligSelection)
-    save_results(fp, ligMol, outPath, outName)
+    saveResults(fp, ligMol, outPath, outName)

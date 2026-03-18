@@ -5,16 +5,16 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 
-def plot_residue_dist(dssp, n_frames, n_res, outDir):
+def plotResidueDist(dssp, n_frames, nRes):
     """Panel 1: per-residue % SSE stacked bar"""
     helixPct = (dssp == 'H').sum(axis=0) / n_frames * 100
     strandPct = (dssp == 'E').sum(axis=0) / n_frames * 100
 
     plt.figure(figsize=(10, 5))
-    plt.bar(range(n_res), helixPct, color='tomato', width=1.0, label='Helix')
-    plt.bar(range(n_res), strandPct, color='steelblue', width=1.0, bottom=helixPct, label='Strand')
+    plt.bar(range(nRes), helixPct, color='tomato', width=1.0, label='Helix')
+    plt.bar(range(nRes), strandPct, color='steelblue', width=1.0, bottom=helixPct, label='Strand')
 
-    plt.xlim(0, n_res)
+    plt.xlim(0, nRes)
     plt.ylim(0, 100)
     plt.xlabel('Residue Index')
     plt.ylabel('Res. % SSE')
@@ -23,10 +23,10 @@ def plot_residue_dist(dssp, n_frames, n_res, outDir):
     plt.show()
 
 
-def plot_sse_timecourse(dssp, time, n_res, outDir):
+def plotSseTimecourse(dssp, time, nRes):
     """Panel 2: % SSE per frame"""
-    fHelix = (dssp == 'H').sum(axis=1) / n_res * 100
-    fStrand = (dssp == 'E').sum(axis=1) / n_res * 100
+    fHelix = (dssp == 'H').sum(axis=1) / nRes * 100
+    fStrand = (dssp == 'E').sum(axis=1) / nRes * 100
     fTotal = fHelix + fStrand
 
     plt.figure(figsize=(14, 4))
@@ -43,10 +43,10 @@ def plot_sse_timecourse(dssp, time, n_res, outDir):
     plt.show()
 
 
-def plot_dssp_heatmap(dssp, time, n_res, outDir):
+def plotDsspHeatmap(dssp, time, nRes):
     """Panel 3: residue × time heatmap"""
-    n_frames = len(time)
-    dsspNum = np.zeros((n_frames, n_res), dtype=float)
+    nFrames = len(time)
+    dsspNum = np.zeros((nFrames, nRes), dtype=float)
     dsspNum[dssp == 'E'] = 1.0
     dsspNum[dssp == 'H'] = 2.0
 
@@ -54,7 +54,7 @@ def plot_dssp_heatmap(dssp, time, n_res, outDir):
     cmap = mcolors.ListedColormap(['#d0d0d0', 'steelblue', 'tomato'])
 
     im = plt.imshow(dsspNum.T, aspect='auto', origin='upper', cmap=cmap,
-                    extent=[time[0], time[-1], n_res, 0],
+                    extent=[time[0], time[-1], nRes, 0],
                     vmin=0, vmax=2, interpolation='none')
 
     plt.xlabel('Time (nsec)')
@@ -92,10 +92,10 @@ if __name__ == "__main__":
 
     # 3. Conditional Plotting
     if args.per_residue:
-        plot_residue_dist(dssp, n_frames, n_res, args.outputName)
+        plotResidueDist(dssp, n_frames, n_res, args.outputName)
 
     if args.per_frame:
-        plot_sse_timecourse(dssp, time, n_res, args.outputName)
+        plotSseTimecourse(dssp, time, n_res, args.outputName)
 
     if args.heatmap:
-        plot_dssp_heatmap(dssp, time, n_res, args.outputName)
+        plotDsspHeatmap(dssp, time, n_res, args.outputName)

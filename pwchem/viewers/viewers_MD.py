@@ -117,11 +117,9 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                           label='Display distance analysis: ')
 
         if self.getMDSystem().getProlifFile():
-            section = form.getSection('Receptor-ligand interactions')
             self._defineProlifParams(form)
 
     def _defineProlifParams(self, form):
-        section = form.getSection('Receptor-ligand interactions')
         form.addSection('Receptor-ligand interactions')
         group = form.addGroup('ProLIF analysis')
         group.addParam('displayFingerprint', params.LabelParam, label='Show interaction fingerprint: ',
@@ -201,7 +199,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
              f'-{self.getEnumText("mdAnalChoices").lower()} -sa {selAtoms} '
       if self.heavyAtoms.get():
         args += '-ha '
-      print(args)
       Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajSSAnalysis(self, paramName=None):
@@ -209,15 +206,13 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         type = self.displayMDTrajSSAnalysis.get()
         ssFlags = ['--per-residue', '--per-frame', '--heatmap']
 
-
-        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} {ssFlags[type]}'
+        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {ssFlags[type]}'
 
         Plugin.runScript(self, 'mdtraj_SS.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showDistance(self, paramName=None):
         system = self.getMDSystem()
         atom1, atom2 = self.atom1.get(), self.atom2.get()
-        print(atom1, atom2)
 
         args = f' -distance  -i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
                f' -a1 {atom1} -a2 {atom2}'
@@ -262,7 +257,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
     def _showProlifMatrix(self, paramName=None):
         fpPkl = self.getMDSystem().getProlifFile()
         args = f'"{fpPkl}" --mode matrix'
-        print(args)
         Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
 

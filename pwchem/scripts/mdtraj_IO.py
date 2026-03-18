@@ -31,12 +31,12 @@ import mdtraj
 import parmed
 
 
-def convertTopology(topFile, outFile, gromacs_topdir=None):
+def convertTopology(topFile, outFile, gromacsTopDir=None):
     """Convert topology file using ParmEd"""
     print(f"Converting topology: {topFile} -> {outFile}")
 
-    if topFile.endswith('.top') and gromacs_topdir:
-        parmed.gromacs.GROMACS_TOPDIR = gromacs_topdir
+    if topFile.endswith('.top') and gromacsTopDir:
+        parmed.gromacs.GROMACS_TOPDIR = gromacsTopDir
 
     topology = parmed.load_file(topFile)
     topology.save(outFile)
@@ -76,7 +76,7 @@ if __name__ == "__main__":
                         help='Output trajectory filename (triggers trajectory conversion)')
 
     # GROMACS topology directory for .top files
-    parser.add_argument('-gtopdir', '--gromacs_topdir', type=str, default=None,
+    parser.add_argument('-gtopdir', '--gromacsTopDir', type=str, default=None,
                         help='GROMACS topology directory (needed for loading .top files)')
 
     args = parser.parse_args()
@@ -85,7 +85,7 @@ if __name__ == "__main__":
         convertSystem(args.inputSystem, args.outputSystem)
 
     if args.outputTopology:
-        convertTopology(args.inputTopology, args.outputTopology, args.gromacs_topdir)
+        convertTopology(args.inputTopology, args.outputTopology, args.gromacsTopDir)
 
     if args.outputTraj:
         convertTraj(args.inputTraj, args.inputSystem, args.outputTraj)

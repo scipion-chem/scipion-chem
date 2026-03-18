@@ -70,11 +70,9 @@ class ProtocolProlif(EMProtocol):
 
     def createOutputStep(self):
         inputSystem = self.inputMDSystem.get()
-        print(inputSystem)
         baseName = inputSystem.getSystemName()
         fpPath = self._getExtraPath(f'{baseName}_fingerprint.pkl')
         outSystem = inputSystem.clone()
         outSystem.setProlifFile(fpPath)
-        print(outSystem)
         self._defineOutputs(outputSystem=outSystem)
 

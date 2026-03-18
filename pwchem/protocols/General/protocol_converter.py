@@ -164,7 +164,7 @@ class ConvertStructures(EMProtocol):
             inSystem = self.inputObject.get()
             sysFile = inSystem.getSystemFile()
             topFile = inSystem.getTopologyFile()
-
+            convScript = 'mdtraj_IO.py'
             # Convert system pdb
             if self.convSysFile.get():
                 outDir = os.path.abspath(self._getExtraPath())
@@ -173,11 +173,12 @@ class ConvertStructures(EMProtocol):
                 sysOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
                 args = ' -s {} -os {}'.format(os.path.abspath(sysFile), sysOut)
-                Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
                 sysFile = sysOut
 
             outSystem = MDSystem(filename=sysFile, topFile=topFile, systemName=sysFile)
 
+            # Convert topology
             if inSystem.hasTopology():
                 topOut = inSystem.getTopologyFile()
                 if self.convTopFile.get():
@@ -192,9 +193,10 @@ class ConvertStructures(EMProtocol):
                         gromacsTopDir = os.path.join(gromacsPlugin.getHome(), 'share/top')
                         args += ' -gtopdir {}'.format(gromacsTopDir)
 
-                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                    Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
                 outSystem.setTopologyFile(topOut)
-            
+
+            # Convert trajectory
             if inSystem.hasTrajectory():
                 trajOut = inSystem.getTrajectoryFile()
                 if self.convTrjFile.get():
@@ -205,7 +207,7 @@ class ConvertStructures(EMProtocol):
                     trajOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
                     args = ' -s {} -t {} -otj {}'.format(os.path.abspath(sysFile), os.path.abspath(trajFile), trajOut)
-                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
+                    Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
                 outSystem.setTrajectoryFile(trajOut)
 
             self._defineOutputs(outputSystem=outSystem)
