@@ -60,6 +60,8 @@ class ProtocolSCORCH2(EMProtocol):
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
+        form.addParam('useGPU', params.BooleanParam, default=True, label="Use GPU: ",
+                      help='Whether to use GPU or not. (Unable to choose the GPU id).')
         iGroup = form.addGroup('Input')
         # Pre-extracted features
         iGroup.addParam('useFeatures', params.BooleanParam, default=False,
@@ -70,10 +72,10 @@ class ProtocolSCORCH2(EMProtocol):
                         condition='useFeatures',
                         help='Input file where the pre-extracted features are stored.')
 
-        iGroup.addParam('inputPDBligandFiles', params.PointerParam, pointerClass='SetOfSmallMolecules',
+        iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
                         label='Input ligand: ', allowsNull=True,
                         condition='not useFeatures',
-                        help='Input folder with PDB ligand files.')
+                        help='Input docked small molecules to rescore')
         # Aggregate
         iGroup.addParam('aggregate', params.BooleanParam, default=False,
                         label="Aggregate results: ",
@@ -169,6 +171,9 @@ class ProtocolSCORCH2(EMProtocol):
         if self.aggregate.get():
             args.append("--aggregate")
 
+        if self.useGPU.get():
+            args.append("--gpu")
+
         Plugin.runCondaCommand(
             self,
             args=" ".join(args),
@@ -184,7 +189,7 @@ class ProtocolSCORCH2(EMProtocol):
                 shutil.move(srcDir, resDir)
 
     def createOutputStep(self):
-        mols = self.inputPDBligandFiles.get()
+        mols = self.inputSmallMolecules.get()
         newMols = SetOfSmallMolecules().create(outputPath=self._getPath())
         scoresDict = self.readScoresTSV()
         for mol in mols:
@@ -200,7 +205,7 @@ class ProtocolSCORCH2(EMProtocol):
                 newMol.setAttributeValue('scorchScore', None)
             newMols.append(newMol)
         newMols.setDocked(True)
-        newMols.proteinFile.set(self.inputPDBligandFiles.get().getProteinFile())
+        newMols.proteinFile.set(self.inputSmallMolecules.get().getProteinFile())
         self._defineOutputs(outputSmallMolecules=newMols)
 
     def moveFilesStep(self):
@@ -211,14 +216,14 @@ class ProtocolSCORCH2(EMProtocol):
         proteinDir.mkdir(parents=True, exist_ok=True)
         moleculeDir.mkdir(parents=True, exist_ok=True)
 
-        protein = self.inputPDBligandFiles.get().getProteinFile()
+        protein = self.inputSmallMolecules.get().getProteinFile()
         proteinPath = Path(protein)
         pdbId = self.getPDBId()
         #change names so it does not crash with _
         proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
         shutil.copy(proteinPath, proteinFile)
 
-        ligands = self.inputPDBligandFiles.get()
+        ligands = self.inputSmallMolecules.get()
         ligandOutDir = moleculeDir / self._defaultName
         ligandOutDir.mkdir(parents=True, exist_ok=True)
 
@@ -278,7 +283,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     def _validate(self):
         validations = []
-        molSet = self.inputPDBligandFiles.get()
+        molSet = self.inputSmallMolecules.get()
         if not molSet.isDocked():
             validations += ['{} is not docked yet'.format(molSet)]
 
@@ -290,7 +295,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def getPDBId(self):
-        protein = self.inputPDBligandFiles.get().getProteinFile()
+        protein = self.inputSmallMolecules.get().getProteinFile()
         proteinPath = Path(protein)
         return proteinPath.stem
 
