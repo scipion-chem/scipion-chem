@@ -215,7 +215,7 @@ class SelectAttributeWizardListOperate(SelectAttributeWizardChem):
   def show(self, form, *params):
     inputParam, outputParam = self.getInputOutput(form)
     operation = getattr(form.protocol, inputParam[0]).get()
-    if not operation in [1, 2]:
+    if not operation in [1, 2, 7]:
       inputParam = [inputParam[1]]
     else:
       inputParam = [inputParam[2]]
