@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 
-def plotResidueDist(dssp, n_frames, nRes):
+def plotResidueDist(dssp, nFrames, nRes):
     """Panel 1: per-residue % SSE stacked bar"""
-    helixPct = (dssp == 'H').sum(axis=0) / n_frames * 100
-    strandPct = (dssp == 'E').sum(axis=0) / n_frames * 100
+    helixPct = (dssp == 'H').sum(axis=0) / nFrames * 100
+    strandPct = (dssp == 'E').sum(axis=0) / nFrames * 100
 
     plt.figure(figsize=(10, 5))
     plt.bar(range(nRes), helixPct, color='tomato', width=1.0, label='Helix')
@@ -87,15 +87,15 @@ if __name__ == "__main__":
     protTraj = traj.atom_slice(protIdx)
     dssp = mdtraj.compute_dssp(protTraj, simplified=True)
 
-    n_frames, n_res = dssp.shape
+    nFrames, nRes = dssp.shape
     time = traj.time / 1000.0
 
     # 3. Conditional Plotting
     if args.per_residue:
-        plotResidueDist(dssp, n_frames, n_res, args.outputName)
+        plotResidueDist(dssp, nFrames, nRes, args.outputName)
 
     if args.per_frame:
-        plotSseTimecourse(dssp, time, n_res, args.outputName)
+        plotSseTimecourse(dssp, time, nRes, args.outputName)
 
     if args.heatmap:
-        plotDsspHeatmap(dssp, time, n_res, args.outputName)
+        plotDsspHeatmap(dssp, time, nRes, args.outputName)

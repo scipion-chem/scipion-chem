@@ -30,7 +30,7 @@ def plotPcCoords(traj):
 
 def plotPcaDist(traj):
     """PCA of the distances"""
-    pca = PCA(n_components=2)
+    pca = PCA(n_components=2, random_state=42)
     caIndices = traj.topology.select('backbone')
     atom_pairs = list(combinations(caIndices, 2))
     pairwiseDistances = mdtraj.geometry.compute_distances(traj, atom_pairs)
