@@ -54,7 +54,7 @@ class ProtChemOperateSet(EMProtocol):
                        label='Remove duplicates: ', condition='not operation in [0, 7]',
                        help='Remove elements with the reference column value repeated')
         group.addParam('refColumn', params.StringParam, label='Reference column: ', default='',
-                       condition='removeDuplicates or operation in [0, 1, 2, 3]',
+                       condition='removeDuplicates or operation in [0, 1, 2, 3, 7]',
                        help='Reference attribute for the set operation.')
 
         group.addParam('filterColumn', params.StringParam, label='Filter column: ',
@@ -85,9 +85,9 @@ class ProtChemOperateSet(EMProtocol):
 
         group = form.addGroup('Input')
         group.addParam('inputSet', params.PointerParam, pointerClass="EMSet", label='Set to filter: ',
-                       condition='not operation in [1, 2]', help='Principal set to operate')
+                       condition='not operation in [1, 2, 7]', help='Principal set to operate')
         group.addParam('inputMultiSet', params.MultiPointerParam, pointerClass="EMSet", allowsNull=True,
-                      label='Input sets: ', condition='operation in [1, 2]')
+                      label='Input sets: ', condition='operation in [1, 2, 7]')
         group.addParam('secondSet', params.PointerParam, pointerClass="EMSet", condition="operation==3",
                       label='Set with items to remove: ',
                       help='Secondary set to operate')
@@ -210,29 +210,31 @@ class ProtChemOperateSet(EMProtocol):
 
         elif self.operation.get() == BEST:
 
-            for item in self.inputSet.get():
-                opId = self.getAttrValue(item, opAttr)
-                value = item.getAttributeValue(self.filterColumn.get())
+            inputSets = fillEmptyAttributes(self.inputMultiSet)
+            for inSet in inputSets:
+                for item in inSet.get():
+                    opId = self.getAttrValue(item, opAttr)
+                    value = item.getAttributeValue(self.filterColumn.get())
 
-                isBetter = False
-                if opId not in outputDict:
-                    isBetter = True
-                else:
-                    prevValue = outputDict[opId][0].getAttributeValue(self.filterColumn.get())
-                    if (self.smallerIsBetter.get() and value < prevValue) or \
-                            (not self.smallerIsBetter.get() and value > prevValue):
+                    isBetter = False
+                    if opId not in outputDict:
                         isBetter = True
+                    else:
+                        prevValue = outputDict[opId][0].getAttributeValue(self.filterColumn.get())
+                        if (self.smallerIsBetter.get() and value < prevValue) or \
+                                (not self.smallerIsBetter.get() and value > prevValue):
+                            isBetter = True
 
-                if isBetter:
-                    outputDict[opId] = [item.clone()]
+                    if isBetter:
+                        outputDict[opId] = [item.clone()]
 
 
         if len(outputDict)>0:
             outputSet = self.getRepInputSet().createCopy(self._getPath(), copyInfo=True)
             i = 1
-            for itemId in outputDict:
-                for item in outputDict[itemId]:
-                    if self.operation.get() in [UNION, INTERSECTION]:
+            for itemId, itemList in outputDict.items():
+                for item in itemList:
+                    if self.operation.get() in [UNION, INTERSECTION, BEST]:
                         item.setObjId(i)
                         i += 1
                     outputSet.append(item)
@@ -242,7 +244,7 @@ class ProtChemOperateSet(EMProtocol):
     ######################## UTILS functions #################
 
     def getRepInputSet(self):
-        if self.operation.get() in [1,2]:
+        if self.operation.get() in [1, 2, 7]:
             return self.inputMultiSet[0].get()
         else:
             return self.inputSet.get()
