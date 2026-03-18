@@ -203,10 +203,10 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
     def _showMDTrajSSAnalysis(self, paramName=None):
         system = self.getMDSystem()
-        type = self.displayMDTrajSSAnalysis.get()
+        showType = self.displayMDTrajSSAnalysis.get()
         ssFlags = ['--per-residue', '--per-frame', '--heatmap']
 
-        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {ssFlags[type]}'
+        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {ssFlags[showType]}'
 
         Plugin.runScript(self, 'mdtraj_SS.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
