@@ -53,7 +53,6 @@ class ProtocolGenomeFetching(EMProtocol):
     def _defineParams(self, form):
         """Define protocol form."""
         form.addSection(label='Input')
-        print("LOADING MODIFIED PROTOCOL")
         group = form.addGroup('NCBI Parameters')
         group.addParam(
         'email',
@@ -73,11 +72,11 @@ class ProtocolGenomeFetching(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('downloadStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.downloadStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def downloadStep(self):
-        Entrez.email = "noeliaauba@usp.ceu.es" # CAMBIAR ESTO
+        Entrez.email = self.email.get()
         Entrez.tool = "GenomeDownloader"
 
         accessions = [a.strip() for a in self.accessions.get().split(",") if a.strip()]
@@ -110,31 +109,48 @@ class ProtocolGenomeFetching(EMProtocol):
                 self.warning(f"Download failed for {accession}: {e}")
 
             time.sleep(2)
+            resultsFile = Path(self._getExtraPath("results.tsv"))
+
+            with open(resultsFile, "w") as f:
+                for acc, org, path in self.results:
+                    f.write(f"{acc}\t{org}\t{path}\n")
 
     def createOutputStep(self):
         genomeSet = SetOfGenome().create(
             outputPath=self._getPath(),
             suffix='genomes'
         )
+        
+        resultsFile = Path(self._getExtraPath("results.tsv"))
 
-        for accession, organism, outFile in getattr(self, "results", []):
-            genome = Genome()
-            genome.setAccession(accession)
-            genome.setOrganism(organism)
-            genome.setFastaFile(str(outFile))
-            genomeSet.append(genome)
+        if not resultsFile.exists():
+            raise RuntimeError("Results file not found")
+
+        with open(resultsFile) as f:
+            for line in f:
+                accession, organism, outFile = line.strip().split("\t")
+        #for accession, organism, outFile in getattr(self, "results", []):
+                genome = Genome()
+                genome.setAccession(accession)
+                genome.setOrganism(organism)
+                genome.setFastaFile(str(outFile))
+                genomeSet.append(genome)
 
         self._defineOutputs(outputGenomes=genomeSet)
 
     # --------------------------- Summary functions ------------------------------
     def _summary(self):
-        if hasattr(self, "results"):
-            return [f"Downloaded {len(self.results)} genomes"]
+        if hasattr(self, "outputGenomes"):
+            n = self.outputGenomes.getSize()
+            return [f"{n} genome protein FASTA files were downloaded from NCBI."]
+            
         return ["No genomes downloaded"]
-
+   
+    
     def _methods(self):
-        if hasattr(self, "results"):
-            return [f"{len(self.results)} genome protein FASTA files were downloaded from NCBI."]
+        if hasattr(self, "outputGenomes") and self.outputGenomes is not None:
+            n = self.outputGenomes.getSize()
+            return [f"{n} genome protein FASTA files were downloaded from NCBI."]
         return ["Genome fetching protocol executed."]
 
     def _validate(self):
