@@ -99,6 +99,7 @@ from pwchem.protocols.Databases.protocol_fetch_ligands import ProtocolLigandsFet
 from pwchem.protocols.Databases.protocol_smallMol_identify import ProtChemSmallMolIdentify
 from pwchem.protocols.Databases.protocol_uniprot_crossref import ProtChemUniprotCrossRef
 from pwchem.protocols.Databases.protocol_ZINC_filter import ProtChemZINCFilter
+from pwchem.protocols.Databases.protocol_ncbi_genomes import ProtocolGenomeFetching
 
 # General protocols
 from pwchem.protocols.General.protocol_converter import ConvertStructures

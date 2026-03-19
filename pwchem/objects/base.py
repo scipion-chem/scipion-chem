@@ -36,6 +36,50 @@ from scipy import spatial
 from pwchem.utils import *
 from pwchem.constants import *
 
+class Genome(data.EMObject):
+    """Genome object representing a bacterial genome."""
+
+    def __init__(self, **kwargs):
+        data.EMObject.__init__(self, **kwargs)
+
+        self.accession = pwobj.String(kwargs.get('accession', None))
+        self.organism = pwobj.String(kwargs.get('organism', None))
+        self.fastaFile = pwobj.String(kwargs.get('fastaFile', None))
+
+    def getAccession(self):
+        return self.accession.get()
+
+    def setAccession(self, value):
+        self.accession.set(value)
+
+    def getOrganism(self):
+        return self.organism.get()
+
+    def setOrganism(self, value):
+        self.organism.set(value)
+
+    def getFastaFile(self):
+        return self.fastaFile.get()
+
+    def setFastaFile(self, value):
+        self.fastaFile.set(value)
+
+    def __str__(self):
+        return f"{self.getClassName()} (accession={self.getAccession()}, organism={self.getOrganism()})"
+
+class SetOfGenome(data.EMSet):
+    """Set of Genome objects"""
+
+    ITEM_TYPE = Genome
+    FILE_TEMPLATE_NAME = 'setOfGenomes%s.sqlite'
+
+    def __init__(self, **kwargs):
+        data.EMSet.__init__(self, **kwargs)
+
+    def getGenomeAccessions(self):
+        """Return a list of genome accession numbers"""
+        return [genome.getAccession() for genome in self]
+
 
 class DatabaseID(data.EMObject):
   """ Database identifier """
