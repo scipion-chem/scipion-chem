@@ -23,7 +23,6 @@
 # **************************************************************************
 
 import os
-from random import choices
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params

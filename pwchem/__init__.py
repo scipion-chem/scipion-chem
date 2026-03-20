@@ -169,7 +169,6 @@ class Plugin(pwem.Plugin):
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
             .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
-            .addCondaPackages(['mdanalysis'], channel='conda-forge',  targetName='MDANALYSIS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
@@ -220,6 +219,7 @@ class Plugin(pwem.Plugin):
         installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
         installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
+            .addCondaPackages(['prolif', 'ipython'], channel='conda-forge', targetName='PROLIF_INSTALLED')\
             .addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
