@@ -1775,7 +1775,6 @@ class MDSystem(data.EMFile):
     self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
     self._prolifFile = pwobj.String(kwargs.get('prolifFp', None))
 
-
   def __str__(self):
     return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
                                        self.hasTrajectory())
