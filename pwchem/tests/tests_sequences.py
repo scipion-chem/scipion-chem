@@ -32,7 +32,7 @@ from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtESMatl
 from pwchem import tests
 from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
 # Scipion chem imports
-from pwchem.tests import TestImportVariants, TestImportSequences
+from pwchem.tests.tests_imports import TestImportVariants, TestImportSequences
 from pwchem.protocols import ProtDefineSeqROI, ProtChemGenerateVariants, ProtSeqCalculateConservation
 from pwchem.protocols import ProtExtractSeqsROI, ProtOperateSeqROI, ProtDefineSetOfSequences
 from pwchem.protocols import ProtMapSequenceROI, ProtChemMultipleSequenceAlignment, ProtChemPairWiseAlignment

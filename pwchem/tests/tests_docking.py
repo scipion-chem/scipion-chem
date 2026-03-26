@@ -30,7 +30,7 @@ from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
 from pwchem.protocols import *
-from pwchem.tests import TestDefineStructROIs
+from pwchem.tests.tests_structROIs import TestDefineStructROIs
 from pwchem.utils import assertHandle
 
 chainStr = '{"model": 0, "chain": "C", "residues": 141}'

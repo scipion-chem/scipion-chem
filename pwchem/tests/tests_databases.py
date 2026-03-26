@@ -34,7 +34,7 @@ from pyworkflow.tests import *
 
 # Scipion chem imports
 from pwchem.protocols import *
-from pwchem.tests import TestImportBase
+from pwchem.tests.tests_general import TestImportBase
 from pwchem.constants import *
 from pwchem.utils import assertHandle
 

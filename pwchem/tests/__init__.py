@@ -24,15 +24,23 @@
 # *
 # **************************************************************************
 
-from .tests_imports import *
-from .tests_preparations import *
-from .tests_ligand_filtering import *
-from .tests_sequences import *
-from .tests_structROIs import *
-from .tests_docking import *
-from .tests_attributes import *
-from .tests_pharmacophores import *
-from .tests_general import *
-from .tests_databases import *
-from .tests_epitopes import *
+from enum import Enum
+from pyworkflow.tests import DataSet
 
+DataSet(name='smallMolecules', folder='smallMolecules',
+                    files={
+                        'mix': 'mix/',
+                        'mol2': 'mol2/',
+                        'pdb': 'pdb/',
+                        'sdf': 'sdf/',
+                        'smi': 'smi/'})
+
+MDSYSTEM = 'mdSystem'
+class DataSetMDSystem(Enum):
+    amberSystemDir = 'amberSystem'
+    amberSystemFile = 'amberSystem/3p6h_system.pdb'
+    amberTopoFile = 'amberSystem/3p6h.parm7'
+    amberCrdFile = 'amberSystem/3p6h.rst7'
+    amberTrjFile = 'amberSystem/3p6h.nc'
+
+DataSet(name=MDSYSTEM, folder=MDSYSTEM, files={el.name: el.value for el in DataSetMDSystem})

@@ -54,10 +54,9 @@ class ProtocolImportMDSystem(EMProtocol):
                       condition='outputType == 2')
         form.addParam('inputTopology', params.PathParam, label='Topology file',
                        help='Topology file - Formats can be PDB, TOP, TPR, PRMTOP, PARM7, CMS and XML')
-        form.addParam('addTraj', params.BooleanParam, default=False, label='Trajectory file',
+        form.addParam('addTraj', params.BooleanParam, default=False, label='Trajectory file')
+        form.addParam('inputTrajectory', params.PathParam, label='Trajectory file', condition='addTraj',
                        help='Trajectory file - Formats can be XTC, NC, NETCDF and DCD')
-        form.addParam('inputTrajectory', params.PathParam, label='Topology file', condition='addTraj',
-                       help='Topology file - Formats can be PDB, TOP, PRMTOP, PARM7, CMS and XML')
 
         form.addParam('hasLig', params.BooleanParam, label='Has ligand?', default=False,
                        help='Does the system has a ligand?')

@@ -96,12 +96,14 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--inputFilename', type=str, help='Input system file (PDB or similar), reference')
     parser.add_argument('-o', '--outpuPath', type=str, help='Output path')
     parser.add_argument('-t', '--inputTraj', type=str, help='Input trajectory file')
+    parser.add_argument('-l', '--ligandName', type=str, help='ligand name in the topology')
     parser.add_argument('-n', '--outputName', type=str, help='Output name')
     parser.add_argument('-wb', default=False, action='store_true', help='Run a water bridges analysis')
     parser.add_argument('-f', '--frameNum', type=int, help='Frame number', default=10)
 
     args = parser.parse_args()
-    topoFile, outPath, trjFile, outName, frameNum = args.inputFilename, args.outpuPath, args.inputTraj, args.outputName, args.frameNum
+    topoFile, outPath, trjFile, ligName, outName, frameNum = (
+        args.inputFilename, args.outpuPath, args.inputTraj, args.ligandName, args.outputName, args.frameNum)
 
     _, extension = os.path.splitext(trjFile)
     if extension.lower() == '.netcdf':
@@ -110,7 +112,7 @@ if __name__ == "__main__":
         u = mda.Universe(topoFile, trjFile)
     u.guess_TopologyAttrs(to_guess=['elements'])
 
-    ligSelection = u.select_atoms("resname LIG")
+    ligSelection = u.select_atoms(f"resname {ligName}")
 
     protSelection = plf.select_over_trajectory(u, u.trajectory[::frameNum], "protein and byres around 6.0 group ligand",
                                                ligand=ligSelection)

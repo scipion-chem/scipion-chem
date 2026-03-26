@@ -25,7 +25,7 @@
 from pyworkflow.tests import DataSet, setupTestProject
 
 # Scipion chem imports
-from pwchem.tests import TestDefineSequenceROIs
+from pwchem.tests.tests_sequences import TestDefineSequenceROIs
 from pwchem.protocols import ProtDefineSeqROI, ProtDefineMultiEpitope, ProtModifyMultiEpitope
 from pwchem.utils import assertHandle
 

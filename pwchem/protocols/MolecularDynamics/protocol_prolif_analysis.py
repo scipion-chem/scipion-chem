@@ -58,9 +58,15 @@ class ProtocolProlif(EMProtocol):
         inputSystem = self.inputMDSystem.get()
         trajFile = inputSystem.getTrajectoryFile()
         topoFile = inputSystem.getTopologyFile()
+        if topoFile.lower().endswith(('.top', '.tpr')):
+            topoFile = inputSystem.getSystemFile() # needed for gromacs topology
         outputPath = self._getExtraPath()
         outputName = inputSystem.getSystemName()
-        args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName} -f {self.frameNum.get()}'
+        if inputSystem.getLigandID():
+            ligName =  inputSystem.getLigandID()
+        else:
+            ligName = 'LIG'
+        args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName} -l {ligName} -f {self.frameNum.get()}'
         if self.getEnumText('type') == 'Water bridges':
             args += ' -wb'
 

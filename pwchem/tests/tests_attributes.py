@@ -28,7 +28,7 @@ from pwem.protocols import ProtImportPdb, ProtImportSequence
 
 # Scipion chem imports
 from pwchem.protocols import *
-from pwchem.tests import TestImportBase
+from pwchem.tests.tests_general import TestImportBase
 from pwchem.utils import assertHandle
 
 from pwchem.tests.tests_sequences import defSeqROIsSeq

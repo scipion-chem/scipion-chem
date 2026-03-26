@@ -29,7 +29,7 @@ from pyworkflow.protocol import params
 
 # pwchem imports
 from .. import Plugin
-from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, TCL_MD_LIG_STR
+from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, PML_MD_STR_AMBER, TCL_MD_LIG_STR
 from ..viewers import PyMolViewer, PyMolView, VmdViewPopen
 from ..objects import MDSystem
 
@@ -50,9 +50,17 @@ class MDSystemViewer(pwviewer.Viewer):
 
     else:
         trjFile = os.path.abspath(obj.getTrajectoryFile())
+        topoFile = os.path.abspath(obj.getTopologyFile())
+        if topoFile.lower().endswith(('.top', '.tpr')):
+            topoFile = obj.getSystemFile() # needed for gromacs topology
         outPml = os.path.join(os.path.dirname(trjFile), 'pymolSimulation.pml')
+        _, trjExt = os.path.splitext(trjFile)
+        if trjExt in ['.nc', '.netcdf']:
+            template = PML_MD_STR_AMBER
+        else:
+            template = PML_MD_STR
         with open(outPml, 'w') as f:
-          f.write(PML_MD_STR.format(os.path.abspath(systemFile),
+          f.write(template.format(os.path.abspath(topoFile),
                                     os.path.abspath(trjFile)))
 
         return [PyMolView(os.path.abspath(outPml), cwd=os.path.dirname(trjFile))]
