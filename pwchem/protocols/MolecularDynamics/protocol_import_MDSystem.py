@@ -68,28 +68,28 @@ class ProtocolImportMDSystem(EMProtocol):
         self._insertFunctionStep('importStep')
 
     def importStep(self):
-        obj_type = self.getEnumText('outputType')
+        objType = self.getEnumText('outputType')
         fnTopo = self._getPath(os.path.split(self.inputTopology.get())[1])
         copyFile(self.inputTopology.get(), fnTopo)
         fnCoords = self._getPath(os.path.split(self.inputCoords.get())[1])
         copyFile(self.inputCoords.get(), fnCoords)
 
-        if obj_type == 'MDSystem':
+        if objType == 'MDSystem':
             outSystem = MDSystem()
-        elif obj_type == 'OpenMMSystem':
+        elif objType == 'OpenMMSystem':
             from openmm.objects import OpenMMSystem
             outSystem = OpenMMSystem()
             fnSerie = self._getPath(os.path.split(self.inputSerie.get())[1])
             copyFile(self.inputSerie.get(), fnSerie)
             outSystem.setSerieFile(fnSerie)
             outSystem.setCifFile(fnCoords)
-        elif obj_type == 'AmberSystem':
+        elif objType == 'AmberSystem':
             from amber.objects import AmberSystem
             outSystem = AmberSystem()
             fnCrd = self._getPath(os.path.split(self.inputCrd.get())[1])
             copyFile(self.inputCrd.get(), fnCrd)
             outSystem.setCrdFile(fnCrd)
-        elif obj_type == 'GromacsSystem':
+        elif objType == 'GromacsSystem':
             from gromacs.objects import GromacsSystem
             outSystem = GromacsSystem()
         outSystem.setSystemFile(fnCoords)

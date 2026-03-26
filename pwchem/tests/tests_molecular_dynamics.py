@@ -27,8 +27,7 @@
 
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
-from pwchem.protocols import *
-from pwchem.constants import *
+from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif
 from pwchem.tests import MDSYSTEM, DataSetMDSystem
 from pwchem.utils import assertHandle
 

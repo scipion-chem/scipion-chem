@@ -69,6 +69,8 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
     """ Visualize the output of Molecular Dynamics simulation """
     _label = 'Viewer Molecular Dynamics System'
     _targets = [MDSystem]
+    _mdtrajScript = 'mdtraj_analysis.py'
+    _prolifViewScript = 'prolif_viewer.py'
 
     def __init__(self, **args):
       super().__init__(**args)
@@ -206,7 +208,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
              f'-{self.getEnumText("mdAnalChoices").lower()} -sa {selAtoms} '
       if self.heavyAtoms.get():
         args += '-ha '
-      Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+      Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajSSAnalysis(self, paramName=None):
         system = self.getMDSystem()
@@ -223,7 +225,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         args = f' -distance  -i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
                f' -a1 {atom1} -a2 {atom2}'
-        Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+        Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajRGAnalysis(self, paramName=None):
         system = self.getMDSystem()
@@ -233,7 +235,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                f' -sa {selAtoms} -rg '
         if self.heavyAtoms.get():
             args += '-ha '
-        Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+        Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajSASAAnalysis(self, paramName=None):
         system = self.getMDSystem()
@@ -241,7 +243,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
                f' -sa {selAtoms} -sasa '
-        Plugin.runScript(self, 'mdtraj_analysis.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+        Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajPCAAnalysis(self, paramName=None):
         system = self.getMDSystem()
@@ -254,16 +256,16 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
     def _showProlifFp(self, paramName=None):
         fpPkl = self.getMDSystem().getProlifFile()
         args = f'"{fpPkl}" --mode barcode'
-        Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+        Plugin.runScript(self, self._prolifViewScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showProlifNetwork(self, paramName=None):
         fpPkl = self.getMDSystem().getProlifFile()
         args = f'"{fpPkl}" --mode network'
-        Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+        Plugin.runScript(self, self._prolifViewScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showProlifMatrix(self, paramName=None):
         fpPkl = self.getMDSystem().getProlifFile()
         args = f'"{fpPkl}" --mode matrix'
-        Plugin.runScript(self, 'prolif_viewer.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
+        Plugin.runScript(self, self._prolifViewScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
 
