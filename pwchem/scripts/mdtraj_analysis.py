@@ -99,7 +99,7 @@ if __name__ == "__main__":
             rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
             plt.plot(rmsf * 10, 'r', label='RMSF')
             plt.title('RMSF')
-            plt.xlabel('Protein sequence')
+            plt.xlabel('Selected atom numbers')
             plt.ylabel('RMSF (Å)')
 
         elif args.sasa:

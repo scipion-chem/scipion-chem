@@ -432,7 +432,7 @@ class TestSeqLocation(BaseTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        tests.setupTestProject(cls)
+        setupTestProject(cls)
 
     @classmethod
     def _runImportSequence(cls):
