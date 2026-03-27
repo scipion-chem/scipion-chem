@@ -218,8 +218,10 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-        installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
-            .addCondaPackages(['prolif', 'ipython'], channel='conda-forge', targetName='PROLIF_INSTALLED')\
+        installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge') \
+            .addCondaPackages(['prolif', 'ipython'], channel='conda-forge', targetName='PROLIF_INSTALLED') \
+            .addCondaPackages(['scipy', 'scikit-learn', 'numba', 'progressbar2', 'prettytable'],
+                              channel='conda-forge', targetName='TTCLUST_INSTALLED') \
             .addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod

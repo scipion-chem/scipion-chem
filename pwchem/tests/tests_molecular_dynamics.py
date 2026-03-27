@@ -27,7 +27,7 @@
 
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
-from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif
+from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering
 from pwchem.tests import MDSYSTEM, DataSetMDSystem
 from pwchem.utils import assertHandle
 
@@ -72,3 +72,41 @@ class TestProLIFanalysis(BaseTest):
             hasattr(self.prolifSystem, '_prolifFile'),
             cwd=self.prolifSystem.getWorkingDir()
         )
+
+class TestTrajClustering(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        cls.ds = DataSet.getDataSet(MDSYSTEM)
+        setupTestProject(cls)
+        cls._runImportSystem()
+
+    @classmethod
+    def _runImportSystem(cls):
+        protImportMDSystem = cls.newProtocol(
+            ProtocolImportMDSystem,
+            inputCoords=cls.ds.getFile(DataSetMDSystem.amberSystemFile.value),
+            inputCrd=cls.ds.getFile(DataSetMDSystem.amberCrdFile.value),
+            inputTopology=cls.ds.getFile(DataSetMDSystem.amberTopoFile.value),
+            addTraj=True,
+            inputTrajectory=cls.ds.getFile(DataSetMDSystem.amberTrjFile.value),
+            hasLig=True,
+            ligID='LIG')
+        cls.launchProtocol(protImportMDSystem)
+        cls.protImportMDSystem = protImportMDSystem
+        return protImportMDSystem
+
+    @classmethod
+    def _runClustering(cls):
+        protClust= cls.newProtocol(
+            ProtocolTrajectoryClustering,
+            inputMDSystem=cls.protImportMDSystem.outputSystem,
+            clusterMode=1,
+            nGroup=3
+        )
+        cls.launchProtocol(protClust)
+        cls.outputSetOfAtomStructures = protClust
+        return protClust
+
+    def test_clustering(self):
+        self._runClustering()
+        assertHandle(self.assertIsNotNone,getattr(self.outputSetOfAtomStructures, 'outputAtomStructs', None))
