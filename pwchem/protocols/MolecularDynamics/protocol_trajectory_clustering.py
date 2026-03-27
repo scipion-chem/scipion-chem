@@ -41,32 +41,31 @@ from pwchem import Plugin as pwchemPlugin
 from pwchem.objects import MDSystem
 from pwchem.constants import MDTRAJ_DIC
 
-
 # ── Clustering ────────────────────────────────────────────────────────────────
 CLUSTERING_METHODS = ['ward', 'single', 'complete', 'average', 'weighted', 'centroid', 'median']
-CLUSTER_MODE       = ['Auto (elbow)', 'Number of groups', 'Cutoff']
+CLUSTER_MODE = ['Auto (elbow)', 'Number of groups', 'Cutoff']
 
 # ── Atom selection ────────────────────────────────────────────────────────────
 SEL_BACKBONE = 0
-SEL_CA       = 1
-SEL_PROTEIN  = 2
-SEL_LIGAND   = 3
+SEL_CA = 1
+SEL_PROTEIN = 2
+SEL_LIGAND = 3
 SEL_RESIDUES = 4
-SEL_NONE     = 5   # alignment only — skips superposition
+SEL_NONE = 5  # alignment only — skips superposition
 
 # Choices shown in the GUI
 ALIGN_CHOICES = ['Backbone', 'Alpha carbons (CA)', 'Protein',
                  'Ligand', 'Residue range', 'None (skip alignment)']
-RMSD_CHOICES  = ['Backbone', 'Alpha carbons (CA)', 'Protein',
-                 'Ligand', 'Residue range']
+RMSD_CHOICES = ['Backbone', 'Alpha carbons (CA)', 'Protein',
+                'Ligand', 'Residue range']
 
 # MDTraj syntax for fixed selections
 _MDTRAJ_SEL = {
-    SEL_BACKBONE : 'backbone',
-    SEL_CA       : 'name CA',
-    SEL_PROTEIN  : 'protein',
+    SEL_BACKBONE: 'backbone',
+    SEL_CA: 'name CA',
+    SEL_PROTEIN: 'protein',
     # SEL_LIGAND is resolved dynamically from getLigandID()
-    SEL_NONE     : 'none',
+    SEL_NONE: 'none',
 }
 
 
@@ -116,7 +115,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
                              condition='selectAlign == {}'.format(SEL_RESIDUES),
                              help='First and last residue index (0-based, inclusive).')
         line.addParam('firstResAlign', params.IntParam, default=0, label='First')
-        line.addParam('lastResAlign',  params.IntParam, default=0, label='Last')
+        line.addParam('lastResAlign', params.IntParam, default=0, label='Last')
 
         group.addParam('selectRmsd', params.EnumParam,
                        choices=RMSD_CHOICES, default=SEL_BACKBONE,
@@ -129,7 +128,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
                              condition='selectRmsd == {}'.format(SEL_RESIDUES),
                              help='First and last residue index (0-based, inclusive).')
         line.addParam('firstResRmsd', params.IntParam, default=0, label='First')
-        line.addParam('lastResRmsd',  params.IntParam, default=0, label='Last')
+        line.addParam('lastResRmsd', params.IntParam, default=0, label='Last')
 
         # ── Clustering ────────────────────────────────────────────────────────
         group = form.addGroup('Clustering')
@@ -163,7 +162,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
         self._insertFunctionStep(self.createOutputStep)
 
     def runClusteringStep(self):
-        mdsys    = self.inputMDSystem.get()
+        mdsys = self.inputMDSystem.get()
         trajFile = os.path.abspath(mdsys.getTrajectoryFile())
 
         topPath = mdsys.getTopologyFile()
@@ -208,23 +207,23 @@ class ProtocolTrajectoryClustering(EMProtocol):
         # the string label (e.g. "backbone") instead of the integer index,
         # which would otherwise cause "Can't set backbone" warnings.
         alignIdx = int(self.selectAlign.get())
-        rmsdIdx  = int(self.selectRmsd.get())
+        rmsdIdx = int(self.selectRmsd.get())
 
         alignStr = selectionToMdtraj(alignIdx,
                                      self.firstResAlign.get(),
                                      self.lastResAlign.get(),
                                      ligandId=ligandId)
-        rmsdStr  = selectionToMdtraj(rmsdIdx,
-                                     self.firstResRmsd.get(),
-                                     self.lastResRmsd.get(),
-                                     ligandId=ligandId)
+        rmsdStr = selectionToMdtraj(rmsdIdx,
+                                    self.firstResRmsd.get(),
+                                    self.lastResRmsd.get(),
+                                    ligandId=ligandId)
         return alignStr, rmsdStr
 
     def _buildArgs(self, trajFile, topFile):
         alignStr, rmsdStr = self._getSelectionStrings()
         mode = int(self.clusterMode.get())
 
-        args  = '-f "{}" '.format(trajFile)
+        args = '-f "{}" '.format(trajFile)
         args += '-t "{}" '.format(topFile)
         args += '-s {} '.format(self.stride.get())
         args += '-l clustering.log '
@@ -232,8 +231,11 @@ class ProtocolTrajectoryClustering(EMProtocol):
         args += '-sr "{}" '.format(rmsdStr)
         args += '-m {} '.format(CLUSTERING_METHODS[int(self.clusterMethod.get())])
         # args += '-axis default -limitmat 100000000 -i Y '
-        args += '-st "not (water or resname \'K+\' \'Cl-\' NA CL MG \'Mg2+\')" '
-        if mode == 0:    # Auto
+        if self._getLigandId():
+            args += f'-st "protein or resname {self._getLigandId()}" '
+        else:
+            args += '-st "protein" '
+        if mode == 0:  # Auto
             args += '-aa Y '
         elif mode == 1:  # N groups
             args += '-ng {} -aa n '.format(self.nGroup.get())
@@ -242,43 +244,13 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
         return args
 
-    def _cleanPdb(self, inputPdb, outputPdb):
-        """
-        Reads inputPdb, filters out water/ions, keeps protein and the
-        specific ligand, then writes to outputPdb.
-        """
-        ligandID = self.inputMDSystem.getLigandID()
-
-        # Common solvent/ion residue names to skip
-        exclude_res = {'HOH', 'WAT', 'SOL', 'TIP3', 'NA', 'CL', 'K', 'MG', 'ZN'}
-
-        with open(inputPdb, 'r') as f_in, open(outputPdb, 'w') as f_out:
-            for line in f_in:
-                # 1. Keep Protein/Nucleics
-                if line.startswith("ATOM"):
-                    f_out.write(line)
-                    continue
-
-                # 2. Handle Ligands and Heteroatoms
-                if line.startswith("HETATM"):
-                    res_name = line[17:20].strip()
-                    # Keep if it matches our specific ligand ID
-                    if res_name == ligandID:
-                        f_out.write(line)
-                    # Alternatively: Keep if it's NOT in the exclude list
-                    # elif res_name not in exclude_res:
-                    #     f_out.write(line)
-                    continue
-
-                # 3. Keep connectivity and structural markers
-                if line.startswith(("TER", "CONECT", "MASTER", "END")):
-                    f_out.write(line)
-
     # ── Info ──────────────────────────────────────────────────────────────────
     def _summary(self):
         summary = []
         mdsys = self.inputMDSystem.get()
         if mdsys:
+            summary.append(
+                f'This protocol has created a set of atom structures as representatives of the clusters. To see the clustering results open the images inside extra/clustering path.\n')
             summary.append('Trajectory: {}'.format(mdsys.getTrajectoryFile()))
         try:
             alignStr, rmsdStr = self._getSelectionStrings()
