@@ -115,3 +115,4 @@ from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateL
 from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
 from pwchem.protocols.MolecularDynamics.protocol_prolif_analysis import ProtocolProlif
 from pwchem.protocols.MolecularDynamics.protocol_import_MDSystem import ProtocolImportMDSystem
+from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import ProtocolTrajectoryClustering
