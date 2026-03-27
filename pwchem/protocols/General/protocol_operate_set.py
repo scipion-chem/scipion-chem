@@ -230,7 +230,7 @@ class ProtChemOperateSet(EMProtocol):
 
 
         if len(outputDict)>0:
-            outputSet = self.getRepInputSet().createCopy(self._getPath(), copyInfo=True)
+            outputSet = self.getRepInputSet().get().createCopy(self._getPath(), copyInfo=True)
             i = 1
             for itemId, itemList in outputDict.items():
                 for item in itemList:
@@ -238,16 +238,18 @@ class ProtChemOperateSet(EMProtocol):
                         item.setObjId(i)
                         i += 1
                     outputSet.append(item)
-            self._defineOutputs(outputSet=outputSet)
+
+            outputArgs = {self.getRepInputSet().getExtended(): outputSet}
+            self._defineOutputs(**outputArgs)
 
 
     ######################## UTILS functions #################
 
     def getRepInputSet(self):
         if self.operation.get() in [1, 2, 7]:
-            return self.inputMultiSet[0].get()
+            return self.inputMultiSet[0]
         else:
-            return self.inputSet.get()
+            return self.inputSet
 
     def addItem(self, dic, itemId, item, allowDup=None):
         allowDup = not self.removeDuplicates.get() if allowDup is None else allowDup

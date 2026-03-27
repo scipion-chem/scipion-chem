@@ -250,9 +250,9 @@ class TestOperateSet(BaseTest):
         protUnion = self._runMultiInputOperation(inProts, op=1, refCol='molName')
         outProts.append(protUnion)
 
-        self._waitOutput(protUnion, 'outputSet', sleepTime=5)
-        assertHandle(self.assertIsNotNone, getattr(protUnion, 'outputSet', None), cwd=protUnion.getWorkingDir())
-        protUniq = self._runSingleInputOperation(protUnion, op=0, refCol='molName', extended='outputSet')
+        self._waitOutput(protUnion, 'outputSmallMolecules', sleepTime=5)
+        assertHandle(self.assertIsNotNone, getattr(protUnion, 'outputSmallMolecules', None), cwd=protUnion.getWorkingDir())
+        protUniq = self._runSingleInputOperation(protUnion, op=0, refCol='molName', extended='outputSmallMolecules')
         outProts.append(protUniq)
 
         protInter = self._runMultiInputOperation(inProts, op=2, refCol='molName')
@@ -278,8 +278,8 @@ class TestOperateSet(BaseTest):
         outProts.append(protRank)
 
         for p in outProts:
-            self._waitOutput(p, 'outputSet', sleepTime=5)
-            assertHandle(self.assertIsNotNone, getattr(p, 'outputSet', None), cwd=p.getWorkingDir())
+            self._waitOutput(p, 'outputSmallMolecules', sleepTime=5)
+            assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 
 class TestGroupSet(BaseTest):
     @classmethod
