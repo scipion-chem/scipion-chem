@@ -1735,93 +1735,88 @@ class SetOfStructROIs(data.EMSet):
   ######### Utils
 
   def getPocketsPDBStr(self):
-    outStr = ''
-    for i, pocket in enumerate(self):
-      pocket.setObjId(i + 1)
-      outStr += self.formatPocketStr(pocket)
-    return outStr
+      outStr = ''
+      for i, pocket in enumerate(self):
+          print(f'----pocket file: {pocket.getFileName()} ')
+          pocket.setObjId(i + 1)
+          outStr += self.formatPocketStr(pocket)
+      return outStr
 
   def formatPocketStr(self, pocket):
       outStr = ''
       numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
+      ext = os.path.splitext(pocketFile)[1].lower()
 
-      # --- Step 1: Get raw string ---
-      if pocketFile.endswith('.cif'):
-          rawStr = self.cifToPdbStr(pocketFile).strip()  # convert CIF ? PDB
-          isCIF = True
+      if ext == ".cif":
+          rawStr = self.cifToPdbStr(pocketFile)
       else:
-          rawStr = getRawPDBStr(pocketFile, ter=False).strip()  # use as-is
-          isCIF = False
+          rawStr = getRawPDBStr(pocketFile, ter=False)
 
-      pocketClass = pocket.getPocketClass()
-
-      # --- Step 2: Process each line ---
-      for raw_line in rawStr.split('\n'):
-
-          # --- Parse line ---
-          sline = splitPDBLine(raw_line)
-          if sline is None:
-              continue  # skip TER/END or non-ATOM lines
-
-          # Replace residue number
-          sline[5] = numId
-
-          # --- CIF-specific fixes ---
-          if isCIF:
-              # Sanitize coordinates (x, y, z), occupancy, tempFactor
-              for i in [6, 7, 8, 9, 10]:
-                  try:
-                      parts = sline[i].split()
-                      sline[i] = parts[-1]  # take last number if multiple
-                      float(sline[i])
-                  except:
-                      sline[i] = '0.0' if i < 9 else '1.00'
-
-              # Ensure segment identifier and element
-              if len(sline) < 12 or sline[11] in ('', None):
-                  sline[11] = ''
-              if len(sline) < 13 or sline[12] in ('', None):
-                  sline[12] = 'C'
-
-          # --- Step 3: Build replacements per pocket class ---
-          if pocketClass in ['AutoLigand', 'AutoSite']:
+      rawStr = rawStr.strip()
+      if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
+          for line in rawStr.split('\n'):
+              sline = splitPDBLine(line)
               replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
-          elif pocketClass == 'FPocket':
-              replacements = [
-                  'HETATM',  # j[0] atomType
-                  sline[1],  # j[1] serial
-                  sline[2],  # j[2] atomName
-                  sline[3],  # j[3] resName
-                  sline[4],  # j[4] chain
-                  numId,  # j[5] resNumber
-                  sline[6],  # x
-                  sline[7],  # y
-                  sline[8],  # z
-                  sline[9],  # occupancy
-                  sline[10],  # tempFactor
-                  '',  # segmentIdentifier
-                  sline[11]  # elementSymbol
-              ]
-          elif pocketClass == 'SiteMap':
-              replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], '', 'Ve']
-          else:  # P2Rank, ElliPro, Standard...
-              replacements = sline  # already sanitized
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-          # --- Step 4: Write line ---
-          pdbLine = writePDBLine(replacements)
-          outStr += pdbLine
+      elif pocket.getPocketClass() == 'FPocket':
+          structure = self.loadStructure(pocketFile)
+          for model in structure:
+              for chain in model:
+                  for residue in chain:
+                      for atom in residue:
+                          x, y, z = atom.coord
+                          replacements = [
+                              'HETATM',
+                              atom.get_serial_number(),
+                              'APOL',
+                              'STP',
+                              'C',
+                              numId,
+                              x, y, z,
+                              '', 'Ve'
+                          ]
+      elif pocket.getPocketClass() == 'SiteMap':
+          for line in rawStr.split('\n'):
+              line = line.split()
+              replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
+
+      else:  # (P2Rank, ElliPro, Standard...)
+          for line in rawStr.split('\n'):
+              line = splitPDBLine(line)
+              if line is None:
+                  continue
+              line[5] = numId
+              cleaned = []
+              for x in line:
+                  if isinstance(x, str):
+                      parts = x.split()
+                      x = parts[-1] if parts else x
+                  cleaned.append(x)
+              line = cleaned
+
+              pdbLine = writePDBLine(line)
+              outStr += pdbLine
 
       return outStr
 
   def cifToPdbStr(self, cifFile):
+      from Bio.PDB import MMCIFParser, PDBIO
+      from io import StringIO
+
       parser = MMCIFParser(QUIET=True)
       structure = parser.get_structure('pocket', cifFile)
+
       io = PDBIO()
       io.set_structure(structure)
-      from io import StringIO
-      s = StringIO()
-      io.save(s)
-      return s.getvalue()
+
+      stream = StringIO()
+      io.save(stream)
+
+      return stream.getvalue()
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
