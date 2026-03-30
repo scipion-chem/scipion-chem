@@ -70,7 +70,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='MDTraj DSSP Analysis')
     parser.add_argument('-i', '--inputFilename', type=str, required=True)
     parser.add_argument('-t', '--inputTraj', type=str, required=True)
-    parser.add_argument('-o', '--outputName', type=str, required=True)
 
     parser.add_argument('--per-residue', action='store_true')
     parser.add_argument('--per-frame', action='store_true')

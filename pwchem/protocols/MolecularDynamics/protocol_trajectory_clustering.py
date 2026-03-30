@@ -113,7 +113,8 @@ class ProtocolTrajectoryClustering(EMProtocol):
                             'based analyses.')
         line = group.addLine('Align residue range:',
                              condition='selectAlign == {}'.format(SEL_RESIDUES),
-                             help='First and last residue index (0-based, inclusive).')
+                             help='First and last residue index. The wizard shows'
+                             'the file in which you can see the residue numbering.')
         line.addParam('firstResAlign', params.IntParam, default=0, label='First')
         line.addParam('lastResAlign', params.IntParam, default=0, label='Last')
 
@@ -126,7 +127,8 @@ class ProtocolTrajectoryClustering(EMProtocol):
                             'protein reference frame.')
         line = group.addLine('RMSD residue range:',
                              condition='selectRmsd == {}'.format(SEL_RESIDUES),
-                             help='First and last residue index (0-based, inclusive).')
+                             help='First and last residue index.'
+                                  'The wizard shows the file in which you can see the residue numbering.')
         line.addParam('firstResRmsd', params.IntParam, default=0, label='First')
         line.addParam('lastResRmsd', params.IntParam, default=0, label='Last')
 

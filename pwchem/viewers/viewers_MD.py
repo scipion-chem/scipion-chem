@@ -116,14 +116,14 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        label='Display PCA analysis: ', choices=['Coordinates', 'Pairwise distances'],
                        help='Display a PCA analysis of the coordinates of the trajectory or the pairwise distances of the backbone.')
 
-        distLine = group.addLine('Distance: ', help='Specify 2 atoms of the system PDB file to compute the distance for every frame'
-                                ' in the trajectory')
+        distLine = group.addLine('Distance between atoms: ', help='Specify 2 atoms of the system PDB file to compute the distance for every frame'
+                                ' in the trajectory. The wizard opens the file to look for the specific atom numbers.')
         distLine.addParam('atom1', params.IntParam, allowsNull=True,
-                       label='Atom num 1:')
+                       label='Atom 1: ')
         distLine.addParam('atom2', params.IntParam, allowsNull=True,
-                       label='Atom num 2: ')
+                       label='Atom 2: ')
         group.addParam('displayDistance', params.LabelParam, help='Display distance over time',
-                          label='Display distance analysis: ')
+                          label='Display distance between selected atoms: ')
 
         if self.getMDSystem().getProlifFile():
             self._defineProlifParams(form)
@@ -215,7 +215,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         showType = self.displayMDTrajSSAnalysis.get()
         ssFlags = ['--per-residue', '--per-frame', '--heatmap']
 
-        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {ssFlags[showType]}'
+        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {ssFlags[showType]} '
 
         Plugin.runScript(self, 'mdtraj_SS.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
@@ -249,7 +249,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         system = self.getMDSystem()
         pcaType = self.displayMDTrajPCAAnalysis.get()
         pcaFlags = ['--pca-coord', '--pca-dist']
-        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} -o {system.getSystemName()} ' \
+        args = f'-i {system.getFileName()} -t {system.getTrajectoryFile()} ' \
                f' {pcaFlags[pcaType]} '
         Plugin.runScript(self, 'mdtraj_PCA.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
