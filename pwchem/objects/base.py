@@ -1737,7 +1737,6 @@ class SetOfStructROIs(data.EMSet):
   def getPocketsPDBStr(self):
       outStr = ''
       for i, pocket in enumerate(self):
-          print(f'----pocket file: {pocket.getFileName()} ')
           pocket.setObjId(i + 1)
           outStr += self.formatPocketStr(pocket)
       return outStr
