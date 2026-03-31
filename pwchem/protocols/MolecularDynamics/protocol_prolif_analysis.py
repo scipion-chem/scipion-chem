@@ -82,3 +82,14 @@ class ProtocolProlif(EMProtocol):
         outSystem.setProlifFile(fpPath)
         self._defineOutputs(outputSystem=outSystem)
 
+    def _summary(self):
+        summary = []
+        if hasattr(self, 'outputSystem'):
+            outSystem = self.outputSystem
+            summary.append('ProLIF analysis performed')
+            summary.append(f'Analysis type  : {self.getEnumText("type")}')
+            if outSystem.getProlifFile():
+                summary.append(f'Fingerprint    : {outSystem.getProlifFile()}')
+            summary.append(f'Fingerprint frequency: every {self.frameNum.get()} frames')
+        return summary
+

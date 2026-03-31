@@ -102,3 +102,19 @@ class ProtocolImportMDSystem(EMProtocol):
             outSystem.setLigandID(self.ligID.get())
 
         self._defineOutputs(outputSystem=outSystem)
+
+    # --------------------------- INFO --------------------
+    def _summary(self):
+        summary = []
+        if hasattr(self, 'outputSystem'):
+            outSystem = self.outputSystem
+            summary.append(f'Output type    : {self.getEnumText("outputType")}')
+            summary.append(f'Coordinate file: {outSystem.getSystemFile()}')
+            summary.append(f'Topology file  : {outSystem.getTopologyFile()}')
+            if outSystem.hasTrajectory():
+                summary.append(f'Trajectory file: {outSystem.getTrajectoryFile()}')
+            else:
+                summary.append('Trajectory file: not provided')
+            if self.hasLig.get():
+                summary.append(f'Ligand ID      : {self.ligID.get()}')
+        return summary
