@@ -82,7 +82,7 @@ class ProtocolPoseBusters(EMProtocol):
         iGroup.addParam('molRec', params.BooleanParam, default=True, label="Use receptor to run tests: ",
                         help='Choose whether to output use receptor to run tests. (If True, it will be used to run '
                              'all default tests that require the protein as input.)')
-        iGroup.addParam('batchSize', params.IntParam, label='Batch size: ', default=200,
+        iGroup.addParam('batchSize', params.IntParam, label='Batch size: ', default=500,
                         expertLevel=params.LEVEL_ADVANCED,
                         help='Maximum batch size to execute')
 
@@ -156,7 +156,8 @@ class ProtocolPoseBusters(EMProtocol):
 
     def createOutputStep(self):
         resultsFile = self.getResultsFile()
-        concatThreadFiles(resultsFile, self._getPath())
+        if not os.path.exists(resultsFile):
+            concatThreadFiles(resultsFile, self._getPath())
         resTestsDic = self.parseResultRows(resultsFile)
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSet.get(), self._getPath(), copyInfo=True)
@@ -164,11 +165,13 @@ class ProtocolPoseBusters(EMProtocol):
             newMol = mol.clone()
             newMol.PoseBusters_file = String(resultsFile)
 
-            resDic = resTestsDic[getBaseName(mol.getPoseFile())]
-            if self.checkPassedTests(resDic) >= self.testsPassed.get():
-                for testName, testVal in resDic.items():
-                    newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
-                newMols.append(newMol)
+            baseName = getBaseName(mol.getPoseFile())
+            if baseName in resTestsDic:
+                resDic = resTestsDic[baseName]
+                if self.checkPassedTests(resDic) >= self.testsPassed.get():
+                    for testName, testVal in resDic.items():
+                        newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
+                    newMols.append(newMol)
 
         self._defineOutputs(outputSmallMolecules=newMols)
 
