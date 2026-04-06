@@ -38,13 +38,14 @@ import csv, re
 from pyworkflow.object import Boolean
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
-from pwchem import Plugin, POSEB_DIC, SCORCH2_DIC
 
 from pwem.protocols import EMProtocol
+from pwem.convert import cifToPdb
 
 from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import *
-from pwem.convert import cifToPdb
+from pwchem import Plugin, POSEB_DIC, SCORCH2_DIC, OPENBABEL_DIC
+
 
 
 class ProtocolPoseBusters(EMProtocol):
@@ -59,6 +60,7 @@ class ProtocolPoseBusters(EMProtocol):
     DEF_COL_THRES = {'energy_ratio': 2.0, 'number_clashes': 0, 'aromatic_ring_maximum_distance_from_plane': 0.05,
                      'kabsch_rmsd': 2.5, 'centroid_distance': 12.0,
                      'volume_overlap_protein': 0.05, 'smallest_distance_protein': 6.0}
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -80,6 +82,9 @@ class ProtocolPoseBusters(EMProtocol):
         iGroup.addParam('molRec', params.BooleanParam, default=True, label="Use receptor to run tests: ",
                         help='Choose whether to output use receptor to run tests. (If True, it will be used to run '
                              'all default tests that require the protein as input.)')
+        iGroup.addParam('batchSize', params.IntParam, label='Batch size: ', default=500,
+                        expertLevel=params.LEVEL_ADVANCED,
+                        help='Maximum batch size to execute')
 
         fGroup = form.addGroup('Tests')
         fGroup.addParam('testsPassed', params.IntParam, label='Min. tests passed: ', default=self.NTESTS['receptor'],
@@ -91,14 +96,46 @@ class ProtocolPoseBusters(EMProtocol):
                         default='', label='List of tests to consider: ', condition='doSpecific',
                         help='List of tests to consider in the filtering.\nRemember to modify the "Min. tests passed" '
                              'param accordingly.')
-        
+
+        form.addParallelSection(threads=4, mpi=1)
+
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.poseBustersStep)
-        self._insertFunctionStep(self.createOutputStep)
+        pSteps = []
+        oStep = self._insertFunctionStep(self.organizeInputStep)
+        for it in range(self.getNThreads()):
+            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[oStep])
+            pSteps += [self._insertFunctionStep(self.poseBustersStep, it, prerequisites=[cStep])]
+        self._insertFunctionStep(self.createOutputStep, prerequisites=pSteps)
 
-    def poseBustersStep(self):
-        resultsFile = self.getResultsFile()
+    def organizeInputStep(self):
+        if self.useTrueMol.get():
+            molTrue = self.getTrueMol()
+            trueFile = self.convertFormat(molTrue, type='crystal')
+            os.rename(trueFile, self.getTrueMolFile())
+
+        if self.molRec.get():
+            protFile = self.convertFormat(self.inputMoleculesSet.get().getProteinFile(), type='file')
+            os.rename(protFile, self.getMolRecFile())
+
+        nThreads = self.getNThreads()
+        molSubSets = makeSubsets(self.inputMoleculesSet.get(), nThreads, True)
+
+        for i, subset in enumerate(molSubSets):
+            for mol in subset:
+                inDir = self.getInMolsDir(i)
+                os.makedirs(inDir, exist_ok=True)
+                copyPath = os.path.join(inDir, os.path.basename(mol.getPoseFile()))
+                os.link(mol.getPoseFile(), copyPath)
+
+    def convertInputStep(self, it):
+        inDir, convDir = self.getInMolsDir(it), self.getConvMolsDir(it)
+        os.makedirs(convDir, exist_ok=True)
+        args = f' --multiFiles -iD "{inDir}" --pattern "*" -of pdb --outputDir "{convDir}"'
+        pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=convDir)
+
+    def poseBustersStep(self, it):
+        resultsFile = self.getResultsFile(it)
 
         baseArgs = []
         baseArgs.append('--outfmt csv')
@@ -106,9 +143,8 @@ class ProtocolPoseBusters(EMProtocol):
         baseArgs.append('--full-report')
 
         args = ['bust']
-        for dockedMol in self.inputMoleculesSet.get():
-            inpFile = self.convertFormat(dockedMol)
-            args.append(os.path.abspath(inpFile))
+        for inpFile in os.listdir(self.getConvMolsDir(it)):
+            args.append(os.path.join(self.getConvMolsDir(it), inpFile))
         
         args.extend(self.getPoseBusterArgs())
         args.extend(baseArgs)
@@ -120,19 +156,22 @@ class ProtocolPoseBusters(EMProtocol):
 
     def createOutputStep(self):
         resultsFile = self.getResultsFile()
-        csvRows = self.getFileInfo(resultsFile)
-        resTestsDic = self.parseResultRows(csvRows)
+        if not os.path.exists(resultsFile):
+            concatThreadFiles(resultsFile, self._getPath())
+        resTestsDic = self.parseResultRows(resultsFile)
 
         newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSet.get(), self._getPath(), copyInfo=True)
         for mol in self.inputMoleculesSet.get():
             newMol = mol.clone()
             newMol.PoseBusters_file = String(resultsFile)
 
-            resDic = resTestsDic[os.path.abspath(mol.getPoseFile())]
-            if self.checkPassedTests(resDic) >= self.testsPassed.get():
-                for testName, testVal in resDic.items():
-                    newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
-                newMols.append(newMol)
+            baseName = getBaseName(mol.getPoseFile())
+            if baseName in resTestsDic:
+                resDic = resTestsDic[baseName]
+                if self.checkPassedTests(resDic) >= self.testsPassed.get():
+                    for testName, testVal in resDic.items():
+                        newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
+                    newMols.append(newMol)
 
         self._defineOutputs(outputSmallMolecules=newMols)
 
@@ -195,20 +234,19 @@ class ProtocolPoseBusters(EMProtocol):
         args = []
 
         if self.useTrueMol.get():
-            molTrue = self.getTrueMol()
-            trueFile = self.convertFormat(molTrue, type='crystal')
+            trueFile = self.getTrueMolFile()
             args.append(f'-l {os.path.abspath(trueFile)}')
 
         if self.molRec.get():
-            protFile = self.convertFormat(
-                self.inputMoleculesSet.get().getProteinFile(), type='file'
-            )
+            protFile = self.getMolRecFile()
             args.append(f'-p {os.path.abspath(protFile)}')
 
         return args
 
-    def getResultsFile(self):
-        return self._getPath('results.csv')
+    def getResultsFile(self, it=None):
+        if it is None:
+            return self._getPath('results.csv')
+        return self._getPath(f'results_{it}.csv')
     
     def getTestToPass(self):
         if self.doSpecific.get():
@@ -224,8 +262,9 @@ class ProtocolPoseBusters(EMProtocol):
                 n += 1
         return n
     
-    def parseResultRows(self, csvRows):
+    def parseResultRows(self, resultsFile):
         resDic = {}
+        csvRows = self.getFileInfo(resultsFile)
         testsToPass = self.getTestToPass()
         for poseName, row in csvRows.items():
             resDic[poseName] = {}
@@ -241,7 +280,7 @@ class ProtocolPoseBusters(EMProtocol):
             reader = csv.DictReader(f, delimiter=',')
             for row in reader:
                 poseFile = row['molecule'] if row['molecule'] else row['file']
-                csvRows[poseFile] = row
+                csvRows[getBaseName(poseFile)] = row
 
         return csvRows
 
@@ -277,3 +316,23 @@ class ProtocolPoseBusters(EMProtocol):
             print('The input ligand is not found')
         return myMol
 
+    def getTrueMolFile(self):
+        return os.path.abspath(self._getExtraPath('trueMol.pdb'))
+
+    def getMolRecFile(self):
+        return os.path.abspath(self._getExtraPath('molRec.pdb'))
+
+    def getInMolsDir(self, it):
+        return os.path.abspath(self._getTmpPath(f'inputMols_{it}'))
+
+    def getConvMolsDir(self, it):
+        return os.path.abspath(self._getExtraPath(f'convertedMols_{it}'))
+
+    def getNThreads(self):
+        nThreads = self.numberOfThreads.get() - 1
+        nThreads = 1 if nThreads < 1 else nThreads
+
+        nMols = len(self.inputMoleculesSet.get())
+        nBatches = (nMols // self.batchSize.get()) + 1
+
+        return max(nThreads, nBatches)
