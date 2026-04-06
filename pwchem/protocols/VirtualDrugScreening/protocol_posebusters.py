@@ -82,6 +82,9 @@ class ProtocolPoseBusters(EMProtocol):
         iGroup.addParam('molRec', params.BooleanParam, default=True, label="Use receptor to run tests: ",
                         help='Choose whether to output use receptor to run tests. (If True, it will be used to run '
                              'all default tests that require the protein as input.)')
+        iGroup.addParam('batchSize', params.IntParam, label='Batch size: ', default=200,
+                        expertLevel=params.LEVEL_ADVANCED,
+                        help='Maximum batch size to execute')
 
         fGroup = form.addGroup('Tests')
         fGroup.addParam('testsPassed', params.IntParam, label='Min. tests passed: ', default=self.NTESTS['receptor'],
@@ -325,4 +328,8 @@ class ProtocolPoseBusters(EMProtocol):
     def getNThreads(self):
         nThreads = self.numberOfThreads.get() - 1
         nThreads = 1 if nThreads < 1 else nThreads
-        return nThreads
+
+        nMols = len(self.inputMoleculesSet.get())
+        nBatches = (nMols // self.batchSize.get()) + 1
+
+        return max(nThreads, nBatches)
