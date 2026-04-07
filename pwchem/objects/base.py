@@ -105,18 +105,6 @@ class SequenceChem(data.Sequence):
         attrDic[key.strip()] = eval(values.strip())
     return attrDic
 
-  def getInteractScoresDic(self):
-    '''Returns data from the files where the interaction scores are stored.'''
-    try:
-        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if "entries" not in data:
-            data["entries"] = []
-    except (json.JSONDecodeError, FileNotFoundError):
-        data = {"entries": []}
-
-    return data
-
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
 
@@ -135,9 +123,22 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', ""))
 
-  def copyInfo(self, other):
-    """ Copy basic information from other set of classes to current one"""
-    self.copyAttributes(other, '_aligned', '_alignFile', '_interactMols', '_interactScoresFile')
+  def createCopy(self, outputPath, copyInfo=False, copyItems=False, itemSelectedCallback=None, rowFilter=None):
+      newSet = self.create(outputPath)
+      if copyInfo:
+        newSet.copyInfo(self)
+
+      if copyItems:
+        newSet.copyItems(self, itemSelectedCallback=itemSelectedCallback, rowFilter=rowFilter)
+
+      return newSet
+
+  def copyInfo(self, other, check=True):
+    """ Copy basic information from other set of classes to current one.
+    Check is True in case the copy is from a SetOfSeqeunces, which does not have the extra attributes"""
+    extraAttrs = ['_aligned', '_alignFile', '_interactMols', '_interactScoresFile']
+    extraAttrs = [a for a in extraAttrs if hasattr(other, a)]
+    self.copyAttributes(other, *extraAttrs)
 
   def getSetPath(self):
     return os.path.abspath(self._mapperPath[0])
@@ -202,33 +203,45 @@ class SetOfSequencesChem(data.SetOfSequences):
       else:
           self._scoreTypes.set(",".join(map(str, scores)))
 
-  def getInteractScoresDic(self, calculate=False):
+  def getInteractScoresDic(self):
     '''Returns data from the files where the interaction scores are stored.'''
-    seq = self.getFirstItem()
-    return(seq.getInteractScoresDic())
+    try:
+        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-  def setInteractScoresDic(self, newEntries, data, outputFile):
-    '''From a list of 'entries' writes the output file with the new entries of scores'''
-    for newEntry in newEntries:
-        seqName = newEntry["sequence"]
-        molsDict = newEntry["molecules"]
+    except (json.JSONDecodeError, FileNotFoundError):
+        data = {seq.getSeqName(): {} for seq in self}
 
-        existingSeq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
+    return data
 
-        if existingSeq:
-            for mol, newScores in molsDict.items():
-                if mol in existingSeq["molecules"]:
-                    for scoreName, scoreVal in newScores.items():
-                        if scoreName not in existingSeq["molecules"][mol]:
-                            existingSeq["molecules"][mol][scoreName] = scoreVal
-                else:
-                    existingSeq["molecules"][mol] = newScores
-        else:
-            data["entries"].append(newEntry)
+  def setInteractScoresDic(self, newData):
+    '''New data will update the scores dictionary storing the interactions of each sequence with a molecule
+    newData: {seqName: {molName: {scoreName: score}}}
+    '''
+    prevData = self.getInteractScoresDic()
+    for seqName, molDic in newData.items():
+      if not seqName in prevData:
+        prevData[seqName] = {}
 
-    with open(outputFile, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-    self.setInteractScoresFile(outputFile)
+      for molName, scoreDic in molDic.items():
+        if not molName in prevData[seqName]:
+          prevData[seqName][molName] = {}
+
+        prevData[seqName][molName].update(scoreDic)
+
+    oFile = self.getInteractScoresFile()
+    with open(oFile, "w", encoding="utf-8") as f:
+        json.dump(prevData, f, indent=4)
+
+  def updateScoreTypes(self):
+     scoreNames = []
+     intDic = self.getInteractScoresDic()
+     for seqName, molDic in intDic.items():
+       for molName, scoreDic in molDic.items():
+         for scoreName in scoreDic:
+           if not scoreName in scoreNames:
+             scoreNames.append(scoreName)
+     self.setScoreTypes(scoreNames)
 
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
@@ -242,8 +255,8 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getInteractMolNames(self):
       data = self.getInteractScoresDic()
       molNames = set()
-      for entry in data.get("entries", []):
-          molNames.update(entry.get("molecules", {}).keys())
+      for _, molDic in data.items():
+          molNames.update([molName for molName, _ in molDic.items()])
       return list(molNames)
 
   def getInteractMolsNumber(self):
