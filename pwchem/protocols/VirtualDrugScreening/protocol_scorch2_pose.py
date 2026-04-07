@@ -41,7 +41,7 @@ from pyworkflow.protocol import params, STEPS_PARALLEL
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import os, shutil, re, runOpenBabel
+from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets
 from pwchem import Plugin, SCORCH2_DIC
 
 
@@ -64,18 +64,11 @@ class ProtocolSCORCH2(EMProtocol):
                       help='Whether to use GPU or not. (Unable to choose the GPU id).')
         iGroup = form.addGroup('Input')
         # Pre-extracted features
-        iGroup.addParam('useFeatures', params.BooleanParam, default=False,
-                       label="Use extracted features: ",
-                       help='Choose whether to use pre-extracted features directly.')
-        iGroup.addParam('inputFeatures', params.PathParam,
-                        label='Input features file: ',
-                        condition='useFeatures',
-                        help='Input file where the pre-extracted features are stored.')
-
         iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
-                        label='Input ligand: ', allowsNull=True,
-                        condition='not useFeatures',
+                        label='Input ligand: ',
                         help='Input docked small molecules to rescore')
+        iGroup.addParam('batchSize', params.IntParam, default=500, expertLevel=params.LEVEL_ADVANCED,
+                        label='Batch size: ', help="Size of the batches send to rescore")
         # Aggregate
         iGroup.addParam('aggregate', params.BooleanParam, default=False,
                         label="Aggregate results: ",
@@ -90,17 +83,24 @@ class ProtocolSCORCH2(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        preExtracted = self.useFeatures.get()
-        if not preExtracted:
-            self._insertFunctionStep('moveFilesStep')
-            self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('scorchStep')
-        self._insertFunctionStep('createOutputStep')
-        self._insertFunctionStep('renameFilesStep')
+        rStep = self._insertFunctionStep(self.organizeInputStep)
 
-    def convertInputStep(self):
-        proteinDir = Path(self._getExtraPath()) / "protein"
-        ligandDir = Path(self._getExtraPath()) / "molecule"
+        sSteps = []
+        for it in range(self.getNBatches()):
+            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep])
+            sSteps += [self._insertFunctionStep(self.scorchStep, it, prerequisites=[cStep])]
+        oStep = self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
+
+    def organizeInputStep(self):
+        # Receptor
+        proteinDir = self.getProtDir()
+        proteinDir.mkdir(parents=True, exist_ok=True)
+
+        protein = self.inputSmallMolecules.get().getProteinFile()
+        proteinPath = Path(protein)
+
+        proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
+        shutil.copy(proteinPath, proteinFile)
 
         proteinFiles = list(proteinDir.glob("*"))
         if proteinFiles:
@@ -108,6 +108,28 @@ class ProtocolSCORCH2(EMProtocol):
             self.removePdbFiles(proteinDir)
         else:
             logging.warning("No protein files found.")
+
+        # Ligands
+        nBatches = self.getNBatches()
+        molSubSets = makeSubsets(self.inputSmallMolecules.get(), nBatches, True)
+        for it, subset in enumerate(molSubSets):
+            moleculeDir = self.getMoleculesDir(it)
+            moleculeDir.mkdir(parents=True, exist_ok=True)
+
+            ligandOutDir = moleculeDir / self._defaultName
+            ligandOutDir.mkdir(parents=True, exist_ok=True)
+
+            for i, ligand in enumerate(subset, start=1):
+                ligandPath = Path(ligand.getPoseFile())
+                origName = ligandPath.name
+                newName = f"{self._defaultName}_{origName}"
+
+                dest = ligandOutDir / newName
+                shutil.copy(ligandPath, dest)
+
+
+    def convertInputStep(self, it):
+        ligandDir = self.getMoleculesDir(it)
 
         ligandFiles = []
         for subfolder in ligandDir.iterdir():
@@ -119,16 +141,13 @@ class ProtocolSCORCH2(EMProtocol):
         else:
             logging.warning("No ligand files found.")
 
-    def scorchStep(self):
-        proteinDir = Path(self._getExtraPath()) / "protein"
-        ligandDir = Path(self._getExtraPath()) / "molecule"
 
-        projectDir = Path(self.getWorkingDir()).parent.resolve().parent
-        proteinFull = projectDir / proteinDir
-        ligandFull = projectDir / ligandDir
+    def scorchStep(self, it):
+        oriProteinDir = self.getProtDir()
+        proteinDir = self.getProtDir(it)
+        shutil.copytree(oriProteinDir, proteinDir)
 
-        outputFile = self._getExtraPath('scorch2_results.tsv')
-        outputFileFull = projectDir / outputFile
+        ligandDir = self.getMoleculesDir(it)
 
         scriptRescoringDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'SCORCH2'))
         modelsDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/models'))
@@ -139,33 +158,22 @@ class ProtocolSCORCH2(EMProtocol):
         psScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_ps_scaler'))
         pbScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_pb_scaler'))
 
-        preExtracted = self.useFeatures.get()
-        if not preExtracted:
-            args = [
+        resDir = self.getResultsDir(it)
+        resDir.mkdir(exist_ok=True)
+        outputFileFull = self.getBatchDir(it) / 'scorch2_results.tsv'
+        args = [
                 str(script),
-                "--protein-dir", str(proteinFull),
-                "--ligand-dir", str(ligandFull),
+                "--protein-dir", str(proteinDir.resolve()),
+                "--ligand-dir", str(ligandDir.resolve()),
                 "--sc2_ps_model", str(sc2PsModel),
                 "--sc2_pb_model", str(sc2PbModel),
                 "--ps_scaler", str(psScaler),
                 "--pb_scaler", str(pbScaler),
-                "--output", str(outputFileFull),
-                "--num-cores", str(self.numberOfThreads.get()),
+                "--output", str(outputFileFull.resolve()),
                 "--ps_weight", str(self.psWeight.get()),
                 "--pb_weight", str(self.pbWeight.get()),
-                "--res-dir", str('results')
-            ]
-        else:
-            args = [
-                str(script),
-                "--features", str(self.inputFeatures.get()),
-                "--sc2_ps_model", str(sc2PsModel),
-                "--sc2_pb_model", str(sc2PbModel),
-                "--ps_scaler", str(psScaler),
-                "--pb_scaler", str(pbScaler),
-                "--output", str(outputFileFull),
-                "--ps_weight", str(self.psWeight.get()),
-                "--pb_weight", str(self.pbWeight.get())
+                '--res-dir', str(resDir.resolve()),
+                "--num-cores", '1',
             ]
 
         if self.aggregate.get():
@@ -181,96 +189,25 @@ class ProtocolSCORCH2(EMProtocol):
             program="python",
             cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home']))
         )
-        if not preExtracted:
-            resDir = Path(self._getExtraPath()) / "results"
-            srcDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'results'))
-
-            if os.path.exists(srcDir):
-                shutil.move(srcDir, resDir)
 
     def createOutputStep(self):
-        mols = self.inputSmallMolecules.get()
-        newMols = SetOfSmallMolecules().create(outputPath=self._getPath())
+        inMols = self.inputSmallMolecules.get()
+        newMols = SetOfSmallMolecules.createCopy(inMols, self._getPath(), copyInfo=True)
         scoresDict = self.readScoresTSV()
-        for mol in mols:
-            newMol = SmallMolecule()
-
-            newMol.copy(mol)
+        for mol in inMols:
+            newMol = mol.clone()
             newMol.scorchScore = Float()
+
             molName = Path(newMol.getPoseFile()).stem
             if molName in scoresDict:
                 newMol.setAttributeValue('scorchScore', scoresDict[molName])
             else:
-
                 newMol.setAttributeValue('scorchScore', None)
             newMols.append(newMol)
-        newMols.setDocked(True)
-        newMols.proteinFile.set(self.inputSmallMolecules.get().getProteinFile())
+
         self._defineOutputs(outputSmallMolecules=newMols)
 
-    def moveFilesStep(self):
-        extraPath = Path(self._getExtraPath())
 
-        proteinDir = extraPath / "protein"
-        moleculeDir = extraPath / "molecule"
-        proteinDir.mkdir(parents=True, exist_ok=True)
-        moleculeDir.mkdir(parents=True, exist_ok=True)
-
-        protein = self.inputSmallMolecules.get().getProteinFile()
-        proteinPath = Path(protein)
-        pdbId = self.getPDBId()
-        #change names so it does not crash with _
-        proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
-        shutil.copy(proteinPath, proteinFile)
-
-        ligands = self.inputSmallMolecules.get()
-        ligandOutDir = moleculeDir / self._defaultName
-        ligandOutDir.mkdir(parents=True, exist_ok=True)
-
-        for i, ligand in enumerate(ligands, start=1):
-            ligandPath = Path(ligand.getPoseFile())
-            origName = ligandPath.name
-            newName = f"{self._defaultName}_{origName}"
-
-            dest = ligandOutDir / newName
-            shutil.copy(ligandPath, dest)
-
-    def renameFilesStep(self):
-        extraPath = Path(self._getExtraPath())
-        pdbid = self.getPDBId()
-
-        proteinDir = extraPath / "protein"
-        moleculeDir = extraPath / "molecule"
-        ligandDir = moleculeDir / self._defaultName
-
-        for file in proteinDir.iterdir():
-            if file.name.startswith(f"{self._defaultName}_protein"):
-                newProteinName = f"{pdbid}_protein{file.suffix}"
-                file.rename(proteinDir / newProteinName)
-
-        newLigandFolder = moleculeDir / pdbid
-        if ligandDir.exists():
-            ligandDir.rename(newLigandFolder)
-            ligandDir = newLigandFolder
-
-        for file in ligandDir.iterdir():
-            if file.name.startswith(f"{self._defaultName}_"):
-                newName = file.name.replace(
-                    f"{self._defaultName}_",
-                    f"{pdbid}_",
-                    1
-                )
-                file.rename(ligandDir / newName)
-
-        resultsDir = extraPath / "results"
-        oldPrefix = f"{self._defaultName}_"
-        newPrefix = f"{pdbid}_"
-
-        if resultsDir.exists():
-            for path in resultsDir.rglob("*"):
-                if path.is_file() and path.name.startswith(oldPrefix):
-                    newName = path.name.replace(oldPrefix, newPrefix, 1)
-                    path.rename(path.with_name(newName))
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -294,6 +231,20 @@ class ProtocolSCORCH2(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def getBatchDir(self, it):
+        return Path(self._getExtraPath()) / f"batch_{it}"
+
+    def getProtDir(self, it=None):
+        if it is None:
+            return Path(self._getExtraPath()) / "protein"
+        return self.getBatchDir(it) / "protein"
+
+    def getMoleculesDir(self, it):
+        return self.getBatchDir(it) / "molecule"
+
+    def getResultsDir(self, it):
+        return self.getBatchDir(it) / f"results"
+
     def getPDBId(self):
         protein = self.inputSmallMolecules.get().getProteinFile()
         proteinPath = Path(protein)
@@ -310,6 +261,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     def convertFiles(self, fileList, baseDir):
         """Convert PDB or CIF to PDBQT, keeping output in the same folder as the input file"""
+        oFiles = []
         for file in fileList:
             suffix = file.suffix.lower()
             basename = file.stem
@@ -319,6 +271,7 @@ class ProtocolSCORCH2(EMProtocol):
 
             pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
             outputPath = str(pdbqtFile.resolve())
+            oFiles.append(outputPath)
             inputPath = str(file.resolve())
 
             if suffix == ".cif":
@@ -328,6 +281,7 @@ class ProtocolSCORCH2(EMProtocol):
 
             args = f"-ipdb {inputPath} -opdbqt -O {outputPath}"
             runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+        return oFiles
 
 
     def removePdbFiles(self, directory):
@@ -341,20 +295,29 @@ class ProtocolSCORCH2(EMProtocol):
                     logging.warning(f"Could not delete {pdbFile.name}: {e}")
 
     def readScoresTSV(self):
-        extraPath = Path(self._getExtraPath())
-        resultsTsv = extraPath / "scorch2_results.tsv"
-
         scoreDict = {}
+        for it in range(self.getNBatches()):
+            resultsTsv = self.getBatchDir(it) / "scorch2_results.tsv"
+            with open(resultsTsv, "r", encoding="utf-8-sig") as f:
+                lines = [line for line in f.readlines() if not line.startswith("#") and line.strip()]
 
-        with open(resultsTsv, "r", encoding="utf-8-sig") as f:
-            lines = [line for line in f.readlines() if not line.startswith("#") and line.strip()]
+            reader = csv.DictReader(lines, delimiter=",")
 
-        reader = csv.DictReader(lines, delimiter=",")
-
-        for row in reader:
-            compounId = row["compound_id"].strip()
-            molName = compounId.split("_", 1)[1].replace(".pdbqt", "")
-            score = float(row["sc2_score"])
-            scoreDict[molName] = score
+            for row in reader:
+                compounId = row["compound_id"].strip()
+                molName = compounId.split("_", 1)[1].replace(".pdbqt", "")
+                score = float(row["sc2_score"])
+                scoreDict[molName] = score
         return scoreDict
+
+    def getNBatches(self):
+        nThreads = self.numberOfThreads.get() - 1
+        nThreads = 1 if nThreads < 1 else nThreads
+
+        nMols = len(self.inputSmallMolecules.get())
+        nBatches = (nMols // self.batchSize.get()) + 1
+
+        maxThreads = max(nThreads, nBatches)
+
+        return min(maxThreads, nMols)
 
