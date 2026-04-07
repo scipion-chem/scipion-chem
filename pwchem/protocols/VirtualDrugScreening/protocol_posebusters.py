@@ -141,6 +141,7 @@ class ProtocolPoseBusters(EMProtocol):
         baseArgs.append('--outfmt csv')
         baseArgs.append(f'--output {os.path.abspath(resultsFile)}')
         baseArgs.append('--full-report')
+        baseArgs.append('--max-workers 1')
 
         args = ['bust']
         for inpFile in os.listdir(self.getConvMolsDir(it)):
@@ -335,4 +336,6 @@ class ProtocolPoseBusters(EMProtocol):
         nMols = len(self.inputMoleculesSet.get())
         nBatches = (nMols // self.batchSize.get()) + 1
 
-        return max(nThreads, nBatches)
+        maxThreads = max(nThreads, nBatches)
+
+        return min(maxThreads, nMols)
