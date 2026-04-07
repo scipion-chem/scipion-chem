@@ -253,10 +253,9 @@ class TestScoreDocking(TestDefineStructROIs):
 class TestSCORCH2(TestScoreDocking):
         def _runSCORCH2(self, dockProt):
                 protSCORCH2 = self.newProtocol(ProtocolSCORCH2)
-                protSCORCH2.useFeatures.set('False')
 
-                protSCORCH2.inputPDBligandFiles.set(dockProt)
-                protSCORCH2.inputPDBligandFiles.setExtended('outputSmallMolecules')
+                protSCORCH2.inputSmallMolecules.set(dockProt)
+                protSCORCH2.inputSmallMolecules.setExtended('outputSmallMolecules')
 
                 self.proj.launchProtocol(protSCORCH2, wait=True)
                 return protSCORCH2
