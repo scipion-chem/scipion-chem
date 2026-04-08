@@ -41,7 +41,7 @@ from pyworkflow.protocol import params, STEPS_PARALLEL
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets
+from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets, insistentRun
 from pwchem import Plugin, SCORCH2_DIC
 
 
@@ -182,13 +182,8 @@ class ProtocolSCORCH2(EMProtocol):
         if self.useGPU.get():
             args.append("--gpu")
 
-        Plugin.runCondaCommand(
-            self,
-            args=" ".join(args),
-            condaDic=SCORCH2_DIC,
-            program="python",
-            cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home']))
-        )
+        insistentRun(self, 'python', args,
+                     envDic=SCORCH2_DIC, nMax=5, cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home'])), sleepTime=5)
 
     def createOutputStep(self):
         inMols = self.inputSmallMolecules.get()
