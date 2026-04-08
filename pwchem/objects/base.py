@@ -220,11 +220,11 @@ class SetOfSequencesChem(data.SetOfSequences):
     '''
     prevData = self.getInteractScoresDic()
     for seqName, molDic in newData.items():
-      if not seqName in prevData:
+      if seqName not in prevData:
         prevData[seqName] = {}
 
       for molName, scoreDic in molDic.items():
-        if not molName in prevData[seqName]:
+        if molName not in prevData[seqName]:
           prevData[seqName][molName] = {}
 
         prevData[seqName][molName].update(scoreDic)
@@ -239,7 +239,7 @@ class SetOfSequencesChem(data.SetOfSequences):
      for seqName, molDic in intDic.items():
        for molName, scoreDic in molDic.items():
          for scoreName in scoreDic:
-           if not scoreName in scoreNames:
+           if scoreName not in scoreNames:
              scoreNames.append(scoreName)
      self.setScoreTypes(scoreNames)
 
