@@ -46,7 +46,6 @@ class OmniBindPredictionViewer(ProtocolViewer):
 
         if self.structSet and self.checkIfInteractions():
             self._defineInteractionParams(form)
-            self._defineGenerateOutputParams(form)
         else:
             form.addSection(label='Viewer')
             form.addInfo('No interaction data found for these structures.')
@@ -85,20 +84,10 @@ class OmniBindPredictionViewer(ProtocolViewer):
         hGroup.addParam('intervals', params.IntParam, default=10, label="Bins",
                         expertLevel=params.LEVEL_ADVANCED)
 
-    def _defineGenerateOutputParams(self, form):
-        """ Añade los botones para generar nuevos sets en Scipion """
-        oGroup = form.addGroup('Generate Scipion Output')
-        oGroup.addParam('genProts', params.LabelParam, label='Generate proteins set: ',
-                        help='Create a new set with the proteins currently selected in filters.')
-        oGroup.addParam('genMols', params.LabelParam, label='Generate molecules set: ',
-                        help='Create a new set with the molecules that pass the score threshold.')
-
     def _getVisualizeDict(self):
         return {
             'displayHeatMap': self._viewHeatMap,
-            'displayHistogram': self._viewHistogram,
-            'genProts': self._generateProts,
-            'genMols': self._generateMols
+            'displayHistogram': self._viewHistogram
         }
 
     def _viewHeatMap(self, paramName=None):
@@ -167,53 +156,3 @@ class OmniBindPredictionViewer(ProtocolViewer):
                 matrix[i, j] = val if val >= thres else np.nan
 
         return matrix, prots, mols, filtScore
-
-    def _generateProts(self, paramName=None):
-        project = self.getProject()
-        filtProt = self.getEnumText('chooseStruct')
-
-        objIds = []
-        for struct in self.structSet:
-            protName = os.path.basename(struct.getFileName()).split('.')[0]
-            if filtProt == 'All' or filtProt == protName:
-                objIds.append(str(struct.getObjId()))
-
-        if objIds and askokcancel("Confirm", f"Create a set with {len(objIds)} proteins?"):
-            protFilter = project.newProtocol(ProtSubSet,
-                                             inputFullSet=self.structSet,
-                                             selectIds=True,
-                                             range=','.join(objIds))
-            protFilter.setObjLabel(f'Filtered Proteins ({filtProt})')
-            project.launchProtocol(protFilter, wait=False)
-
-    def _generateMols(self, paramName=None):
-        project = self.getProject()
-        allMols = self.structSet._interactMols.get()
-        if not allMols:
-            return
-
-        filtProt = self.getEnumText('chooseStruct')
-        filtMol = self.getEnumText('chooseMol')
-        filtScore = self.getEnumText('chooseScore')
-        thres = self.scThres.get()
-
-        with open(self.structSet._interactScoresFile.get(), 'r') as f:
-            fullData = json.load(f)
-
-        mols_to_keep = set()
-        for pName, molDic in fullData.items():
-            if filtProt == 'All' or filtProt == pName:
-                for mName, scores in molDic.items():
-                    if filtMol == 'All' or filtMol == mName:
-                        if scores.get(filtScore, 0) >= thres:
-                            mols_to_keep.add(mName)
-
-        objIds = [str(m.getObjId()) for m in allMols if m.getMolName() in mols_to_keep]
-
-        if objIds and askokcancel("Confirm", f"Create a set with {len(objIds)} molecules?"):
-            molFilter = project.newProtocol(ProtSubSet,
-                                            inputFullSet=allMols,
-                                            selectIds=True,
-                                            range=','.join(objIds))
-            molFilter.setObjLabel(f'Mols {filtScore} > {thres}')
-            project.launchProtocol(molFilter, wait=False)
