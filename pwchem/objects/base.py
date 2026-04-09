@@ -78,10 +78,6 @@ class SequenceChem(data.Sequence):
     data.Sequence.__init__(self, **kwargs)
     self._attrFile = pwobj.String(kwargs.get('attributesFile', None))
 
-    # Dictionary that contains the interacting score of each SequenceChem with each SmallMolecule,
-    # so there is no need to create 1 SetOfSmallMolecules per SequenceChem {molId: score}
-    self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
-
   def __str__(self):
     return "SequenceChem (name = {})\n".format(self.getSeqName())
 
@@ -105,11 +101,6 @@ class SequenceChem(data.Sequence):
         attrDic[key.strip()] = eval(values.strip())
     return attrDic
 
-  def getInteractScoresFile(self):
-    return self._interactScoresFile.get()
-
-  def setInteractScoresFile(self, intFile):
-    self._interactScoresFile.set(intFile)
 
 
 class SetOfSequencesChem(data.SetOfSequences):
