@@ -1523,6 +1523,11 @@ class SetOfStructROIs(data.EMSet):
     self._hetatmFile = String(kwargs.get('hetatmFile', None))
     self._interactingResiduesFile = String(kwargs.get('interactingResiduesFile', None))
 
+    self._interactMols = pwobj.Pointer()
+    self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
+
+    self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', ""))
+
   def __str__(self):
     s = '{} ({} items, {} class)'.format(self.getClassName(), self.getSize(), self.getPocketsClass())
     return s
@@ -1530,6 +1535,7 @@ class SetOfStructROIs(data.EMSet):
   def copyInfo(self, other):
     self._hetatmFile = other._hetatmFile
     self._pocketsClass = other._pocketsClass
+    self._interactMols = other._interactMols
 
   def getSetPath(self):
     return os.path.abspath(self._mapperPath[0])
@@ -1769,6 +1775,83 @@ class SetOfStructROIs(data.EMSet):
         outStr += pdbLine
 
     return outStr
+
+  def getInteractMols(self):
+    return self._interactMols.get()
+
+  def getInteractMolsPointer(self):
+    return self._interactMols
+
+  def hasInteractMols(self):
+    return self.getInteractMolsPointer() != pwobj.Pointer()
+
+  def setInteractMols(self, mols=None):
+    if mols.isPointer():
+      self._interactMols.copy(mols)
+    else:
+      self._interactMols.set(mols)
+
+  def getScoreTypes(self):
+      if self._scoreTypes == "":
+        return []
+      return self._scoreTypes.get().split(",")
+
+  def hasScoreTypes(self):
+      return bool(self._scoreTypes)
+
+  def setScoreTypes(self, scores=None):
+      if scores is None:
+          self._scoreTypes.set("")
+      elif isinstance(scores, str):
+          self._scoreTypes.set(scores)
+      else:
+          self._scoreTypes.set(",".join(map(str, scores)))
+
+  def getInteractScoresDic(self):
+    '''Returns data from the files where the interaction scores are stored.'''
+    try:
+        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+    except (json.JSONDecodeError, FileNotFoundError):
+        data = {seq.getSeqName(): {} for seq in self}
+
+    return data
+
+  def setInteractScoresDic(self, newData):
+    '''New data will update the scores dictionary storing the interactions of each sequence with a molecule
+    newData: {seqName: {molName: {scoreName: score}}}
+    '''
+    prevData = self.getInteractScoresDic()
+    for seqName, molDic in newData.items():
+      if seqName not in prevData:
+        prevData[seqName] = {}
+
+      for molName, scoreDic in molDic.items():
+        if molName not in prevData[seqName]:
+          prevData[seqName][molName] = {}
+
+        prevData[seqName][molName].update(scoreDic)
+
+    oFile = self.getInteractScoresFile()
+    with open(oFile, "w", encoding="utf-8") as f:
+        json.dump(prevData, f, indent=4)
+
+  def updateScoreTypes(self):
+     scoreNames = []
+     intDic = self.getInteractScoresDic()
+     for seqName, molDic in intDic.items():
+       for molName, scoreDic in molDic.items():
+         for scoreName in scoreDic:
+           if scoreName not in scoreNames:
+             scoreNames.append(scoreName)
+     self.setScoreTypes(scoreNames)
+
+  def getInteractScoresFile(self):
+      return self._interactScoresFile.get()
+
+  def setInteractScoresFile(self, intFile):
+      self._interactScoresFile.set(intFile)
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
