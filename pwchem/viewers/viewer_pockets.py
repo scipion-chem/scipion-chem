@@ -25,16 +25,26 @@
 # **************************************************************************
 
 import os
+import json
 from pathlib import Path
+from pwem.viewers import EmPlotter
+
+import matplotlib.pyplot as plt
+from tkinter.messagebox import askokcancel
 
 import numpy as np
 from pyworkflow.protocol import params, Protocol
 
 import pyworkflow.viewer as pwviewer
+
+from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER
 from matplotlib import pyplot as plt, cm
 from matplotlib.patches import Circle, Patch
 
 from pwem.viewers.mdviewer.viewer import MDViewer
+
+from pwchem.utils import getFilteredOutput
+from pwchem.viewers.viewers_sequences import heatmap, annotateHeatmap
 
 from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
@@ -581,3 +591,162 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
       args = '{} -e {}'.format(outFile, tclFile)
 
       return [VmdViewPopen(args, cwd=outDir)]
+
+
+class InteractionsViewerStructROIs(ProtocolViewer):
+    """ Protocol viewer to visualize DrugCLIP scores on structROIs
+    """
+    _label = 'Interactions viewer'
+    _targets = [SetOfStructROIs]
+    _environments = [pwviewer.DESKTOP_TKINTER]
+
+    def __init__(self, **kwargs):
+        pwviewer.ProtocolViewer.__init__(self, **kwargs)
+
+    def _defineParams(self, form):
+        self.structSet = self.getOutPockets()
+
+        if self.structSet and self.checkIfInteractions():
+            self._defineInteractionParams(form)
+        else:
+            form.addSection(label='Viewer')
+            form.addInfo('No interaction data found for these structures.')
+
+    def _defineInteractionParams(self, form):
+        scoresFile = self.structSet._interactScoresFile.get()
+        with open(scoresFile, 'r') as f:
+            data = json.load(f)
+
+        roiNames = sorted(list(data.keys()))
+        molNames = sorted(list(data[roiNames[0]].keys())) if roiNames else []
+        scoreTypes = sorted(list(data[roiNames[0]][molNames[0]].keys())) if molNames else []
+
+        form.addSection(label='Interaction viewer')
+        sGroup = form.addGroup('Score filter')
+
+        sGroup.addParam('chooseROI', params.EnumParam, label='Display results for pocket: ',
+                        choices=['All'] + roiNames, default=0,
+                        help='Display results for the specific pocket')
+
+        sGroup.addParam('chooseMol', params.EnumParam, label='Display results for molecules: ',
+                        choices=['All'] + molNames, default=0,
+                        help='Display results for the specific molecule')
+
+        sGroup.addParam('scThres', params.FloatParam, label='Score threshold: ', default=0,
+                        help='Display interactions over this DrugCLIP score')
+
+        sGroup.addParam('chooseScore', params.EnumParam, label='Score type: ',
+                        choices=scoreTypes, default=0)
+
+        hGroup = form.addGroup('Scores View')
+        hGroup.addParam('displayHeatMap', params.LabelParam, label='Display Heatmap',
+                        help='Matrix of Pocket vs Molecule scores')
+        hGroup.addParam('displayHistogram', params.LabelParam, label='Display Histogram',
+                        help='Distribution of predicted affinities')
+        hGroup.addParam('intervals', params.IntParam, default=11, label="Bins",
+                        expertLevel=params.LEVEL_ADVANCED)
+
+    def _getVisualizeDict(self):
+        vDic = super()._getVisualizeDict()
+        vDic.update({
+            'displayHeatMap': self._viewHeatMap,
+            'displayHistogram': self._viewHistogram
+        })
+        return vDic
+
+    def _viewHeatMap(self, paramName=None):
+        filtProt = self.getEnumText('chooseROI')
+        filtMol = self.getEnumText('chooseMol')
+        filtScore = self.getEnumText('chooseScore')
+
+        intAr, prots, mols, scoreLabel = self._getFilteredData(filtProt, filtMol, filtScore)
+
+        if len(prots) * len(mols) > 500:
+            if not askokcancel("Large dataset", "The heatmap might be too large. Continue?"):
+                return
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        im, _ = heatmap(intAr, prots, mols, ax=ax, cmap="YlOrRd",
+                        cbarLabel=f"OmniBind {scoreLabel}")
+
+        if len(prots) * len(mols) < 150:
+            annotateHeatmap(im, valfmt="{x:.2f}")
+
+        fig.tight_layout()
+        plt.show()
+
+    def _viewHistogram(self, paramName=None):
+        outPockets = self.getOutPockets()
+        filtROI = self.getEnumText('chooseROI')
+        filtMol = self.getEnumText('chooseMol')
+        filtScore = self.getEnumText('chooseScore')
+
+        intAr, _, _, sType = self.getFilteredOutput(outPockets, filtROI, filtMol, filtScore, self.scThres.get())
+        scoreList = intAr.flatten()
+
+        self.plotter = EmPlotter(x=1, y=1, windowTitle='DrugCLIP Score Distribution')
+        a = self.plotter.createSubPlot(f"Distribution: {filtROI}", 'DrugCLIP Score', "Count")
+
+        low, high = scoreList.min(), scoreList.max()
+        a.hist(scoreList, bins=self.intervals.get(), linewidth=1, rwidth=0.9, color='skyblue')
+        a.grid(True)
+        return [self.plotter]
+
+    ############ UTILS ##############
+
+    def getOutPockets(self):
+        if hasattr(self.protocol, 'outputStructROIs'):
+            return self.protocol.outputStructROIs
+        return self.protocol
+
+    def checkIfInteractions(self):
+        obj = self.getOutPockets()
+        return obj is not None and obj.hasInteractMols()
+
+    def _getFilteredData(self, filtProt, filtMol, filtScore):
+        with open(self.structSet._interactScoresFile.get(), 'r') as f:
+            fullData = json.load(f)
+
+        prots = [filtProt] if filtProt != 'All' else sorted(fullData.keys())
+        allMols = set()
+        for p in fullData:
+            allMols.update(fullData[p].keys())
+        mols = [filtMol] if filtMol != 'All' else sorted(list(allMols))
+
+        matrix = np.zeros((len(prots), len(mols)))
+        thres = self.scThres.get()
+
+        for i, p in enumerate(prots):
+            for j, m in enumerate(mols):
+                val = fullData.get(p, {}).get(m, {}).get(filtScore, np.nan)
+                matrix[i, j] = val if val >= thres else np.nan
+
+        return matrix, prots, mols, filtScore
+
+    def getFilteredOutput(self, outPockets, filtROI, filtMol, filtScore, threshold=0.0):
+        scores_file = outPockets._interactScoresFile.get()
+
+        with open(scores_file, "r") as f:
+            data = json.load(f)
+
+        prots = [filtROI] if filtROI != "All" else sorted(data.keys())
+
+        all_mols = set()
+        for roi in data:
+            all_mols.update(data[roi].keys())
+
+        mols = [filtMol] if filtMol != "All" else sorted(all_mols)
+
+        matrix = np.full((len(prots), len(mols)), np.nan, dtype=float)
+
+        for i, p in enumerate(prots):
+            for j, m in enumerate(mols):
+                val = data.get(p, {}).get(m, {}).get(filtScore, np.nan)
+
+                if np.isfinite(val) and val >= threshold:
+                    matrix[i, j] = val
+                else:
+                    matrix[i, j] = np.nan
+
+        return matrix, prots, mols, filtScore
+
