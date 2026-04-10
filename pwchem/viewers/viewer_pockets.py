@@ -687,7 +687,7 @@ class InteractionsViewerStructROIs(ProtocolViewer):
         self.plotter = EmPlotter(x=1, y=1, windowTitle='DrugCLIP Score Distribution')
         a = self.plotter.createSubPlot(f"Distribution: {filtROI}", 'DrugCLIP Score', "Count")
 
-        low, high = scoreList.min(), scoreList.max()
+        _, _ = scoreList.min(), scoreList.max()
         a.hist(scoreList, bins=self.intervals.get(), linewidth=1, rwidth=0.9, color='skyblue')
         a.grid(True)
         return [self.plotter]
@@ -724,18 +724,18 @@ class InteractionsViewerStructROIs(ProtocolViewer):
         return matrix, prots, mols, filtScore
 
     def getFilteredOutput(self, outPockets, filtROI, filtMol, filtScore, threshold=0.0):
-        scores_file = outPockets._interactScoresFile.get()
+        scoresFile = outPockets._interactScoresFile.get()
 
-        with open(scores_file, "r") as f:
+        with open(scoresFile, "r") as f:
             data = json.load(f)
 
         prots = [filtROI] if filtROI != "All" else sorted(data.keys())
 
-        all_mols = set()
+        allMols = set()
         for roi in data:
-            all_mols.update(data[roi].keys())
+            allMols.update(data[roi].keys())
 
-        mols = [filtMol] if filtMol != "All" else sorted(all_mols)
+        mols = [filtMol] if filtMol != "All" else sorted(allMols)
 
         matrix = np.full((len(prots), len(mols)), np.nan, dtype=float)
 
