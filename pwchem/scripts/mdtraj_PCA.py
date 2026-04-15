@@ -63,5 +63,5 @@ if __name__ == "__main__":
     if args.pca_coord:
         plotPcCoords(traj)
 
-    elif args.pca_dist:
+    if args.pca_dist:
         plotPcaDist(traj)

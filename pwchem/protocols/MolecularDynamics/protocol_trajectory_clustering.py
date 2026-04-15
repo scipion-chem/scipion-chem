@@ -232,7 +232,6 @@ class ProtocolTrajectoryClustering(EMProtocol):
         args += '-sa "{}" '.format(alignStr)
         args += '-sr "{}" '.format(rmsdStr)
         args += '-m {} '.format(CLUSTERING_METHODS[int(self.clusterMethod.get())])
-        # args += '-axis default -limitmat 100000000 -i Y '
         if self._getLigandId():
             args += f'-st "protein or resname {self._getLigandId()}" '
         else:
@@ -252,7 +251,8 @@ class ProtocolTrajectoryClustering(EMProtocol):
         mdsys = self.inputMDSystem.get()
         if mdsys:
             summary.append(
-                f'This protocol has created a set of atom structures as representatives of the clusters. To see the clustering results open the images inside extra/clustering path.\n')
+                'This protocol has created a set of atom structures as representatives of the clusters.\n '
+                'To see the clustering results open the images inside extra/clustering path.\n')
             summary.append('Trajectory: {}'.format(mdsys.getTrajectoryFile()))
         try:
             alignStr, rmsdStr = self._getSelectionStrings()
@@ -276,21 +276,5 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
         if self.clusterMode.get() == 1 and self.nGroup.get() < 2:
             errors.append('Number of clusters must be at least 2.')
-
-        if self.selectAlign.get() == SEL_RESIDUES:
-            if self.firstResAlign.get() > self.lastResAlign.get():
-                errors.append('Alignment: first residue index must be <= last.')
-
-        if self.selectRmsd.get() == SEL_RESIDUES:
-            if self.firstResRmsd.get() > self.lastResRmsd.get():
-                errors.append('RMSD: first residue index must be <= last.')
-
-        if self.selectAlign.get() == SEL_LIGAND and not self._getLigandId():
-            errors.append('Ligand selected for alignment but no ligand ID found '
-                          'in the input MDSystem. Check getLigandID().')
-
-        if self.selectRmsd.get() == SEL_LIGAND and not self._getLigandId():
-            errors.append('Ligand selected for RMSD but no ligand ID found '
-                          'in the input MDSystem. Check getLigandID().')
 
         return errors

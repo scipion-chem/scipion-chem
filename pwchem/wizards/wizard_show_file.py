@@ -41,8 +41,7 @@ class OpenSystemFileWizard(VariableWizard):
     _outputs = {}
 
     def show(self, form, *params):
-        inputParam, outputParam = self.getInputOutput(form)
-        system = inputParam[0]
+        inputParam, _ = self.getInputOutput(form)
         protocol = form.protocol
 
         systemFile = getattr(protocol, inputParam[0]).get().getSystemFile()

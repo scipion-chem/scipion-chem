@@ -30,28 +30,14 @@ from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering
 from pwchem.tests import MDSYSTEM, DataSetMDSystem
 from pwchem.utils import assertHandle
+from pwchem.tests.tests_imports import TestImportMDSystems
 
-class TestProLIFanalysis(BaseTest):
+class TestProLIFanalysis(TestImportMDSystems):
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet(MDSYSTEM)
         setupTestProject(cls)
         cls._runImportSystem()
-
-    @classmethod
-    def _runImportSystem(cls):
-        protImportMDSystem = cls.newProtocol(
-            ProtocolImportMDSystem,
-            inputCoords=cls.ds.getFile(DataSetMDSystem.amberSystemFile.value),
-            inputCrd=cls.ds.getFile(DataSetMDSystem.amberCrdFile.value),
-            inputTopology=cls.ds.getFile(DataSetMDSystem.amberTopoFile.value),
-            addTraj=True,
-            inputTrajectory=cls.ds.getFile(DataSetMDSystem.amberTrjFile.value),
-            hasLig=True,
-            ligID='LIG')
-        cls.launchProtocol(protImportMDSystem)
-        cls.protImportMDSystem = protImportMDSystem
-        return protImportMDSystem
 
     @classmethod
     def _runProLIF(cls):
@@ -73,27 +59,12 @@ class TestProLIFanalysis(BaseTest):
             cwd=self.prolifSystem.getWorkingDir()
         )
 
-class TestTrajClustering(BaseTest):
+class TestTrajClustering(TestImportMDSystems):
     @classmethod
     def setUpClass(cls):
         cls.ds = DataSet.getDataSet(MDSYSTEM)
         setupTestProject(cls)
         cls._runImportSystem()
-
-    @classmethod
-    def _runImportSystem(cls):
-        protImportMDSystem = cls.newProtocol(
-            ProtocolImportMDSystem,
-            inputCoords=cls.ds.getFile(DataSetMDSystem.amberSystemFile.value),
-            inputCrd=cls.ds.getFile(DataSetMDSystem.amberCrdFile.value),
-            inputTopology=cls.ds.getFile(DataSetMDSystem.amberTopoFile.value),
-            addTraj=True,
-            inputTrajectory=cls.ds.getFile(DataSetMDSystem.amberTrjFile.value),
-            hasLig=True,
-            ligID='LIG')
-        cls.launchProtocol(protImportMDSystem)
-        cls.protImportMDSystem = protImportMDSystem
-        return protImportMDSystem
 
     @classmethod
     def _runClustering(cls):

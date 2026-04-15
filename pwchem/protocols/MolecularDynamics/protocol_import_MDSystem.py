@@ -60,12 +60,12 @@ class ProtocolImportMDSystem(EMProtocol):
 
         form.addParam('hasLig', params.BooleanParam, label='Has ligand?', default=False,
                        help='Does the system has a ligand?')
-        form.addParam('ligID', params.StringParam, label='Has ligand?', condition='hasLig',
+        form.addParam('ligID', params.StringParam, label='Ligand name in PDB', condition='hasLig',
                        help='Does the system has a ligand?', default='LIG')
 
     # --------------------------- INSERT steps functions --------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('importStep')
+        self._insertFunctionStep(self.importStep)
 
     def importStep(self):
         objType = self.getEnumText('outputType')

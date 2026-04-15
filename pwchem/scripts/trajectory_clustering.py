@@ -131,7 +131,7 @@ def extractSelectedAtoms(selection, traj, logName, save=False):
             subTraj[0].save_pdb("{0}/{0}.pdb".format(logName))
             subTraj.save_xtc("{0}/{0}.xtc".format(logName))
         return subTraj
-    except:
+    except Exception as e:
         print("ERROR : there is an error with your selection string")
         print("        SELECTION STRING : ")
         print("        {}".format(selection))
@@ -143,7 +143,7 @@ def sendErrorMessage(calcType, selectionString, other=""):
     """Print information regarding an invalid selection string."""
     print("ERROR : {} selection string not valid".format(calcType))
     print("        >{}".format(selectionString))
-    if not other == "":
+    if other != "":
         print("        >{}".format(other))
     exit(1)
 
@@ -231,7 +231,7 @@ def parseArg():
                     "(Amber, Gromacs, CHARMM, NAMD, PDB)")
     try:
         argcomplete.autocomplete(arguments)
-    except:
+    except Exception as e:
         pass
 
     arguments.add_argument('-f', "--traj",    required=True, nargs='+',
@@ -304,7 +304,7 @@ def askChoice(args, name):
         try:
             name = npyFiles[int(choiceFile) - 1]
             return name
-        except:
+        except Exception as e:
             print("I didn't understand. Please try again")
             return askChoice(args, name)
     else:
@@ -317,7 +317,7 @@ def searchDistMat(rmsdString, args):
     name = rmsdString.replace(" ", "_") if rmsdString else "matrix_all"
 
     nameHashed = md5(name.encode()).hexdigest() + '.npy'
-    if not name[-4:] == ".npy":
+    if not name.endswith(".npy"):
         name += ".npy"
 
     npyFiles = glob.glob("*.npy")
@@ -426,7 +426,7 @@ def returnMappingCluster(labels):
     for i, clusterNum in enumerate(labels):
         clustersList[clusterNum - 1].frames.append(i)
         if clusterNum != clustersList[clusterNum - 1].id:
-            print("{0} - {0}".format(clusterNum, clustersList[clusterNum - 1]))
+            print("{0} - {1}".format(clusterNum, clustersList[clusterNum - 1]))
             sys.exit(1)
 
     for cluster in clustersList:
@@ -453,7 +453,7 @@ def autoClustering(matrix):
     distortions = []
     K = range(2, 15)
     for k in K:
-        kMeans = KMeans(n_clusters=k, n_init=10)
+        kMeans = KMeans(n_clusters=k, n_init=10, random_state=42)
         kMeans.fit(matrix)
         distortions.append(
             sum(np.min(cdist(matrix, kMeans.cluster_centers_, 'euclidean'), axis=1)) / matrix.shape[0])
@@ -470,7 +470,7 @@ def autoClustering(matrix):
     segThreshold = 0.99
     kIdx = np.argmax(segGains > segThreshold)
 
-    kMeans = KMeans(n_clusters=kIdx, n_init=10)
+    kMeans = KMeans(n_clusters=kIdx, n_init=10, random_state=42)
     kMeans.fit(matrix)
     return kIdx
 
@@ -537,7 +537,7 @@ def createClusterTable(traj, args):
                 cutoff = COORDS[0][1]
                 clicked = True
                 clusteringResult = sch.fcluster(linkage, cutoff, "distance")
-            except:
+            except Exception as e:
                 print("ERROR : PLEASE CLICK ON THE DENDROGRAM TO CHOOSE YOUR CUTOFF VALUE")
             plt.close()
 
@@ -574,7 +574,7 @@ def plotBarplot(clustersList, logName, size, traj, args):
     cmap = getCmap(len(clustersList))
     data = np.asmatrix(clustersNumberOrdered)
 
-    fig, ax = plt.subplots(figsize=(10, 1.5))
+    _, _ = plt.subplots(figsize=(10, 1.5))
 
     if traj.time.sum() < 0.0000005 or args["axis"].lower() == "frame":
         timeMin, timeMax = 0, np.shape(data)[1]
@@ -587,7 +587,7 @@ def plotBarplot(clustersList, logName, size, traj, args):
                 timeMin /= 1000
                 timeMax /= 1000
                 plt.xlabel("Time ($\\mu$s)")
-        except:
+        except Exception as e:
             timeMin, timeMax = 0, np.shape(data)[1]
 
     im = plt.imshow(data, aspect='auto', interpolation='none', cmap=cmap,
@@ -605,16 +605,15 @@ def plotBarplot(clustersList, logName, size, traj, args):
 
 def plotHist(clustersList, logName, colorsList):
     """Plot a histogram of cluster sizes."""
-    if mpl.__version__[0] == "2":
-        if "classic" in plt.style.available:
-            plt.style.use("classic")
+    if mpl.__version__[0] == "2" and "classic" in plt.style.available:
+        plt.style.use("classic")
 
     values = [cl.size for cl in clustersList]
     labels = [cl.id  for cl in clustersList]
 
     width = 0.7
     index = np.arange(len(values))
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
 
     bp = ax.bar(index, values, width, color=colorsList, label="Cluster size")
     for rect in bp:
@@ -634,7 +633,7 @@ def plotHist(clustersList, logName, colorsList):
 
 def plotDistmat(distances, logName):
     """Plot the full pairwise RMSD distance matrix."""
-    fig, ax = plt.subplots()
+    _, _ = plt.subplots()
     plt.imshow(distances, interpolation='none', origin='lower')
     plt.colorbar()
     plt.xlabel("Frame")
@@ -647,11 +646,10 @@ def plotDistmat(distances, logName):
 
 def plotDendro(linkage, logName, cutoff, colorList, clustersList):
     """Plot the hierarchical clustering dendrogram."""
-    if mpl.__version__[0] == "2":
-        if "classic" in plt.style.available:
+    if mpl.__version__[0] == "2" and "classic" in plt.style.available:
             plt.style.use("classic")
 
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     colorHex   = [mpl.colors.rgb2hex(x) for x in colorList]
     sch.set_link_color_palette(colorHex)
 
@@ -704,7 +702,7 @@ def plot2DDistanceProjection(rmsdMat, clustersList, colors, logName):
     x       = coords[:, 0]
     y       = coords[:, 1]
 
-    fig = plt.figure()
+    plt.figure()
     ax  = plt.subplot(111)
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
@@ -817,7 +815,7 @@ def clusterAnalysisCall(args):
 
     if len(trajFile) == 1:
         trajFile = trajFile[0]
-        if topFile is None and trajFile[-4:] == ".pdb":
+        if topFile is None and trajFile.endswith(".pdb"):
             traj = md.load_pdb(trajFile)
         else:
             traj = md.load(trajFile, top=topFile, stride=args["stride"])
@@ -825,7 +823,7 @@ def clusterAnalysisCall(args):
         print(">Several trajectories given. Will concatenate them.")
         trajList = []
         for t in trajFile:
-            if topFile is None and t[-4:] == ".pdb":
+            if topFile is None and t.endswith(".pdb"):
                 trajList.append(md.load_pdb(t))
             else:
                 trajList.append(md.load(t, top=topFile, stride=args["stride"]))
