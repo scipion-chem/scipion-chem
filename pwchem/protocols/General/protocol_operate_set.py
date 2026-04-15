@@ -215,6 +215,8 @@ class ProtChemOperateSet(EMProtocol):
                 for item in inSet.get():
                     opId = self.getAttrValue(item, opAttr)
                     value = item.getAttributeValue(self.filterColumn.get())
+                    if value is None:
+                        continue
 
                     isBetter = False
                     if opId not in outputDict:
