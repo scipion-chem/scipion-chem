@@ -131,7 +131,7 @@ def extractSelectedAtoms(selection, traj, logName, save=False):
             subTraj[0].save_pdb("{0}/{0}.pdb".format(logName))
             subTraj.save_xtc("{0}/{0}.xtc".format(logName))
         return subTraj
-    except Exception as e:
+    except ValueError:
         print("ERROR : there is an error with your selection string")
         print("        SELECTION STRING : ")
         print("        {}".format(selection))
@@ -231,7 +231,7 @@ def parseArg():
                     "(Amber, Gromacs, CHARMM, NAMD, PDB)")
     try:
         argcomplete.autocomplete(arguments)
-    except Exception as e:
+    except ValueError:
         pass
 
     arguments.add_argument('-f', "--traj",    required=True, nargs='+',
@@ -304,7 +304,7 @@ def askChoice(args, name):
         try:
             name = npyFiles[int(choiceFile) - 1]
             return name
-        except Exception as e:
+        except ValueError:
             print("I didn't understand. Please try again")
             return askChoice(args, name)
     else:
@@ -537,7 +537,7 @@ def createClusterTable(traj, args):
                 cutoff = COORDS[0][1]
                 clicked = True
                 clusteringResult = sch.fcluster(linkage, cutoff, "distance")
-            except Exception as e:
+            except ValueError:
                 print("ERROR : PLEASE CLICK ON THE DENDROGRAM TO CHOOSE YOUR CUTOFF VALUE")
             plt.close()
 
@@ -587,7 +587,7 @@ def plotBarplot(clustersList, logName, size, traj, args):
                 timeMin /= 1000
                 timeMax /= 1000
                 plt.xlabel("Time ($\\mu$s)")
-        except Exception as e:
+        except ValueError:
             timeMin, timeMax = 0, np.shape(data)[1]
 
     im = plt.imshow(data, aspect='auto', interpolation='none', cmap=cmap,

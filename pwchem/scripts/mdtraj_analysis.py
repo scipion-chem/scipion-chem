@@ -82,6 +82,7 @@ if __name__ == "__main__":
     trajectory = mdtraj.load(trjFile, top=topo)
 
     # Atom selection
+    psXlabel = 'Simulation time (ps)'
     if args.selectAtoms:
         index = getSelectionIndex(topo, args.selectAtoms)
         if args.heavyAtoms:
@@ -92,7 +93,7 @@ if __name__ == "__main__":
             rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
             plt.plot(trajectory.time, rmsd * 10,  'r', label='RMSD')
             plt.title('RMSD')
-            plt.xlabel('Simulation time (ps)')
+            plt.xlabel(psXlabel)
             plt.ylabel('RMSD (Å)')
 
         elif args.rmsf:
@@ -114,14 +115,14 @@ if __name__ == "__main__":
             plt.plot(trajectory.time, sasa_over_time, 'g', label=f'SASA ({args.selectAtoms})')
 
             plt.title(f'Solvent Accessible Surface Area: {args.selectAtoms} atoms')
-            plt.xlabel('Simulation time (ps)')
+            plt.xlabel(psXlabel)
             plt.ylabel(r'SASA ($nm^2$)')
 
     if args.rg:
         rg = mdtraj.compute_rg(trajectory)
         plt.plot(trajectory.time, rg * 10, 'b', label='Rg')
         plt.title('Radius of Gyration')
-        plt.xlabel('Simulation time (ps)')
+        plt.xlabel(psXlabel)
         plt.ylabel('Rg (Å)')
 
     elif args.distance:
@@ -136,7 +137,7 @@ if __name__ == "__main__":
             plt.plot(trajectory.time, distances[:, 0] * 10, 'purple', label='Distance')
             plt.title(
                 f'Distance: {atom1.residue.name}{atom1.residue.resSeq}:{atom1.name} - {atom2.residue.name}{atom2.residue.resSeq}:{atom2.name}')
-            plt.xlabel('Simulation time (ps)')
+            plt.xlabel('%s' % psXlabel)
             plt.ylabel('Distance (Å)')
             plt.legend()
 
