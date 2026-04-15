@@ -34,7 +34,6 @@ same or different software
 
 import os, re, glob
 from scipy.cluster.hierarchy import linkage, fcluster
-from sklearn.metrics.pairwise import pairwise_distances
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -292,7 +291,7 @@ class ProtocolConsensusDocking(EMProtocol):
                         clusterMol[cl] = [(molDic[molName][i], rmsdSums[i])]
                 finalClusters += list(clusterMol.values())
             else:
-                finalClusters += [(molDic[molName][0], 0)]
+                finalClusters.append([(molDic[molName][0], 0)])
 
         return finalClusters
 

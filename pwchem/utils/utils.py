@@ -1186,24 +1186,27 @@ def parseRMSDs(rmsdFile):
       rmsds.append(float(line.strip().split()[-1]))
   return rmsds
 
-def runRdkitRMSD(inputFiles):
-    refFile, targetFiles = inputFiles
-    programCall = 'python -m spyrmsd '
-    try:
-      result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                            programCall, retOut=True)
-    except:
-      try:
-        programCall = 'python -m spyrmsd -n '
-        result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                              programCall, retOut=True)
-      except Exception as _:
-        result = ' '.join(['1000'] * len(targetFiles))
+def runRdkitRMSD(targetsTuple):
+    molName, targetFiles = targetsTuple
 
-    result = list(map(float, result.split()))
+    scriptName = 'rmsd_molecules.py'
+    programCall = f'python {pwchemPlugin.getScriptsDir(scriptName)}'
+    result = pwchemPlugin.runCondaCommand(None, f'{" ".join(targetFiles)}', RDKIT_DIC,
+                                          programCall, retOut=True)
+
+    result = {molName: list(map(float, eval(result)))}
     return result
 
-def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
+def runParallelRdkitRMSD(mols, nJobs=1):
+  molFileDic, _ = buildMolDic(mols)
+
+  iterInput = [(molName, targetFiles) for molName, targetFiles in molFileDic.items()]
+  rmsdLists = runInParallel(runRdkitRMSD, paramList=iterInput, jobs=nJobs)
+  rmsdDic = {k: v for d in rmsdLists for k, v in d.items()}
+
+  return rmsdDic
+
+def runParallelRdkitRMSDtoReference(mols, referenceFile=None, nJobs=1):
   molFileDic, _ = buildMolDic(mols)
   rmsdDic = {}
   for molName, targetFiles in molFileDic.items():
@@ -1486,15 +1489,7 @@ def createMSJDic(protocol):
 def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, filtScoreType, scThres):
   '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
   The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
-  data = inSeqs.getInteractScoresDic()
-  #data = {"entries": [ {"sequence": "...", "molecules": {...}}, ... ]}
-
-  intDic = {}
-  for entry in data.get("entries", []):
-      seqName = entry.get("sequence")
-      mols = entry.get("molecules", {})
-      intDic[seqName] = mols
-  #returns dic {seq:mol {...}}
+  intDic = inSeqs.getInteractScoresDic()
 
   seqNames, molNames, scoreTypes = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames(), inSeqs.getScoreTypes()
   seqNames, molNames, scoreType = filterNames(seqNames, molNames, filtSeqNames, filtMolNames, scoreTypes, filtScoreType)
@@ -1540,13 +1535,12 @@ def filterScores(intAr, seqNames, molNames, scThres):
   return intAr, seqNames, molNames
 
 def formatInteractionsArray(intDic, seqNames, molNames, scoreType):
-  scoreKey = f"score_{scoreType}"
   intAr = np.zeros((len(seqNames), len(molNames)))
   for i, seqName in enumerate(seqNames):
     for j, molName in enumerate(molNames):
             try:
                 # get the numeric value for that score type
-                value = intDic[seqName][molName][scoreKey]
+                value = intDic[seqName][molName][scoreType]
             except KeyError:
                 # if missing, assign NaN
                 value = np.nan
