@@ -28,6 +28,7 @@ import os
 import json
 from pathlib import Path
 from pwem.viewers import EmPlotter
+from pwem.protocols import ProtSubSet
 
 import matplotlib.pyplot as plt
 from tkinter.messagebox import askokcancel
@@ -617,3 +618,38 @@ class InteractionsViewerStructROIs(BaseInteractionViewer):
         if hasattr(self.protocol, 'outputStructROIs'):
             return self.protocol.outputStructROIs
         return self.protocol
+
+    def _generateProts(self, paramName=None):
+        data = self._getData()
+
+        f1 = self.getEnumText('chooseEnt1')
+        f2 = self.getEnumText('chooseEnt2')
+        fScore = self.getEnumText('chooseScore')
+
+        _, e1, _, _ = self._getFilteredData(data, f1, f2, fScore)
+        print(f'e1={e1}')
+
+        objIds = []
+        roiSet = self.getOutPockets()
+
+        for obj in roiSet:
+            if os.path.splitext(os.path.basename(obj.getFileName()))[0] in e1:
+                objIds.append(str(obj.getObjId()))
+
+        if not objIds:
+            return
+
+        if askokcancel("Generate ROI subset",
+                       f"Generate subset with {len(objIds)} ROIs?"):
+            project = self.getProject()
+            prot = project.newProtocol(
+                ProtSubSet,
+                inputFullSet=roiSet,
+                selectIds=True,
+                range=','.join(objIds)
+            )
+
+            project.launchProtocol(prot, wait=True)
+
+    def _getMolSet(self):
+        return self.getOutPockets().getInteractMols()

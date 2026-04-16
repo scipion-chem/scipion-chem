@@ -87,14 +87,23 @@ class BaseInteractionViewer(ProtocolViewer):
         hGroup.addParam('displayHistogram', params.LabelParam, label='Histogram')
         hGroup.addParam('intervals', params.IntParam, default=10, label='Number of bins')
 
+        oGroup = form.addGroup('Generate output')
+
+        oGroup.addParam('genProts', params.LabelParam,
+                        label=f'Generate {self._getLabels()[0]} subset')
+
+        oGroup.addParam('genMols', params.LabelParam,
+                        label=f'Generate {self._getLabels()[1]} subset')
+
     def _getVisualizeDict(self):
         return {
             'displayHeatMap': self._viewHeatMap,
-            'displayHistogram': self._viewHistogram
+            'displayHistogram': self._viewHistogram,
+            'genProts': self._generateProts,
+            'genMols': self._generateMols,
         }
 
-    def _getFilteredData(self, filt1, filt2, filtScore):
-        data = self._getData()
+    def _getFilteredData(self, data, filt1, filt2, filtScore):
 
         ent1 = [filt1] if filt1 != 'All' else sorted(data.keys())
 
@@ -115,18 +124,20 @@ class BaseInteractionViewer(ProtocolViewer):
         return matrix, ent1, ent2, filtScore
 
     def _viewHeatMap(self, paramName=None):
+        data = self._getData()
+
         f1 = self.getEnumText('chooseEnt1')
         f2 = self.getEnumText('chooseEnt2')
         fScore = self.getEnumText('chooseScore')
 
-        matrix, e1, e2, label = self._getFilteredData(f1, f2, fScore)
+        mat, e1, e2, label = self._getFilteredData(
+            data, f1, f2, fScore
+        )
 
-        if len(e1) * len(e2) > 500:
-            if not askokcancel("Large dataset", "Heatmap may be large. Continue?"):
-                return
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
 
-        fig, ax = plt.subplots(figsize=(10, 8))
-        im, _ = heatmap(matrix, e1, e2, ax=ax,
+        im, _ = heatmap(mat, e1, e2, ax=ax,
                         cmap="YlOrRd",
                         cbarLabel=f"{label}")
 
@@ -139,8 +150,10 @@ class BaseInteractionViewer(ProtocolViewer):
         f1 = self.getEnumText('chooseEnt1')
         f2 = self.getEnumText('chooseEnt2')
         fScore = self.getEnumText('chooseScore')
+        data = self._getData()
 
-        matrix, _, _, label = self._getFilteredData(f1, f2, fScore)
+        matrix, _, _, label = self._getFilteredData(data, f1, f2, fScore)
+
         scores = matrix.flatten()
         scores = scores[~np.isnan(scores)]
 
@@ -151,3 +164,44 @@ class BaseInteractionViewer(ProtocolViewer):
         ax.grid(True)
 
         plotter.show()
+
+    def _getMolSet(self):
+        raise NotImplementedError
+
+    def _generateMols(self, paramName=None):
+        data = self._getData()
+
+        f1 = self.getEnumText('chooseEnt1')
+        f2 = self.getEnumText('chooseEnt2')
+        fScore = self.getEnumText('chooseScore')
+
+        _, _, e2, _ = self._getFilteredData(
+            data, f1, f2, fScore
+        )
+        newe2 = []
+        for e in e2:
+            newe2.append(os.path.splitext(e)[0])
+        e2 = newe2
+
+        molSet = self._getMolSet()
+
+        objIds = []
+        for obj in molSet:
+            print(obj.getMolName())
+            if obj.getMolName() in e2:
+                objIds.append(str(obj.getObjId()))
+
+        if not objIds:
+            return
+
+        if askokcancel("Generate molecules subset",
+                       f"Generate subset with {len(objIds)} molecules?"):
+            project = self.getProject()
+            prot = project.newProtocol(
+                ProtSubSet,
+                inputFullSet=molSet,
+                selectIds=True,
+                range=','.join(objIds)
+            )
+
+            project.launchProtocol(prot, wait=True)
