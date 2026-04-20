@@ -229,10 +229,6 @@ def parseArg():
     arguments = argparse.ArgumentParser(
         description="Clusterize molecular dynamics trajectories "
                     "(Amber, Gromacs, CHARMM, NAMD, PDB)")
-    try:
-        argcomplete.autocomplete(arguments)
-    except ValueError:
-        pass
 
     arguments.add_argument('-f', "--traj",    required=True, nargs='+',
                            help="Trajectory file(s).")
@@ -250,6 +246,8 @@ def parseArg():
                            help="Selection string for RMSD calculation.")
     arguments.add_argument('-m',  '--method', default="ward",
                            help="Linkage method: single/complete/average/weighted/centroid/median/ward.")
+    arguments.add_argument('-rs', '--random_seed', type=int,
+                           help="Seed for the random number generator used during the KMeans elbow method.")
     arguments.add_argument('-cc', "--cutoff", default=None,
                            help="Distance cutoff for hierarchical clustering.")
     arguments.add_argument('-ng', "--ngroup", default=None,
@@ -442,7 +440,7 @@ def segmentsGain(p1, v, p2):
     return np.arccos((vp1 ** 2 + vp2 ** 2 - p1p2 ** 2) / (2 * vp1 * vp2)) / np.pi
 
 
-def autoClustering(matrix):
+def autoClustering(matrix, randomSeed):
     """
     Determine the optimal number of clusters using KMeans and the elbow method.
     Returns the optimal k (int).
@@ -453,7 +451,7 @@ def autoClustering(matrix):
     distortions = []
     K = range(2, 15)
     for k in K:
-        kMeans = KMeans(n_clusters=k, n_init=10, random_state=42)
+        kMeans = KMeans(n_clusters=k, n_init=10, random_state=randomSeed)
         kMeans.fit(matrix)
         distortions.append(
             sum(np.min(cdist(matrix, kMeans.cluster_centers_, 'euclidean'), axis=1)) / matrix.shape[0])
@@ -470,7 +468,7 @@ def autoClustering(matrix):
     segThreshold = 0.99
     kIdx = np.argmax(segGains > segThreshold)
 
-    kMeans = KMeans(n_clusters=kIdx, n_init=10, random_state=42)
+    kMeans = KMeans(n_clusters=kIdx, n_init=10, random_state=randomSeed)
     kMeans.fit(matrix)
     return kIdx
 
@@ -521,7 +519,7 @@ def createClusterTable(traj, args):
         clusteringResult = sch.fcluster(linkage, cutoff, "distance")
     elif nCluster:
         if nCluster == "auto":
-            nCluster = autoClustering(distances)
+            nCluster = autoClustering(distances, args['random_seed'])
         clusteringResult = sch.fcluster(linkage, t=nCluster, criterion="maxclust")
         nGroup = len(np.unique(clusteringResult))
         cutoff = linkage[-(nGroup - 1), 2]

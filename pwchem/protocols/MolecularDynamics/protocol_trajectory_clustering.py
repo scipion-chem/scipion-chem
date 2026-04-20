@@ -148,6 +148,12 @@ class ProtocolTrajectoryClustering(EMProtocol):
                             'Number of groups: you specify k.\n'
                             'Cutoff: you specify a distance threshold on the dendrogram.')
 
+        group.addParam('randomSeed', params.IntParam, expertLevel=params.LEVEL_ADVANCED,
+                       label='Random seed', default=42,
+                       condition='clusterMode == 0',
+                       help='Seed for the random number generator used during the automatic '
+                            'cluster detection (KMeans elbow method).')
+
         group.addParam('nGroup', params.IntParam, default=5,
                        condition='clusterMode == 1',
                        label='Number of clusters',
@@ -232,6 +238,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
         args += '-sa "{}" '.format(alignStr)
         args += '-sr "{}" '.format(rmsdStr)
         args += '-m {} '.format(CLUSTERING_METHODS[int(self.clusterMethod.get())])
+        args += '-rs {} '.format(self.randomSeed.get())
         if self._getLigandId():
             args += f'-st "protein or resname {self._getLigandId()}" '
         else:
