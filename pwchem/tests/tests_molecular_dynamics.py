@@ -28,14 +28,13 @@
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
 from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering
-from pwchem.tests import MDSYSTEM, DataSetMDSystem
 from pwchem.utils import assertHandle
-from pwchem.tests.tests_imports import TestImportMDSystems
+from pwchem.tests import TestImportMDSystems
 
 class TestProLIFanalysis(TestImportMDSystems):
     @classmethod
     def setUpClass(cls):
-        cls.ds = DataSet.getDataSet(MDSYSTEM)
+        cls.ds = DataSet.getDataSet('mdSystem')
         setupTestProject(cls)
         cls._runImportSystem()
 
@@ -62,7 +61,7 @@ class TestProLIFanalysis(TestImportMDSystems):
 class TestTrajClustering(TestImportMDSystems):
     @classmethod
     def setUpClass(cls):
-        cls.ds = DataSet.getDataSet(MDSYSTEM)
+        cls.ds = DataSet.getDataSet('mdSystem')
         setupTestProject(cls)
         cls._runImportSystem()
 

@@ -28,8 +28,7 @@ from pwem.protocols import ProtImportPdb
 
 # Scipion chem imports
 from pwchem.protocols import ProtocolPharmacophoreGeneration, ProtocolPharmacophoreModification, ProtocolPharmacophoreFiltering
-from pwchem.tests.tests_docking import TestExtractLigand
-from pwchem.tests.tests_preparations import  TestRDKitLigandPreparation
+from pwchem.tests import TestExtractLigand, TestRDKitLigandPreparation
 from pwchem.utils import assertHandle
 
 chainStr = '{"model": 0, "chain": "C", "residues": 93}'

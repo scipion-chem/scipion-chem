@@ -35,7 +35,6 @@ from pwem.protocols import ProtImportPdb
 # Scipion chem imports
 from pwchem.protocols import *
 from pwchem.constants import *
-from pwchem.tests import MDSYSTEM, DataSetMDSystem
 from pwchem.utils import assertHandle
 
 # Global variables
@@ -314,11 +313,12 @@ class TestImportExport(TestImportBase):
 class TestImportMDSystems(BaseTest):
 	@classmethod
 	def setUpClass(cls):
-		cls.ds = DataSet.getDataSet(MDSYSTEM)
+		cls.ds = DataSet.getDataSet('mdSystem')
 		setupTestProject(cls)
 
 	@classmethod
 	def _runImportSystem(cls):
+		from pwchem.tests import DataSetMDSystem
 		protImportMDSystem = cls.newProtocol(
 			ProtocolImportMDSystem,
 			inputCoords=cls.ds.getFile(DataSetMDSystem.amberSystemFile.value),
