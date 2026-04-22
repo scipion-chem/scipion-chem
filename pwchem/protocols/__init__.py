@@ -110,6 +110,7 @@ from pwchem.protocols.General.protocol_export_set import ProtChemImportExportSet
 from pwchem.protocols.General.protocol_pymol import ProtPymolOperate
 from pwchem.protocols.General.protocol_ranx_fuse import ProtocolRANXFuse
 from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateLibrary
+from pwchem.protocols.General.protocol_ungroup_set import ProtUngroupSet
 
 # Molecular dynamics
 from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
