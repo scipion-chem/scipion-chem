@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import gzip
 import enum, io, pickle, os
 import subprocess as sp
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict
@@ -1939,6 +1939,65 @@ class PharmacophoreChem(data.EMSet):
       feat.setObjId(featId)
       self.append(feat)
 
+
+class FastqFile(data.EMFile):
+  """Object representing a FASTQ dataset."""
+
+  def __init__(self, filename=None, **kwargs):
+    super().__init__(filename=filename, **kwargs)
+
+    self._filename2 = pwobj.String(kwargs.get('filename2', None))
+    self._sampleName = pwobj.String(kwargs.get('sampleName', None))
+    self._isPaired = pwobj.Boolean(kwargs.get('isPaired', False))
+    self._isCompressed = pwobj.Boolean(kwargs.get('isCompressed', False))
+
+  def getFileName2(self):
+    return self._filename2.get()
+
+  def setFileName2(self, value):
+    self._filename2.set(value)
+
+  def hasFileName2(self):
+    return bool(self.getFileName2())
+
+  def getSampleName(self):
+    return self._sampleName.get()
+
+  def setSampleName(self, value):
+    self._sampleName.set(value)
+
+  def isPaired(self):
+    return self._isPaired.get()
+
+  def setIsPaired(self, value):
+    self._isPaired.set(value)
+
+  def isCompressed(self):
+    return self._isCompressed.get()
+
+  def setIsCompressed(self, value):
+    self._isCompressed.set(value)
+
+  def hasQuality(self):
+    return True
+
+  def getFiles(self):
+    files = [self.getFileName()]
+    if self.isPaired() and self.hasFileName2():
+      files.append(self.getFileName2())
+    return [f for f in files if f]
+
+  def __str__(self):
+    sample = self.getSampleName() or 'unnamed'
+    return '{} ({}, paired={})'.format(
+      self.getClassName(), sample, self.isPaired())
+
+  def getObjLabel(self):
+    sample = self.getSampleName()
+    if sample:
+      return sample
+    fn = self.getFileName()
+    return os.path.basename(fn) if fn else 'fastq'
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################
