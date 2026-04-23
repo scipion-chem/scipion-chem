@@ -297,12 +297,14 @@ class ProtocolOperateLibrary(EMProtocol):
                     headers = f.read().split(',')
             else:
                 headers = list(set([h for inLib in self.inputLibraries for h in inLib.get().getHeaders()]))
-                headers.remove('SMI'), headers.remove('Name')
+                smiName = 'SMI' if 'SMI' in headers else 'SMILES'
+                headers.remove(smiName), headers.remove('Name')
                 with open(oHeadFile, 'w') as f:
                     f.write(f'{",".join(headers)}')
         else:
             headers = self.inputLibrary.get().getHeaders()
-            headers.remove('SMI'), headers.remove('Name')
+            smiName = 'SMI' if 'SMI' in headers else 'SMILES'
+            headers.remove(smiName), headers.remove('Name')
 
         return headers
 
