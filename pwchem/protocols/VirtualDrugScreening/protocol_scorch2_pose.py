@@ -346,24 +346,24 @@ class ProtocolSCORCH2(EMProtocol):
         nBatches = (nMols // self.batchSize.get()) + 1
         return nBatches
 
-    def getExtendedBounds(self, coords_dict, N):
+    def getExtendedBounds(self, coordsDics, N):
         """
         Returns:
             Tuple of (min_x, max_x, min_y, max_y, min_z, max_z) each extended by N
         """
         # Extract all coordinates
-        all_coords = list(coords_dict.values())
+        allCoords = [c for coordsDic in coordsDics for c in list(coordsDic.values())]
 
         # Get min and max for each dimension
-        minX, maxX = min(coord[0] for coord in all_coords) - N, max(coord[0] for coord in all_coords) + N
-        minY, maxY = min(coord[1] for coord in all_coords) - N, max(coord[1] for coord in all_coords) + N
-        minZ, maxZ = min(coord[2] for coord in all_coords) - N, max(coord[2] for coord in all_coords) + N
+        minX, maxX = min(coord[0] for coord in allCoords) - N, max(coord[0] for coord in allCoords) + N
+        minY, maxY = min(coord[1] for coord in allCoords) - N, max(coord[1] for coord in allCoords) + N
+        minZ, maxZ = min(coord[2] for coord in allCoords) - N, max(coord[2] for coord in allCoords) + N
 
         return [(minX, maxX), (minY, maxY), (minZ, maxZ)]
 
     def cropProteinFile(self, inFile, oFile, molList):
-        atomsPosDic = molList[0].getAtomsPosDic()
-        limitCoords = self.getExtendedBounds(atomsPosDic, 20)
+        atomsPosDics = [mol.getAtomsPosDic() for mol in molList]
+        limitCoords = self.getExtendedBounds(atomsPosDics, 20)
 
         tmpFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
         tmpFile = pdbFromASFile(inFile, tmpFile)
