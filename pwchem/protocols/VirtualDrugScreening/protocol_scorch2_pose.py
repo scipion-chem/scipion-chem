@@ -164,7 +164,6 @@ class ProtocolSCORCH2(EMProtocol):
             os.remove(tmpFile)
 
             self.convertFiles([proteinFile], proteinDir)
-            self.removePdbFiles(proteinDir)
 
 
     def convertInputStep(self, pockId, it):
@@ -174,11 +173,10 @@ class ProtocolSCORCH2(EMProtocol):
         for subfolder in ligandDir.iterdir():
             if subfolder.is_dir():
                 ligandFiles.extend(f for f in subfolder.glob("*") if f.is_file())
-        if ligandFiles:
-            self.convertFiles(ligandFiles, os.path.abspath(subfolder))
-            self.removePdbFiles((subfolder))
-        else:
-            logging.warning("No ligand files found.")
+            if ligandFiles:
+                self.convertFiles(ligandFiles, os.path.abspath(subfolder))
+            else:
+                logging.warning("No ligand files found.")
 
 
     def scorchStep(self, pockId, it):
@@ -318,18 +316,10 @@ class ProtocolSCORCH2(EMProtocol):
 
             args = f"-ipdb {inputPath} -opdbqt -O {outputPath}"
             runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+
+            os.remove(inputPath)
         return oFiles
 
-
-    def removePdbFiles(self, directory):
-        """Removes .pdb files only if their corresponding .pdbqt exists in the same directory."""
-        for pdbFile in directory.rglob("*.pdb"):
-            pdbqtFile = pdbFile.with_suffix(".pdbqt")
-            if pdbqtFile.exists():
-                try:
-                    pdbFile.unlink()
-                except Exception as e:
-                    logging.warning(f"Could not delete {pdbFile.name}: {e}")
 
     def readScoresTSV(self):
         scoreDict = {}
