@@ -388,6 +388,7 @@ class ProtocolSCORCH2(EMProtocol):
         io.set_structure(structModel)
         io.save(str(oFile), selector)
 
-        subprocess.run(f"sed -i '/^REMARK/d' {oFile}", shell=True)
+        self.runJob(f"sed -i '/^REMARK/d' {oFile}")
+
         return oFile
 
