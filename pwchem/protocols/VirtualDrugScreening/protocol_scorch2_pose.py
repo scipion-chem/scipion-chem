@@ -71,6 +71,13 @@ class CoordinateRangeSelect(Select):
                 return 1  # Accept this residue
         return 0  # Reject this residue
 
+    def accept_record(self, record):
+        """Return False for REMARK records to exclude them"""
+        # Skip any line starting with REMARK
+        if record.startswith('REMARK'):
+            return False
+        return True
+
 class ProtocolSCORCH2(EMProtocol):
     """
     Computes the best poses of protein-ligand interactions using SCORCH2: https://github.com/LinCompbio/SCORCH2
