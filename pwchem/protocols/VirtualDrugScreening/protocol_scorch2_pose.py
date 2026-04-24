@@ -365,16 +365,17 @@ class ProtocolSCORCH2(EMProtocol):
         atomsPosDic = molList[0].getAtomsPosDic()
         limitCoords = self.getExtendedBounds(atomsPosDic, 20)
 
-        tFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
-        pdbFile = pdbFromASFile(inFile, tFile)
+        tmpFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
+        tmpFile = pdbFromASFile(inFile, tmpFile)
 
         selector = CoordinateRangeSelect(limitCoords)
-        structModel = PDBParser().get_structure('receptor', pdbFile)[0]
+        structModel = PDBParser().get_structure('receptor', tmpFile)[0]
 
         # Write the filtered structure
         io = PDBIO()
         io.set_structure(structModel)
         io.save(str(oFile), selector)
 
+        os.remove(tmpFile)
         return oFile
 
