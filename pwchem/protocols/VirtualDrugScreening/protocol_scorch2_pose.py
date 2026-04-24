@@ -89,16 +89,22 @@ class ProtocolSCORCH2(EMProtocol):
         iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
                         label='Input ligand: ',
                         help='Input docked small molecules to rescore')
+
         iGroup.addParam('cropReceptor', params.BooleanParam, default=False, label="Crop receptor: ",
                         help='Crop receptor for each pocket (20A around positions) to accelerate the '
                              'feature calculation.')
+        iGroup.addParam('cropPad', params.FloatParam, default=15.0, expertLevel=params.LEVEL_ADVANCED,
+                        condition='cropReceptor', label='Padding for crop: ',
+                        help="Size of the padding for the receptor cropping in Angstroms. "
+                             "Not recommended to set under 15")
 
         iGroup.addParam('batchSize', params.IntParam, default=500, expertLevel=params.LEVEL_ADVANCED,
                         label='Batch size: ', help="Size of the batches send to rescore")
         # Aggregate
         iGroup.addParam('aggregate', params.BooleanParam, default=False,
                         label="Aggregate results: ",
-                        help='If Yes, the best pose will be selected per compound with aggregation metadata. If No, all poses will be scored individually and ranked by SC2 score.')
+                        help='If Yes, the best pose will be selected per compound with aggregation metadata. I'
+                             'f No, all poses will be scored individually and ranked by SC2 score.')
 
         iGroup.addParam('psWeight', params.FloatParam, default=0.7, expertLevel=params.LEVEL_ADVANCED,
                         label='PS weight: ', help="Weight for SC2-PS predictions")
@@ -381,7 +387,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     def cropProteinFile(self, inFile, oFile, molList):
         atomsPosDics = [mol.getAtomsPosDic() for mol in molList]
-        limitCoords = self.getExtendedBounds(atomsPosDics, 20)
+        limitCoords = self.getExtendedBounds(atomsPosDics, self.cropPad.get())
 
         selector = CoordinateRangeSelect(limitCoords)
         structModel = PDBParser().get_structure('receptor', inFile)[0]
