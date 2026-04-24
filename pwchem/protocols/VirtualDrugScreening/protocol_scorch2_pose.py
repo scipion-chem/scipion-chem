@@ -360,6 +360,8 @@ class ProtocolSCORCH2(EMProtocol):
     def getNBatches(self, molList):
         nMols = len(molList)
         nBatches = (nMols // self.batchSize.get()) + 1
+
+        nBatches = max(nBatches, self.numberOfThreads.get() - 1)
         return nBatches
 
     def getExtendedBounds(self, coordsDics, N):
