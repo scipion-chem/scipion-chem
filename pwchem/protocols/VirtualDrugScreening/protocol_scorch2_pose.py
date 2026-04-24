@@ -351,9 +351,12 @@ class ProtocolSCORCH2(EMProtocol):
 
     def getNBatches(self, molList):
         nMols = len(molList)
-        nBatches = (nMols // self.batchSize.get()) + 1
+        if nMols > self.batchSize.get():
+            nBatches = (nMols // self.batchSize.get()) + 1
 
-        nBatches = max(nBatches, self.numberOfThreads.get() - 1)
+            nBatches = max(nBatches, self.numberOfThreads.get() - 1)
+        else:
+            nBatches = 1
 
         return min(nBatches, len(molList))
 
