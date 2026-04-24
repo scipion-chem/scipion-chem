@@ -151,10 +151,10 @@ class ProtocolSCORCH2(EMProtocol):
             proteinDir = self.getProtDir(pockId)
             proteinDir.mkdir(parents=True, exist_ok=True)
 
-            proteinFile = proteinDir / f"{self._defaultName}_protein{inProteinPath.suffix}"
+            proteinFile = proteinDir / f"{self._defaultName}_protein.pdb"
 
-            tmpFile = os.path.join(os.path.dirname(proteinFile), 'tempPDB.pdb')
-            tmpFile = pdbFromASFile(inProteinPath, tmpFile)
+            tmpFile = os.path.join(proteinFile.parent, 'tempPDB.pdb')
+            tmpFile = pdbFromASFile(str(inProteinPath), tmpFile)
 
             if self.cropReceptor.get():
                 self.cropProteinFile(tmpFile, proteinFile, molList)
@@ -163,12 +163,8 @@ class ProtocolSCORCH2(EMProtocol):
 
             os.remove(tmpFile)
 
-            proteinFiles = list(proteinDir.glob("*"))
-            if proteinFiles:
-                self.convertFiles(proteinFiles, proteinDir)
-                self.removePdbFiles(proteinDir)
-            else:
-                logging.warning("No protein files found.")
+            self.convertFiles([proteinFile], proteinDir)
+            self.removePdbFiles(proteinDir)
 
 
     def convertInputStep(self, pockId, it):
@@ -270,7 +266,7 @@ class ProtocolSCORCH2(EMProtocol):
 
     # --------------------------- UTILS functions -----------------------------------
     def getPocketDir(self, it):
-        return Path(self._getExtraPath()) / f"pocket_{it}"
+        return Path(os.path.abspath(self._getExtraPath())) / f"pocket_{it}"
 
     def getBatchDir(self, pockId, it):
         return self.getPocketDir(pockId) / f"batch_{it}"
