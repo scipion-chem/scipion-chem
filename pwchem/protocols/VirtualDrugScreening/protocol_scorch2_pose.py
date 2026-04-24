@@ -89,6 +89,10 @@ class ProtocolSCORCH2(EMProtocol):
         iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
                         label='Input ligand: ',
                         help='Input docked small molecules to rescore')
+        iGroup.addParam('cropReceptor', params.BooleanParam, default=False, label="Crop receptor: ",
+                        help='Crop receptor for each pocket (20A around positions) to accelerate the '
+                             'feature calculation.')
+
         iGroup.addParam('batchSize', params.IntParam, default=500, expertLevel=params.LEVEL_ADVANCED,
                         label='Batch size: ', help="Size of the batches send to rescore")
         # Aggregate
@@ -142,7 +146,16 @@ class ProtocolSCORCH2(EMProtocol):
             proteinDir.mkdir(parents=True, exist_ok=True)
 
             proteinFile = proteinDir / f"{self._defaultName}_protein{inProteinPath.suffix}"
-            self.cropProteinFile(inProteinPath, proteinFile, molList)
+
+            tmpFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
+            tmpFile = pdbFromASFile(inProteinPath, tmpFile)
+
+            if self.cropReceptor.get():
+                self.cropProteinFile(tmpFile, proteinFile, molList)
+            else:
+                shutil.copy(tmpFile, proteinFile)
+
+            os.remove(tmpFile)
 
             proteinFiles = list(proteinDir.glob("*"))
             if proteinFiles:
@@ -337,8 +350,11 @@ class ProtocolSCORCH2(EMProtocol):
     def getMolsSetsDic(self):
         '''Return a dictionary {pocketId: [molList]}'''
         inMols = self.inputSmallMolecules.get()
-        molIdDic = inMols.updateLigandsDic({}, inMols, 'pocket')
-        molDic = {pockId: inMols.getMolsFromIds(molIds) for pockId, molIds in molIdDic.items()}
+        if self.cropReceptor.get():
+            molIdDic = inMols.updateLigandsDic({}, inMols, 'pocket')
+            molDic = {pockId: inMols.getMolsFromIds(molIds) for pockId, molIds in molIdDic.items()}
+        else:
+            molDic = {0: inMols}
         return molDic
 
     def getNBatches(self, molList):
@@ -365,17 +381,13 @@ class ProtocolSCORCH2(EMProtocol):
         atomsPosDics = [mol.getAtomsPosDic() for mol in molList]
         limitCoords = self.getExtendedBounds(atomsPosDics, 20)
 
-        tmpFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
-        tmpFile = pdbFromASFile(inFile, tmpFile)
-
         selector = CoordinateRangeSelect(limitCoords)
-        structModel = PDBParser().get_structure('receptor', tmpFile)[0]
+        structModel = PDBParser().get_structure('receptor', inFile)[0]
 
         # Write the filtered structure
         io = PDBIO()
         io.set_structure(structModel)
         io.save(str(oFile), selector)
 
-        os.remove(tmpFile)
         return oFile
 
