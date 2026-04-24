@@ -30,7 +30,7 @@
 SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-based virtual screening. (SC2, https://github.com/LinCompbio/SCORCH2)
 
 """
-import csv
+import csv, subprocess
 import logging
 from ctypes.wintypes import SMALL_RECT
 from pathlib import Path
@@ -71,12 +71,6 @@ class CoordinateRangeSelect(Select):
                 return 1  # Accept this residue
         return 0  # Reject this residue
 
-    def accept_record(self, record):
-        """Return False for REMARK records to exclude them"""
-        # Skip any line starting with REMARK
-        if record.startswith('REMARK'):
-            return False
-        return True
 
 class ProtocolSCORCH2(EMProtocol):
     """
@@ -394,5 +388,6 @@ class ProtocolSCORCH2(EMProtocol):
         io.set_structure(structModel)
         io.save(str(oFile), selector)
 
+        subprocess.run(f"sed -i '/^REMARK/d' {oFile}", shell=True)
         return oFile
 
