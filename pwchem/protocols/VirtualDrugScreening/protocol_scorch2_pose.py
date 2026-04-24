@@ -158,7 +158,7 @@ class ProtocolSCORCH2(EMProtocol):
             tmpFile = pdbFromASFile(str(inProteinPath), tmpFile)
 
             if self.cropReceptor.get():
-                self.cropProteinFile(tmpFile, proteinFile, molList)
+                self.cropProteinFile(tmpFile, str(proteinFile), molList)
             else:
                 shutil.copy(tmpFile, proteinFile)
 
@@ -386,7 +386,7 @@ class ProtocolSCORCH2(EMProtocol):
         # Write the filtered structure
         io = PDBIO()
         io.set_structure(structModel)
-        io.save(str(oFile), selector)
+        io.save(oFile, selector)
 
         self.runJob(f"sed -i '/^REMARK/d' {oFile}")
 
