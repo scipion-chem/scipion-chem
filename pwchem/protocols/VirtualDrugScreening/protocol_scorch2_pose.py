@@ -147,7 +147,7 @@ class ProtocolSCORCH2(EMProtocol):
 
             proteinFile = proteinDir / f"{self._defaultName}_protein{inProteinPath.suffix}"
 
-            tmpFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
+            tmpFile = os.path.join(os.path.dirname(proteinFile), 'tempPDB.pdb')
             tmpFile = pdbFromASFile(inProteinPath, tmpFile)
 
             if self.cropReceptor.get():
