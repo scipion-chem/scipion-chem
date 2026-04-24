@@ -34,20 +34,42 @@ import csv
 import logging
 from ctypes.wintypes import SMALL_RECT
 from pathlib import Path
+from Bio.PDB import PDBParser, PDBIO, Select
+
 from pwem.convert import cifToPdb
-
-from pyworkflow.object import Float
-from pyworkflow.protocol import params, STEPS_PARALLEL
 from pwem.protocols import EMProtocol
+from pyworkflow.object import Float
+from pyworkflow.protocol import params
 
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets, insistentRun
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets, insistentRun, pdbFromASFile
 from pwchem import Plugin, SCORCH2_DIC
 
 
 currentDir = Path(__file__).parent.resolve()
 
 
+class CoordinateRangeSelect(Select):
+    """
+    Select residues that have at least one atom within the specified
+    coordinate range, extended by N in all directions.
+    """
+
+    def __init__(self, coordinateRanges):
+        (self.x_min, self.x_max), (self.y_min, self.y_max), (self.z_min, self.z_max) = coordinateRanges
+
+    def accept_residue(self, residue):
+        """
+        Accept residue if any of its atoms is within the coordinate range.
+        """
+        # Check all atoms in the residue
+        for atom in residue.get_atoms():
+            coord = atom.get_coord()
+            if (self.x_min <= coord[0] <= self.x_max and
+                    self.y_min <= coord[1] <= self.y_max and
+                    self.z_min <= coord[2] <= self.z_max):
+                return 1  # Accept this residue
+        return 0  # Reject this residue
 
 class ProtocolSCORCH2(EMProtocol):
     """
@@ -83,53 +105,55 @@ class ProtocolSCORCH2(EMProtocol):
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        rStep = self._insertFunctionStep(self.organizeInputStep)
+        molDic = self.getMolsSetsDic()
+        rStep = self._insertFunctionStep(self.organizeInputStep, molDic)
 
         sSteps = []
-        for it in range(self.getNBatches()):
-            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep])
-            sSteps += [self._insertFunctionStep(self.scorchStep, it, prerequisites=[cStep])]
+        for pockId, molList in molDic.items():
+            for it in range(self.getNBatches(molList)):
+                cStep = self._insertFunctionStep(self.convertInputStep, pockId, it, prerequisites=[rStep])
+                sSteps += [self._insertFunctionStep(self.scorchStep, pockId, it, prerequisites=[cStep])]
         oStep = self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
 
-    def organizeInputStep(self):
-        # Receptor
-        proteinDir = self.getProtDir()
-        proteinDir.mkdir(parents=True, exist_ok=True)
-
-        protein = self.inputSmallMolecules.get().getProteinFile()
-        proteinPath = Path(protein)
-
-        proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
-        shutil.copy(proteinPath, proteinFile)
-
-        proteinFiles = list(proteinDir.glob("*"))
-        if proteinFiles:
-            self.convertFiles(proteinFiles, proteinDir)
-            self.removePdbFiles(proteinDir)
-        else:
-            logging.warning("No protein files found.")
+    def organizeInputStep(self, molDic):
+        inProteinPath = Path(self.inputSmallMolecules.get().getProteinFile())
 
         # Ligands
-        nBatches = self.getNBatches()
-        molSubSets = makeSubsets(self.inputSmallMolecules.get(), nBatches, True)
-        for it, subset in enumerate(molSubSets):
-            moleculeDir = self.getMoleculesDir(it)
-            moleculeDir.mkdir(parents=True, exist_ok=True)
+        for pockId, molList in molDic.items():
+            nBatches = self.getNBatches(molList)
+            molSubSets = makeSubsets(molList, nBatches, True)
+            for it, subset in enumerate(molSubSets):
+                moleculeDir = self.getMoleculesDir(pockId, it)
+                moleculeDir.mkdir(parents=True, exist_ok=True)
 
-            ligandOutDir = moleculeDir / self._defaultName
-            ligandOutDir.mkdir(parents=True, exist_ok=True)
+                ligandOutDir = moleculeDir / self._defaultName
+                ligandOutDir.mkdir(parents=True, exist_ok=True)
 
-            for i, ligand in enumerate(subset, start=1):
-                ligandPath = Path(ligand.getPoseFile())
-                origName = ligandPath.name
-                newName = f"{self._defaultName}_{origName}"
+                for i, ligand in enumerate(subset, start=1):
+                    ligandPath = Path(ligand.getPoseFile())
+                    origName = ligandPath.name
+                    newName = f"{self._defaultName}_{origName}"
 
-                dest = ligandOutDir / newName
-                shutil.copy(ligandPath, dest)
+                    dest = ligandOutDir / newName
+                    shutil.copy(ligandPath, dest)
+
+            # Receptor
+            proteinDir = self.getProtDir(pockId)
+            proteinDir.mkdir(parents=True, exist_ok=True)
+
+            proteinFile = proteinDir / f"{self._defaultName}_protein{inProteinPath.suffix}"
+            self.cropProteinFile(inProteinPath, proteinFile, molList)
+
+            proteinFiles = list(proteinDir.glob("*"))
+            if proteinFiles:
+                self.convertFiles(proteinFiles, proteinDir)
+                self.removePdbFiles(proteinDir)
+            else:
+                logging.warning("No protein files found.")
 
 
-    def convertInputStep(self, it):
-        ligandDir = self.getMoleculesDir(it)
+    def convertInputStep(self, pockId, it):
+        ligandDir = self.getMoleculesDir(pockId, it)
 
         ligandFiles = []
         for subfolder in ligandDir.iterdir():
@@ -142,12 +166,12 @@ class ProtocolSCORCH2(EMProtocol):
             logging.warning("No ligand files found.")
 
 
-    def scorchStep(self, it):
-        oriProteinDir = self.getProtDir()
-        proteinDir = self.getProtDir(it)
+    def scorchStep(self, pockId, it):
+        oriProteinDir = self.getProtDir(pockId)
+        proteinDir = self.getProtDir(pockId, it)
         shutil.copytree(oriProteinDir, proteinDir)
 
-        ligandDir = self.getMoleculesDir(it)
+        ligandDir = self.getMoleculesDir(pockId, it)
 
         scriptRescoringDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'SCORCH2'))
         modelsDir = os.path.abspath(os.path.join(Plugin.getVar(SCORCH2_DIC['home']), 'scorchModels/models'))
@@ -158,9 +182,9 @@ class ProtocolSCORCH2(EMProtocol):
         psScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_ps_scaler'))
         pbScaler = os.path.abspath(os.path.join(modelsDir, 'sc2_pb_scaler'))
 
-        resDir = self.getResultsDir(it)
+        resDir = self.getResultsDir(pockId, it)
         resDir.mkdir(exist_ok=True)
-        outputFileFull = self.getBatchDir(it) / 'scorch2_results.tsv'
+        outputFileFull = self.getBatchDir(pockId, it) / 'scorch2_results.tsv'
         args = [
                 str(script),
                 "--protein-dir", str(proteinDir.resolve()),
@@ -226,19 +250,22 @@ class ProtocolSCORCH2(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def getBatchDir(self, it):
-        return Path(self._getExtraPath()) / f"batch_{it}"
+    def getPocketDir(self, it):
+        return Path(self._getExtraPath()) / f"pocket_{it}"
 
-    def getProtDir(self, it=None):
+    def getBatchDir(self, pockId, it):
+        return self.getPocketDir(pockId) / f"batch_{it}"
+
+    def getProtDir(self, pockId, it=None):
         if it is None:
-            return Path(self._getExtraPath()) / "protein"
-        return self.getBatchDir(it) / "protein"
+            return self.getPocketDir(pockId) / "protein"
+        return self.getBatchDir(pockId, it) / "protein"
 
-    def getMoleculesDir(self, it):
-        return self.getBatchDir(it) / "molecule"
+    def getMoleculesDir(self, pockId, it):
+        return self.getBatchDir(pockId, it) / "molecule"
 
-    def getResultsDir(self, it):
-        return self.getBatchDir(it) / f"results"
+    def getResultsDir(self, pockId, it):
+        return self.getBatchDir(pockId, it) / f"results"
 
     def getPDBId(self):
         protein = self.inputSmallMolecules.get().getProteinFile()
@@ -291,28 +318,63 @@ class ProtocolSCORCH2(EMProtocol):
 
     def readScoresTSV(self):
         scoreDict = {}
-        for it in range(self.getNBatches()):
-            resultsTsv = self.getBatchDir(it) / "scorch2_results.tsv"
-            with open(resultsTsv, "r", encoding="utf-8-sig") as f:
-                lines = [line for line in f.readlines() if not line.startswith("#") and line.strip()]
+        molDic = self.getMolsSetsDic()
+        for pockId, molList in molDic.items():
+            for it in range(self.getNBatches(molList)):
+                resultsTsv = self.getBatchDir(pockId, it) / "scorch2_results.tsv"
+                with open(resultsTsv, "r", encoding="utf-8-sig") as f:
+                    lines = [line for line in f.readlines() if not line.startswith("#") and line.strip()]
 
-            reader = csv.DictReader(lines, delimiter=",")
+                reader = csv.DictReader(lines, delimiter=",")
 
-            for row in reader:
-                compounId = row["compound_id"].strip()
-                molName = compounId.split("_", 1)[1].replace(".pdbqt", "")
-                score = float(row["sc2_score"])
-                scoreDict[molName] = score
+                for row in reader:
+                    compounId = row["compound_id"].strip()
+                    molName = compounId.split("_", 1)[1].replace(".pdbqt", "")
+                    score = float(row["sc2_score"])
+                    scoreDict[molName] = score
         return scoreDict
 
-    def getNBatches(self):
-        nThreads = self.numberOfThreads.get() - 1
-        nThreads = 1 if nThreads < 1 else nThreads
+    def getMolsSetsDic(self):
+        '''Return a dictionary {pocketId: [molList]}'''
+        inMols = self.inputSmallMolecules.get()
+        molIdDic = inMols.updateLigandsDic({}, inMols, 'pocket')
+        molDic = {pockId: inMols.getMolsFromIds(molIds) for pockId, molIds in molIdDic.items()}
+        return molDic
 
-        nMols = len(self.inputSmallMolecules.get())
+    def getNBatches(self, molList):
+        nMols = len(molList)
         nBatches = (nMols // self.batchSize.get()) + 1
+        return nBatches
 
-        maxThreads = max(nThreads, nBatches)
+    def getExtendedBounds(self, coords_dict, N):
+        """
+        Returns:
+            Tuple of (min_x, max_x, min_y, max_y, min_z, max_z) each extended by N
+        """
+        # Extract all coordinates
+        all_coords = list(coords_dict.values())
 
-        return min(maxThreads, nMols)
+        # Get min and max for each dimension
+        minX, maxX = min(coord[0] for coord in all_coords) - N, max(coord[0] for coord in all_coords) + N
+        minY, maxY = min(coord[1] for coord in all_coords) - N, max(coord[1] for coord in all_coords) + N
+        minZ, maxZ = min(coord[2] for coord in all_coords) - N, max(coord[2] for coord in all_coords) + N
+
+        return [(minX, maxX), (minY, maxY), (minZ, maxZ)]
+
+    def cropProteinFile(self, inFile, oFile, molList):
+        atomsPosDic = molList[0].getAtomsPosDic()
+        limitCoords = self.getExtendedBounds(atomsPosDic, 20)
+
+        tFile = os.path.join(os.path.dirname(oFile), 'tempPDB.pdb')
+        pdbFile = pdbFromASFile(inFile, tFile)
+
+        selector = CoordinateRangeSelect(limitCoords)
+        structModel = PDBParser().get_structure('receptor', pdbFile)[0]
+
+        # Write the filtered structure
+        io = PDBIO()
+        io.set_structure(structModel)
+        io.save(str(oFile), selector)
+
+        return oFile
 
