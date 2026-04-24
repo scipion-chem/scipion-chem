@@ -317,6 +317,7 @@ class ProtocolSCORCH2(EMProtocol):
 
             args = f"-ipdb {inputPath} -opdbqt -O {outputPath}"
             runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
+            self.runJob(f"sed -i '/^REMARK/d' {outputPath}", '')
 
             os.remove(inputPath)
         return oFiles
@@ -387,8 +388,6 @@ class ProtocolSCORCH2(EMProtocol):
         io = PDBIO()
         io.set_structure(structModel)
         io.save(oFile, selector)
-
-        self.runJob(f"sed -i '/^REMARK/d' {oFile}", '')
 
         return oFile
 
