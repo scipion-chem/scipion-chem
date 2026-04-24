@@ -388,7 +388,7 @@ class ProtocolSCORCH2(EMProtocol):
         io.set_structure(structModel)
         io.save(oFile, selector)
 
-        self.runJob(f"sed -i '/^REMARK/d' {oFile}")
+        self.runJob(f"sed -i '/^REMARK/d' {oFile}", '')
 
         return oFile
 
