@@ -136,14 +136,12 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-        # Defining file names
-        tar_file = cls.getDefTar(MGL_DIC)
+        mglEnvName = cls.getEnvName(MGL_DIC)
 
-        # Installing package
-        installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tar_file)\
-            .addCommand(f'tar -xf {tar_file} --strip-components 1 && rm {tar_file}', 'MGLTOOLS_EXTRACTED')\
-            .addCommand('export DISPLAY= && {}'.format(cls.getDefPath(MGL_DIC, 'install.sh')), 'MGLTOOLS_INSTALLED')\
-            .addPackage(env, dependencies=['wget', 'tar'], default=default)
+        installer.addCommand(
+            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]}',
+            'MGLTOOLS_ENV_CREATED'
+        ).addPackage(env,dependencies=['conda'],default=default)
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=True):
