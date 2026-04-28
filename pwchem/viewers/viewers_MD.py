@@ -54,14 +54,14 @@ class MDSystemViewer(pwviewer.Viewer):
   def _visualize(self, obj, onlySystem=False, trjFile=None, **kwargs):
     systemFile = os.path.abspath(obj.getSystemFile())
     if not trjFile:
-        trjFile = obj.hasTrajectory()
+        trjFile = obj.getTrajectoryFile()
 
     if not trjFile or onlySystem:
         pymolV = PyMolViewer(project=self.getProject())
         return pymolV._visualize(systemFile, cwd=os.path.dirname(systemFile))
 
     else:
-        trjFile = os.path.abspath(obj.getTrajectoryFile())
+        # trjFile = os.path.abspath(obj.getTrajectoryFile())
         topoFile = os.path.abspath(obj.getTopologyFile())
         if topoFile.lower().endswith(('.top', '.tpr')):
             topoFile = obj.getSystemFile() # needed for gromacs topology
