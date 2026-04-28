@@ -135,7 +135,7 @@ class BaseInteractionViewer(ProtocolViewer):
         )
 
         import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
 
         im, _ = heatmap(mat, e1, e2, ax=ax,
                         cmap="YlOrRd",

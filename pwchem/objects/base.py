@@ -64,7 +64,7 @@ class DatabaseID(data.EMObject):
       self.copyObjId(other)
 
 class SetClass:
-  def _initSet(self, **kwargs):
+  def initSet(self, **kwargs):
       self._interactMols = pwobj.Pointer()
       self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
       self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', ""))
@@ -183,7 +183,7 @@ class SequenceChem(data.Sequence):
 class SetOfSequencesChem(data.SetOfSequences, SetClass):
   def __init__(self, **kwargs):
     data.SetOfSequences.__init__(self, **kwargs)
-    self._initSet(**kwargs)
+    self.initSet(**kwargs)
     self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
     self._alignFile = pwobj.String(kwargs.get('alignFile', None))
 
@@ -1507,7 +1507,7 @@ class SetOfStructROIs(data.EMSet, SetClass):
 
   def __init__(self, **kwargs):
     data.EMSet.__init__(self, **kwargs)
-    self._initSet(**kwargs)
+    self.initSet(**kwargs)
     self._pocketsClass = String(kwargs.get('pocketsClass', None))
     self._hetatmFile = String(kwargs.get('hetatmFile', None))
     self._interactingResiduesFile = String(kwargs.get('interactingResiduesFile', None))

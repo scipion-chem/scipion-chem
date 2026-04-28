@@ -98,13 +98,13 @@ class InteractionsViewerAtomStruct(BaseInteractionViewer):
         scoresFile = structs.getAttributeValue('_interactScoresFile')
         return self.getMolecules(scoresFile)
 
-    def getMolecules(self, json_path):
-        with open(json_path, "r") as f:
+    def getMolecules(self, jsonPath):
+        with open(jsonPath, "r") as f:
             data = json.load(f)
 
         molecules = set()
 
-        for model_data in data.values():
-            molecules.update(model_data.keys())
+        for modelData in data.values():
+            molecules.update(modelData.keys())
 
         return sorted(molecules)
