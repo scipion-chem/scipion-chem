@@ -54,9 +54,11 @@ class ProtUngroupSet(EMProtocol):
             newItem = item.clone()
 
             # Give the cloned item a fresh, unique output path if it has one
-            # (relevant for objects like AtomStruct that wrap a file)
-            if hasattr(newItem, 'getFileName') and newItem.getFileName():
+            if hasattr(newItem, 'getSeqName') and newItem.getSeqName():
+                newItem.setSeqName(item.getSeqName())
+            elif hasattr(newItem, 'getFileName') and newItem.getFileName():
                 newItem.setFileName(item.getFileName())
+
 
             outputName = f'output{i + 1}'
             self._defineOutputs(**{outputName: newItem})
