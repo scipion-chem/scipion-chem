@@ -104,9 +104,9 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
 
         structModel = MMCIFParser().get_structure(self._getInputName(), cifFile)[0] # 0: modelID?
 
-        env_name = Plugin.getEnvName(MGL_DIC)
+        envName = Plugin.getEnvName(MGL_DIC)
 
-        prefix = Plugin.getMGLToolsPrefix(env_name)
+        prefix = Plugin.getMGLToolsPrefix(envName)
 
         msmsPath = os.path.join(
             prefix,

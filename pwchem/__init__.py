@@ -399,16 +399,16 @@ class Plugin(pwem.Plugin):
         }, position=pos)
         return environ
 
-    def getMGLToolsPrefix(env_name):
+    def getMGLToolsPrefix(cls,envName):
         result = subprocess.run(
             ["conda", "env", "list"],
             capture_output=True,
             text=True
         )
         for line in result.stdout.splitlines():
-            if line.startswith(env_name):
+            if line.startswith(envName):
                 return line.split()[-1]
-        raise RuntimeError(f"Cannot find conda env {env_name}")
+        raise RuntimeError(f"Cannot find conda env {envName}")
 
     @classmethod
     def getODDTModelsPath(cls, path=''):

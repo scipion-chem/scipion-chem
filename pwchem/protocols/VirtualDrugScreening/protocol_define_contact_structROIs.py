@@ -422,9 +422,9 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
 
     def getInputSurfaceStructure(self):
       structure = self.getInputStructure()
-      env_name = Plugin.getEnvName(MGL_DIC)
+      envName = Plugin.getEnvName(MGL_DIC)
 
-      prefix = Plugin.getMGLToolsPrefix(env_name)
+      prefix = Plugin.getMGLToolsPrefix(envName)
 
       msmsPath = os.path.join(
           prefix,

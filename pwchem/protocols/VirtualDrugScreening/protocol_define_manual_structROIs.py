@@ -196,9 +196,9 @@ class ProtDefineStructROIs(EMProtocol):
         structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
 
-        env_name = Plugin.getEnvName(MGL_DIC)
+        envName = Plugin.getEnvName(MGL_DIC)
 
-        prefix = Plugin.getMGLToolsPrefix(env_name)
+        prefix = Plugin.getMGLToolsPrefix(envName)
 
         msmsPath = os.path.join(
             prefix,
