@@ -106,7 +106,7 @@ class ProtMapSequenceROI(ProtDefineStructROIs):
 
         envName = Plugin.getEnvName(MGL_DIC)
 
-        prefix = Plugin.getMGLToolsPrefix(envName)
+        prefix = Plugin.getMGLToolsPrefix(envName=envName)
 
         msmsPath = os.path.join(
             prefix,
