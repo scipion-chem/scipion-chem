@@ -419,6 +419,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     # If there is a Preference set, filter for it
                     filteredClust = self.filterPocketsBySet(clust, self.getPrefSetId())
 
+                outPockets = None
                 if self.repChoice.get() == MAXVOL and filteredClust:
                     outPockets = [self.getMaxVolumePocket(filteredClust)]
                 elif self.repChoice.get() == MAXSURF and filteredClust:
@@ -429,7 +430,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 elif self.repChoice.get() == INTERSEC:
                     # As intersection creates a new pocket rather than choosing, it uses all pockets, no the filtered
                     outPockets = [self.getIntersectionPocket(clust, i)]
-                representatives += outPockets
+
+                if outPockets:
+                    representatives += outPockets
 
         return representatives
 
