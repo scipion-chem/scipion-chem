@@ -1633,9 +1633,32 @@ class SetOfStructROIs(data.EMSet):
       else:
           cifDic = MMCIF2Dict(protFile)
           cifDic = filterCifCols(cifDic, CIF_DEF_COLS)
-          f.write(writeCifBlocks(cifDic))
+
+          maxId = max(map(int, cifDic['_atom_site.id']))
           for pocket in self:
-              f.write(getRawPDBStr(pocket.getFileName(), ter=False))
+              for seqId, (x, y, z) in enumerate(pocket.getPointsCoords(), start=1):
+                  maxId += 1
+
+                  cifDic['_atom_site.id'].append(str(maxId))
+                  cifDic['_atom_site.group_PDB'].append('HETATM')
+                  cifDic['_atom_site.type_symbol'].append('C')
+                  cifDic['_atom_site.label_atom_id'].append(f'C{seqId}')
+                  cifDic['_atom_site.label_alt_id'].append('.')
+                  cifDic['_atom_site.label_comp_id'].append('STP')
+                  cifDic['_atom_site.label_asym_id'].append('A')
+                  cifDic['_atom_site.label_entity_id'].append('1')
+                  cifDic['_atom_site.label_seq_id'].append(str(seqId))
+                  cifDic['_atom_site.Cartn_x'].append(str(x))
+                  cifDic['_atom_site.Cartn_y'].append(str(y))
+                  cifDic['_atom_site.Cartn_z'].append(str(z))
+                  cifDic['_atom_site.auth_asym_id'].append('A')
+                  cifDic['_atom_site.auth_seq_id'].append(str(seqId))
+                  cifDic['_atom_site.pdbx_PDB_ins_code'].append('?')
+                  cifDic['_atom_site.occupancy'].append('1.00')
+                  cifDic['_atom_site.B_iso_or_equiv'].append('0.00')
+                  cifDic['_atom_site.pdbx_PDB_model_num'].append('1')
+
+          f.write(writeCifBlocks(cifDic))
 
     self.setProteinHetatmFile(outFile)
     return outFile
@@ -1716,50 +1739,87 @@ class SetOfStructROIs(data.EMSet):
   ######### Utils
 
   def getPocketsPDBStr(self):
-    outStr = ''
-    for i, pocket in enumerate(self):
-      pocket.setObjId(i + 1)
-      outStr += self.formatPocketStr(pocket)
-    return outStr
+      outStr = ''
+      for i, pocket in enumerate(self):
+          pocket.setObjId(i + 1)
+          outStr += self.formatPocketStr(pocket)
+      return outStr
 
   def formatPocketStr(self, pocket):
-    outStr = ''
-    numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
-    rawStr = getRawPDBStr(pocketFile, ter=False).strip()
-    if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
-      for line in rawStr.split('\n'):
-        sline = splitPDBLine(line)
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      outStr = ''
+      numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
+      ext = os.path.splitext(pocketFile)[1].lower()
 
-    elif pocket.getPocketClass() == 'FPocket':
-      for line in rawStr.split('\n'):
-        sline = line.split()
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:], '', 'Ve']
-        try:
-          pdbLine = writePDBLine(replacements)
-        except:
-          sline = splitPDBLine(line)
-          replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:], '', 'Ve']
-          pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      if ext == ".cif":
+          rawStr = self.cifToPdbStr(pocketFile)
+      else:
+          rawStr = getRawPDBStr(pocketFile, ter=False)
 
-    elif pocket.getPocketClass() == 'SiteMap':
-      for line in rawStr.split('\n'):
-        line = line.split()
-        replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      rawStr = rawStr.strip()
+      if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
+          for line in rawStr.split('\n'):
+              sline = splitPDBLine(line)
+              replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-    else:  # (P2Rank, ElliPro, Standard...)
-      for line in rawStr.split('\n'):
-        line = splitPDBLine(line)
-        line[5] = numId
-        pdbLine = writePDBLine(line)
-        outStr += pdbLine
+      elif pocket.getPocketClass() == 'FPocket':
+          structure = self.loadStructure(pocketFile)
+          for model in structure:
+              for chain in model:
+                  for residue in chain:
+                      for atom in residue:
+                          x, y, z = atom.coord
+                          replacements = [
+                              'HETATM',
+                              atom.get_serial_number(),
+                              'APOL',
+                              'STP',
+                              'C',
+                              numId,
+                              x, y, z,
+                              '', 'Ve'
+                          ]
+      elif pocket.getPocketClass() == 'SiteMap':
+          for line in rawStr.split('\n'):
+              line = line.split()
+              replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-    return outStr
+      else:  # (P2Rank, ElliPro, Standard...)
+          for line in rawStr.split('\n'):
+              line = splitPDBLine(line)
+              if line is None:
+                  continue
+              line[5] = numId
+              cleaned = []
+              for x in line:
+                  if isinstance(x, str):
+                      parts = x.split()
+                      x = parts[-1] if parts else x
+                  cleaned.append(x)
+              line = cleaned
+
+              pdbLine = writePDBLine(line)
+              outStr += pdbLine
+
+      return outStr
+
+  def cifToPdbStr(self, cifFile):
+      from Bio.PDB import MMCIFParser, PDBIO
+      from io import StringIO
+
+      parser = MMCIFParser(QUIET=True)
+      structure = parser.get_structure('pocket', cifFile)
+
+      io = PDBIO()
+      io.set_structure(structure)
+
+      stream = StringIO()
+      io.save(stream)
+
+      return stream.getvalue()
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
