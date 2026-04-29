@@ -138,7 +138,6 @@ class ProtExtractLigands(EMProtocol):
         ligandFiles = []
         io = PDBIO()
         io.set_structure(struct)
-        i = 1
         for model in struct:
             for chain in model:
                 for residue in chain:
@@ -146,9 +145,8 @@ class ProtExtractLigands(EMProtocol):
                     if not isHet(residue) or len(heavyAtoms) < self.nAtoms.get():
                         continue
                     print(f"saving {chain} {residue}")
-                    outFile = self._getPath(f"{struct_name}_{residue.get_resname()}-{i}.pdb")
+                    outFile = self._getPath(f"{struct_name}_{residue.get_resname()}.pdb")
                     ligandFiles.append(outFile)
                     io.save(outFile, ResidueSelect(chain, residue))
-                    i += 1
 
         return ligandFiles

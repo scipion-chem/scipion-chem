@@ -112,8 +112,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         """ Assign the charges using a method available in the open-access program openbabel and
         Generate a number of conformers of the same small molecule with openbabel
         """
-        if not os.path.exists(self.getPrepDir()):
-          os.makedirs(self.getPrepDir())
+        os.makedirs(self.getPrepDir(), exist_ok=True)
 
         failedCharges, failedConfs = [], []
         for fnSmall in self.getInputMolFiles(it):
@@ -164,12 +163,16 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
                         newSmallMol._ConformersFile = pwobj.String(confFile)
                         outputSmallMolecules.append(newSmallMol)
                 else:
-                    newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
+                    newSmallMol = SmallMolecule()
                     if not self.useLibrary.get():
                       newSmallMol.copy(mol, copyId=False)
                       newSmallMol.setMappingFile(pwobj.String(mapFile))
                     else:
                       newSmallMol = self.addLibAttributes(newSmallMol, mol)
+
+                    newSmallMol.setFileName(os.path.relpath(fnSmall))
+                    newSmallMol.setConfId(1)
+
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:
@@ -200,12 +203,14 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         cmethod = self._dic_method[index_method]
 
         # With a given pH
+        fnSmall = os.path.abspath(fnSmall)
+        tFile = os.path.abspath(self._getTmpPath(f"{fnRoot}.mol2"))
+        args = f' -i{fnFormat[1:]} {fnSmall} -d -O "{os.path.abspath(tFile)}" && '
         oFile = self.getPrepDir(f"{fnRoot}.mol2")
         if self.ph.get():
-          args = " -i%s '%s' -p %s --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall),
-                                                                   str(self.phvalue.get()), cmethod, oFile)
+          args += f" obabel -imol2 '{tFile}' -p {str(self.phvalue.get())} --partialcharge {cmethod} -O '{oFile}' "
         else:
-          args = " -i%s '%s' -h --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
+          args += f" obabel -imol2 '{tFile}' -h --partialcharge {cmethod} -O '{oFile}' "
 
         if fnFormat == '.smi':
           args += '--gen3D '
@@ -223,11 +228,11 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
       fnRoot = getBaseName(fnSmall)
 
       if self.method_conf.get() == 0:  # Genetic algorithm
-        args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" % \
-               (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
+        args = (f" '{os.path.abspath(fnSmall)}' --conformer --nconf {self.number_conf.get()} --score rmsd "
+                f"--writeconformers -O '{fnRoot}_conformers.mol2'")
       else:  # confab
-        args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
-               (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
+        args = (f" '{os.path.abspath(fnSmall)}' --confab --original --verbose --conf {self.number_conf.get()} "
+                f"--rcutoff {str(self.rmsd_cutoff.get())} -O '{fnRoot}_conformers.mol2'")
       try:
         runOpenBabel(protocol=self, args=args, cwd=self.getPrepDir())
         fail = None

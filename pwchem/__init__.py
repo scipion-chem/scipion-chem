@@ -61,7 +61,9 @@ class Plugin(pwem.Plugin):
         cls.addMDTrajPackage(env)
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
+
         cls.addSCORCHenv(env)
+        cls.addPoseBustersPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -73,6 +75,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+        cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
 
         # Common enviroments
@@ -86,7 +89,7 @@ class Plugin(pwem.Plugin):
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
     def getEnvName(cls, packageDictionary):
-        """ This function returns the name of the conda enviroment for a given package. """
+        """ This function returns the name of the conda environment for a given package. """
         return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
 
     @classmethod
@@ -121,8 +124,9 @@ class Plugin(pwem.Plugin):
         # Installing package
         rdkitEnvName = cls.getEnvName(RDKIT_DIC)
         installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
-                             f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 -y', 'RDKIT_ENV_CREATED')\
-            .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
+                             f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 spyrmsd -y', 'RDKIT_ENV_CREATED')\
+            .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra '
+                        f'"setuptools<70" -y', 'SKLEARN_INSTALLED')\
             .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 
@@ -165,10 +169,12 @@ class Plugin(pwem.Plugin):
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
             .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
+            .addCondaPackages(['mdanalysis'], channel='conda-forge',  targetName='MDANALYSIS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
             .addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
+
 
         # # Instantiating shape it install helper
         binariesDirectory = SHAPEIT_DIC['name']
@@ -239,6 +245,23 @@ class Plugin(pwem.Plugin):
             .addPackage(env, dependencies=['conda', 'pip'], default=default)
 
     @classmethod
+    def addPoseBustersPackage(cls, env, default=True):
+        installer = InstallHelper(
+            POSEB_DIC['name'],
+            packageHome=cls.getVar(POSEB_DIC['home']),
+            packageVersion=POSEB_DIC['version']
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "git clone --branch v0.6.3 --depth 1 https://github.com/maabuu/posebusters.git && "
+            "pip install --editable ./posebusters ",
+            "POSEBUSTERS_INSTALLED"
+        )
+
+        installer.addPackage(env, dependencies=['pip', 'git'], default=default)
+
+    @classmethod
     def addSCORCHenv(cls, env, default=True):
         # Instantiating install helper
         installer = InstallHelper(SCORCH2_DIC['name'],
@@ -283,7 +306,6 @@ class Plugin(pwem.Plugin):
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
-
     ##################### RUN CALLS ######################
     @classmethod
     def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None, pyStr='python'):
@@ -300,16 +322,21 @@ class Plugin(pwem.Plugin):
                 subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
     @classmethod
-    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True):
+    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True, retOut=False):
         """ General function to run conda commands """
+        result = None
         fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
-        if not popen:
+        if not popen and not retOut:
             protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
         else:
-            kwargs = {}
-            if silent:
-                kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-            run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+            if not retOut:
+                kwargs = {}
+                if silent:
+                    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+                run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+            else:
+                result = subprocess.check_output(fullProgram + args, cwd=cwd, shell=True, text=True)
+        return result
 
     @classmethod
     def runShapeIt(cls, protocol, args, cwd=None):

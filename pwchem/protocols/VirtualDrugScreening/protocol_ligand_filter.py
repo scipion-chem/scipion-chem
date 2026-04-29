@@ -93,7 +93,7 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
 
     def getInputDir(self):
-      return self._getExtraPath()
+      return os.path.abspath(self._getExtraPath())
 
     def getNSubsets(self):
       nt = self.numberOfThreads.get()
@@ -126,8 +126,10 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
       heads = self.inputLibrary.get().getHeaders()
       attrs = molLine.split()
       for i, h in enumerate(heads):
-        if h != 'Name':
+        if h.lower() not in ['name', 'molname']:
           smallMol.__setattr__(h, pwobj.String(attrs[i]))
+        else:
+          smallMol.setMolName(attrs[i])
       return smallMol
 
     def _validate(self):
