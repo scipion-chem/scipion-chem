@@ -399,6 +399,7 @@ class Plugin(pwem.Plugin):
         }, position=pos)
         return environ
 
+    @classmethod
     def getMGLToolsPrefix(cls,envName):
         result = subprocess.run(
             ["conda", "env", "list"],
