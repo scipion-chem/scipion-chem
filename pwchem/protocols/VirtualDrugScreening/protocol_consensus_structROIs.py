@@ -330,11 +330,12 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def createIndepOutputs(self):
         outSets = {}
-        for setId in self.indepConsensusSets:
+        for setId, pockSet in self.indepConsensusSets.items():
             suffix = '_{:03d}'.format(setId+1)
             newSet = SetOfStructROIs(filename=self._getExtraPath('ConsensusStructROIs{}.sqlite'.format(suffix)))
-            for pock in self.indepConsensusSets[setId]:
-                newSet.append(pock.clone())
+            if pockSet:
+                for pock in pockSet:
+                    newSet.append(pock.clone())
             outSets[setId] = newSet
         return outSets
 
@@ -431,7 +432,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     # As intersection creates a new pocket rather than choosing, it uses all pockets, no the filtered
                     outPockets = [self.getIntersectionPocket(clust, i)]
 
-                if outPockets:
+                if outPockets is not None:
                     representatives += outPockets
 
         return representatives
@@ -495,22 +496,26 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def getIntersectionPocket(self, cluster, i):
         '''Return the pocket as set of intersection residues in a cluster.'''
-        inters = cluster[0].getDecodedCResidues()
-        pdbFile = cluster[0].getProteinFile()
-        for pocket in cluster:
-            pRes = pocket.getDecodedCResidues()
-            inters = set(inters).intersection(set(pRes))
+        if len(cluster) > 1:
+            inters = cluster[0].getDecodedCResidues()
+            pdbFile = cluster[0].getProteinFile()
+            for pocket in cluster:
+                pRes = pocket.getDecodedCResidues()
+                inters = set(inters).intersection(set(pRes))
 
-        if len(inters) > 0:
-            coords = []
-            resCoordDic = self.parseResidueCoords(pdbFile)
-            for res in inters:
-                coords += resCoordDic[res]
+            if len(inters) > 0:
+                coords = []
+                resCoordDic = self.parseResidueCoords(pdbFile)
+                for res in inters:
+                    coords += resCoordDic[res]
 
-            pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
-            createPocketFile(coords, i, pocketFile)
-            outPocket = StructROI(pocketFile, pdbFile)
-            outPocket.calculateContacts()
+                pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
+                createPocketFile(coords, i, pocketFile)
+                outPocket = StructROI(pocketFile, pdbFile)
+                outPocket.setObjId(i)
+                outPocket.calculateContacts()
+            else:
+                outPocket = self.getMaxSurfacePocket(cluster)
         else:
             outPocket = self.getMaxSurfacePocket(cluster)
 
