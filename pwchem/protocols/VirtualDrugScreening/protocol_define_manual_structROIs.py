@@ -195,9 +195,16 @@ class ProtDefineStructROIs(EMProtocol):
 
         structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
-        self.structSurface = get_surface(self.structModel,
-                                         MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
+        env_name = Plugin.getEnvName(MGL_DIC)
+
+        prefix = Plugin.getMGLToolsPrefix(env_name)
+
+        msmsPath = os.path.join(
+            prefix,
+            "MGLToolsPckgs/binaries/msms"
+        )
+        self.structSurface = get_surface(self.structModel, MSMS=msmsPath)
     def definePocketsStep(self):
         coordsDefined = []
         for roiStr in self.inROIs.get().split('\n'):
