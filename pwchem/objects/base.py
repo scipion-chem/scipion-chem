@@ -1775,7 +1775,7 @@ class MDSystem(data.EMFile):
     self._ff = pwobj.String(kwargs.get('ff', None))
     self._wff = pwobj.String(kwargs.get('wff', None))
 
-    self._ligName = pwobj.String(kwargs.get('ligName', None))
+    self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
     self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
     self._prolifFile = pwobj.String(kwargs.get('prolifFp', None))
 
