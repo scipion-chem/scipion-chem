@@ -287,7 +287,7 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
       return fileName
 
   def getResidues(self, form, inputObj, chainStr):
-    if isinstance(inputObj, str):
+    if isinstance(inputObj, str): #handles the seq from a setOfSeqs
       seqName = inputObj.split('name = ')[1].split(')')[0]
 
       seqSet = form.protocol.inputSetOfSequences.get()
