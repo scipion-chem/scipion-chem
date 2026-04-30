@@ -288,16 +288,7 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
 
   def getResidues(self, form, inputObj, chainStr):
     if isinstance(inputObj, str): #handles the seq from a setOfSeqs
-      seqName = inputObj.split('name = ')[1].split(')')[0]
-
-      seqSet = form.protocol.inputSetOfSequences.get()
-      realSeq = None
-
-      for seq in seqSet:
-          if seq.getName() == seqName or seqName in str(seq):
-              realSeq = seq
-              break
-      inputObj = realSeq
+      inputObj = self.getSeqFromStr(form, inputObj)
 
     if issubclass(type(inputObj), Sequence) or str(type(inputObj).__name__) == 'SequenceVariants':
       finalResiduesList = []
@@ -325,6 +316,18 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
         finalResiduesList.append(String(i))
 
     return finalResiduesList
+
+  def getSeqFromStr(self, form, inputObj):
+      seqName = inputObj.split('name = ')[1].split(')')[0]
+
+      seqSet = form.protocol.inputSetOfSequences.get()
+      realSeq = None
+
+      for seq in seqSet:
+          if seq.getName() == seqName or seqName in str(seq):
+              realSeq = seq
+              break
+      return realSeq
 
 
 class SelectAtomWizardQT(SelectResidueWizardQT):
