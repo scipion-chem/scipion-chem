@@ -297,8 +297,6 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
           if seq.getName() == seqName or seqName in str(seq):
               realSeq = seq
               break
-      if realSeq is None:
-          raise Exception(f"Sequence {seqName} not found in set")
       inputObj = realSeq
 
     if issubclass(type(inputObj), Sequence) or str(type(inputObj).__name__) == 'SequenceVariants':
