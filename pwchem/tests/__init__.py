@@ -35,4 +35,15 @@ from .tests_pharmacophores import *
 from .tests_general import *
 from .tests_databases import *
 from .tests_epitopes import *
+from .tests_molecular_dynamics import *
 
+from enum import Enum
+
+class DataSetMDSystem(Enum):
+    amberSystemDir = 'amberSystem'
+    amberSystemFile = 'amberSystem/3p6h_system.pdb'
+    amberTopoFile = 'amberSystem/3p6h.parm7'
+    amberCrdFile = 'amberSystem/3p6h.rst7'
+    amberTrjFile = 'amberSystem/3p6h.nc'
+
+DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in DataSetMDSystem})
