@@ -287,6 +287,9 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
       return fileName
 
   def getResidues(self, form, inputObj, chainStr):
+    if isinstance(inputObj, str): #handles the seq from a setOfSeqs
+      inputObj = self.getSeqFromStr(form, inputObj)
+
     if issubclass(type(inputObj), Sequence) or str(type(inputObj).__name__) == 'SequenceVariants':
       finalResiduesList = []
       for i, res in enumerate(inputObj.getSequence()):
@@ -296,7 +299,6 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
           res3 = res
         stri = '{"index": %s, "residue": "%s"}' % (i + 1, res3)
         finalResiduesList.append(String(stri))
-
     else:
       structureHandler = AtomicStructHandler()
       fileName = self.getInputFilename(form.protocol, inputObj, structureHandler)
@@ -314,6 +316,18 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
         finalResiduesList.append(String(i))
 
     return finalResiduesList
+
+  def getSeqFromStr(self, form, inputObj):
+      seqName = inputObj.split('name = ')[1].split(')')[0]
+
+      seqSet = form.protocol.inputSetOfSequences.get()
+      realSeq = None
+
+      for seq in seqSet:
+          if seq.getName() == seqName or seqName in str(seq):
+              realSeq = seq
+              break
+      return realSeq
 
 
 class SelectAtomWizardQT(SelectResidueWizardQT):
