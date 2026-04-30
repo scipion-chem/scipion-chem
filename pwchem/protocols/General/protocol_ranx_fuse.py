@@ -171,13 +171,15 @@ class ProtocolRANXFuse(EMProtocol):
   def createOutputStep(self):
     inSet = self.inputSets[0].get()
     outAttrName = self.getOutAttrName()
-    outScores = self.parseOutputFile()
+    outData = self.parseOutputFile()
 
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
-      scoreComb = outScores[inID]
+      scoreComb = outData[inID]["score"]
+      rankComb = outData[inID]["rank"]
       setattr(item, self.outName.get(), Float(scoreComb))
+      setattr(item, "RanxRank", Integer(rankComb))
       outSet.append(item)
 
     self._defineOutputs(outputSet=outSet)
@@ -263,13 +265,27 @@ class ProtocolRANXFuse(EMProtocol):
     return paramsFile
 
   def parseOutputFile(self):
-    outDic = {}
+    scores = {}
     with open(self.getOutFile()) as f:
       f.readline()
       for line in f:
         _, mutName, scoreComb = line.strip().split('\t')
-        outDic[mutName] = scoreComb
-    return outDic
+        scores[mutName] = float(scoreComb)
+
+    sorted_items = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    ranked = {}
+    current_rank = 1
+    for idx, (mut, score) in enumerate(sorted_items):
+      if idx > 0 and score < sorted_items[idx - 1][1]:
+        current_rank = idx + 1
+      ranked[mut] = {"score": score, "rank": current_rank}
+
+    with open(self.getOutFile(), 'w') as f:
+      f.write("Rank\tMut\tScore\n")
+      for mut, data in ranked.items():
+        f.write(f"{data['rank']}\t{mut}\t{data['score']}\n")
+    return ranked
 
   # --------------------------- INFO functions -----------------------------------
   def _validate(self):
