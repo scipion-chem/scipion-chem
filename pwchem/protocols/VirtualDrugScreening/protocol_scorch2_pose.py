@@ -275,6 +275,9 @@ class ProtocolSCORCH2(EMProtocol):
                 inputPath = str(pdbFile.resolve())
 
             args = f"-ipdb {inputPath} -opdbqt -O {outputPath}"
+
+            if suffix == ".sdf":
+                args = f"-isdf {inputPath} -opdbqt -O {outputPath}"
             runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
         return oFiles
 
