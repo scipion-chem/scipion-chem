@@ -208,8 +208,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
 
 
     group = form.addGroup('Local files', condition=NO_DEF_LIB)
-    group.addParam('filePath', params.PathParam, condition=NO_DEF_LIB,
-                   label='Library file: ', help='File path to the SMI library in local.')
+    group.addParam('filePath', params.PathParam, condition=NO_DEF_LIB, label='Library file: ',
+                   help='File path to the SMI library in local. Columns should be tab separated.')
     group.addParam('headers', params.StringParam, condition=NO_DEF_LIB,
                    label='Library headers: ', default='',
                    help='Headers of the selected library file. Set them separated by commas. e.g: SMI,Name')
@@ -219,8 +219,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
     if self.defLibraries:
-      self._insertFunctionStep('downloadStep')
-    self._insertFunctionStep('createOutputStep')
+      self._insertFunctionStep(self.downloadStep)
+    self._insertFunctionStep(self.createOutputStep)
 
   def downloadStep(self):
     libChoice = self.choicesLibraries.get()
