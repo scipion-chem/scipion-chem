@@ -37,7 +37,6 @@ from pathlib import Path
 
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
-from Bio.PDB.ResidueDepth import get_surface
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -196,15 +195,7 @@ class ProtDefineStructROIs(EMProtocol):
         structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
 
-        envName = Plugin.getEnvName(MGL_DIC)
-
-        prefix = Plugin.getMGLToolsPrefix(envName=envName)
-
-        msmsPath = os.path.join(
-            prefix,
-            "MGLToolsPckgs/binaries/msms"
-        )
-        self.structSurface = get_surface(self.structModel, MSMS=msmsPath)
+        self.structSurface = Plugin.runMSMS(self.structModel)
     def definePocketsStep(self):
         coordsDefined = []
         for roiStr in self.inROIs.get().split('\n'):

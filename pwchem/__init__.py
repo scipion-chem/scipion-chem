@@ -363,6 +363,19 @@ class Plugin(pwem.Plugin):
         fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
+    @classmethod
+    def runMSMS(cls, structModel):
+        """ Run MSMS command from a given protocol. """
+        from Bio.PDB.ResidueDepth import get_surface
+        envName = Plugin.getEnvName(MGL_DIC)
+        prefix = Plugin.getMGLToolsPrefix(envName=envName)
+        msmsPath = os.path.join(
+            prefix,
+            "MGLToolsPckgs/binaries/msms"
+        )
+        structSurface = get_surface(structModel, MSMS=msmsPath)
+        return structSurface
+
 ##################### UTILS ###########################
     @classmethod
     def getPluginHome(cls, path=""):
