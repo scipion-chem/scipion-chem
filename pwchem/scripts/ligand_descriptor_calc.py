@@ -10,29 +10,24 @@ import os, sys, json
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 
-# --- PATH bootstrap ---
 HERE = os.path.abspath(os.path.dirname(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 for p in (REPO_ROOT, HERE):
     if p not in sys.path:
         sys.path.insert(0, p)
-# ----------------------
 
-# Try to import descriptor_categories (fallback to constants)
 try:
-    from pwchem.scripts.constants import descriptor_categories
+    from pwchem.constants import DESCRIPTOR_CATEGORIES
 except ModuleNotFoundError:
     import importlib
     constants = importlib.import_module('constants')
-    descriptor_categories = getattr(constants, 'descriptor_categories')
+    DESCRIPTOR_CATEGORIES = getattr(constants, 'descriptor_categories')
 
 def load_molecule(path):
-    """Load molecule from .mol/.sdf or .smi/.smiles safely (skip invalid files)."""
     path = os.path.abspath(path)
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         print(f"[WARNING] Skipping missing or empty file: {path}")
         return None
-
     try:
         if path.endswith(('.smi', '.smiles')):
             with open(path) as f:
@@ -51,15 +46,15 @@ def main():
     if len(sys.argv) < 4:
         raise SystemExit("Usage: python ligand_descriptor_calc.py input.json output.json flags.json")
 
-    input_json = sys.argv[1]
+    input_json  = sys.argv[1]
     output_json = sys.argv[2]
-    flags_json = sys.argv[3]
-
-    with open(flags_json, 'r') as f:
-        enabled_categories = json.load(f)
-
+    flags_json  = sys.argv[3]
+    
     with open(input_json, 'r') as f:
         molecule_paths = json.load(f)
+
+    with open(flags_json, 'r') as f:
+        enabled_descriptors = set(json.load(f))
 
     descriptor_list = Descriptors.descList
     header = [name for name, _ in descriptor_list]
@@ -73,14 +68,11 @@ def main():
 
         row = []
         for name, desc_func in descriptor_list:
-            evaluate = False
-            for cat in descriptor_categories():
-                if enabled_categories.get(cat, False) and name in descriptor_categories[cat]:
-                    evaluate = True
-                    break
-
+            if name not in enabled_descriptors:
+                row.append(float('nan'))
+                continue
             try:
-                value = desc_func(mol) if evaluate else float('nan')
+                value = desc_func(mol)
             except Exception:
                 value = float('nan')
             row.append(value)
@@ -89,7 +81,6 @@ def main():
 
     with open(output_json, 'w') as f:
         json.dump({'header': header, 'property_dict': property_dict}, f)
-
 
 if __name__ == "__main__":
     main()

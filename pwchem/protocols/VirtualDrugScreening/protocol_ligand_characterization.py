@@ -26,7 +26,6 @@
 import numpy as np
 import os
 import json
-import glob
 
 from pyworkflow.protocol import params
 from pyworkflow.object import Float
@@ -43,167 +42,112 @@ class ProtocolLigandCharacterization(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label='Parameters')
+
         form.addParam('inputSmallMolecules', params.PointerParam,
                       pointerClass='SetOfSmallMolecules, SmallMoleculesLibrary', allowsNull=False,
                       label="Input Small Molecules",
                       help='Set of molecules to process.')
-        form.addParam('useLibrary', params.BooleanParam, default=False,
-                      label="Use Small Molecules Library")
 
-        # Boolean flags for descriptor categories
+        # Name all parameters using booleans
         form.addParam('useConstitutional', params.BooleanParam, default=True,
                       label='Calculate constitutional descriptors')
+
         form.addParam('useElectronic', params.BooleanParam, default=True,
                       label='Calculate electronic descriptors')
+
         form.addParam('useTopological', params.BooleanParam, default=True,
                       label='Calculate topological descriptors')
+
         form.addParam('useGeometrical', params.BooleanParam, default=True,
                       label='Calculate geometrical descriptors')
+
         form.addParam('useRing', params.BooleanParam, default=True,
                       label='Calculate ring descriptors')
+
         form.addParam('useFragment', params.BooleanParam, default=True,
                       label='Calculate fragment descriptors')
+
         form.addParam('useOther', params.BooleanParam, default=True,
                       label='Calculate other descriptors')
 
-    # --------------------------------------------------------
-    # Workflow
-    # --------------------------------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('runDescriptorCalc')
         self._insertFunctionStep('createOutputStep')
 
-    # --------------------------------------------------------
-    # Step 1: Run external RDKit descriptor calculator
-    # --------------------------------------------------------
     def runDescriptorCalc(self):
-        mol_input = self.inputSmallMolecules.get()
-        is_lib = isinstance(mol_input, SmallMoleculesLibrary) or self.useLibrary.get()
+        mol_set = self.inputSmallMolecules.get()
 
-        # Build {molName: filePath}
         mol_dict = {}
-        if is_lib:
-            inDir = os.path.abspath(self._getTmpPath())
-            try:
-                ligFiles = mol_input.splitInFiles(inDir)
-            except Exception as e:
-                self.info(f"splitInFiles() failed ({type(e).__name__}: {e}). Trying directory glob.")
-                try:
-                    lib_src = mol_input.getFileName()
-                except Exception:
-                    raise
-                ligFiles = []
-                if os.path.isdir(lib_src):
-                    exts = ('*.sdf', '*.mol', '*.mol2', '*.smi', '*.smiles')
-                    for pat in exts:
-                        ligFiles.extend(glob.glob(os.path.join(lib_src, pat)))
-                    ligFiles = [os.path.abspath(p) for p in ligFiles]
-                    if not ligFiles:
-                        self.error(f"No ligand files found in directory: {lib_src}")
-                else:
-                    self.error(f"Library source is not a directory and splitInFiles() failed: {lib_src}")
+        for mol in mol_set:
+            name = mol.molName.get()
+            path = os.path.abspath(mol.getFileName())
+            mol_dict[name] = path
+        print(f"[DEBUG] mol_dict has {len(mol_dict)} entries")
 
-            for f in ligFiles:
-                base = os.path.basename(f)
-                name, _ = os.path.splitext(base)
-                i, orig = 2, name
-                while name in mol_dict:
-                    name = f"{orig}_{i}"
-                    i += 1
-                mol_dict[name] = os.path.abspath(f)
-        else:
-            mol_dict = {mol.molName.get(): mol.getFileName() for mol in mol_input}
-
-        # Serialize input molecules
-        input_json = self._getExtraPath("input_mols.json")
+        input_json = os.path.abspath(self._getExtraPath("input_mols.json"))
+        # input_json = self._getExtraPath("input_mols.json")
         with open(input_json, 'w') as f:
             json.dump(mol_dict, f)
 
-        # Descriptor flags
-        flags = {cat: bool(getattr(self, f"use{cat.capitalize()}").get()) for cat in DESCRIPTOR_CATEGORIES}
-        flags_path = self._getExtraPath("descriptor_flags.json")
+        enabled_descriptors = []
+        for cat, desc_list in DESCRIPTOR_CATEGORIES.items():
+            val = getattr(self, f"use{cat.capitalize()}").get()
+            print(f"[DEBUG] cat={cat}, value={val}")
+            if val:
+                enabled_descriptors.extend(desc_list)
+
+        flags_path = os.path.abspath(self._getExtraPath("descriptor_flags.json"))
         with open(flags_path, 'w') as f:
-            json.dump(flags, f)
+            json.dump(enabled_descriptors, f)
 
-        # Output path
-        output_json = self._getExtraPath("output_results.json")
+        # Output file path
+        output_json = os.path.abspath(self._getExtraPath("output_results.json"))
+        # output_json = self._getExtraPath("output_results.json")
 
-        # Prepare environment
-        scripts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
-        if not os.path.isdir(scripts_dir):
-            self.error(f"Scripts dir not found: {scripts_dir}")
+        # Call the RDKit script in the correct environment
+        Plugin.runScript(self, 'ligand_descriptor_calc.py',
+                         f"{input_json} {output_json} {flags_path}",
+                         env=RDKIT_DIC,
+                         cwd=self._getPath())
 
-        env = dict(RDKIT_DIC) if isinstance(RDKIT_DIC, dict) else {}
-        prev_py = env.get('PYTHONPATH', '')
-        env['PYTHONPATH'] = os.pathsep.join([p for p in [scripts_dir, prev_py] if p])
-
-        # Run descriptor calculation script
-        Plugin.runScript(
-            self,
-            'ligand_descriptor_calc.py',
-            f"{os.path.abspath(input_json)} {os.path.abspath(output_json)} {os.path.abspath(flags_path)}",
-            env=env,
-            cwd=scripts_dir
-        )
-
-        if not os.path.exists(output_json) or os.path.getsize(output_json) == 0:
-            self.error("Descriptor script produced no output.")
-
-    # --------------------------------------------------------
-    # Step 2: Create output with descriptors visible in Scipion
-    # --------------------------------------------------------
-    def createOutputStep(self):
-        inp = self.inputSmallMolecules.get()
-
-        #if isinstance(inp, SmallMoleculesLibrary) or self.useLibrary.get():
-        #    self.info("Input is a SmallMoleculesLibrary; skipping property attachment. "
-        #              "Descriptor results are available in 'output_results.json'.")
-        #   return
-
-        newMols = SetOfSmallMolecules.createCopy(inp, self._getPath(), copyInfo=True)
-
-        # Load descriptor data
-        output_json = self._getExtraPath("output_results.json")
+        # Load the results
         with open(output_json, 'r') as f:
             data = json.load(f)
 
-        header = data.get('header', [])
-        property_dict = data.get('property_dict', {})
+        self.header = data['header']
+        self.propertyDict = data['property_dict']
 
-        for mol in inp:
-            mol_copy = mol.clone()
-            name = mol_copy.molName.get()
+    def createOutputStep(self):
+        newMols = SetOfSmallMolecules.createCopy(self.inputSmallMolecules.get(), self._getPath(), copyInfo=True)
 
-            if name not in property_dict:
-                newMols.append(mol_copy)
+        mols = self.inputSmallMolecules.get()
+        for mol in mols:
+            if mol.molName.get() not in self.propertyDict:
                 continue
 
-            row = property_dict[name]
-            for i, prop_name in enumerate(header):
-                value = row[i]
-                category = next(
-                    (cat for cat, props in DESCRIPTOR_CATEGORIES.items() if prop_name in props),
-                    'uncategorized'
-                )
-                attr_name = f"_Property_{category}_{prop_name}"
-                setattr(mol_copy, attr_name, Float(value))
+            row = self.propertyDict[mol.molName.get()]
 
-            newMols.append(mol_copy)
+            for i in range(len(row)):
+                prop_name = self.header[i]
+                value = row[i]
+
+                # Find the descriptor category
+                category = 'uncategorized'
+                for cat, prop_list in DESCRIPTOR_CATEGORIES.items():
+                    if prop_name in prop_list:
+                        category = cat
+                        break
+
+                attr_name = f"Property {category} {prop_name}"
+                setattr(mol, attr_name, Float(value))
+
+            newMols.append(mol)
 
         newMols.updateMolClass()
         self._defineOutputs(outputSmallMolecules=newMols)
 
-    # --------------------------------------------------------
-    # Summary and plugin metadata
-    # --------------------------------------------------------
     def _summary(self):
-        msgs = []
-        out_json = self._getExtraPath("output_results.json")
-        if os.path.exists(out_json):
-            msgs.append(f"Descriptors stored in {os.path.basename(out_json)}")
-        else:
-            msgs.append("No descriptor output found.")
-        return msgs
+        pass
 
     def getPluginCategory(self):
         return "Virtual Screening"
