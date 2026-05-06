@@ -92,7 +92,7 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
     elif ext == 'smi' or ext == 'smiles':
         with open(inFile) as f:
             for line in f:
-                smi, name = line.strip().split()
+                smi, name = line.strip().split('\t')
                 mol = Chem.MolFromSmiles(smi)
                 if mol:
                     mol.SetProp(nameKey, name)
@@ -195,6 +195,7 @@ if __name__ == "__main__":
             writter, ext = Chem.SDWriter, 'sdf'
 
         if singleOutFile:
+            outName = outName.replace(' ', '_')
             outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
             with writter(outFile) as f:
                 for mol in mols:
@@ -209,7 +210,7 @@ if __name__ == "__main__":
                         molName = mol.GetProp(nameKey)
                     else:
                         molName = '{}_{}'.format(outBase, i+1)
-                    molName = molName.replace('/', '-')
+                    molName = molName.replace('/', '-').replace(' ', '_')
                     outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
                     with writter(outFile) as f:
                         f.write(mol)

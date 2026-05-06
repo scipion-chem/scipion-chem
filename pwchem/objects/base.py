@@ -799,13 +799,13 @@ class SmallMoleculesLibrary(data.EMObject):
   def yieldLibraryMapItems(self, inverted=False, fullLine=False, lineDic=False):
     with open(self.getFileName()) as f:
       for line in f:
-        smi, name = line.split()[0].strip(), line.split()[1].strip()
+        smi, name = line.split('\t')[0].strip(), line.split('\t')[1].strip()
         key = name if inverted else smi
         if not fullLine:
           val = smi if inverted else name
         else:
           if lineDic:
-            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split())}
+            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split('\t'))}
           else:
             val = line.strip()
         yield key, val
@@ -829,7 +829,7 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split()[col]
+        molName = line.split('\t')[col].replace(' ', '_')
 
         oFile = os.path.join(outDir, f'{molName}.smi')
         with open(oFile, 'w') as fO:
@@ -841,7 +841,7 @@ class SmallMoleculesLibrary(data.EMObject):
     batch = []
     with open(self.getFileName()) as f:
       for line in f:
-        row = line.split()
+        row = line.split('\t')
         try:
           vals = [row[ci].strip() for ci in colIndexes]
           batch.append(vals)

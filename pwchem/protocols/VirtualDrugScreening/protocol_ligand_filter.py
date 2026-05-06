@@ -124,10 +124,14 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
     def addLibAttributes(self, smallMol, molLine):
       heads = self.inputLibrary.get().getHeaders()
-      attrs = molLine.split()
+      attrs = molLine.split('\t')
       for i, h in enumerate(heads):
         if h.lower() not in ['name', 'molname']:
-          smallMol.__setattr__(h, pwobj.String(attrs[i]))
+          try:
+              val = float(attrs[i])
+              smallMol.__setattr__(h, pwobj.Float(val))
+          except:
+              smallMol.__setattr__(h, pwobj.String(attrs[i]))
         else:
           smallMol.setMolName(attrs[i])
       return smallMol
