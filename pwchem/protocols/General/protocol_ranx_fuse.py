@@ -272,14 +272,13 @@ class ProtocolRANXFuse(EMProtocol):
         _, mutName, scoreComb = line.strip().split('\t')
         scores[mutName] = float(scoreComb)
 
-    sorted_items = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    sortedItems = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
     ranked = {}
-    current_rank = 1
-    for idx, (mut, score) in enumerate(sorted_items):
-      if idx > 0 and score < sorted_items[idx - 1][1]:
-        current_rank = idx + 1
-      ranked[mut] = {"score": score, "rank": current_rank}
+    currentRank = 1
+    for idx, (mut, score) in enumerate(sortedItems):
+      currentRank = idx + 1
+      ranked[mut] = {"score": score, "rank": currentRank}
 
     with open(self.getOutFile(), 'w') as f:
       f.write("Rank\tMut\tScore\n")
