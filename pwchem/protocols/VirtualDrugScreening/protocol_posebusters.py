@@ -33,7 +33,7 @@ This protocol is used to perform tests oer predicted molecule poses (https://git
 """
 import os.path
 
-import csv, re
+import csv, shutil
 
 from pyworkflow.object import Boolean
 from pyworkflow.protocol import params
@@ -112,11 +112,11 @@ class ProtocolPoseBusters(EMProtocol):
         if self.useTrueMol.get():
             molTrue = self.getTrueMol()
             trueFile = self.convertFormat(molTrue, type='crystal')
-            os.rename(trueFile, self.getTrueMolFile())
+            shutil.copy(trueFile, self.getTrueMolFile())
 
         if self.molRec.get():
             protFile = self.convertFormat(self.inputMoleculesSet.get().getProteinFile(), type='file')
-            os.rename(protFile, self.getMolRecFile())
+            shutil.copy(os.path.abspath(protFile), self.getMolRecFile())
 
         nThreads = self.getNThreads()
         molSubSets = makeSubsets(self.inputMoleculesSet.get(), nThreads, True)
@@ -126,7 +126,8 @@ class ProtocolPoseBusters(EMProtocol):
                 inDir = self.getInMolsDir(i)
                 os.makedirs(inDir, exist_ok=True)
                 copyPath = os.path.join(inDir, os.path.basename(mol.getPoseFile()))
-                os.link(mol.getPoseFile(), copyPath)
+                if not os.path.exists(copyPath):
+                    os.link(mol.getPoseFile(), copyPath)
 
     def convertInputStep(self, it):
         inDir, convDir = self.getInMolsDir(it), self.getConvMolsDir(it)
