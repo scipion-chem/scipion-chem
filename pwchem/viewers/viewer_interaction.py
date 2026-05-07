@@ -119,6 +119,7 @@ class BaseInteractionViewer(ProtocolViewer):
         for i, e1 in enumerate(ent1):
             for j, e2 in enumerate(ent2):
                 val = data.get(e1, {}).get(e2, {}).get(filtScore, np.nan)
+                val = float(val)
                 matrix[i, j] = val if val >= thres else np.nan
 
         return matrix, ent1, ent2, filtScore

@@ -1,3 +1,8 @@
+import numpy as np
+
+import matplotlib.pyplot as plt
+import matplotlib
+
 def heatmap(data, rowLabels, colLabels, ax=None, cbarKw=None, cbarLabel="", **kwargs):
   """
   Create a heatmap from a numpy array and two lists of labels.

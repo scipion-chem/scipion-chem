@@ -23,10 +23,7 @@
 # **************************************************************************
 
 import os
-import numpy as np
 from subprocess import Popen
-import matplotlib.pyplot as plt
-import matplotlib
 from tkinter.messagebox import askokcancel
 
 import pyworkflow.viewer as pwviewer
@@ -181,26 +178,12 @@ class SequenceChemViewer(BaseInteractionViewer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-
     def _getData(self):
         outSeqs = self.getOutSequences()
 
-        data = {}
-
-        for seq in outSeqs:
-            seqName = seq.getSeqName()
-
-            if seqName not in data:
-                data[seqName] = {}
-
-            interactMols = seq.getInteractMols()
-
-            if interactMols is None:
-                continue
-
-            for molName, scores in interactMols.items():
-                data[seqName][molName] = scores
-
+        data = outSeqs.getInteractScoresDic()
+        if data is None:
+            return {}
         return data
 
     def _getEntityNames(self, data):
@@ -272,3 +255,18 @@ class SequenceChemViewer(BaseInteractionViewer):
                     seqSet = obj
 
         return seqSet.getInteractMols() is not None
+
+    def getOutSequences(self):
+        if hasattr(self.protocol, 'outputSequences'):
+            return self.protocol.outputSequences
+
+        if isinstance(self.protocol, SetOfSequencesChem):
+            return self.protocol
+
+        if hasattr(self.protocol, 'iterOutputAttributes'):
+            for oAttr in self.protocol.iterOutputAttributes():
+                obj = getattr(self.protocol, oAttr[0])
+                if isinstance(obj, SetOfSequencesChem):
+                    return obj
+
+        return self.protocol
