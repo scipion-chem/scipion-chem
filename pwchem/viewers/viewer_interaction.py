@@ -32,7 +32,7 @@ from pyworkflow.protocol import params
 
 from pwem.objects import SetOfAtomStructs
 from pwem.viewers import EmPlotter
-from pwchem.viewers.viewers_sequences import heatmap, annotateHeatmap
+from .viewers_utils import heatmap, annotateHeatmap
 from pwem.protocols import ProtSubSet
 
 

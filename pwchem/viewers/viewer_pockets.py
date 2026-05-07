@@ -46,7 +46,7 @@ from pwem.viewers.mdviewer.viewer import MDViewer
 
 from pwchem.utils import getFilteredOutput
 from pwchem.viewers.viewer_interaction import BaseInteractionViewer
-from pwchem.viewers.viewers_sequences import heatmap, annotateHeatmap
+from .viewers_utils import heatmap, annotateHeatmap
 
 from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
