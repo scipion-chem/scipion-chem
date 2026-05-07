@@ -92,10 +92,9 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
     elif ext == 'smi' or ext == 'smiles':
         with open(inFile) as f:
             for line in f:
-                print(line)
-                if not line:
+                if not line.strip():
                     continue
-                parts = line.split()
+                parts = line.split('\t')
                 if len(parts) < 2:
                     continue
                 smi, name = parts[0], parts[1]
