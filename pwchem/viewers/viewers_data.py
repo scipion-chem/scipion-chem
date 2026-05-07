@@ -21,6 +21,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import json
+from tkinter.messagebox import askokcancel
 
 import os
 from subprocess import Popen
@@ -40,6 +42,10 @@ import pwchem.objects
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import *
 from pwchem.utils import getBaseName
+
+
+from pwchem.viewers.viewer_interaction import BaseInteractionViewer
+from pwem.protocols import ProtSubSet
 
 class PyMol:
   """ Help class to run PyMol and manage its environment. """
@@ -162,7 +168,7 @@ class AtomStructPymolViewer(PyMolViewer):
       return pymolV._visualize(obj.getFileName())
 
 
-class SetOfAtomStructViewer(AtomStructViewer):
+class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
   _label = 'Viewer Set Of AtomStruct'
   _targets = [SetOfAtomStructs]
 
@@ -184,13 +190,19 @@ class SetOfAtomStructViewer(AtomStructViewer):
                   label='Display Atom Struct set in table format: ',
                   help='Display the Atom Struct set in the set in table format with their respective attributes')
 
+    data = self._getData()
+    if data:
+        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+
   def _getVisualizeDict(self):
-    return {
-      # Structures
-      'displaySoftware': self._viewSetStructure,
-      # Table
-      'displayTable': self._viewTable,
-    }
+      d = {
+          'displaySoftware': self._viewSetStructure,
+          'displayTable': self._viewTable,
+      }
+
+      d.update(BaseInteractionViewer._getVisualizeDict(self))
+
+      return d
 
   def _viewSetStructure(self, e=None):
     if self.displaySoftware.get() == 0:
@@ -252,6 +264,73 @@ class SetOfAtomStructViewer(AtomStructViewer):
     with open(oFile, 'w') as f:
       f.write(oStr)
     return oFile
+
+  def _getData(self):
+      structSet = self.getStructSet()
+
+      with open(structSet._interactScoresFile.get(), 'r') as f:
+          return json.load(f)
+
+  def _getEntityNames(self, data):
+      protNames = sorted(data.keys())
+      molNames = sorted(next(iter(data.values())).keys())
+      scoreTypes = sorted(next(iter(next(iter(data.values())).values())).keys())
+      return protNames, molNames, scoreTypes
+
+  def _getLabels(self):
+      return "Protein", "Ligand", "Affinity"
+
+  def getStructSet(self):
+      if hasattr(self.protocol, 'outputAtomStructs'):
+          return self.protocol.outputAtomStructs
+      return self.protocol
+
+  def _generateProts(self, paramName=None):
+      f1 = self.getEnumText('chooseEnt1')
+      f2 = self.getEnumText('chooseEnt2')
+      fScore = self.getEnumText('chooseScore')
+
+      data = self._getData()
+
+      _, e1, _, _ = self._getFilteredData(data, f1, f2, fScore)
+
+      objIds = []
+      structSet = self.getStructSet()
+
+      for obj in structSet:
+          if os.path.splitext(os.path.basename(obj.getFileName()))[0] in e1:
+              objIds.append(str(obj.getObjId()))
+
+      if not objIds:
+          return
+
+      if askokcancel("Generate proteins subset",
+                     f"Generate subset with {len(objIds)} proteins?"):
+          project = self.getProject()
+          prot = project.newProtocol(
+              ProtSubSet,
+              inputFullSet=structSet,
+              selectIds=True,
+              range=','.join(objIds)
+          )
+
+          project.launchProtocol(prot, wait=True)
+
+  def _getMolSet(self):
+      structs = self.getStructSet()
+      scoresFile = structs.getAttributeValue('_interactScoresFile')
+      return self.getMolecules(scoresFile)
+
+  def getMolecules(self, jsonPath):
+      with open(jsonPath, "r") as f:
+          data = json.load(f)
+
+      molecules = set()
+
+      for modelData in data.values():
+          molecules.update(modelData.keys())
+
+      return sorted(molecules)
 
 
 class SetOfDatabaseIDView(pwemViews.ObjectView):
