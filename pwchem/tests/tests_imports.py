@@ -309,3 +309,30 @@ class TestImportExport(TestImportBase):
 
 				oName = 'importedObject' if inName == 'outputPdb' else 'importedSet'
 				assertHandle(self.assertIsNotNone, getattr(protImp, oName, None), cwd=protImp.getWorkingDir())
+
+class TestImportMDSystems(BaseTest):
+	@classmethod
+	def setUpClass(cls):
+		cls.ds = DataSet.getDataSet('mdSystem')
+		setupTestProject(cls)
+
+	@classmethod
+	def _runImportSystem(cls):
+		from pwchem.tests import DataSetMDSystem
+		protImportMDSystem = cls.newProtocol(
+			ProtocolImportMDSystem,
+			inputCoords=cls.ds.getFile(DataSetMDSystem.amberSystemFile.value),
+			inputCrd=cls.ds.getFile(DataSetMDSystem.amberCrdFile.value),
+			inputTopology=cls.ds.getFile(DataSetMDSystem.amberTopoFile.value),
+			addTraj=True,
+			inputTrajectory=cls.ds.getFile(DataSetMDSystem.amberTrjFile.value),
+			hasLig=True,
+			ligID='LIG')
+		cls.launchProtocol(protImportMDSystem)
+		cls.protImportMDSystem = protImportMDSystem
+		return protImportMDSystem
+
+	def test(self):
+		systemImport = self._runImportSystem()
+		assertHandle(self.assertIsNotNone, getattr(systemImport, 'outputSystem', None),
+					 cwd=systemImport.getWorkingDir())
