@@ -26,7 +26,7 @@
 
 # General imports
 import os, re, glob, json
-from urllib.request import urlopen
+import urllib
 from Bio.PDB import PDBIO, Select
 
 # Scipion em imports
@@ -363,7 +363,7 @@ class ProtocolLigandsFetching(EMProtocol):
 	def mapUniprot2SmilesDic(self, uniprot_id):
 		ligDic = {}
 		url = 'https://bindingdb.org/axis2/services/BDBService/getLigandsByUniprot?uniprot={}'.format(uniprot_id)
-		with urlopen(url) as response:
+		with urllib.request.urlopen(url) as response:
 			fullXML = response.read().decode('utf-8')
 			ligIds = re.findall(r'<bdb:monomerid>\d+</bdb:monomerid>', fullXML)
 			ligIds = [ligId.split('>')[1].split('<')[0] for ligId in ligIds]
@@ -540,8 +540,12 @@ class ProtocolLigandsFetching(EMProtocol):
 			zid = 'ZINC' + ligand_id.zfill(12)
 			url = 'https://zinc.docking.org/substances/{}.sdf'.format(zid)
 
+			headers = {
+				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			}
+			req = urllib.request.Request(url, headers=headers)
 			# Defining function to retry n times
-			getUrlContent = lambda url: urlopen(url).read().decode('utf-8')
+			getUrlContent = lambda url: urllib.request.urlopen(req).read().decode('utf-8')
 
 			# Trying to access url
 			sdfStr = insistentExecution(getUrlContent, url, maxTimes=3, verbose=True)
@@ -706,13 +710,13 @@ class ProtocolLigandsFetching(EMProtocol):
 					url += 'limit=%s&' % limit
 				url += 'molecule_chembl_id=%s' % id
 
-		with urlopen(url) as response:
+		with urllib.request.urlopen(url) as response:
 			jDic = json.loads(response.read())
 		return jDic
 
 	def getDBDSmiles(self, dbid):
 		url = 'https://www.bindingdb.org/rwd/bind/chemsearch/marvin/MolStructure.jsp?monomerid={}'.format(dbid)
-		with urlopen(url) as response:
+		with urllib.request.urlopen(url) as response:
 			fullHTML = response.read().decode('utf-8')
 
 		smiLine = re.findall(r'<b>SMILES</b> <span class="darkgray">.+?</span>', fullHTML)[0]
@@ -728,7 +732,7 @@ class ProtocolLigandsFetching(EMProtocol):
 			url = "https://www.bindingdb.org/rwd/bind/BindingDB_DrugBankID.txt"
 
 		if not os.path.exists(mapFile):
-			with urlopen(url) as response:
+			with urllib.request.urlopen(url) as response:
 				with open(mapFile, 'w') as f:
 					f.write(response.read().decode('utf-8'))
 

@@ -372,9 +372,9 @@ class SequenceChemViewer(SequenceGeneralViewer):
             plt.show()
 
     def _viewHistogram(self, paramName=None):
-      outSeqs = self.getOutSequences()
-      filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
-      if filtMolNames == 'All':
+        outSeqs = self.getOutSequences()
+        filtSeqNames, filtMolNames, filtScoreType = self.getEnumText('chooseSeq'), self.getEnumText('chooseMol'), self.getEnumText('chooseScore')
+
         intAr, _, _, scoreType = getFilteredOutput(outSeqs, filtSeqNames, filtMolNames, filtScoreType, self.scThres.get())
         scoreList = intAr.flatten()
 
@@ -437,7 +437,7 @@ class SequenceChemViewer(SequenceGeneralViewer):
             protFilter = project.newProtocol(
                 ProtExtractInteractingMols, inputSequences=self.getOutSequences(),
                 chooseSeq=seqNames, chooseMol=molNames,
-                scThres=scThres
+                chooseScore=self.getEnumText('chooseScore'), scThres=scThres
             )
             project.launchProtocol(protFilter, wait=True)
 

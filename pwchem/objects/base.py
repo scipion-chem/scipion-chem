@@ -78,10 +78,6 @@ class SequenceChem(data.Sequence):
     data.Sequence.__init__(self, **kwargs)
     self._attrFile = pwobj.String(kwargs.get('attributesFile', None))
 
-    # Dictionary that contains the interacting score of each SequenceChem with each SmallMolecule,
-    # so there is no need to create 1 SetOfSmallMolecules per SequenceChem {molId: score}
-    self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
-
   def __str__(self):
     return "SequenceChem (name = {})\n".format(self.getSeqName())
 
@@ -105,23 +101,6 @@ class SequenceChem(data.Sequence):
         attrDic[key.strip()] = eval(values.strip())
     return attrDic
 
-  def getInteractScoresDic(self):
-    '''Returns data from the files where the interaction scores are stored.'''
-    try:
-        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if "entries" not in data:
-            data["entries"] = []
-    except (json.JSONDecodeError, FileNotFoundError):
-        data = {"entries": []}
-
-    return data
-
-  def getInteractScoresFile(self):
-    return self._interactScoresFile.get()
-
-  def setInteractScoresFile(self, intFile):
-    self._interactScoresFile.set(intFile)
 
 
 class SetOfSequencesChem(data.SetOfSequences):
@@ -135,9 +114,22 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', ""))
 
-  def copyInfo(self, other):
-    """ Copy basic information from other set of classes to current one"""
-    self.copyAttributes(other, '_aligned', '_alignFile', '_interactMols', '_interactScoresFile')
+  def createCopy(self, outputPath, copyInfo=False, copyItems=False, itemSelectedCallback=None, rowFilter=None):
+      newSet = self.create(outputPath)
+      if copyInfo:
+        newSet.copyInfo(self)
+
+      if copyItems:
+        newSet.copyItems(self, itemSelectedCallback=itemSelectedCallback, rowFilter=rowFilter)
+
+      return newSet
+
+  def copyInfo(self, other, check=True):
+    """ Copy basic information from other set of classes to current one.
+    Check is True in case the copy is from a SetOfSeqeunces, which does not have the extra attributes"""
+    extraAttrs = ['_aligned', '_alignFile', '_interactMols', '_interactScoresFile']
+    extraAttrs = [a for a in extraAttrs if hasattr(other, a)]
+    self.copyAttributes(other, *extraAttrs)
 
   def getSetPath(self):
     return os.path.abspath(self._mapperPath[0])
@@ -202,33 +194,45 @@ class SetOfSequencesChem(data.SetOfSequences):
       else:
           self._scoreTypes.set(",".join(map(str, scores)))
 
-  def getInteractScoresDic(self, calculate=False):
+  def getInteractScoresDic(self):
     '''Returns data from the files where the interaction scores are stored.'''
-    seq = self.getFirstItem()
-    return(seq.getInteractScoresDic())
+    try:
+        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-  def setInteractScoresDic(self, newEntries, data, outputFile):
-    '''From a list of 'entries' writes the output file with the new entries of scores'''
-    for newEntry in newEntries:
-        seqName = newEntry["sequence"]
-        molsDict = newEntry["molecules"]
+    except (json.JSONDecodeError, FileNotFoundError):
+        data = {seq.getSeqName(): {} for seq in self}
 
-        existingSeq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
+    return data
 
-        if existingSeq:
-            for mol, newScores in molsDict.items():
-                if mol in existingSeq["molecules"]:
-                    for scoreName, scoreVal in newScores.items():
-                        if scoreName not in existingSeq["molecules"][mol]:
-                            existingSeq["molecules"][mol][scoreName] = scoreVal
-                else:
-                    existingSeq["molecules"][mol] = newScores
-        else:
-            data["entries"].append(newEntry)
+  def setInteractScoresDic(self, newData):
+    '''New data will update the scores dictionary storing the interactions of each sequence with a molecule
+    newData: {seqName: {molName: {scoreName: score}}}
+    '''
+    prevData = self.getInteractScoresDic()
+    for seqName, molDic in newData.items():
+      if seqName not in prevData:
+        prevData[seqName] = {}
 
-    with open(outputFile, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-    self.setInteractScoresFile(outputFile)
+      for molName, scoreDic in molDic.items():
+        if molName not in prevData[seqName]:
+          prevData[seqName][molName] = {}
+
+        prevData[seqName][molName].update(scoreDic)
+
+    oFile = self.getInteractScoresFile()
+    with open(oFile, "w", encoding="utf-8") as f:
+        json.dump(prevData, f, indent=4)
+
+  def updateScoreTypes(self):
+     scoreNames = []
+     intDic = self.getInteractScoresDic()
+     for seqName, molDic in intDic.items():
+       for molName, scoreDic in molDic.items():
+         for scoreName in scoreDic:
+           if scoreName not in scoreNames:
+             scoreNames.append(scoreName)
+     self.setScoreTypes(scoreNames)
 
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
@@ -242,8 +246,8 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getInteractMolNames(self):
       data = self.getInteractScoresDic()
       molNames = set()
-      for entry in data.get("entries", []):
-          molNames.update(entry.get("molecules", {}).keys())
+      for _, molDic in data.items():
+          molNames.update([molName for molName, _ in molDic.items()])
       return list(molNames)
 
   def getInteractMolsNumber(self):
@@ -391,11 +395,11 @@ class SmallMolecule(data.EMObject):
   def setMolName(self, value):
     self.molName.set(value)
 
-  def guessMolName(self):
+  def guessMolName(self, useConfId=True):
     molName = None
     if self.getFileName():
       fBase = self.getFileName().split('/')[-1].split('.')[0]
-      if self.getConfId():
+      if self.getConfId() and useConfId:
         molName = '-'.join(fBase.split('-')[:-1])
       else:
         molName = fBase
@@ -492,7 +496,7 @@ class SmallMolecule(data.EMObject):
       name += '_{}'.format(self.getDockId())
     return name
 
-  def getAtomsPosDic(self, onlyHeavy=True):
+  def getAtomsPosDic(self, onlyHeavy=True, doMap=False):
     '''Returns a dictionary with the atoms coordinates:
         {atomId: [c1, c2, c3], ...}'''
     molFile = self.getFileName()
@@ -501,12 +505,20 @@ class SmallMolecule(data.EMObject):
 
     posDic = {}
     if '.pdb' in molFile:
+      numType = {}
       with open(molFile) as fIn:
         for line in fIn:
           if line.startswith('ATOM') or line.startswith('HETATM'):
             elements = splitPDBLine(line)
             atomId, coords = elements[2], elements[6:9]
             atomType = removeNumberFromStr(atomId)
+            if atomType == atomId:
+                if atomId not in numType:
+                  numType[atomType] = 0
+
+                numType[atomType] += 1
+                atomId = '{}{}'.format(atomType, numType[atomType])
+
             if atomType != 'H' or not onlyHeavy:
               posDic[atomId] = list(map(float, coords))
 
@@ -545,6 +557,10 @@ class SmallMolecule(data.EMObject):
                 posDic[atomId] = list(map(float, coords))
             else:
               break
+
+    if doMap and self.getMapDic():
+      mapDic = self.getMapDic()
+      posDic = {mapDic[atomId]: posDic[atomId] for atomId in posDic}
 
     return posDic
 
@@ -772,6 +788,9 @@ class SmallMoleculesLibrary(data.EMObject):
     self.libraryFile.set(value)
     self.calculateLength()
 
+  def getSeparator(self):
+    return '\t'
+
   def getLibraryMap(self, inverted=False, fullLine=False, lineDic=False):
     '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
         '''
@@ -783,13 +802,13 @@ class SmallMoleculesLibrary(data.EMObject):
   def yieldLibraryMapItems(self, inverted=False, fullLine=False, lineDic=False):
     with open(self.getFileName()) as f:
       for line in f:
-        smi, name = line.split()[0].strip(), line.split()[1].strip()
+        smi, name = line.split(self.getSeparator())[0].strip(), line.split(self.getSeparator())[1].strip()
         key = name if inverted else smi
         if not fullLine:
           val = smi if inverted else name
         else:
           if lineDic:
-            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split())}
+            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split(self.getSeparator()))}
           else:
             val = line.strip()
         yield key, val
@@ -813,7 +832,7 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split()[col]
+        molName = line.split(self.getSeparator())[col]
 
         oFile = os.path.join(outDir, f'{molName}.smi')
         with open(oFile, 'w') as fO:
@@ -825,7 +844,7 @@ class SmallMoleculesLibrary(data.EMObject):
     batch = []
     with open(self.getFileName()) as f:
       for line in f:
-        row = line.split()
+        row = line.split(self.getSeparator())
         try:
           vals = [row[ci].strip() for ci in colIndexes]
           batch.append(vals)
@@ -1138,7 +1157,7 @@ class StructROI(data.EMFile):
       protAtoms = self.getProteinAtoms()
       for atom in protAtoms:
         atomId = atom.serial_number
-        if atomId in contactsIds:
+        if str(atomId) in contactsIds:
           contactAtoms.append(atom)
     else:
       # Manually calculate the contacts
@@ -1288,7 +1307,7 @@ class StructROI(data.EMFile):
   def getAtomsCoords(self, atoms):
     coords = []
     for atom in atoms:
-      coords.append(atom.getCoords())
+      coords.append(atom.get_coord())
     return coords
 
   def getAtomsIds(self, atoms):
@@ -1338,7 +1357,7 @@ class StructROI(data.EMFile):
     '''Returns the atoms sorted as they are close to the reference coordinate'''
     dists = []
     for at in atoms:
-      dists += [calculateDistance(refCoord, at.getCoords())]
+      dists += [calculateDistance(refCoord, at.get_coord())]
 
     zippedLists = sorted(zip(dists, atoms))
     dists, atoms = zip(*zippedLists)
@@ -1744,55 +1763,6 @@ class SetOfStructROIs(data.EMSet):
         outStr += pdbLine
 
     return outStr
-
-
-class ProteinAtom(data.EMObject):
-  def __init__(self, pdbLine, **kwargs):
-    data.EMObject.__init__(self, **kwargs)
-    self.parseLine(pdbLine)
-
-  def __str__(self):
-    return 'Atom: {}. Type: {}'.format(self.atomId, self.atomType)
-
-  def parseLine(self, pdbLine):
-    if not pdbLine.startswith('ATOM') and not pdbLine.startswith('HETATM'):
-      print('Passed line does not seems like an pdb ATOM line')
-    else:
-      self.line = pdbLine
-      line = splitPDBLine(pdbLine)
-      self.atomId = line[1]
-      self.atomType = line[2]
-      self.residueType = line[3]
-      self.proteinChain = line[4]
-      self.residueNumber = line[5]
-      self.residueId = '{}.{}'.format(self.proteinChain, self.residueNumber)
-      self.xCoord = line[6]
-      self.yCoord = line[7]
-      self.zCoord = line[8]
-      self.atomLetter = line[-1]
-
-  def getCoords(self):
-    return tuple(map(float, (self.xCoord, self.yCoord, self.zCoord)))
-
-
-class ProteinResidue(data.EMObject):
-  def __init__(self, pdbLine, **kwargs):
-    data.EMObject.__init__(self, **kwargs)
-    self.parseLine(pdbLine)
-
-  def __str__(self):
-    return 'Residue: {}. Type: {}'.format(self.residueId, self.residueType)
-
-  def parseLine(self, pdbLine):
-    if not pdbLine.startswith('ATOM'):
-      print('Passed line does not seems like an pdb ATOM line')
-    else:
-      line = splitPDBLine(pdbLine)
-      self.residueType = line[3]
-      self.proteinChain = line[4]
-      self.residueNumber = line[5]
-      self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
-
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
