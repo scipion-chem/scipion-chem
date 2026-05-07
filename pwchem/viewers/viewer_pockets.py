@@ -85,7 +85,7 @@ class ContactSurfaceViewer(pwviewer.Viewer):
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
 
-class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
+class ViewerGeneralStructROIs(BaseInteractionViewer):
   _label = 'Viewer structural ROIs'
   _targets = [SetOfStructROIs]
 
@@ -129,12 +129,19 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
                       default=True,
                       help='Display min distance labels on the connecting lines.')
 
+    data = self._getData()
+    if data:
+        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+
   def _getVisualizeDict(self):
-    return {
+    d = {
       'displayAtomStruct': self._showAtomStruct,
       'displayTable': self._viewSet,
       'labelDistances': self._viewResidueInteractions
     }
+    d.update(BaseInteractionViewer._getVisualizeDict(self))
+
+    return d
 
   def _viewSet(self, e=None):
     molSet = self.getObject()
@@ -466,6 +473,63 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
     return pymolV._visualize(pmlFile, cwd=outDir)
 
 
+  # ----------------------------------Interactions
+  def _getData(self):
+      structSet = self.getOutPockets()
+
+      with open(structSet._interactScoresFile.get(), 'r') as f:
+          return json.load(f)
+
+  def _getEntityNames(self, data):
+      roiNames = sorted(data.keys())
+      molNames = sorted(next(iter(data.values())).keys())
+      scoreTypes = sorted(next(iter(next(iter(data.values())).values())).keys())
+      return roiNames, molNames, scoreTypes
+
+  def _getLabels(self):
+      return "ROI", "Molecule", "Score"
+
+  def getOutPockets(self):
+      if hasattr(self.protocol, 'outputStructROIs'):
+          return self.protocol.outputStructROIs
+      return self.protocol
+
+  def _generateProts(self, paramName=None):
+      data = self._getData()
+
+      f1 = self.getEnumText('chooseEnt1')
+      f2 = self.getEnumText('chooseEnt2')
+      fScore = self.getEnumText('chooseScore')
+
+      _, e1, _, _ = self._getFilteredData(data, f1, f2, fScore)
+      print(f'e1={e1}')
+
+      objIds = []
+      roiSet = self.getOutPockets()
+
+      for obj in roiSet:
+          if os.path.splitext(os.path.basename(obj.getFileName()))[0] in e1:
+              objIds.append(str(obj.getObjId()))
+
+      if not objIds:
+          return
+
+      if askokcancel("Generate ROI subset",
+                     f"Generate subset with {len(objIds)} ROIs?"):
+          project = self.getProject()
+          prot = project.newProtocol(
+              ProtSubSet,
+              inputFullSet=roiSet,
+              selectIds=True,
+              range=','.join(objIds)
+          )
+
+          project.launchProtocol(prot, wait=True)
+
+  def _getMolSet(self):
+      return self.getOutPockets().getInteractMols()
+
+
 MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'
 VOLUME_VMD = 2
 
@@ -593,63 +657,3 @@ class ViewerConsensusStructROIs(pwviewer.ProtocolViewer):
       args = '{} -e {}'.format(outFile, tclFile)
 
       return [VmdViewPopen(args, cwd=outDir)]
-
-class InteractionsViewerStructROIs(BaseInteractionViewer):
-    _label = 'Interactions viewer'
-    _targets = [SetOfStructROIs]
-    _environments = [pwviewer.DESKTOP_TKINTER]
-
-    def _getData(self):
-        structSet = self.getOutPockets()
-
-        with open(structSet._interactScoresFile.get(), 'r') as f:
-            return json.load(f)
-
-    def _getEntityNames(self, data):
-        roiNames = sorted(data.keys())
-        molNames = sorted(next(iter(data.values())).keys())
-        scoreTypes = sorted(next(iter(next(iter(data.values())).values())).keys())
-        return roiNames, molNames, scoreTypes
-
-    def _getLabels(self):
-        return "ROI", "Molecule", "Score"
-
-    def getOutPockets(self):
-        if hasattr(self.protocol, 'outputStructROIs'):
-            return self.protocol.outputStructROIs
-        return self.protocol
-
-    def _generateProts(self, paramName=None):
-        data = self._getData()
-
-        f1 = self.getEnumText('chooseEnt1')
-        f2 = self.getEnumText('chooseEnt2')
-        fScore = self.getEnumText('chooseScore')
-
-        _, e1, _, _ = self._getFilteredData(data, f1, f2, fScore)
-        print(f'e1={e1}')
-
-        objIds = []
-        roiSet = self.getOutPockets()
-
-        for obj in roiSet:
-            if os.path.splitext(os.path.basename(obj.getFileName()))[0] in e1:
-                objIds.append(str(obj.getObjId()))
-
-        if not objIds:
-            return
-
-        if askokcancel("Generate ROI subset",
-                       f"Generate subset with {len(objIds)} ROIs?"):
-            project = self.getProject()
-            prot = project.newProtocol(
-                ProtSubSet,
-                inputFullSet=roiSet,
-                selectIds=True,
-                range=','.join(objIds)
-            )
-
-            project.launchProtocol(prot, wait=True)
-
-    def _getMolSet(self):
-        return self.getOutPockets().getInteractMols()
