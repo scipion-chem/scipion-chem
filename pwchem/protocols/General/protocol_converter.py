@@ -163,49 +163,52 @@ class ConvertStructures(EMProtocol):
         elif isinstance(self.inputObject.get(), MDSystem):
             inSystem = self.inputObject.get()
             sysFile = inSystem.getSystemFile()
-
+            topFile = inSystem.getTopologyFile()
+            convScript = 'mdtraj_IO.py'
+            # Convert system pdb
             if self.convSysFile.get():
                 outDir = os.path.abspath(self._getExtraPath())
                 fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                 outFormat = self.getEnumText('outputSysFormat').lower()
-                fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
+                sysOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                args = ' -s {} -o {}'.format(os.path.abspath(sysFile), fnOut) # no traj so convert system
-                Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
-                sysFile = fnOut
+                args = ' -s {} -os {}'.format(os.path.abspath(sysFile), sysOut)
+                Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
+                sysFile = sysOut
 
-            outSystem = MDSystem(filename=sysFile)
-            outSystem.setSystemFile(sysFile)
-            
+            outSystem = MDSystem(filename=sysFile, topFile=topFile, systemName=sysFile)
+
+            # Convert topology
             if inSystem.hasTopology():
-                topFile = inSystem.getTopologyFile()
-                
+                topOut = inSystem.getTopologyFile()
                 if self.convTopFile.get():
+                    outDir = os.path.abspath(self._getExtraPath())
+                    outFormat = self.getEnumText('outputTopFormat').lower()
+                    topOut = os.path.join(outDir, '{}.{}'.format(getBaseName(topFile), outFormat))
+
+                    args = ' -top {} -otop {}'.format(os.path.abspath(topFile), topOut)
+
                     if topFile.endswith('.top') and importlib.util.find_spec('gromacs'):
                         from gromacs import Plugin as gromacsPlugin
-                        from gromacs.constants import GROMACS_DIC
-                        parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
+                        gromacsTopDir = os.path.join(gromacsPlugin.getHome(), 'share/top')
+                        args += ' -gtopdir {}'.format(gromacsTopDir)
 
-                    top = parmed.load_file(topFile)
-                    topFile = self._getExtraPath('{}.{}'.format(getBaseName(topFile),
-                                                                self.getEnumText('outputTopFormat').lower()))
-                    top.save(topFile)
-                outSystem.setTopologyFile(topFile)
-            
+                    Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
+                outSystem.setTopologyFile(topOut)
+
+            # Convert trajectory
             if inSystem.hasTrajectory():
-                trjFile = inSystem.getTrajectoryFile()
-
+                trajOut = inSystem.getTrajectoryFile()
                 if self.convTrjFile.get():
+                    trajFile = inSystem.getTrajectoryFile()
                     outDir = os.path.abspath(self._getExtraPath())
                     fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                     outFormat = self.getEnumText('outputTrjFormat').lower()
-                    fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
+                    trajOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                    args = ' -s {} -o {} -t {}'.format(os.path.abspath(sysFile), fnOut, os.path.abspath(trjFile))
-                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
-                    trjFile = fnOut
-
-                outSystem.setTrajectoryFile(trjFile)
+                    args = ' -s {} -t {} -otj {}'.format(os.path.abspath(sysFile), os.path.abspath(trajFile), trajOut)
+                    Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
+                outSystem.setTrajectoryFile(trajOut)
 
             self._defineOutputs(outputSystem=outSystem)
             self._defineSourceRelation(self.inputObject, outSystem)

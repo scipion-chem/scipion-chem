@@ -284,7 +284,7 @@ class TestOperateSet(BaseTest):
 class TestGroupSet(BaseTest):
     @classmethod
     def setUpClass(cls):
-        tests.setupTestProject(cls)
+        setupTestProject(cls)
         cls.ds = DataSet.getDataSet('model_building_tutorial')
         cls.dsLig = DataSet.getDataSet("smallMolecules")
         cls._runImportSmallMols()
