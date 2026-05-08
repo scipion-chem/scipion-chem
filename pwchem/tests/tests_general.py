@@ -126,7 +126,7 @@ class TestConverter(TestImportBoth):
 
         files = ""
         for file in convertFile:
-            if not file.endswith(".smi"):
+            if not file.endswith(".sdf"):
                 files += "%s; "
 
         assertHandle(self.assertTrue, files == "",
