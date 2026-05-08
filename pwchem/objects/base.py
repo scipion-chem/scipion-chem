@@ -104,8 +104,10 @@ class SetClass:
       try:
           with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
               data = json.load(f)
+
       except (json.JSONDecodeError, FileNotFoundError):
-          data = {seq.getSeqName(): {} for seq in self}
+              data = self._getDefaultInteractDic()
+
       return data
 
   def setInteractScoresDic(self, newData):
@@ -186,6 +188,9 @@ class SetOfSequencesChem(data.SetOfSequences, SetClass):
     self.initSet(**kwargs)
     self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
     self._alignFile = pwobj.String(kwargs.get('alignFile', None))
+
+  def _getDefaultInteractDic(self):
+      return {seq.getSeqName(): {} for seq in self}
 
 
   def createCopy(self, outputPath, copyInfo=False, copyItems=False, itemSelectedCallback=None, rowFilter=None):
@@ -1524,6 +1529,10 @@ class SetOfStructROIs(data.EMSet, SetClass):
     self._hetatmFile = other._hetatmFile
     self._pocketsClass = other._pocketsClass
     self._interactMols = other._interactMols
+
+  def _getDefaultInteractDic(self):
+      print('HOLA')
+      return {roi.getFileName(): {} for roi in self}
 
   def getSetPath(self):
     return os.path.abspath(self._mapperPath[0])
