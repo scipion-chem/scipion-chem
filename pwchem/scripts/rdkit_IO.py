@@ -94,10 +94,13 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
             for line in f:
                 if not line.strip():
                     continue
-                parts = line.split('\t')
-                if len(parts) < 2:
-                    continue
-                smi, name = parts[0], parts[1]
+                  
+                values = line.strip().split('\t')
+                if len(values) >= 2:
+                    smi, name = values[0], values[1]
+                else:
+                    smi, name = values[0], os.path.basename(os.path.splitext(inFile)[0])
+                
                 mol = Chem.MolFromSmiles(smi)
                 if mol:
                     mol.SetProp(nameKey, name)
