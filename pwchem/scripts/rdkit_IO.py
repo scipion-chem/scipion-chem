@@ -92,7 +92,11 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
     elif ext == 'smi' or ext == 'smiles':
         with open(inFile) as f:
             for line in f:
-                smi, name = line.strip().split('\t')
+                values = line.strip().split('\t')
+                if len(values) >= 2:
+                    smi, name = values[0], values[1]
+                else:
+                    smi, name = values[0], os.path.basename(os.path.splitext(inFile)[0])
                 mol = Chem.MolFromSmiles(smi)
                 if mol:
                     mol.SetProp(nameKey, name)
