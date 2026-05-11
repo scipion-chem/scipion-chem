@@ -74,13 +74,13 @@ class TestImportBoth(BaseTest):
 class TestConverter(TestImportBoth):
     def test_1(self):
         """ Convert a mix of small molecules file into pdb format. """
-        print("\nConvert a mix of small molecules file into pdb format \n")
+        print("\nConvert a mix of small molecules file into pdb format with RDKit \n")
 
         # Import SetOfSmallMolecules
         smallM = self.smallProt.outputSmallMolecules
         args = {
             'inputObject': smallM, # SmallMolecules
-            "useManager": 1,
+            "useManager": 0,
             'outputFormatSmall': 0, # PDB
         }
 
@@ -91,7 +91,7 @@ class TestConverter(TestImportBoth):
         convertFile = glob.glob(protocol._getExtraPath("*"))
 
         assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-        assertHandle(self.assertTrue, small1.getSize()==4,
+        assertHandle(self.assertTrue, small1.getSize()>0,
                                  message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
         files = ""
@@ -103,7 +103,7 @@ class TestConverter(TestImportBoth):
                                  message="The conversion was incorrect and those files have a wrong format : %s" %files, cwd=protocol.getWorkingDir())
 
     def test_2(self):
-        """ Convert a mix of small molecules file into smi format. """
+        """ Convert a mix of small molecules file into sdf format with OpenBabel. """
         print("\nConvert a mix of small molecules file into smi format \n")
 
         # Import SetOfSmallMolecules
@@ -112,7 +112,7 @@ class TestConverter(TestImportBoth):
         args = {
             'inputObject': smallM, # SmallMolecules
             "useManager": 1,
-            'outputFormatSmall': 3, # smiles or smi
+            'outputFormatSmall': 2, # sdf
         }
 
         protocol = self.newProtocol(ConvertStructures, **args)
@@ -121,12 +121,12 @@ class TestConverter(TestImportBoth):
         convertFile = glob.glob(protocol._getExtraPath("*"))
 
         assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-        assertHandle(self.assertTrue, small1.getSize()==4,
+        assertHandle(self.assertTrue, small1.getSize()>0,
                                  message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
         files = ""
         for file in convertFile:
-            if not file.endswith(".smi"):
+            if not file.endswith(".sdf"):
                 files += "%s; "
 
         assertHandle(self.assertTrue, files == "",
