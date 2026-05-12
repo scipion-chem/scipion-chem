@@ -788,6 +788,9 @@ class SmallMoleculesLibrary(data.EMObject):
     self.libraryFile.set(value)
     self.calculateLength()
 
+  def getSeparator(self):
+    return '\t'
+
   def getLibraryMap(self, inverted=False, fullLine=False, lineDic=False):
     '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
         '''
@@ -829,11 +832,7 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split('\t')[col].replace(' ', '_')
 
-        oFile = os.path.join(outDir, f'{molName}.smi')
-        with open(oFile, 'w') as fO:
-          fO.write(line)
         oFiles.append(oFile)
     return oFiles
 
@@ -1777,6 +1776,7 @@ class MDSystem(data.EMFile):
 
     self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
     self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
+    self._prolifFile = pwobj.String(kwargs.get('prolifFp', None))
 
   def __str__(self):
     return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
@@ -1812,6 +1812,12 @@ class MDSystem(data.EMFile):
     else:
       return False
 
+  def hasLig(self):
+    if self.getLigTopologyFile():
+      return True
+    else:
+      return False
+
   def getTrajectoryFile(self):
     return self._trjFile.get()
 
@@ -1840,6 +1846,11 @@ class MDSystem(data.EMFile):
   def setLigTopologyFile(self, value):
     self._ligTopFile.set(value)
 
+  def getProlifFile(self):
+    return self._prolifFile.get()
+
+  def setProlifFile(self, value):
+    self._prolifFile.set(value)
 
 class PharmFeature(data.EMObject):
   """ Represent a pharmacophore feature """
