@@ -28,24 +28,10 @@ import unittest
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_characterization import ProtocolLigandCharacterization
 from pwchem.tests.tests_imports import TestImportBase
 from pwchem.utils import assertHandle
-import pwchem
-
-# RDKit y script externo 
-try:
-    from rdkit import Chem  
-    RDKit_OK = True
-except Exception:
-    RDKit_OK = False
-
-SCRIPTS_DIR = os.path.join(os.path.dirname(pwchem.__file__), "scripts")
-DESCR_SCRIPT = os.path.join(SCRIPTS_DIR, "ligand_descriptor_calc.py")
-SCRIPT_EXISTS = os.path.exists(DESCR_SCRIPT)
-
 
 class TestLigandCharacterization(TestImportBase):
     """Tests for ProtocolLigandCharacterization."""
 
-    #Test 1: Always run
     def test_protocol_instantiates(self):
         """El protocolo se instancia y expone sus parámetros sin crashear."""
         prot = self.newProtocol(ProtocolLigandCharacterization)
@@ -53,7 +39,6 @@ class TestLigandCharacterization(TestImportBase):
         form = prot.getForm()
         self.assertIsNotNone(form)
 
-    # To launch protocol
     @classmethod
     def _runLigandCharacterization(cls, inProt):
         protChar = cls.newProtocol(ProtocolLigandCharacterization)
@@ -63,20 +48,11 @@ class TestLigandCharacterization(TestImportBase):
         cls.proj.launchProtocol(protChar, wait=False)
         return protChar
     
-    # Only if RDKIT + script
-    @unittest.skipIf(not RDKit_OK, "RDKit no disponible en el entorno de tests")
-    @unittest.skipIf(not SCRIPT_EXISTS, "Falta pwchem/scripts/ligand_descriptor_calc.py")
     def test_ligand_characterization_runs(self):
         """Ejecuta el protocolo y verifica que genera outputSmallMolecules con tamaño > 0."""
         protChar = self._runLigandCharacterization(inProt=self.protImportSmallMols)
-
-        # 0) Wait
         self._waitOutput(protChar, "outputSmallMolecules", sleepTime=10)
-
-        # 1) It exists
         out = getattr(protChar, "outputSmallMolecules", None)
         assertHandle(self.assertIsNotNone, out, cwd=protChar.getWorkingDir())
-
-        # 2) Has elements
         assertHandle(self.assertGreater, out.getSize(), 0, cwd=protChar.getWorkingDir())
 

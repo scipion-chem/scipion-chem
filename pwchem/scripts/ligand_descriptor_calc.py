@@ -17,14 +17,14 @@ for p in (REPO_ROOT, HERE):
     if p not in sys.path:
         sys.path.insert(0, p)
 # ----------------------
-
-# Try to import descriptor_categories (fallback to constants)
-try:
-    from pwchem.scripts.constants import descriptor_categories
-except ModuleNotFoundError:
-    import importlib
-    constants = importlib.import_module('constants')
-    descriptor_categories = getattr(constants, 'descriptor_categories')
+import importlib.util
+spec = importlib.util.spec_from_file_location(
+    'constants',
+    os.path.join(HERE, 'constants.py')
+)
+_constants = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(_constants)
+descriptor_categories = _constants.descriptor_categories
 
 def load_molecule(path):
     """Load molecule from .mol/.sdf or .smi/.smiles safely (skip invalid files)."""
@@ -36,7 +36,7 @@ def load_molecule(path):
     try:
         if path.endswith(('.smi', '.smiles')):
             with open(path) as f:
-                line = f.readline().strip()
+                line = f.readline().strip().split()[0]
             return Chem.MolFromSmiles(line)
         else:
             mol = Chem.MolFromMolFile(path, sanitize=True)
@@ -74,7 +74,7 @@ def main():
         row = []
         for name, desc_func in descriptor_list:
             evaluate = False
-            for cat in descriptor_categories():
+            for cat in descriptor_categories:
                 if enabled_categories.get(cat, False) and name in descriptor_categories[cat]:
                     evaluate = True
                     break
