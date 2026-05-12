@@ -76,7 +76,8 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
         inDir = os.path.abspath(self._getTmpPath())
         ligFiles = self.inputLibrary.get().splitInFiles(inDir)
       else:
-        ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
+        ligFiles = [os.path.abspath(mol.getFileName()).replace(' ', '_')
+                    for mol in self.inputSmallMolecules.get()]
 
       inputSubsets = makeSubsets(ligFiles, nSubsets, cloneItem=False)
       for it, fileSet in enumerate(inputSubsets):
