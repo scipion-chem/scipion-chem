@@ -1759,7 +1759,6 @@ class SetOfStructROIs(data.EMSet):
           rawStr = getRawPDBStr(pocketFile, ter=False)
 
       rawStr = rawStr.strip()
-      print(f'pocket class: {pocket.getPocketClass()}')
       if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
           for line in rawStr.split('\n'):
               sline = splitPDBLine(line)
@@ -1768,7 +1767,6 @@ class SetOfStructROIs(data.EMSet):
               outStr += pdbLine
 
       elif pocket.getPocketClass() == 'FPocket':
-          print('escribiendo fpokcet')
           structure = self.loadStructure(pocketFile)
           for model in structure:
               for chain in model:
@@ -1786,7 +1784,7 @@ class SetOfStructROIs(data.EMSet):
                               0.0,
                               0.0,
                               '',
-                              'C'  
+                              'C'
                           ]
                           pdbLine = writePDBLine(replacements)
                           outStr += pdbLine
