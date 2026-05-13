@@ -1783,6 +1783,8 @@ class SetOfStructROIs(data.EMSet):
                               x, y, z,
                               '', 'Ve'
                           ]
+                          pdbLine = writePDBLine(replacements)
+                          outStr += pdbLine
       elif pocket.getPocketClass() == 'SiteMap':
           for line in rawStr.split('\n'):
               line = line.split()
