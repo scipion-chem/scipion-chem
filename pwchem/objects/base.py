@@ -100,18 +100,21 @@ class SetClass:
       else:
           self._scoreTypes.set(",".join(map(str, scores)))
 
-  def getInteractScoresDic(self):
+  def getInteractScoresDic(self, getDef=True):
       try:
           with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
               data = json.load(f)
 
       except (json.JSONDecodeError, FileNotFoundError):
+          if getDef:
               data = self._getDefaultInteractDic()
+          else:
+              data = {}
 
       return data
 
   def setInteractScoresDic(self, newData):
-      prevData = self.getInteractScoresDic()
+      prevData = self.getInteractScoresDic(getDef=False)
       for seqName, molDic in newData.items():
           if seqName not in prevData:
               prevData[seqName] = {}

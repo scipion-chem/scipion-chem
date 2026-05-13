@@ -482,9 +482,18 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
 
   def _getEntityNames(self, data):
       roiNames = sorted(data.keys())
-      molNames = sorted(next(iter(data.values())).keys())
-      scoreTypes = sorted(next(iter(next(iter(data.values())).values())).keys())
-      return roiNames, molNames, scoreTypes
+      molNames = sorted(list({
+          mol_name
+          for roi_data in data.values()
+          for mol_name in roi_data.keys()
+      }))
+      scoreNames = sorted(list({
+          score_name
+          for roi_data in data.values()
+          for mol_data in roi_data.values()
+          for score_name in mol_data.keys()
+      }))
+      return roiNames, molNames, scoreNames
 
   def _getLabels(self):
       return "ROI", "Molecule", "Score"
