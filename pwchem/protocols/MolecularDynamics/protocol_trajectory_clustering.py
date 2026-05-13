@@ -117,11 +117,10 @@ class ProtocolTrajectoryClustering(EMProtocol):
                       label='Set of Atomic Structures: ', condition=f'inputFrom=={SETOFSTRUCTS}',
                       help='Ensembl of atomic structures.')
 
-        form.addParam('refStructure', params.IntParam,         ### AÑADIR UN WIZARD PARA SELECCIONAR POR ID
+        form.addParam('refStructId', params.IntParam,
                       pointerClass='MDSystem',default=1,
                       label='Reference structure: ', condition=f'inputFrom=={SETOFSTRUCTS}',
-                      help='Reference structure to align to before RMSD calculation.')
-
+                      help='ID of the structure in the input set to use as the alignment reference before calculating RMSD.')
 
         # ── Atom selection ────────────────────────────────────────────────────
         group = form.addGroup('Atom selection')
@@ -291,8 +290,8 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
     def getRefStruct(self):
         myStruct = None
-        refId = self.refStructure.get()
-        myStruct= self.inputSetOfStructs.get().getItem('id', 5).getFileName()
+        refId = self.refStructId.get()
+        myStruct= self.inputSetOfStructs.get().getItem('id', refId).getFileName()
         if myStruct is None:
             print('The input ligand is not found')
         return myStruct
@@ -302,8 +301,8 @@ class ProtocolTrajectoryClustering(EMProtocol):
         summary = []
         if hasattr(self, 'outputAtomStructs'):
             summary.append(
-                'This protocol has created a set of atom structures as representatives of the clusters.\n '
-                'To see the clustering results open the images inside extra/clustering path.\n')
+                'This protocol has created a set of atom structures as representatives of the clusters.\n'
+                'Clustering summary images are inside extra/clustering directory.\n')
             if self.inputFrom.get() == MDSYSTEM:
                 mdsys = self.inputMDSystem.get()
                 summary.append('Trajectory: {}'.format(mdsys.getTrajectoryFile()))
