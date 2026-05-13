@@ -180,6 +180,14 @@ class SequenceChem(data.Sequence):
         attrDic[key.strip()] = eval(values.strip())
     return attrDic
 
+class SetOfAtomStructsChem(data.SetOfAtomStructs, SetClass):
+  def __init__(self, **kwargs):
+    data.SetOfAtomStructs.__init__(self, **kwargs)
+    self.initSet(**kwargs)
+    self._interactingScoresFile = String(kwargs.get('interactingScoresFile', None))
+
+  def _getDefaultInteractDic(self):
+      return {struct.getFileName(): {} for struct in self}
 
 
 class SetOfSequencesChem(data.SetOfSequences, SetClass):
@@ -1531,7 +1539,6 @@ class SetOfStructROIs(data.EMSet, SetClass):
     self._interactMols = other._interactMols
 
   def _getDefaultInteractDic(self):
-      print('HOLA')
       return {roi.getFileName(): {} for roi in self}
 
   def getSetPath(self):
