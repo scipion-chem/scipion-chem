@@ -172,15 +172,54 @@ class ProtocolRANXFuse(EMProtocol):
     inSet = self.inputSets[0].get()
     outAttrName = self.getOutAttrName()
     outData = self.parseOutputFile()
-
+    perSetAttrs = self.buildPerSetAttributeDictionary()
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
+
+    # Get original input attribute names dynamically
+    originalAttrs = set()
+    inAttrDic = self.getInputAttrsDic()
+
+    for _, attrVals in inAttrDic.items():
+      for attrVal in attrVals:
+        originalAttrs.add(attrVal[0])
+
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
+      # Clone item to avoid modifying original object
+      newItem = item.clone()
+
+      # Remove original attributes dynamically
+      for attrName in originalAttrs:
+        if hasattr(newItem, attrName):
+          delattr(newItem, attrName)
+
+      # Add renamed attributes in deterministic order
+      if inID in perSetAttrs:
+
+        attrs = perSetAttrs[inID]
+        # Sort first by set idx, then by attr name
+        orderedAttrs = sorted(
+          attrs.keys(),
+          key=lambda x: (
+            int(x.split('_set_Idx_')[-1]),
+            x.split('_set_Idx_')[0]
+          )
+        )
+
+        for attrName in orderedAttrs:
+          value = attrs[attrName]
+          try:
+            setattr(newItem, attrName, Float(float(value)))
+          except:
+            setattr(newItem, attrName, String(str(value)))
+
+      # Add fusion outputs at the end
       scoreComb = outData[inID]["score"]
       rankComb = outData[inID]["rank"]
-      setattr(item, self.outName.get(), Float(scoreComb))
-      setattr(item, "RanxRank", Integer(rankComb))
-      outSet.append(item)
+
+      setattr(newItem, self.outName.get(), Float(scoreComb))
+      setattr(newItem, "RanxRank", Integer(rankComb))
+      outSet.append(newItem)
 
     self._defineOutputs(outputSet=outSet)
 
@@ -247,6 +286,36 @@ class ProtocolRANXFuse(EMProtocol):
       mutations[str(obj.getAttributeValue(attrName))] = value * mult
 
     return mutations
+
+  def buildPerSetAttributeDictionary(self):
+    """
+    Returns:
+      {
+        mutation_id: {
+          "ddg_set_Idx_0": value,
+          "zscore_set_Idx_0": value,
+          "ddg_set_Idx_1": value,
+          ...
+        }
+      }
+    """
+    inSets = self.getInputSets()
+    inAttrDic = self.getInputAttrsDic()
+    data = {}
+
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, attrID = key.split('-')
+      inSet = inSets[int(inPointIdx)]
+      for obj in inSet:
+        mutID = str(obj.getAttributeValue(attrID))
+        if mutID not in data:
+          data[mutID] = {}
+        for attrVal in attrVals:
+          attrName = attrVal[0]
+          newAttrName = f"{attrName}_set_Idx_{inPointIdx}"
+          value = obj.getAttributeValue(attrName)
+          data[mutID][newAttrName] = value
+    return data
 
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
