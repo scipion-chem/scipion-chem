@@ -228,11 +228,11 @@ if __name__ == "__main__":
                     name = '{}_{}'.format(outBase, i + 1)
                 smiles = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
                 allRows.append({
-                    "name": name,
-                    "smiles": smiles
+                    "smiles": smiles,
+                    "name": name
                 })
             with open(outFile, "w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=["name", "smiles"])
+                writer = csv.DictWriter(f,fieldnames=["smiles", "name"])
                 writer.writeheader()
                 writer.writerows(allRows)
             print("SMILES CSV saved to:", outFile)
