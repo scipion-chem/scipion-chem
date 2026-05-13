@@ -41,6 +41,8 @@ from pwchem import Plugin as pwchemPlugin
 from pwchem.objects import MDSystem
 from pwchem.constants import MDTRAJ_DIC
 
+MDSYSTEM, SETOFSTRUCTS = 0, 1
+
 # ── Clustering ────────────────────────────────────────────────────────────────
 CLUSTERING_METHODS = ['ward', 'single', 'complete', 'average', 'weighted', 'centroid', 'median']
 CLUSTER_MODE = ['Auto (elbow)', 'Number of groups', 'Cutoff']
@@ -92,14 +94,34 @@ class ProtocolTrajectoryClustering(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Input')
 
+        form.addParam('inputFrom', params.EnumParam,
+            choices=["MDSystem", "SetOfAtomStructs"], display=params.EnumParam.DISPLAY_HLIST,
+            default=MDSYSTEM,
+            label='Input object type',
+            help='Input can be either:\n'
+                 '- MDSystem with trajectory\n'
+                 '- SetOfAtomStructs ensemble'
+        )
+
         form.addParam('inputMDSystem', params.PointerParam,
-                      pointerClass='MDSystem', allowsNull=False,
-                      label='MD simulation: ',
+                      pointerClass='MDSystem',
+                      label='MD simulation: ', condition=f'inputFrom=={MDSYSTEM}',
                       help='Molecular Dynamics System with an associated trajectory.')
 
         form.addParam('stride', params.IntParam, default=1,
-                      label='Stride',
+                      label='Stride', condition=f'inputFrom=={MDSYSTEM}',
                       help='Read every Nth frame from the trajectory.')
+
+        form.addParam('inputSetOfStructs', params.PointerParam,
+                      pointerClass='SetOfAtomStructs',
+                      label='Set of Atomic Structures: ', condition=f'inputFrom=={SETOFSTRUCTS}',
+                      help='Ensembl of atomic structures.')
+
+        form.addParam('refStructure', params.IntParam,         ### AÑADIR UN WIZARD PARA SELECCIONAR POR ID
+                      pointerClass='MDSystem',default=1,
+                      label='Reference structure: ', condition=f'inputFrom=={SETOFSTRUCTS}',
+                      help='Reference structure to align to before RMSD calculation.')
+
 
         # ── Atom selection ────────────────────────────────────────────────────
         group = form.addGroup('Atom selection')
@@ -171,12 +193,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
     def runClusteringStep(self):
         mdsys = self.inputMDSystem.get()
-        trajFile = os.path.abspath(mdsys.getTrajectoryFile())
-
-        topPath = mdsys.getTopologyFile()
-        topFile = os.path.abspath(
-            mdsys.getSystemFile() if os.path.splitext(topPath)[1] == '.top'
-            else topPath)
+        trajFile, topFile = self._prepareInputTrajectory()
 
         os.makedirs(self._getExtraPath(), exist_ok=True)
         args = self._buildArgs(trajFile, topFile)
@@ -197,9 +214,32 @@ class ProtocolTrajectoryClustering(EMProtocol):
             outputSet.append(AtomStruct(filename=os.path.abspath(pdbFile)))
 
         self._defineOutputs(outputAtomStructs=outputSet)
-        self._defineSourceRelation(self.inputMDSystem, outputSet)
+        if self.inputFrom.get() == MDSYSTEM:
+            self._defineSourceRelation(self.inputMDSystem, outputSet)
+        else:
+            self._defineSourceRelation(self.inputSetOfStructs, outputSet)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+    def _prepareInputTrajectory(self):
+        """
+        Prepare trajectory/topology pair.
+        Returns - trajFile, topFile
+        """
+        if self.inputFrom.get() == MDSYSTEM:
+            mdsys = self.inputMDSystem.get()
+            trajFile = os.path.abspath(mdsys.getTrajectoryFile())
+            topPath = mdsys.getTopologyFile()
+            topFile = os.path.abspath(
+                mdsys.getSystemFile() if os.path.splitext(topPath)[1] == '.top'
+                else topPath)
+            return trajFile, topFile
+
+        elif self.inputFrom.get() == SETOFSTRUCTS:
+            pdbFiles = self.inputSetOfStructs.get().getFiles()
+            trajFile = ' '.join(pdbFiles)
+            topFile = self.getRefStruct()
+            return trajFile, topFile
+
     def _getLigandId(self):
         """Safely retrieve the ligand residue name from the input MDSystem."""
         try:
@@ -211,9 +251,6 @@ class ProtocolTrajectoryClustering(EMProtocol):
         """Return (alignStr, rmsdStr) as MDTraj selection strings."""
         ligandId = self._getLigandId()
 
-        # int() cast guards against old saved protocol instances that stored
-        # the string label (e.g. "backbone") instead of the integer index,
-        # which would otherwise cause "Can't set backbone" warnings.
         alignIdx = int(self.selectAlign.get())
         rmsdIdx = int(self.selectRmsd.get())
 
@@ -231,8 +268,8 @@ class ProtocolTrajectoryClustering(EMProtocol):
         alignStr, rmsdStr = self._getSelectionStrings()
         mode = int(self.clusterMode.get())
 
-        args = '-f "{}" '.format(trajFile)
-        args += '-t "{}" '.format(topFile)
+        args = '-f {} '.format(trajFile)
+        args += '-t {} '.format(topFile)
         args += '-s {} '.format(self.stride.get())
         args += '-l clustering.log '
         args += '-sa "{}" '.format(alignStr)
@@ -252,23 +289,32 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
         return args
 
+    def getRefStruct(self):
+        myStruct = None
+        refId = self.refStructure.get()
+        myStruct= self.inputSetOfStructs.get().getItem('id', 5).getFileName()
+        if myStruct is None:
+            print('The input ligand is not found')
+        return myStruct
+
     # ── Info ──────────────────────────────────────────────────────────────────
     def _summary(self):
         summary = []
-        mdsys = self.inputMDSystem.get()
-        if mdsys:
+        if hasattr(self, 'outputAtomStructs'):
             summary.append(
                 'This protocol has created a set of atom structures as representatives of the clusters.\n '
                 'To see the clustering results open the images inside extra/clustering path.\n')
-            summary.append('Trajectory: {}'.format(mdsys.getTrajectoryFile()))
-        try:
-            alignStr, rmsdStr = self._getSelectionStrings()
-            summary.append('Alignment selection : {}'.format(alignStr))
-            summary.append('RMSD selection      : {}'.format(rmsdStr))
-        except Exception:
-            pass
-        summary.append('Method : {}'.format(CLUSTERING_METHODS[int(self.clusterMethod.get())]))
-        summary.append('Mode   : {}'.format(CLUSTER_MODE[int(self.clusterMode.get())]))
+            if self.inputFrom.get() == MDSYSTEM:
+                mdsys = self.inputMDSystem.get()
+                summary.append('Trajectory: {}'.format(mdsys.getTrajectoryFile()))
+            try:
+                alignStr, rmsdStr = self._getSelectionStrings()
+                summary.append('Alignment selection : {}'.format(alignStr))
+                summary.append('RMSD selection      : {}'.format(rmsdStr))
+            except Exception:
+                pass
+            summary.append('Method : {}'.format(CLUSTERING_METHODS[int(self.clusterMethod.get())]))
+            summary.append('Mode   : {}'.format(CLUSTER_MODE[int(self.clusterMode.get())]))
         return summary
 
     def _validate(self):
