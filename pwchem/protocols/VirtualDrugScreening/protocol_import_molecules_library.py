@@ -249,6 +249,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
         reduceNRandomLines(smiFile, nMols, oDir=self._getTmpPath(), seed=self.randomSeed.get())
       swapColumns(smiFile, oDir=self._getTmpPath())
 
+    self.ensureTabDelimiter(oFile)
+
   def createOutputStep(self):
     oFile = self.getOutLibraryFile()
     if not self.defLibraries.get():
@@ -453,5 +455,13 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
         headers = [h.strip() for h in self.headers.get().split(',')]
     return headers
 
+  def ensureTabDelimiter(self, oFile):
+      tmpFile = 'tabi.tsv'
+      with open(oFile) as fIn:
+          with open(tmpFile, 'w') as fOut:
+              for line in fIn:
+                  fOut.write('\t'.join(line.split()) + '\n')
 
+      os.rename(tmpFile, oFile)
+      return oFile
 

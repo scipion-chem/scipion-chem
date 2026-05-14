@@ -38,7 +38,7 @@ import pyworkflow.object as pwobj
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem import Plugin
-from pwchem.utils import performBatchThreading, runInParallel, makeSubsets, downloadUrlFile, getBaseName
+from pwchem.utils import performBatchThreading, runInParallel, makeSubsets, downloadUrlFile, getBaseName, splitFile
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 from pwchem.protocols.VirtualDrugScreening.protocol_import_molecules_library import ProtChemImportMoleculesLibrary
 
@@ -236,7 +236,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
                         "NOTE: wildcard characters ('*', '?', '#') "
                         "cannot appear in the actual path.)")
     group.addParam('filesPattern', params.StringParam, condition='singleFiles and not defLibraries',
-                   label='Pattern', default="*",
+                   label='Pattern: ', default="*",
                    help="Pattern of the files to be imported.\n\n"
                         "The pattern can contain standard wildcards such as\n"
                         "*, ?, etc, or special ones like ### to mark some\n"
@@ -248,8 +248,8 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
                         "SDF (.sdf), Maestro (.mae, .maegz), or PDB blocks (.pdb)")
 
     group.addParam('filePath', params.PathParam, condition='not singleFiles and not defLibraries',
-                   label='File', help='Allowed formats: \n '
-                                      ' - SMILES ("SMILES ID" per line) \n'
+                   label='File: ', help='Allowed formats: \n '
+                                      ' - SMILES ("SMILES ID" per line, tab separated) \n'
                                       ' - Mol2 (Multiple mol2 file) \n'
                                       ' - SDF (Multiple sdf file)')
 
@@ -370,7 +370,7 @@ class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
           inFiles.append(os.path.join(oDir, file))
 
     else:
-      inFiles = [self.filePath.get()]
+      inFiles = splitFile(self.filePath.get(), n=self.numberOfThreads.get()-1, oDir=self._getTmpPath(), remove=False)
     return [os.path.abspath(inFile) for inFile in inFiles]
 
   def downloadSDFThread(self, ids, oDir, db='ZINC'):
