@@ -802,13 +802,13 @@ class SmallMoleculesLibrary(data.EMObject):
   def yieldLibraryMapItems(self, inverted=False, fullLine=False, lineDic=False):
     with open(self.getFileName()) as f:
       for line in f:
-        smi, name = line.split(self.getSeparator())[0].strip(), line.split(self.getSeparator())[1].strip()
+        smi, name = line.split('\t')[0].strip(), line.split('\t')[1].strip()
         key = name if inverted else smi
         if not fullLine:
           val = smi if inverted else name
         else:
           if lineDic:
-            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split(self.getSeparator()))}
+            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split('\t'))}
           else:
             val = line.strip()
         yield key, val
@@ -832,11 +832,12 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split(self.getSeparator())[col]
+        molName = line.split('\t')[col].replace(' ', '_')
 
         oFile = os.path.join(outDir, f'{molName}.smi')
         with open(oFile, 'w') as fO:
           fO.write(line)
+
         oFiles.append(oFile)
     return oFiles
 
@@ -844,7 +845,7 @@ class SmallMoleculesLibrary(data.EMObject):
     batch = []
     with open(self.getFileName()) as f:
       for line in f:
-        row = line.split(self.getSeparator())
+        row = line.split('\t')
         try:
           vals = [row[ci].strip() for ci in colIndexes]
           batch.append(vals)
@@ -1636,9 +1637,32 @@ class SetOfStructROIs(data.EMSet):
       else:
           cifDic = MMCIF2Dict(protFile)
           cifDic = filterCifCols(cifDic, CIF_DEF_COLS)
-          f.write(writeCifBlocks(cifDic))
+
+          maxId = max(map(int, cifDic['_atom_site.id']))
           for pocket in self:
-              f.write(getRawPDBStr(pocket.getFileName(), ter=False))
+              for seqId, (x, y, z) in enumerate(pocket.getPointsCoords(), start=1):
+                  maxId += 1
+
+                  cifDic['_atom_site.id'].append(str(maxId))
+                  cifDic['_atom_site.group_PDB'].append('HETATM')
+                  cifDic['_atom_site.type_symbol'].append('C')
+                  cifDic['_atom_site.label_atom_id'].append(f'C{seqId}')
+                  cifDic['_atom_site.label_alt_id'].append('.')
+                  cifDic['_atom_site.label_comp_id'].append('STP')
+                  cifDic['_atom_site.label_asym_id'].append('A')
+                  cifDic['_atom_site.label_entity_id'].append('1')
+                  cifDic['_atom_site.label_seq_id'].append(str(seqId))
+                  cifDic['_atom_site.Cartn_x'].append(str(x))
+                  cifDic['_atom_site.Cartn_y'].append(str(y))
+                  cifDic['_atom_site.Cartn_z'].append(str(z))
+                  cifDic['_atom_site.auth_asym_id'].append('A')
+                  cifDic['_atom_site.auth_seq_id'].append(str(seqId))
+                  cifDic['_atom_site.pdbx_PDB_ins_code'].append('?')
+                  cifDic['_atom_site.occupancy'].append('1.00')
+                  cifDic['_atom_site.B_iso_or_equiv'].append('0.00')
+                  cifDic['_atom_site.pdbx_PDB_model_num'].append('1')
+
+          f.write(writeCifBlocks(cifDic))
 
     self.setProteinHetatmFile(outFile)
     return outFile
@@ -1719,50 +1743,92 @@ class SetOfStructROIs(data.EMSet):
   ######### Utils
 
   def getPocketsPDBStr(self):
-    outStr = ''
-    for i, pocket in enumerate(self):
-      pocket.setObjId(i + 1)
-      outStr += self.formatPocketStr(pocket)
-    return outStr
+      outStr = ''
+      for i, pocket in enumerate(self):
+          pocket.setObjId(i + 1)
+          outStr += self.formatPocketStr(pocket)
+      return outStr
 
   def formatPocketStr(self, pocket):
-    outStr = ''
-    numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
-    rawStr = getRawPDBStr(pocketFile, ter=False).strip()
-    if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
-      for line in rawStr.split('\n'):
-        sline = splitPDBLine(line)
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      outStr = ''
+      numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
+      ext = os.path.splitext(pocketFile)[1].lower()
 
-    elif pocket.getPocketClass() == 'FPocket':
-      for line in rawStr.split('\n'):
-        sline = line.split()
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:], '', 'Ve']
-        try:
-          pdbLine = writePDBLine(replacements)
-        except:
-          sline = splitPDBLine(line)
-          replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:], '', 'Ve']
-          pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      if ext == ".cif":
+          rawStr = self.cifToPdbStr(pocketFile)
+      else:
+          rawStr = getRawPDBStr(pocketFile, ter=False)
 
-    elif pocket.getPocketClass() == 'SiteMap':
-      for line in rawStr.split('\n'):
-        line = line.split()
-        replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      rawStr = rawStr.strip()
+      if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
+          for line in rawStr.split('\n'):
+              sline = splitPDBLine(line)
+              replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-    else:  # (P2Rank, ElliPro, Standard...)
-      for line in rawStr.split('\n'):
-        line = splitPDBLine(line)
-        line[5] = numId
-        pdbLine = writePDBLine(line)
-        outStr += pdbLine
+      elif pocket.getPocketClass() == 'FPocket':
+          structure = self.loadStructure(pocketFile)
+          for model in structure:
+              for chain in model:
+                  for residue in chain:
+                      for atom in residue:
+                          x, y, z = atom.coord
+                          replacements = [
+                              'HETATM',
+                              str(atom.get_serial_number()),
+                              'APOL',
+                              'STP',
+                              'C',
+                              str(numId),
+                              x, y, z,
+                              0.0,
+                              0.0,
+                              '',
+                              'C'
+                          ]
+                          pdbLine = writePDBLine(replacements)
+                          outStr += pdbLine
+      elif pocket.getPocketClass() == 'SiteMap':
+          for line in rawStr.split('\n'):
+              line = line.split()
+              replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-    return outStr
+      else:  # (P2Rank, ElliPro, Standard...)
+          for line in rawStr.split('\n'):
+              line = splitPDBLine(line)
+              if line is None:
+                  continue
+              line[5] = numId
+              cleaned = []
+              for x in line:
+                  if isinstance(x, str):
+                      parts = x.split()
+                      x = parts[-1] if parts else x
+                  cleaned.append(x)
+              line = cleaned
+
+              pdbLine = writePDBLine(line)
+              outStr += pdbLine
+
+      return outStr
+
+  def cifToPdbStr(self, cifFile):
+      from Bio.PDB import MMCIFParser, PDBIO
+      from io import StringIO
+
+      parser = MMCIFParser(QUIET=True)
+      structure = parser.get_structure('pocket', cifFile)
+
+      io = PDBIO()
+      io.set_structure(structure)
+
+      stream = StringIO()
+      io.save(stream)
+
+      return stream.getvalue()
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
@@ -1780,6 +1846,7 @@ class MDSystem(data.EMFile):
 
     self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
     self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
+    self._prolifFile = pwobj.String(kwargs.get('prolifFp', None))
 
   def __str__(self):
     return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
@@ -1815,6 +1882,12 @@ class MDSystem(data.EMFile):
     else:
       return False
 
+  def hasLig(self):
+    if self.getLigTopologyFile():
+      return True
+    else:
+      return False
+
   def getTrajectoryFile(self):
     return self._trjFile.get()
 
@@ -1843,6 +1916,11 @@ class MDSystem(data.EMFile):
   def setLigTopologyFile(self, value):
     self._ligTopFile.set(value)
 
+  def getProlifFile(self):
+    return self._prolifFile.get()
+
+  def setProlifFile(self, value):
+    self._prolifFile.set(value)
 
 class PharmFeature(data.EMObject):
   """ Represent a pharmacophore feature """
