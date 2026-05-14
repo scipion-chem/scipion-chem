@@ -245,25 +245,25 @@ if __name__ == "__main__":
             else:
                 writter, ext = Chem.SDWriter, 'sdf'
 
-            if singleOutFile:
-                outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
-                with writter(outFile) as f:
-                    for mol in mols:
-                        if mol:
-                            f.write(mol)
-
-            else:
-                outBase = args.outputBase if args.outputBase else 'molecule'
-                for i, mol in enumerate(mols):
+        if singleOutFile:
+            outName = outName.replace(' ', '_')
+            outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
+            with writter(outFile) as f:
+                for mol in mols:
                     if mol:
-                        if mol.HasProp(nameKey):
-                            molName = mol.GetProp(nameKey)
-                        else:
-                            molName = '{}_{}'.format(outBase, i+1)
-                        molName = molName.replace('/', '-')
-                        outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
-                        with writter(outFile) as f:
-                            f.write(mol)
+                        f.write(mol)
 
+        else:
+            outBase = args.outputBase if args.outputBase else 'molecule'
+            for i, mol in enumerate(mols):
+                if mol:
+                    if mol.HasProp(nameKey):
+                        molName = mol.GetProp(nameKey)
+                    else:
+                        molName = '{}_{}'.format(outBase, i+1)
+                    molName = molName.replace('/', '-').replace(' ', '_')
+                    outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
+                    with writter(outFile) as f:
+                        f.write(mol)
 
 
