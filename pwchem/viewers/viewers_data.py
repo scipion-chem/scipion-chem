@@ -318,8 +318,7 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
 
   def _getMolSet(self):
       structs = self.getStructSet()
-      scoresFile = structs.getAttributeValue('_interactScoresFile')
-      return self.getMolecules(scoresFile)
+      return structs.getInteractMols()
 
   def getMolecules(self, jsonPath):
       with open(jsonPath, "r") as f:
