@@ -172,17 +172,10 @@ class ProtocolRANXFuse(EMProtocol):
     inSet = self.inputSets[0].get()
     outAttrName = self.getOutAttrName()
     outData = self.parseOutputFile()
-    perSetAttrs = self.buildPerSetAttributeDictionary()
-    outSet = inSet.createCopy(self._getPath(), copyInfo=True)
-
-    # Get original input attribute names dynamically
-    originalAttrs = set()
     inAttrDic = self.getInputAttrsDic()
-
-    for _, attrVals in inAttrDic.items():
-      for attrVal in attrVals:
-        originalAttrs.add(attrVal[0])
-
+    originalAttrs = self.getOriginalAttrs(inAttrDic)
+    perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
+    outSet = inSet.createCopy(self._getPath(), copyInfo=True)
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
       # Clone item to avoid modifying original object
@@ -196,18 +189,9 @@ class ProtocolRANXFuse(EMProtocol):
       # Add renamed attributes in deterministic order
       if inID in perSetAttrs:
 
-        attrs = perSetAttrs[inID]
-        # Sort first by set idx, then by attr name
-        orderedAttrs = sorted(
-          attrs.keys(),
-          key=lambda x: (
-            int(x.split('_set_Idx_')[-1]),
-            x.split('_set_Idx_')[0]
-          )
-        )
+        orderedAttrs = perSetAttrs[inID]
 
-        for attrName in orderedAttrs:
-          value = attrs[attrName]
+        for attrName, value in orderedAttrs.items():
           try:
             setattr(newItem, attrName, Float(float(value)))
           except:
@@ -287,35 +271,35 @@ class ProtocolRANXFuse(EMProtocol):
 
     return mutations
 
-  def buildPerSetAttributeDictionary(self):
-    """
-    Returns:
-      {
-        mutation_id: {
-          "ddg_set_Idx_0": value,
-          "zscore_set_Idx_0": value,
-          "ddg_set_Idx_1": value,
-          ...
-        }
-      }
-    """
+  def buildPerSetAttributeDictionary(self, inAttrDic):
     inSets = self.getInputSets()
-    inAttrDic = self.getInputAttrsDic()
     data = {}
 
     for key, attrVals in inAttrDic.items():
       inPointIdx, attrID = key.split('-')
       inSet = inSets[int(inPointIdx)]
       for obj in inSet:
-        mutID = str(obj.getAttributeValue(attrID))
-        if mutID not in data:
-          data[mutID] = {}
+        itemID = str(obj.getAttributeValue(attrID))
+        if itemID not in data:
+          data[itemID] = {}
         for attrVal in attrVals:
           attrName = attrVal[0]
-          newAttrName = f"{attrName}_set_Idx_{inPointIdx}"
+          newAttrName = f"{attrName}_setIdx_{inPointIdx}"
           value = obj.getAttributeValue(attrName)
-          data[mutID][newAttrName] = value
-    return data
+          data[itemID][newAttrName] = value
+        
+    orderedData = {}
+    for itemID, attrs in data.items():
+      orderedAttrs = dict(sorted(attrs.items(), key=lambda x: (int(x[0].split('_setIdx_')[-1]), x[0].split('_setIdx_')[0])))
+      orderedData[itemID] = orderedAttrs
+    return orderedData
+
+  def getOriginalAttrs(self, inAttrDic):
+    originalAttrs = set()
+    for _, attrVals in inAttrDic.items():
+      for attrVal in attrVals:
+        originalAttrs.add(attrVal[0])
+    return originalAttrs
 
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
