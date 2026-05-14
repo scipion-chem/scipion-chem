@@ -272,6 +272,17 @@ class ProtocolRANXFuse(EMProtocol):
     return mutations
 
   def buildPerSetAttributeDictionary(self, inAttrDic):
+    """
+    Returns:
+      {
+        itemID: {
+          "ddg_setIdx_0": value,
+          "zscore_setIdx_0": value,
+          "ddg_setIdx_1": value,
+          ...
+        }
+      }
+    """
     inSets = self.getInputSets()
     data = {}
 
