@@ -79,6 +79,8 @@ class BaseInteractionViewer(ProtocolViewer):
                         label='Score type: ',
                         choices=scoreTypes, default=0)
 
+        sGroup.addParam('overUnderThr', params.EnumParam, choices=['Over', 'Under'],
+                        label='Over or under threshold: ', default=0)
         sGroup.addParam('scThres', params.FloatParam,
                         label='Score threshold: ', default=0.0)
 
@@ -120,7 +122,13 @@ class BaseInteractionViewer(ProtocolViewer):
             for j, e2 in enumerate(ent2):
                 val = data.get(e1, {}).get(e2, {}).get(filtScore, np.nan)
                 val = float(val)
-                matrix[i, j] = val if val >= thres else np.nan
+                mode = self.getEnumText('overUnderThr')
+                if np.isnan(val):
+                    matrix[i, j] = np.nan
+                elif mode == 'Over':
+                    matrix[i, j] = val if val >= thres else np.nan
+                else:  # Under
+                    matrix[i, j] = val if val <= thres else np.nan
 
         return matrix, ent1, ent2, filtScore
 
