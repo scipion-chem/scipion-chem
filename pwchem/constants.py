@@ -37,6 +37,8 @@ BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
 DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
 RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RANKX_HOME'}
+POSEB_DIC =     {'name': 'posebusters',      'version': '0.6.3',           'home': 'POSEB_HOME'}
+SCORCH2_DIC = {'name': 'scorch2', 'version': '1.0', 'home': 'SCORCH2_HOME'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
@@ -521,3 +523,14 @@ DESCRIPTOR_CATEGORIES = {'other': ['MaxAbsEStateIndex', 'MaxEStateIndex', 'MinAb
                          'geometrical': ['LabuteASA'], 
                          'ring': ['NumAliphaticRings', 'NumAromaticRings', 'RingCount'], 
                          'fragment': ['fr_Al_COO', 'fr_Al_OH', 'fr_Al_OH_noTert', 'fr_ArN', 'fr_Ar_COO', 'fr_Ar_N', 'fr_Ar_NH', 'fr_Ar_OH', 'fr_COO', 'fr_COO2', 'fr_C_O', 'fr_C_O_noCOO', 'fr_C_S', 'fr_HOCCN', 'fr_Imine', 'fr_NH0', 'fr_NH1', 'fr_NH2', 'fr_N_O', 'fr_Ndealkylation1', 'fr_Ndealkylation2', 'fr_Nhpyrrole', 'fr_SH', 'fr_aldehyde', 'fr_alkyl_carbamate', 'fr_alkyl_halide', 'fr_allylic_oxid', 'fr_amide', 'fr_amidine', 'fr_aniline', 'fr_aryl_methyl', 'fr_azide', 'fr_azo', 'fr_barbitur', 'fr_benzene', 'fr_benzodiazepine', 'fr_bicyclic', 'fr_diazo', 'fr_dihydropyridine', 'fr_epoxide', 'fr_ester', 'fr_ether', 'fr_furan', 'fr_guanido', 'fr_halogen', 'fr_hdrzine', 'fr_hdrzone', 'fr_imidazole', 'fr_imide', 'fr_isocyan', 'fr_isothiocyan', 'fr_ketone', 'fr_ketone_Topliss', 'fr_lactam', 'fr_lactone', 'fr_methoxy', 'fr_morpholine', 'fr_nitrile', 'fr_nitro', 'fr_nitro_arom', 'fr_nitro_arom_nonortho', 'fr_nitroso', 'fr_oxazole', 'fr_oxime', 'fr_para_hydroxylation', 'fr_phenol', 'fr_phenol_noOrthoHbond', 'fr_phos_acid', 'fr_phos_ester', 'fr_piperdine', 'fr_piperzine', 'fr_priamide', 'fr_prisulfonamd', 'fr_pyridine', 'fr_quatN', 'fr_sulfide', 'fr_sulfonamd', 'fr_sulfone', 'fr_term_acetylene', 'fr_tetrazole', 'fr_thiazole', 'fr_thiocyan', 'fr_thiophene', 'fr_unbrch_alkane', 'fr_urea']}
+
+CIF_DEF_HEADER = "data_example\nloop_\n{}\n"
+
+CIF_DEF_COLS = ["_atom_site.group_PDB",  "_atom_site.id",  "_atom_site.type_symbol",
+                "_atom_site.label_atom_id",  "_atom_site.label_alt_id",
+                "_atom_site.label_comp_id",  "_atom_site.label_asym_id",
+                "_atom_site.label_entity_id",  "_atom_site.label_seq_id",
+                "_atom_site.Cartn_x",  "_atom_site.Cartn_y",  "_atom_site.Cartn_z",
+                "_atom_site.auth_asym_id",  "_atom_site.auth_seq_id",
+                "_atom_site.pdbx_PDB_ins_code",  "_atom_site.occupancy",  "_atom_site.B_iso_or_equiv",
+                "_atom_site.pdbx_PDB_model_num"]

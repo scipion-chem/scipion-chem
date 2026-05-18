@@ -1,94 +1,101 @@
-# Script to calculate selected RDKit molecular descriptors for a set of input molecules
-# Designed to be called from a Scipion protocol using a separate RDKit environment
+"""
+Script to calculate selected RDKit molecular descriptors for a set of input molecules.
+Designed to be called from a Scipion protocol using a separate RDKit environment.
+"""
 
-# --- PATH bootstrap: make sure 'pwchem' is importable regardless of cwd/conda ---
+import os
+import sys
+import json
+import importlib.util
 
-# Script to calculate selected RDKit molecular descriptors for a set of input molecules
-# Designed to be called from a Scipion protocol using a separate RDKit environment
-
-import os, sys, json
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 
-# --- PATH bootstrap ---
 HERE = os.path.abspath(os.path.dirname(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 for p in (REPO_ROOT, HERE):
     if p not in sys.path:
         sys.path.insert(0, p)
-# ----------------------
-import importlib.util
+
+from rdkit_IO import getMolsFromFile
+
 spec = importlib.util.spec_from_file_location(
     'constants',
-    os.path.join(HERE, 'constants.py')
+    os.path.join(REPO_ROOT, 'pwchem', 'constants.py')
 )
 _constants = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(_constants)
-descriptor_categories = _constants.descriptor_categories
+DESCRIPTOR_CATEGORIES = _constants.DESCRIPTOR_CATEGORIES
 
-def load_molecule(path):
-    """Load molecule from .mol/.sdf or .smi/.smiles safely (skip invalid files)."""
-    path = os.path.abspath(path)
-    if not os.path.exists(path) or os.path.getsize(path) == 0:
-        print(f"[WARNING] Skipping missing or empty file: {path}")
-        return None
 
-    try:
-        if path.endswith(('.smi', '.smiles')):
-            with open(path) as f:
-                line = f.readline().strip().split()[0]
-            return Chem.MolFromSmiles(line)
+def loadMolecule(path):
+    """Load first molecule from file, handling smi files safely."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in ('.smi', '.smiles'):
+        with open(path) as f:
+            line = f.readline().strip().split()[0]
+        return Chem.MolFromSmiles(line)
+    else:
+        mols, _ = getMolsFromFile(path)
+        return mols[0] if mols else None
+
+
+def getEnabledDescriptors(enabledCategories):
+    """Return descList and set of enabled descriptor names."""
+    descList = Descriptors.descList
+    enabledSet = set()
+    for name, _ in descList:
+        for cat, props in DESCRIPTOR_CATEGORIES.items():
+            if enabledCategories.get(cat, False) and name in props:
+                enabledSet.add(name)
+                break
+    return descList, enabledSet
+
+
+def calcMolDescriptors(mol, descList, enabledSet):
+    """Calculate descriptors for a single molecule."""
+    row = []
+    for name, func in descList:
+        if name in enabledSet:
+            try:
+                value = func(mol)
+            except Exception:
+                value = float('nan')
         else:
-            mol = Chem.MolFromMolFile(path, sanitize=True)
-            if mol is None:
-                print(f"[WARNING] RDKit could not read molecule: {path}")
-            return mol
-    except Exception as e:
-        print(f"[ERROR] Failed to load {path}: {e}")
-        return None
+            value = float('nan')
+        row.append(value)
+    return row
+
 
 def main():
     if len(sys.argv) < 4:
         raise SystemExit("Usage: python ligand_descriptor_calc.py input.json output.json flags.json")
 
-    input_json = sys.argv[1]
-    output_json = sys.argv[2]
-    flags_json = sys.argv[3]
+    inputJson = sys.argv[1]
+    outputJson = sys.argv[2]
+    flagsJson = sys.argv[3]
 
-    with open(flags_json, 'r') as f:
-        enabled_categories = json.load(f)
+    with open(flagsJson, 'r') as f:
+        enabledCategories = json.load(f)
 
-    with open(input_json, 'r') as f:
-        molecule_paths = json.load(f)
+    with open(inputJson, 'r') as f:
+        moleculePaths = json.load(f)
 
-    descriptor_list = Descriptors.descList
-    header = [name for name, _ in descriptor_list]
-    property_dict = {}
+    descList, enabledSet = getEnabledDescriptors(enabledCategories)
+    header = [name for name, _ in descList]
+    propertyDict = {}
 
-    for mol_name, path in molecule_paths.items():
-        mol = load_molecule(path)
+    for molName, path in moleculePaths.items():
+        mol = loadMolecule(path)
+
         if mol is None:
-            property_dict[mol_name] = [float('nan')] * len(header)
+            propertyDict[molName] = [float('nan')] * len(header)
             continue
 
-        row = []
-        for name, desc_func in descriptor_list:
-            evaluate = False
-            for cat in descriptor_categories:
-                if enabled_categories.get(cat, False) and name in descriptor_categories[cat]:
-                    evaluate = True
-                    break
+        propertyDict[molName] = calcMolDescriptors(mol, descList, enabledSet)
 
-            try:
-                value = desc_func(mol) if evaluate else float('nan')
-            except Exception:
-                value = float('nan')
-            row.append(value)
-
-        property_dict[mol_name] = row
-
-    with open(output_json, 'w') as f:
-        json.dump({'header': header, 'property_dict': property_dict}, f)
+    with open(outputJson, 'w') as f:
+        json.dump({'header': header, 'property_dict': propertyDict}, f)
 
 
 if __name__ == "__main__":
