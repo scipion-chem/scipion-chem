@@ -80,7 +80,7 @@ class BaseInteractionViewer(ProtocolViewer):
                         choices=scoreTypes, default=0)
 
         sGroup.addParam('overUnderThr', params.EnumParam, choices=['Over', 'Under'],
-                        label='Over or under threshold: ', default=0)
+                        label='Keep molecules over or under threshold: ', default=0)
         sGroup.addParam('scThres', params.FloatParam,
                         label='Score threshold: ', default=0.0)
 
