@@ -267,9 +267,12 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
 
   def _getData(self):
       structSet = self.getStructSet()
-
-      with open(structSet._interactScoresFile.get(), 'r') as f:
-          return json.load(f)
+      if hasattr(structSet, '_interactScoresFile'):
+          with open(structSet._interactScoresFile.get(), 'r') as f:
+              data = json.load(f)
+      else:
+          data = None
+      return data
 
   def _getEntityNames(self, data):
       protNames = sorted(data.keys())
