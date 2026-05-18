@@ -188,17 +188,17 @@ class BaseInteractionViewer(ProtocolViewer):
             data, f1, f2, fScore
         )
 
-        valid_indices = ~np.isnan(matrix).all(axis=0)
-        filtered_e2 = [e2[i] for i in range(len(e2)) if valid_indices[i]]
+        validIndices = ~np.isnan(matrix).all(axis=0)
+        filteredE2 = [e2[i] for i in range(len(e2)) if validIndices[i]]
 
-        filtered_e2 = [os.path.splitext(e)[0] for e in filtered_e2]
+        filteredE2 = [os.path.splitext(e)[0] for e in filteredE2]
 
         molSet = self._getMolSet()
 
         objIds = []
         for obj in molSet:
             print(obj.getMolName())
-            if obj.getMolName() in filtered_e2:
+            if obj.getMolName() in filteredE2:
                 objIds.append(str(obj.getObjId()))
 
         if not objIds:
