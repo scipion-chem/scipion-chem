@@ -80,6 +80,7 @@ class BaseInteractionViewer(ProtocolViewer):
                         choices=scoreTypes, default=0)
 
         sGroup.addParam('overUnderThr', params.EnumParam, choices=['Over', 'Under'],
+                        display=params.EnumParam.DISPLAY_HLIST,
                         label='Keep molecules over or under threshold: ', default=0)
         sGroup.addParam('scThres', params.FloatParam,
                         label='Score threshold: ', default=0.0)
@@ -197,7 +198,6 @@ class BaseInteractionViewer(ProtocolViewer):
 
         objIds = []
         for obj in molSet:
-            print(obj.getMolName())
             if obj.getMolName() in filteredE2:
                 objIds.append(str(obj.getObjId()))
 
