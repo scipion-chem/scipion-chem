@@ -191,7 +191,6 @@ class ProtocolTrajectoryClustering(EMProtocol):
         self._insertFunctionStep(self.createOutputStep)
 
     def runClusteringStep(self):
-        mdsys = self.inputMDSystem.get()
         trajFile, topFile = self._prepareInputTrajectory()
 
         os.makedirs(self._getExtraPath(), exist_ok=True)
@@ -318,10 +317,12 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
     def _validate(self):
         errors = []
-        mdsys = self.inputMDSystem.get()
 
-        if mdsys and not mdsys.hasTrajectory():
-            errors.append('The input MDSystem has no associated trajectory file.')
+        if self.inputFrom.get() == MDSYSTEM:
+            mdsys = self.inputMDSystem.get()
+
+            if mdsys and not mdsys.hasTrajectory():
+                errors.append('The input MDSystem has no associated trajectory file.')
 
         if self.clusterMode.get() == 2 and self.cutoff.get() <= 0:
             errors.append('Cutoff must be a positive value.')
