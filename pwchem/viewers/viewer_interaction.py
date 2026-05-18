@@ -176,20 +176,21 @@ class BaseInteractionViewer(ProtocolViewer):
         f2 = self.getEnumText('chooseEnt2')
         fScore = self.getEnumText('chooseScore')
 
-        _, _, e2, _ = self._getFilteredData(
+        matrix, _, e2, _ = self._getFilteredData(
             data, f1, f2, fScore
         )
-        newe2 = []
-        for e in e2:
-            newe2.append(os.path.splitext(e)[0])
-        e2 = newe2
+
+        valid_indices = ~np.isnan(matrix).all(axis=0)
+        filtered_e2 = [e2[i] for i in range(len(e2)) if valid_indices[i]]
+
+        filtered_e2 = [os.path.splitext(e)[0] for e in filtered_e2]
 
         molSet = self._getMolSet()
 
         objIds = []
         for obj in molSet:
             print(obj.getMolName())
-            if obj.getMolName() in e2:
+            if obj.getMolName() in filtered_e2:
                 objIds.append(str(obj.getObjId()))
 
         if not objIds:
