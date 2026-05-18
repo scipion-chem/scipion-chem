@@ -276,9 +276,9 @@ class ProtocolRANXFuse(EMProtocol):
     Returns:
       {
         itemID: {
-          "ddg_setIdx_0": value,
-          "zscore_setIdx_0": value,
-          "ddg_setIdx_1": value,
+          "attr1_setIdx_0": value,
+          "attr2_setIdx_0": value,
+          "attr1_setIdx_1": value,
           ...
         }
       }
