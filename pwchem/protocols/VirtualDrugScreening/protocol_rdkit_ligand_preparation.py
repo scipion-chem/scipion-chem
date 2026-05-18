@@ -159,7 +159,8 @@ class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         inLib = self.inputLibrary.get()
         with open(inLib.getFileName()) as f:
           for line in f:
-            baseNames.append([line.split()[1], line])
+            bName = line.split('\t')[1].replace(' ', '_')
+            baseNames.append([bName, line])
       else:
         for mol in self.inputSmallMolecules.get():
             fnSmall = mol.getFileName()
