@@ -19,10 +19,11 @@
 # * 02111-1307 USA
 # *
 # * All comments concerning this program package may be sent to the
-# * e-mail address 'you@yourinstitution.email'
+# * e-mail address 'scipion@cnb.csic.es'
 # *
 
 import os
+import glob
 import json
 
 from pyworkflow.protocol import params
@@ -31,8 +32,10 @@ from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
 from pwchem.constants import RDKIT_DIC
-from pwchem.objects import SetOfSmallMolecules
+from pwchem.objects import SetOfSmallMolecules, SmallMoleculesLibrary
 from pwchem.constants import DESCRIPTOR_CATEGORIES
+
+OUTPUT_JSON = "output_results.json"
 
 
 class ProtocolLigandCharacterization(EMProtocol):
@@ -41,9 +44,10 @@ class ProtocolLigandCharacterization(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label='Parameters')
         form.addParam('inputSmallMolecules', params.PointerParam,
-                      pointerClass='SetOfSmallMolecules', allowsNull=False,
+                      pointerClass='SetOfSmallMolecules, SmallMoleculesLibrary',
+                      allowsNull=False,
                       label="Input Small Molecules",
-                      help='Set of molecules to process.')
+                      help='Set of molecules or library to process.')
 
         form.addParam('useConstitutional', params.BooleanParam, default=True,
                       label='Calculate constitutional descriptors')
@@ -64,81 +68,133 @@ class ProtocolLigandCharacterization(EMProtocol):
         self._insertFunctionStep('runDescriptorCalc')
         self._insertFunctionStep('createOutputStep')
 
-    def runDescriptorCalc(self):
-        mol_input = self.inputSmallMolecules.get()
-        mol_dict = {mol.molName.get(): os.path.abspath(mol.getFileName()) for mol in mol_input}
+    def _buildMolDict(self):
+        """Build {molName: filePath} dict handling both SetOfSmallMolecules and SmallMoleculesLibrary."""
+        molInput = self.inputSmallMolecules.get()
+        molDict = {}
 
-        input_json = self._getExtraPath("input_mols.json")
-        with open(input_json, 'w') as f:
-            json.dump(mol_dict, f)
+        if isinstance(molInput, SmallMoleculesLibrary):
+            inDir = os.path.abspath(self._getTmpPath())
+            try:
+                ligFiles = molInput.splitInFiles(inDir)
+            except Exception as e:
+                self.info(f"splitInFiles() failed ({type(e).__name__}: {e}). Trying directory glob.")
+                libSrc = molInput.getFileName()
+                ligFiles = []
+                if os.path.isdir(libSrc):
+                    for pat in ('*.sdf', '*.mol', '*.mol2', '*.smi', '*.smiles'):
+                        ligFiles.extend(glob.glob(os.path.join(libSrc, pat)))
+                    ligFiles = [os.path.abspath(p) for p in ligFiles]
+                    if not ligFiles:
+                        self.error(f"No ligand files found in directory: {libSrc}")
+                else:
+                    self.error(f"Library source is not a directory and splitInFiles() failed: {libSrc}")
+
+            for f in ligFiles:
+                base = os.path.basename(f)
+                name, _ = os.path.splitext(base)
+                i, orig = 2, name
+                while name in molDict:
+                    name = f"{orig}_{i}"
+                    i += 1
+                molDict[name] = os.path.abspath(f)
+        else:
+            molDict = {mol.molName.get(): os.path.join(self.getProject().getPath(), mol.getFileName())
+                       for mol in molInput}
+
+        return molDict
+
+    def runDescriptorCalc(self):
+        molDict = self._buildMolDict()
+
+        inputJson = self._getExtraPath("input_mols.json")
+        with open(inputJson, 'w') as f:
+            json.dump(molDict, f)
 
         flags = {cat: bool(getattr(self, f"use{cat.capitalize()}").get()) for cat in DESCRIPTOR_CATEGORIES}
-        flags_path = self._getExtraPath("descriptor_flags.json")
-        with open(flags_path, 'w') as f:
+        flagsPath = self._getExtraPath("descriptor_flags.json")
+        with open(flagsPath, 'w') as f:
             json.dump(flags, f)
 
-        output_json = self._getExtraPath("output_results.json")
-
-        scripts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
-        if not os.path.isdir(scripts_dir):
-            self.error(f"Scripts dir not found: {scripts_dir}")
+        outputJson = self._getExtraPath(OUTPUT_JSON)
+        scriptsDir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
+        if not os.path.isdir(scriptsDir):
+            self.error(f"Scripts dir not found: {scriptsDir}")
 
         env = dict(RDKIT_DIC) if isinstance(RDKIT_DIC, dict) else {}
-        prev_py = env.get('PYTHONPATH', '')
-        env['PYTHONPATH'] = os.pathsep.join([p for p in [scripts_dir, prev_py] if p])
+        prevPy = env.get('PYTHONPATH', '')
+        env['PYTHONPATH'] = os.pathsep.join([p for p in [scriptsDir, prevPy] if p])
 
         Plugin.runScript(
             self,
             'ligand_descriptor_calc.py',
-            f"{os.path.abspath(input_json)} {os.path.abspath(output_json)} {os.path.abspath(flags_path)}",
+            f"{os.path.abspath(inputJson)} {os.path.abspath(outputJson)} {os.path.abspath(flagsPath)}",
             env=env,
-            cwd=scripts_dir
+            cwd=scriptsDir
         )
 
-        if not os.path.exists(output_json) or os.path.getsize(output_json) == 0:
+        if not os.path.exists(outputJson) or os.path.getsize(outputJson) == 0:
             self.error("Descriptor script produced no output.")
 
     def createOutputStep(self):
-        mol_input = self.inputSmallMolecules.get()
+        molInput = self.inputSmallMolecules.get()
+        outputJson = self._getExtraPath(OUTPUT_JSON)
 
-        output_json = self._getExtraPath("output_results.json")
-        with open(output_json, 'r') as f:
+        with open(outputJson, 'r') as f:
             data = json.load(f)
 
         header = data.get('header', [])
-        property_dict = data.get('property_dict', {})
+        propertyDict = data.get('property_dict', {})
 
-        new_mols = SetOfSmallMolecules.createCopy(mol_input, self._getPath(), copyInfo=True)
+        if isinstance(molInput, SmallMoleculesLibrary):
+            newMols = SetOfSmallMolecules(filename=self._getPath('smallMolecules.sqlite'))
+            for molName, molPath in self._buildMolDict().items():
+                molCopy = SetOfSmallMolecules.ITEM_TYPE()
+                molCopy.setFileName(molPath)
+                molCopy.molName.set(molName)
 
-        for mol in mol_input:
-            mol_copy = mol.clone()
-            name = mol_copy.molName.get()
+                if molName in propertyDict:
+                    row = propertyDict[molName]
+                    for i, propName in enumerate(header):
+                        value = row[i]
+                        category = next(
+                            (cat for cat, props in DESCRIPTOR_CATEGORIES.items() if propName in props),
+                            'uncategorized'
+                        )
+                        attrName = f"_Property_{category}_{propName}"
+                        setattr(molCopy, attrName, Float(value))
 
-            if name not in property_dict:
-                new_mols.append(mol_copy)
-                continue
+                newMols.append(molCopy)
+        else:
+            newMols = SetOfSmallMolecules.createCopy(molInput, self._getPath(), copyInfo=True)
+            for mol in molInput:
+                molCopy = mol.clone()
+                name = molCopy.molName.get()
 
-            row = property_dict[name]
-            for i, prop_name in enumerate(header):
-                value = row[i]
-                category = next(
-                    (cat for cat, props in DESCRIPTOR_CATEGORIES.items() if prop_name in props),
-                    'uncategorized'
-                )
-                attr_name = f"_Property_{category}_{prop_name}"
-                if not (isinstance(value, float) and value != value):  # skip nan
-                    setattr(mol_copy, attr_name, Float(value))
+                if name not in propertyDict:
+                    newMols.append(molCopy)
+                    continue
 
-            new_mols.append(mol_copy)
+                row = propertyDict[name]
+                for i, propName in enumerate(header):
+                    value = row[i]
+                    category = next(
+                        (cat for cat, props in DESCRIPTOR_CATEGORIES.items() if propName in props),
+                        'uncategorized'
+                    )
+                    attrName = f"_Property_{category}_{propName}"
+                    setattr(molCopy, attrName, Float(value))
 
-        new_mols.updateMolClass()
-        self._defineOutputs(outputSmallMolecules=new_mols)
+                newMols.append(molCopy)
+
+        newMols.updateMolClass()
+        self._defineOutputs(outputSmallMolecules=newMols)
 
     def _summary(self):
         msgs = []
-        out_json = self._getExtraPath("output_results.json")
-        if os.path.exists(out_json):
-            msgs.append(f"Descriptors stored in {os.path.basename(out_json)}")
+        outJson = self._getExtraPath(OUTPUT_JSON)
+        if os.path.exists(outJson):
+            msgs.append(f"Descriptors stored in {os.path.basename(outJson)}")
         else:
             msgs.append("No descriptor output found.")
         return msgs
