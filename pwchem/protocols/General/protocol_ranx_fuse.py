@@ -272,7 +272,7 @@ class ProtocolRANXFuse(EMProtocol):
     return mutations
 
   def buildPerSetAttributeDictionary(self, inAttrDic):
-    """
+    """ Builds a dictionary where the values for each attribute of each input set are stored.
     Returns:
       {
         itemID: {
