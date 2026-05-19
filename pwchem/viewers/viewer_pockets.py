@@ -25,16 +25,28 @@
 # **************************************************************************
 
 import os
+import json
 from pathlib import Path
+from pwem.viewers import EmPlotter
+from pwem.protocols import ProtSubSet
+
+import matplotlib.pyplot as plt
+from tkinter.messagebox import askokcancel
 
 import numpy as np
 from pyworkflow.protocol import params, Protocol
 
 import pyworkflow.viewer as pwviewer
+
+from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER
 from matplotlib import pyplot as plt, cm
 from matplotlib.patches import Circle, Patch
 
 from pwem.viewers.mdviewer.viewer import MDViewer
+
+from pwchem.utils import getFilteredOutput
+from pwchem.viewers.viewer_interaction import BaseInteractionViewer
+from .viewers_utils import heatmap, annotateHeatmap
 
 from pwchem.objects import SetOfStructROIs
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
@@ -73,7 +85,7 @@ class ContactSurfaceViewer(pwviewer.Viewer):
 VOLUME_PYMOL, VOLUME_PYMOL_SURF = 0, 1
 
 
-class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
+class ViewerGeneralStructROIs(BaseInteractionViewer):
   _label = 'Viewer structural ROIs'
   _targets = [SetOfStructROIs]
 
@@ -117,12 +129,19 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
                       default=True,
                       help='Display min distance labels on the connecting lines.')
 
+    data = self._getData()
+    if data:
+        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+
   def _getVisualizeDict(self):
-    return {
+    d = {
       'displayAtomStruct': self._showAtomStruct,
       'displayTable': self._viewSet,
       'labelDistances': self._viewResidueInteractions
     }
+    d.update(BaseInteractionViewer._getVisualizeDict(self))
+
+    return d
 
   def _viewSet(self, e=None):
     molSet = self.getObject()
@@ -452,6 +471,72 @@ class ViewerGeneralStructROIs(pwviewer.ProtocolViewer):
   def _showAtomStructPyMol(self, pmlFile, outDir):
     pymolV = PyMolViewer(project=self.getProject())
     return pymolV._visualize(pmlFile, cwd=outDir)
+
+
+  # ----------------------------------Interactions
+  def _getData(self):
+      structSet = self.getOutPockets()
+
+      with open(structSet._interactScoresFile.get(), 'r') as f:
+          return json.load(f)
+
+  def _getEntityNames(self, data):
+      roiNames = sorted(data.keys())
+      molNames = sorted({
+          molName
+          for roiData in data.values()
+          for molName in roiData.keys()
+      })
+      scoreNames = sorted({
+          scoreName
+          for roiData in data.values()
+          for molData in roiData.values()
+          for scoreName in molData.keys()
+      })
+      return roiNames, molNames, scoreNames
+
+  def _getLabels(self):
+      return "ROI", "Molecule", "Score"
+
+  def getOutPockets(self):
+      if hasattr(self.protocol, 'outputStructROIs'):
+          return self.protocol.outputStructROIs
+      return self.protocol
+
+  def _generateProts(self, paramName=None):
+      data = self._getData()
+
+      f1 = self.getEnumText('chooseEnt1')
+      f2 = self.getEnumText('chooseEnt2')
+      fScore = self.getEnumText('chooseScore')
+
+      _, e1, _, _ = self._getFilteredData(data, f1, f2, fScore)
+      print(f'e1={e1}')
+
+      objIds = []
+      roiSet = self.getOutPockets()
+
+      for obj in roiSet:
+          if os.path.splitext(os.path.basename(obj.getFileName()))[0] in e1:
+              objIds.append(str(obj.getObjId()))
+
+      if not objIds:
+          return
+
+      if askokcancel("Generate ROI subset",
+                     f"Generate subset with {len(objIds)} ROIs?"):
+          project = self.getProject()
+          prot = project.newProtocol(
+              ProtSubSet,
+              inputFullSet=roiSet,
+              selectIds=True,
+              range=','.join(objIds)
+          )
+
+          project.launchProtocol(prot, wait=True)
+
+  def _getMolSet(self):
+      return self.getOutPockets().getInteractMols()
 
 
 MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'
