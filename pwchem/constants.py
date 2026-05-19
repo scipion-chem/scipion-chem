@@ -28,7 +28,7 @@
 #Constant dictionaries
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
 JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}
-OPENBABEL_DIC = {'name': 'openbabel',   'version': '2.2',           'home': 'OPENBABEL_HOME'}
+OPENBABEL_DIC = {'name': 'openbabel',   'version': '3.1.1',           'home': 'OPENBABEL_HOME'}
 ALIVIEW_DIC =   {'name': 'aliview',     'version': '1.28',          'home': 'ALIVIEW_HOME'}
 SHAPEIT_DIC =   {'name': 'shape-it',    'version': '2.0.0',         'home': 'SHAPEIT_HOME'}
 VMD_DIC =       {'name': 'vmd',         'version': '1.9.3',         'home': 'VMD_CHEM_HOME'}
@@ -69,42 +69,53 @@ WARNLIBBIG = f'WARNING: you are about to split an immense library of molecules, 
 
 PML_STR = '''from pymol import cmd,stored
 load {}
-#select pockets, resn STP
 stored.list=[]
 cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
-
-aux = {}
-aux.sort()
-
-lastSTP=max(list(map(int, stored.list)))	#get the index of the last residu
 stored.list = list(map(str, stored.list))
 hide lines, resn STP
 
 #show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))'''
+for my_index in stored.list: cmd.select("pocket"+my_index, "resn STP and resi "+my_index)
+for my_index in stored.list: cmd.color(int(my_index)+1,"pocket"+my_index)
+for my_index in stored.list: cmd.show("spheres","pocket"+my_index)
+for my_index in stored.list: cmd.hide("sticks","pocket"+my_index)
+for my_index in stored.list: cmd.set("sphere_scale","0.3","pocket"+my_index)
+for my_index in stored.list: cmd.set("sphere_transparency","0.1","pocket"+my_index)'''
+
+PML_BBOX_STR_POCK = PML_STR + '''
+python
+{}
+zoom
+python end
+'''
 
 PML_SURF_STR = '''from pymol import cmd,stored
-load {}, protein
-create ligands, protein and organic
-select xlig, protein and organic
-delete xlig
+load {}
 
-hide everything, all
+select protein_only, polymer and not organic
+select non_stp_ligands, organic and not resn STP
+hide everything
 
-color white, elem c
-color bluewhite, protein
-show surface, protein
-
-show sticks, ligands
-set stick_color, magenta
+show surface, protein_only
+color white, protein_only
+show sticks, non_stp_ligands
 
 {}
 zoom visible
 '''
+
+PML_BBOX_STR_POCKSURF = PML_SURF_STR + '''
+python
+{}
+zoom
+python end
+'''
+
+
+PML_BBOX_STR_EACH = '''rgb = {}
+boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
+'''
+
 
 PML_SURF_EACH = '''set_color pcol{} = {}
 select surf_pocket{}, protein and id {} 
@@ -119,11 +130,11 @@ TCL_STR = '''proc highlighting { colorId representation id selection } {
    mol addrep $id
 }
 
-set id [mol new %s type pdb]
+set id [mol new %s type cif]
 mol delrep top $id
-highlighting Name "Lines" $id "protein"
-highlighting Name "Licorice" $id "not protein and not resname STP"
-highlighting Element "NewCartoon" $id "protein"
+highlighting Name "Lines" 0 "protein"
+highlighting Name "Licorice" 0 "not protein and not resname STP"
+highlighting Element "NewCartoon" 0 "protein"
 set id [mol new %s type pqr]
                         mol selection "all" 
                          mol material "Glass3" 
@@ -131,7 +142,7 @@ set id [mol new %s type pqr]
                          mol representation "QuickSurf 0.3" 
                          mol color ResId $id 
                          mol addrep $id 
-highlighting Index "Points 1" $id "resname STP"
+highlighting Index "Points 1" 1 "resname STP"
 display rendermode GLSL'''#.format(proteinHETATMFile, proteinPQRFile)
 
 FUNCTION_GRID_BOX = '''from pymol.cgo import *
@@ -363,60 +374,6 @@ zoom
 python end
 '''
 
-PML_BBOX_STR_POCK = '''load {} 
-set cartoon_color, white
-
-from pymol import cmd,stored
-load {}
-#select pockets, resn STP
-stored.list=[]
-cmd.iterate("(resn STP)","stored.list.append(resi)")	#read info about residues STP
-
-aux = {}
-aux.sort()
-
-stored.list = list(map(str, stored.list))
-#print(stored.list)
-lastSTP=stored.list[-1]	#get the index of the last residu
-hide lines, resn STP
-
-#show spheres, resn STP
-for my_index in range(1,int(lastSTP)+1): cmd.select("pocket"+str(aux[my_index-1]), "resn STP and resi "+str(my_index))
-for my_index in range(1,int(lastSTP)+1): cmd.color(my_index+1,"pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.show("spheres","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_scale","0.3","pocket"+str(aux[my_index-1]))
-for my_index in range(1,int(lastSTP)+1): cmd.set("sphere_transparency","0.1","pocket"+str(aux[my_index-1]))
-
-python
-{}
-zoom
-python end
-'''
-
-PML_BBOX_STR_POCKSURF = '''
-from pymol import cmd,stored
-load {}, protein
-create protein and organic
-hide everything, all
-
-color white, elem c
-color bluewhite, protein
-show surface, protein
-
-{}
-zoom visible
-
-python
-{}
-zoom
-python end
-'''
-
-
-PML_BBOX_STR_EACH = '''rgb = {}
-boxName = drawBoundingBox(center={}, size={}, gridName="{}", r=rgb[0], g=rgb[1], b=rgb[2])
-'''
-
 
 PML_PHARM = '''from pymol.cgo import *
 from pymol import cmd
@@ -512,19 +469,24 @@ hide everything, not br. all within 3 of (byres polymer & name CA)
 set movie_fps, 15
 '''
 
-NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "borda"]
+
+PML_MD_STR_AMBER = '''load {}
+load_traj {}, format=trj
+hide everything, not br. all within 3 of (byres polymer & name CA)
+set movie_fps, 15
+'''
+
+NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "zmuv", "rank", "borda"]
 SCORE_BASED_METHODS = ["med", "anz"]
 RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 
-DESCRIPTOR_CATEGORIES = {'other': ['MaxAbsEStateIndex', 'MaxEStateIndex', 'MinAbsEStateIndex', 'MinEStateIndex', 'qed', 'SPS', 'MaxPartialCharge', 'MinPartialCharge', 'MaxAbsPartialCharge', 'MinAbsPartialCharge', 'FpDensityMorgan1', 'FpDensityMorgan2', 'FpDensityMorgan3', 'BCUT2D_MWHI', 'BCUT2D_MWLOW', 'BCUT2D_CHGHI', 'BCUT2D_CHGLO', 'BCUT2D_LOGPHI', 'BCUT2D_LOGPLOW', 'BCUT2D_MRHI', 'BCUT2D_MRLOW', 'AvgIpc', 'BalabanJ', 'BertzCT', 'Ipc', 'PEOE_VSA1', 'PEOE_VSA10', 'PEOE_VSA11', 'PEOE_VSA12', 'PEOE_VSA13', 'PEOE_VSA14', 'PEOE_VSA2', 'PEOE_VSA3', 'PEOE_VSA4', 'PEOE_VSA5', 'PEOE_VSA6', 'PEOE_VSA7', 'PEOE_VSA8', 'PEOE_VSA9', 'SMR_VSA1', 'SMR_VSA10', 'SMR_VSA2', 'SMR_VSA3', 'SMR_VSA4', 'SMR_VSA5', 'SMR_VSA6', 'SMR_VSA7', 'SMR_VSA8', 'SMR_VSA9', 'SlogP_VSA1', 'SlogP_VSA10', 'SlogP_VSA11', 'SlogP_VSA12', 'SlogP_VSA2', 'SlogP_VSA3', 'SlogP_VSA4', 'SlogP_VSA5', 'SlogP_VSA6', 'SlogP_VSA7', 'SlogP_VSA8', 'SlogP_VSA9', 'EState_VSA1', 'EState_VSA10', 'EState_VSA11', 'EState_VSA2', 'EState_VSA3', 'EState_VSA4', 'EState_VSA5', 'EState_VSA6', 'EState_VSA7', 'EState_VSA8', 'EState_VSA9', 'VSA_EState1', 'VSA_EState10', 'VSA_EState2', 'VSA_EState3', 'VSA_EState4', 'VSA_EState5', 'VSA_EState6', 'VSA_EState7', 'VSA_EState8', 'VSA_EState9', 'FractionCSP3', 'NHOHCount', 'NOCount', 'NumAliphaticCarbocycles', 'NumAliphaticHeterocycles', 'NumAmideBonds', 'NumAromaticCarbocycles', 'NumAromaticHeterocycles', 'NumAtomStereoCenters', 'NumBridgeheadAtoms', 'NumHeteroatoms', 'NumHeterocycles', 'NumRotatableBonds', 'NumSaturatedCarbocycles', 'NumSaturatedHeterocycles', 'NumSaturatedRings', 'NumSpiroAtoms', 'NumUnspecifiedAtomStereoCenters', 'Phi'], 
-                         'constitutional': ['MolWt', 'HeavyAtomMolWt', 'ExactMolWt', 'NumValenceElectrons', 'HeavyAtomCount', 'NumHAcceptors', 'NumHDonors'], 
-                         'electronic': ['ExactMolWt', 'NumRadicalElectrons', 'MolLogP', 'MolMR'], 
-                         'topological': ['Chi0', 'Chi0n', 'Chi0v', 'Chi1', 'Chi1n', 'Chi1v', 'Chi2n', 'Chi2v', 'Chi3n', 'Chi3v', 'Chi4n', 'Chi4v', 'HallKierAlpha', 'Kappa1', 'Kappa2', 'Kappa3', 'TPSA'], 
-                         'geometrical': ['LabuteASA'], 
-                         'ring': ['NumAliphaticRings', 'NumAromaticRings', 'RingCount'], 
+DESCRIPTOR_CATEGORIES = {'other': ['MaxAbsEStateIndex', 'MaxEStateIndex', 'MinAbsEStateIndex', 'MinEStateIndex', 'qed', 'SPS', 'MaxPartialCharge', 'MinPartialCharge', 'MaxAbsPartialCharge', 'MinAbsPartialCharge', 'FpDensityMorgan1', 'FpDensityMorgan2', 'FpDensityMorgan3', 'BCUT2D_MWHI', 'BCUT2D_MWLOW', 'BCUT2D_CHGHI', 'BCUT2D_CHGLO', 'BCUT2D_LOGPHI', 'BCUT2D_LOGPLOW', 'BCUT2D_MRHI', 'BCUT2D_MRLOW', 'AvgIpc', 'BalabanJ', 'BertzCT', 'Ipc', 'PEOE_VSA1', 'PEOE_VSA10', 'PEOE_VSA11', 'PEOE_VSA12', 'PEOE_VSA13', 'PEOE_VSA14', 'PEOE_VSA2', 'PEOE_VSA3', 'PEOE_VSA4', 'PEOE_VSA5', 'PEOE_VSA6', 'PEOE_VSA7', 'PEOE_VSA8', 'PEOE_VSA9', 'SMR_VSA1', 'SMR_VSA10', 'SMR_VSA2', 'SMR_VSA3', 'SMR_VSA4', 'SMR_VSA5', 'SMR_VSA6', 'SMR_VSA7', 'SMR_VSA8', 'SMR_VSA9', 'SlogP_VSA1', 'SlogP_VSA10', 'SlogP_VSA11', 'SlogP_VSA12', 'SlogP_VSA2', 'SlogP_VSA3', 'SlogP_VSA4', 'SlogP_VSA5', 'SlogP_VSA6', 'SlogP_VSA7', 'SlogP_VSA8', 'SlogP_VSA9', 'EState_VSA1', 'EState_VSA10', 'EState_VSA11', 'EState_VSA2', 'EState_VSA3', 'EState_VSA4', 'EState_VSA5', 'EState_VSA6', 'EState_VSA7', 'EState_VSA8', 'EState_VSA9', 'VSA_EState1', 'VSA_EState10', 'VSA_EState2', 'VSA_EState3', 'VSA_EState4', 'VSA_EState5', 'VSA_EState6', 'VSA_EState7', 'VSA_EState8', 'VSA_EState9', 'FractionCSP3', 'NHOHCount', 'NOCount', 'NumAliphaticCarbocycles', 'NumAliphaticHeterocycles', 'NumAmideBonds', 'NumAromaticCarbocycles', 'NumAromaticHeterocycles', 'NumAtomStereoCenters', 'NumBridgeheadAtoms', 'NumHeteroatoms', 'NumHeterocycles', 'NumRotatableBonds', 'NumSaturatedCarbocycles', 'NumSaturatedHeterocycles', 'NumSaturatedRings', 'NumSpiroAtoms', 'NumUnspecifiedAtomStereoCenters', 'Phi'],
+                         'constitutional': ['MolWt', 'HeavyAtomMolWt', 'ExactMolWt', 'NumValenceElectrons', 'HeavyAtomCount', 'NumHAcceptors', 'NumHDonors'],
+                         'electronic': ['ExactMolWt', 'NumRadicalElectrons', 'MolLogP', 'MolMR'],
+                         'topological': ['Chi0', 'Chi0n', 'Chi0v', 'Chi1', 'Chi1n', 'Chi1v', 'Chi2n', 'Chi2v', 'Chi3n', 'Chi3v', 'Chi4n', 'Chi4v', 'HallKierAlpha', 'Kappa1', 'Kappa2', 'Kappa3', 'TPSA'],
+                         'geometrical': ['LabuteASA'],
+                         'ring': ['NumAliphaticRings', 'NumAromaticRings', 'RingCount'],
                          'fragment': ['fr_Al_COO', 'fr_Al_OH', 'fr_Al_OH_noTert', 'fr_ArN', 'fr_Ar_COO', 'fr_Ar_N', 'fr_Ar_NH', 'fr_Ar_OH', 'fr_COO', 'fr_COO2', 'fr_C_O', 'fr_C_O_noCOO', 'fr_C_S', 'fr_HOCCN', 'fr_Imine', 'fr_NH0', 'fr_NH1', 'fr_NH2', 'fr_N_O', 'fr_Ndealkylation1', 'fr_Ndealkylation2', 'fr_Nhpyrrole', 'fr_SH', 'fr_aldehyde', 'fr_alkyl_carbamate', 'fr_alkyl_halide', 'fr_allylic_oxid', 'fr_amide', 'fr_amidine', 'fr_aniline', 'fr_aryl_methyl', 'fr_azide', 'fr_azo', 'fr_barbitur', 'fr_benzene', 'fr_benzodiazepine', 'fr_bicyclic', 'fr_diazo', 'fr_dihydropyridine', 'fr_epoxide', 'fr_ester', 'fr_ether', 'fr_furan', 'fr_guanido', 'fr_halogen', 'fr_hdrzine', 'fr_hdrzone', 'fr_imidazole', 'fr_imide', 'fr_isocyan', 'fr_isothiocyan', 'fr_ketone', 'fr_ketone_Topliss', 'fr_lactam', 'fr_lactone', 'fr_methoxy', 'fr_morpholine', 'fr_nitrile', 'fr_nitro', 'fr_nitro_arom', 'fr_nitro_arom_nonortho', 'fr_nitroso', 'fr_oxazole', 'fr_oxime', 'fr_para_hydroxylation', 'fr_phenol', 'fr_phenol_noOrthoHbond', 'fr_phos_acid', 'fr_phos_ester', 'fr_piperdine', 'fr_piperzine', 'fr_priamide', 'fr_prisulfonamd', 'fr_pyridine', 'fr_quatN', 'fr_sulfide', 'fr_sulfonamd', 'fr_sulfone', 'fr_term_acetylene', 'fr_tetrazole', 'fr_thiazole', 'fr_thiocyan', 'fr_thiophene', 'fr_unbrch_alkane', 'fr_urea']}
-
-CIF_DEF_HEADER = "data_example\nloop_\n{}\n"
 
 CIF_DEF_COLS = ["_atom_site.group_PDB",  "_atom_site.id",  "_atom_site.type_symbol",
                 "_atom_site.label_atom_id",  "_atom_site.label_alt_id",
@@ -534,3 +496,5 @@ CIF_DEF_COLS = ["_atom_site.group_PDB",  "_atom_site.id",  "_atom_site.type_symb
                 "_atom_site.auth_asym_id",  "_atom_site.auth_seq_id",
                 "_atom_site.pdbx_PDB_ins_code",  "_atom_site.occupancy",  "_atom_site.B_iso_or_equiv",
                 "_atom_site.pdbx_PDB_model_num"]
+
+CIF_DEF_HEADER = "data_example\nloop_\n{}\n"
