@@ -172,15 +172,38 @@ class ProtocolRANXFuse(EMProtocol):
     inSet = self.inputSets[0].get()
     outAttrName = self.getOutAttrName()
     outData = self.parseOutputFile()
-
+    inAttrDic = self.getInputAttrsDic()
+    originalAttrs = self.getOriginalAttrs(inAttrDic)
+    perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
+      # Clone item to avoid modifying original object
+      newItem = item.clone()
+
+      # Remove original attributes dynamically
+      for attrName in originalAttrs:
+        if hasattr(newItem, attrName):
+          delattr(newItem, attrName)
+
+      # Add renamed attributes in deterministic order
+      if inID in perSetAttrs:
+
+        orderedAttrs = perSetAttrs[inID]
+
+        for attrName, value in orderedAttrs.items():
+          try:
+            setattr(newItem, attrName, Float(float(value)))
+          except:
+            setattr(newItem, attrName, String(str(value)))
+
+      # Add fusion outputs at the end
       scoreComb = outData[inID]["score"]
       rankComb = outData[inID]["rank"]
-      setattr(item, self.outName.get(), Float(scoreComb))
-      setattr(item, "RanxRank", Integer(rankComb))
-      outSet.append(item)
+
+      setattr(newItem, self.outName.get(), Float(scoreComb))
+      setattr(newItem, "RanxRank", Integer(rankComb))
+      outSet.append(newItem)
 
     self._defineOutputs(outputSet=outSet)
 
@@ -247,6 +270,47 @@ class ProtocolRANXFuse(EMProtocol):
       mutations[str(obj.getAttributeValue(attrName))] = value * mult
 
     return mutations
+
+  def buildPerSetAttributeDictionary(self, inAttrDic):
+    """ Builds a dictionary where the values for each attribute of each input set are stored.
+    Returns:
+      {
+        itemID: {
+          "attr1_setIdx_0": value,
+          "attr2_setIdx_0": value,
+          "attr1_setIdx_1": value,
+          ...
+        }
+      }
+    """
+    inSets = self.getInputSets()
+    data = {}
+
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, attrID = key.split('-')
+      inSet = inSets[int(inPointIdx)]
+      for obj in inSet:
+        itemID = str(obj.getAttributeValue(attrID))
+        if itemID not in data:
+          data[itemID] = {}
+        for attrVal in attrVals:
+          attrName = attrVal[0]
+          newAttrName = f"{attrName}_setIdx_{inPointIdx}"
+          value = obj.getAttributeValue(attrName)
+          data[itemID][newAttrName] = value
+        
+    orderedData = {}
+    for itemID, attrs in data.items():
+      orderedAttrs = dict(sorted(attrs.items(), key=lambda x: (int(x[0].split('_setIdx_')[-1]), x[0].split('_setIdx_')[0])))
+      orderedData[itemID] = orderedAttrs
+    return orderedData
+
+  def getOriginalAttrs(self, inAttrDic):
+    originalAttrs = set()
+    for _, attrVals in inAttrDic.items():
+      for attrVal in attrVals:
+        originalAttrs.add(attrVal[0])
+    return originalAttrs
 
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
