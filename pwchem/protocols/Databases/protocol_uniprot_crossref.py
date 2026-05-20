@@ -40,7 +40,90 @@ dbChoices = ['PDB', 'UniProtKB', 'EMBL', 'ChEMBL', 'DrugBank', 'BindingDB', 'GO'
              'DOI', 'PubMed', 'Other']
 
 class ProtChemUniprotCrossRef(EMProtocol):
-    """Extract cross references from uniprot"""
+    """
+    This protocol extracts cross-references from UniProt entries to other biological
+    and chemical databases such as PDB, ChEMBL, DrugBank, BindingDB, GO, Pfam, and others.
+
+    It allows users to map UniProt protein identifiers to external database identifiers
+    and optionally enrich them with associated metadata properties.
+
+    Inputs
+    ------
+    fromString:
+        Boolean flag indicating whether input IDs are provided as a comma-separated string.
+
+    inputListID:
+        SetOfDatabaseID containing UniProt identifiers (used when fromString = False).
+
+    inputIDsStr:
+        Comma-separated string of UniProt IDs (used when fromString = True).
+
+    Cross-reference configuration
+    -----------------------------
+    extract:
+        Selected external database to extract cross-references from UniProt.
+        Options include:
+        PDB, UniProtKB, EMBL, ChEMBL, DrugBank, BindingDB, GO, Gene3D,
+        InterPro, Pfam, DOI, PubMed, Other.
+
+    extractOther:
+        Custom database name used when extract = Other.
+
+    storeProps:
+        Boolean flag indicating whether to store additional cross-reference properties
+        (e.g. activity type, annotations, descriptors).
+
+    crossMain:
+        Boolean flag defining how identifiers are stored:
+        - True → cross-reference ID is treated as the main ID
+        - False → UniProt ID remains primary and cross-ref is stored as auxiliary
+
+    Workflow
+    --------
+    1. Input preparation
+       - Reads UniProt IDs either from SetOfDatabaseID or comma-separated string.
+
+    2. Cross-reference retrieval
+       - Queries UniProt REST API:
+         https://www.uniprot.org/uniprot/{id}.json
+
+    3. Parsing UniProt JSON
+       - Extracts "uniProtKBCrossReferences" section
+       - Filters entries by selected database (extract parameter)
+
+    4. Cross-reference mapping
+       - Builds dictionary:
+         {UniProt ID → {CrossRef ID → properties}}
+
+    5. Optional property extraction
+       - If storeProps is enabled:
+         extracts metadata keys and values from UniProt JSON
+
+    6. Output construction
+       - Creates SetOfDatabaseID containing mapped identifiers
+       - Stores cross-reference relationships
+       - Optionally swaps main/cross identifiers depending on configuration
+
+    Output
+    ------
+    outputDatabaseIDs:
+        SetOfDatabaseID containing:
+        - UniProt IDs
+        - Cross-referenced database IDs
+        - Optional metadata properties per cross-reference
+
+    Summary
+    -------
+    This protocol enables systematic extraction of cross-references from UniProt,
+    facilitating integration of protein identifiers with external bioinformatics
+    and chemical databases for downstream analysis and data fusion workflows.
+
+    Notes
+    -----
+    - Requires internet access to query UniProt REST API.
+    - Output depends on availability of cross-reference annotations in UniProt.
+    - Designed for integration in Scipion / pwchem workflows.
+    """
     _label = 'uniprot crossref'
 
     def _defineParams(self, form):
