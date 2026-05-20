@@ -76,7 +76,8 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
         inDir = os.path.abspath(self._getTmpPath())
         ligFiles = self.inputLibrary.get().splitInFiles(inDir)
       else:
-        ligFiles = [os.path.abspath(mol.getFileName()) for mol in self.inputSmallMolecules.get()]
+        ligFiles = [os.path.abspath(mol.getFileName()).replace(' ', '_')
+                    for mol in self.inputSmallMolecules.get()]
 
       inputSubsets = makeSubsets(ligFiles, nSubsets, cloneItem=False)
       for it, fileSet in enumerate(inputSubsets):
@@ -93,7 +94,7 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
 
     def getInputDir(self):
-      return self._getExtraPath()
+      return os.path.abspath(self._getExtraPath())
 
     def getNSubsets(self):
       nt = self.numberOfThreads.get()
@@ -124,10 +125,16 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
     def addLibAttributes(self, smallMol, molLine):
       heads = self.inputLibrary.get().getHeaders()
-      attrs = molLine.split()
+      attrs = molLine.split('\t')
       for i, h in enumerate(heads):
-        if h != 'Name':
-          smallMol.__setattr__(h, pwobj.String(attrs[i]))
+        if h.lower() not in ['name', 'molname']:
+          try:
+              val = float(attrs[i])
+              smallMol.__setattr__(h, pwobj.Float(val))
+          except:
+              smallMol.__setattr__(h, pwobj.String(attrs[i]))
+        else:
+          smallMol.setMolName(attrs[i])
       return smallMol
 
     def _validate(self):

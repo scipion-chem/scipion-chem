@@ -38,6 +38,7 @@ BIOCONDA_DIC =  {'name': 'bioconda',    'version': '1.0'}
 MDTRAJ_DIC =    {'name': 'mdtraj',      'version': '1.9.8',         'home': 'MDTRAJ_HOME'}
 DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEAP_HOME'}
 RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RANKX_HOME'}
+POSEB_DIC =     {'name': 'posebusters',      'version': '0.6.3',           'home': 'POSEB_HOME'}
 SCORCH2_DIC = {'name': 'scorch2', 'version': '1.0', 'home': 'SCORCH2_HOME'}
 
 #Autoligand
@@ -469,7 +470,14 @@ hide everything, not br. all within 3 of (byres polymer & name CA)
 set movie_fps, 15
 '''
 
-NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "rank", "borda"]
+
+PML_MD_STR_AMBER = '''load {}
+load_traj {}, format=trj
+hide everything, not br. all within 3 of (byres polymer & name CA)
+set movie_fps, 15
+'''
+
+NORM_STRATEGY = ["None", "min-max", "min-max-inverted", "max", "sum", "zmuv", "rank", "borda"]
 SCORE_BASED_METHODS = ["med", "anz"]
 RANK_BASED_METHODS = ["isr", "log_isr", "logn_isr", "rrf", "rbc"]
 

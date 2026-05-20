@@ -37,7 +37,6 @@ from pathlib import Path
 
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
-from Bio.PDB.ResidueDepth import get_surface
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -50,6 +49,7 @@ from pwchem.constants import *
 
 COORDS, RESIDUES, LIGANDS, PPI, NRES = 0, 1, 2, 3, 4
 INTERACTIONSFILENAME = "interacting_residues.csv"
+
 
 class ProtDefineStructROIs(EMProtocol):
     """
@@ -194,9 +194,8 @@ class ProtDefineStructROIs(EMProtocol):
 
         structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
-        self.structSurface = get_surface(self.structModel,
-                                         MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
+        self.structSurface = Plugin.runMSMS(self.structModel)
     def definePocketsStep(self):
         coordsDefined = []
         for roiStr in self.inROIs.get().split('\n'):
@@ -236,6 +235,20 @@ class ProtDefineStructROIs(EMProtocol):
             interactionsFile = Path(self._getExtraPath(INTERACTIONSFILENAME))
             if interactionsFile.exists():
                 outPockets.setInteractingResiduesFile(interactionsFile)
+            
+                table = self.build_contiguous_regions(interactionsFile)
+                if table:
+                    tableFile = self._getExtraPath("antibody_regions.md")
+                    with open(tableFile, "w") as f:
+                        f.write(table)
+            
+                # --- LOG EN run.stdout ---
+                self.info("\n" + "="*80)
+                self.info("Protein-Protein interaction regions (all chains)")
+                self.info("="*80)
+                for line in table.splitlines():
+                    self.info(line)
+
             self._defineOutputs(outputStructROIs=outPockets)
 
 
@@ -403,10 +416,12 @@ class ProtDefineStructROIs(EMProtocol):
                         resName1 = atom1.get_parent().get_resname()
                         resName2 = atom2.get_parent().get_resname()
 
-                        key = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
-                        residuePairs[key].append(dist)
+                        key12 = (chain1Id, f'{resName1}:{resNum1}', chain2Id, f'{resName2}:{resNum2}')
+                        key21 = (chain2Id, f'{resName2}:{resNum2}', chain1Id, f'{resName1}:{resNum1}')
 
-                        break
+                        for key in (key12, key21):
+                            if key not in residuePairs or dist < residuePairs[key]:
+                                residuePairs[key] = dist
 
             with open(interactionsFile, mode='a', newline='') as f:
                 writer = csv.writer(f)
@@ -414,12 +429,11 @@ class ProtDefineStructROIs(EMProtocol):
                     writer.writerow([
                         'Chain1', 'Residue1',
                         'Chain2', 'Residue2',
-                        'Mean distance'
+                        'Min distance'
                     ])
 
-                for (ch1, res1, ch2, res2), dists in residuePairs.items():
-                    meanDist = sum(dists) / len(dists)
-                    writer.writerow([ch1, res1, ch2, res2, f'{meanDist:.2f}'])
+                for (ch1, res1, ch2, res2), dist in residuePairs.items():
+                    writer.writerow([ch1, res1, ch2, res2, f'{dist:.2f}'])
 
 
         elif roiKey == 'Near_Residues:':
@@ -495,3 +509,50 @@ class ProtDefineStructROIs(EMProtocol):
     def _getInputName(self):
         return os.path.splitext(os.path.basename(self.inputAtomStruct.get().getFileName()))[0]
 
+    def build_contiguous_regions(self, interactionsCsv):
+        """
+        Build a Markdown table of interacting residues per chain,
+        listing for each residue the residues it interacts with,
+        sorted by minimal distance.
+        """
+        # Diccionario: key = (Chain1, Residue1), value = list of tuples (Chain2, Residue2, min_distance)
+        interactions = defaultdict(list)
+
+        with open(interactionsCsv, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                chain1 = row['Chain1']
+                res1 = row['Residue1']
+                chain2 = row['Chain2']
+                res2 = row['Residue2']
+                dist = float(row['Min distance'])
+                interactions[(chain1, res1)].append((chain2, res2, dist))
+
+        if not interactions:
+            return None
+
+        # Construir el Markdown
+        summaryBlocks = []
+
+        # Agrupamos por chain de origen (Chain1)
+        chains = sorted(set(ch1 for ch1, _ in interactions.keys()))
+        for chain in chains:
+            summaryBlocks.append(f"Regions of interaction - Chain {chain}")
+            summaryBlocks.append("| Residue | Interacting residues |")
+            summaryBlocks.append("|--------|-------------------|")
+
+            # Filtramos las claves de esta chain
+            residues_chain = [(res1, interactions[(chain, res1)]) for ch1, res1 in interactions if ch1 == chain]
+            
+            # Ordenamos por la menor distancia de interacción de cada residuo
+            residues_chain.sort(key=lambda x: min([dist for _, _, dist in x[1]]))
+
+            for res1, partners in residues_chain:
+                # Ordenar partners por distancia mínima
+                partners_sorted = sorted(partners, key=lambda x: x[2])
+                partners_str = ", ".join([f"{ch2}:{res2} ({dist:.2f} Å)" for ch2, res2, dist in partners_sorted])
+                summaryBlocks.append(f"| {res1} | {partners_str} |")
+
+            summaryBlocks.append("")  # línea en blanco entre cadenas
+
+        return "\n".join(summaryBlocks)

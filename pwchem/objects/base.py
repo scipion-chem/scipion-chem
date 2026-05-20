@@ -78,10 +78,6 @@ class SequenceChem(data.Sequence):
     data.Sequence.__init__(self, **kwargs)
     self._attrFile = pwobj.String(kwargs.get('attributesFile', None))
 
-    # Dictionary that contains the interacting score of each SequenceChem with each SmallMolecule,
-    # so there is no need to create 1 SetOfSmallMolecules per SequenceChem {molId: score}
-    self._interactScoresFile = pwobj.String(kwargs.get('interactScoreFile', None))
-
   def __str__(self):
     return "SequenceChem (name = {})\n".format(self.getSeqName())
 
@@ -105,23 +101,6 @@ class SequenceChem(data.Sequence):
         attrDic[key.strip()] = eval(values.strip())
     return attrDic
 
-  def getInteractScoresDic(self):
-    '''Returns data from the files where the interaction scores are stored.'''
-    try:
-        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if "entries" not in data:
-            data["entries"] = []
-    except (json.JSONDecodeError, FileNotFoundError):
-        data = {"entries": []}
-
-    return data
-
-  def getInteractScoresFile(self):
-    return self._interactScoresFile.get()
-
-  def setInteractScoresFile(self, intFile):
-    self._interactScoresFile.set(intFile)
 
 
 class SetOfSequencesChem(data.SetOfSequences):
@@ -135,9 +114,22 @@ class SetOfSequencesChem(data.SetOfSequences):
 
     self._scoreTypes = pwobj.String(kwargs.get('scoreTypes', ""))
 
-  def copyInfo(self, other):
-    """ Copy basic information from other set of classes to current one"""
-    self.copyAttributes(other, '_aligned', '_alignFile', '_interactMols', '_interactScoresFile')
+  def createCopy(self, outputPath, copyInfo=False, copyItems=False, itemSelectedCallback=None, rowFilter=None):
+      newSet = self.create(outputPath)
+      if copyInfo:
+        newSet.copyInfo(self)
+
+      if copyItems:
+        newSet.copyItems(self, itemSelectedCallback=itemSelectedCallback, rowFilter=rowFilter)
+
+      return newSet
+
+  def copyInfo(self, other, check=True):
+    """ Copy basic information from other set of classes to current one.
+    Check is True in case the copy is from a SetOfSeqeunces, which does not have the extra attributes"""
+    extraAttrs = ['_aligned', '_alignFile', '_interactMols', '_interactScoresFile']
+    extraAttrs = [a for a in extraAttrs if hasattr(other, a)]
+    self.copyAttributes(other, *extraAttrs)
 
   def getSetPath(self):
     return os.path.abspath(self._mapperPath[0])
@@ -202,33 +194,45 @@ class SetOfSequencesChem(data.SetOfSequences):
       else:
           self._scoreTypes.set(",".join(map(str, scores)))
 
-  def getInteractScoresDic(self, calculate=False):
+  def getInteractScoresDic(self):
     '''Returns data from the files where the interaction scores are stored.'''
-    seq = self.getFirstItem()
-    return(seq.getInteractScoresDic())
+    try:
+        with open(self.getInteractScoresFile(), "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-  def setInteractScoresDic(self, newEntries, data, outputFile):
-    '''From a list of 'entries' writes the output file with the new entries of scores'''
-    for newEntry in newEntries:
-        seqName = newEntry["sequence"]
-        molsDict = newEntry["molecules"]
+    except (json.JSONDecodeError, FileNotFoundError):
+        data = {seq.getSeqName(): {} for seq in self}
 
-        existingSeq = next((s for s in data["entries"] if s["sequence"] == seqName), None)
+    return data
 
-        if existingSeq:
-            for mol, newScores in molsDict.items():
-                if mol in existingSeq["molecules"]:
-                    for scoreName, scoreVal in newScores.items():
-                        if scoreName not in existingSeq["molecules"][mol]:
-                            existingSeq["molecules"][mol][scoreName] = scoreVal
-                else:
-                    existingSeq["molecules"][mol] = newScores
-        else:
-            data["entries"].append(newEntry)
+  def setInteractScoresDic(self, newData):
+    '''New data will update the scores dictionary storing the interactions of each sequence with a molecule
+    newData: {seqName: {molName: {scoreName: score}}}
+    '''
+    prevData = self.getInteractScoresDic()
+    for seqName, molDic in newData.items():
+      if seqName not in prevData:
+        prevData[seqName] = {}
 
-    with open(outputFile, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-    self.setInteractScoresFile(outputFile)
+      for molName, scoreDic in molDic.items():
+        if molName not in prevData[seqName]:
+          prevData[seqName][molName] = {}
+
+        prevData[seqName][molName].update(scoreDic)
+
+    oFile = self.getInteractScoresFile()
+    with open(oFile, "w", encoding="utf-8") as f:
+        json.dump(prevData, f, indent=4)
+
+  def updateScoreTypes(self):
+     scoreNames = []
+     intDic = self.getInteractScoresDic()
+     for seqName, molDic in intDic.items():
+       for molName, scoreDic in molDic.items():
+         for scoreName in scoreDic:
+           if scoreName not in scoreNames:
+             scoreNames.append(scoreName)
+     self.setScoreTypes(scoreNames)
 
   def getInteractScoresFile(self):
     return self._interactScoresFile.get()
@@ -242,8 +246,8 @@ class SetOfSequencesChem(data.SetOfSequences):
   def getInteractMolNames(self):
       data = self.getInteractScoresDic()
       molNames = set()
-      for entry in data.get("entries", []):
-          molNames.update(entry.get("molecules", {}).keys())
+      for _, molDic in data.items():
+          molNames.update([molName for molName, _ in molDic.items()])
       return list(molNames)
 
   def getInteractMolsNumber(self):
@@ -391,11 +395,11 @@ class SmallMolecule(data.EMObject):
   def setMolName(self, value):
     self.molName.set(value)
 
-  def guessMolName(self):
+  def guessMolName(self, useConfId=True):
     molName = None
     if self.getFileName():
       fBase = self.getFileName().split('/')[-1].split('.')[0]
-      if self.getConfId():
+      if self.getConfId() and useConfId:
         molName = '-'.join(fBase.split('-')[:-1])
       else:
         molName = fBase
@@ -492,7 +496,7 @@ class SmallMolecule(data.EMObject):
       name += '_{}'.format(self.getDockId())
     return name
 
-  def getAtomsPosDic(self, onlyHeavy=True):
+  def getAtomsPosDic(self, onlyHeavy=True, doMap=False):
     '''Returns a dictionary with the atoms coordinates:
         {atomId: [c1, c2, c3], ...}'''
     molFile = self.getFileName()
@@ -501,12 +505,20 @@ class SmallMolecule(data.EMObject):
 
     posDic = {}
     if '.pdb' in molFile:
+      numType = {}
       with open(molFile) as fIn:
         for line in fIn:
           if line.startswith('ATOM') or line.startswith('HETATM'):
             elements = splitPDBLine(line)
             atomId, coords = elements[2], elements[6:9]
             atomType = removeNumberFromStr(atomId)
+            if atomType == atomId:
+                if atomId not in numType:
+                  numType[atomType] = 0
+
+                numType[atomType] += 1
+                atomId = '{}{}'.format(atomType, numType[atomType])
+
             if atomType != 'H' or not onlyHeavy:
               posDic[atomId] = list(map(float, coords))
 
@@ -545,6 +557,10 @@ class SmallMolecule(data.EMObject):
                 posDic[atomId] = list(map(float, coords))
             else:
               break
+
+    if doMap and self.getMapDic():
+      mapDic = self.getMapDic()
+      posDic = {mapDic[atomId]: posDic[atomId] for atomId in posDic}
 
     return posDic
 
@@ -772,6 +788,9 @@ class SmallMoleculesLibrary(data.EMObject):
     self.libraryFile.set(value)
     self.calculateLength()
 
+  def getSeparator(self):
+    return '\t'
+
   def getLibraryMap(self, inverted=False, fullLine=False, lineDic=False):
     '''Returns a map dictionary as: {smi: name} or {name: smi} if inverted
         '''
@@ -783,13 +802,13 @@ class SmallMoleculesLibrary(data.EMObject):
   def yieldLibraryMapItems(self, inverted=False, fullLine=False, lineDic=False):
     with open(self.getFileName()) as f:
       for line in f:
-        smi, name = line.split()[0].strip(), line.split()[1].strip()
+        smi, name = line.split('\t')[0].strip(), line.split('\t')[1].strip()
         key = name if inverted else smi
         if not fullLine:
           val = smi if inverted else name
         else:
           if lineDic:
-            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split())}
+            val = {ki: vi for ki, vi in zip(self.getHeaders(), line.strip().split('\t'))}
           else:
             val = line.strip()
         yield key, val
@@ -813,11 +832,12 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split()[col]
+        molName = line.split('\t')[col].replace(' ', '_')
 
         oFile = os.path.join(outDir, f'{molName}.smi')
         with open(oFile, 'w') as fO:
           fO.write(line)
+
         oFiles.append(oFile)
     return oFiles
 
@@ -825,7 +845,7 @@ class SmallMoleculesLibrary(data.EMObject):
     batch = []
     with open(self.getFileName()) as f:
       for line in f:
-        row = line.split()
+        row = line.split('\t')
         try:
           vals = [row[ci].strip() for ci in colIndexes]
           batch.append(vals)
@@ -1138,7 +1158,7 @@ class StructROI(data.EMFile):
       protAtoms = self.getProteinAtoms()
       for atom in protAtoms:
         atomId = atom.serial_number
-        if atomId in contactsIds:
+        if str(atomId) in contactsIds:
           contactAtoms.append(atom)
     else:
       # Manually calculate the contacts
@@ -1288,7 +1308,7 @@ class StructROI(data.EMFile):
   def getAtomsCoords(self, atoms):
     coords = []
     for atom in atoms:
-      coords.append(atom.getCoords())
+      coords.append(atom.get_coord())
     return coords
 
   def getAtomsIds(self, atoms):
@@ -1338,7 +1358,7 @@ class StructROI(data.EMFile):
     '''Returns the atoms sorted as they are close to the reference coordinate'''
     dists = []
     for at in atoms:
-      dists += [calculateDistance(refCoord, at.getCoords())]
+      dists += [calculateDistance(refCoord, at.get_coord())]
 
     zippedLists = sorted(zip(dists, atoms))
     dists, atoms = zip(*zippedLists)
@@ -1617,9 +1637,33 @@ class SetOfStructROIs(data.EMSet):
       else:
           cifDic = MMCIF2Dict(protFile)
           cifDic = filterCifCols(cifDic, CIF_DEF_COLS)
-          f.write(writeCifBlocks(cifDic))
+
+          maxId = max(map(int, cifDic['_atom_site.id']))
           for pocket in self:
-              f.write(getRawPDBStr(pocket.getFileName(), ter=False))
+              pockId = pocket.getObjId()
+              for seqId, (x, y, z) in enumerate(pocket.getPointsCoords(), start=1):
+                  maxId += 1
+
+                  cifDic['_atom_site.id'].append(str(maxId))
+                  cifDic['_atom_site.group_PDB'].append('HETATM')
+                  cifDic['_atom_site.type_symbol'].append('C')
+                  cifDic['_atom_site.label_atom_id'].append(f'C{seqId}')
+                  cifDic['_atom_site.label_alt_id'].append('.')
+                  cifDic['_atom_site.label_comp_id'].append('STP')
+                  cifDic['_atom_site.label_asym_id'].append('A')
+                  cifDic['_atom_site.label_entity_id'].append('1')
+                  cifDic['_atom_site.label_seq_id'].append(str(pockId))
+                  cifDic['_atom_site.Cartn_x'].append(str(x))
+                  cifDic['_atom_site.Cartn_y'].append(str(y))
+                  cifDic['_atom_site.Cartn_z'].append(str(z))
+                  cifDic['_atom_site.auth_asym_id'].append('A')
+                  cifDic['_atom_site.auth_seq_id'].append(str(pockId))
+                  cifDic['_atom_site.pdbx_PDB_ins_code'].append('?')
+                  cifDic['_atom_site.occupancy'].append('1.00')
+                  cifDic['_atom_site.B_iso_or_equiv'].append('0.00')
+                  cifDic['_atom_site.pdbx_PDB_model_num'].append('1')
+
+          f.write(writeCifBlocks(cifDic))
 
     self.setProteinHetatmFile(outFile)
     return outFile
@@ -1700,99 +1744,92 @@ class SetOfStructROIs(data.EMSet):
   ######### Utils
 
   def getPocketsPDBStr(self):
-    outStr = ''
-    for i, pocket in enumerate(self):
-      pocket.setObjId(i + 1)
-      outStr += self.formatPocketStr(pocket)
-    return outStr
+      outStr = ''
+      for i, pocket in enumerate(self):
+          pocket.setObjId(i + 1)
+          outStr += self.formatPocketStr(pocket)
+      return outStr
 
   def formatPocketStr(self, pocket):
-    outStr = ''
-    numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
-    rawStr = getRawPDBStr(pocketFile, ter=False).strip()
-    if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
-      for line in rawStr.split('\n'):
-        sline = splitPDBLine(line)
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      outStr = ''
+      numId, pocketFile = str(pocket.getObjId()), pocket.getFileName()
+      ext = os.path.splitext(pocketFile)[1].lower()
 
-    elif pocket.getPocketClass() == 'FPocket':
-      for line in rawStr.split('\n'):
-        sline = line.split()
-        replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[5:], '', 'Ve']
-        try:
-          pdbLine = writePDBLine(replacements)
-        except:
-          sline = splitPDBLine(line)
-          replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:], '', 'Ve']
-          pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      if ext == ".cif":
+          rawStr = self.cifToPdbStr(pocketFile)
+      else:
+          rawStr = getRawPDBStr(pocketFile, ter=False)
 
-    elif pocket.getPocketClass() == 'SiteMap':
-      for line in rawStr.split('\n'):
-        line = line.split()
-        replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
-        pdbLine = writePDBLine(replacements)
-        outStr += pdbLine
+      rawStr = rawStr.strip()
+      if pocket.getPocketClass() in ['AutoLigand', 'AutoSite']:
+          for line in rawStr.split('\n'):
+              sline = splitPDBLine(line)
+              replacements = ['HETATM', sline[1], 'APOL', 'STP', 'C', numId, *sline[6:-1], 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-    else:  # (P2Rank, ElliPro, Standard...)
-      for line in rawStr.split('\n'):
-        line = splitPDBLine(line)
-        line[5] = numId
-        pdbLine = writePDBLine(line)
-        outStr += pdbLine
+      elif pocket.getPocketClass() == 'FPocket':
+          structure = self.loadStructure(pocketFile)
+          for model in structure:
+              for chain in model:
+                  for residue in chain:
+                      for atom in residue:
+                          x, y, z = atom.coord
+                          replacements = [
+                              'HETATM',
+                              str(atom.get_serial_number()),
+                              'APOL',
+                              'STP',
+                              'C',
+                              str(numId),
+                              x, y, z,
+                              0.0,
+                              0.0,
+                              '',
+                              'C'
+                          ]
+                          pdbLine = writePDBLine(replacements)
+                          outStr += pdbLine
+      elif pocket.getPocketClass() == 'SiteMap':
+          for line in rawStr.split('\n'):
+              line = line.split()
+              replacements = ['HETATM', line[1], 'APOL', 'STP', 'C', numId, *line[5:-1], '', 'Ve']
+              pdbLine = writePDBLine(replacements)
+              outStr += pdbLine
 
-    return outStr
+      else:  # (P2Rank, ElliPro, Standard...)
+          for line in rawStr.split('\n'):
+              line = splitPDBLine(line)
+              if line is None:
+                  continue
+              line[5] = numId
+              cleaned = []
+              for x in line:
+                  if isinstance(x, str):
+                      parts = x.split()
+                      x = parts[-1] if parts else x
+                  cleaned.append(x)
+              line = cleaned
 
+              pdbLine = writePDBLine(line)
+              outStr += pdbLine
 
-class ProteinAtom(data.EMObject):
-  def __init__(self, pdbLine, **kwargs):
-    data.EMObject.__init__(self, **kwargs)
-    self.parseLine(pdbLine)
+      return outStr
 
-  def __str__(self):
-    return 'Atom: {}. Type: {}'.format(self.atomId, self.atomType)
+  def cifToPdbStr(self, cifFile):
+      from Bio.PDB import MMCIFParser, PDBIO
+      from io import StringIO
 
-  def parseLine(self, pdbLine):
-    if not pdbLine.startswith('ATOM') and not pdbLine.startswith('HETATM'):
-      print('Passed line does not seems like an pdb ATOM line')
-    else:
-      self.line = pdbLine
-      line = splitPDBLine(pdbLine)
-      self.atomId = line[1]
-      self.atomType = line[2]
-      self.residueType = line[3]
-      self.proteinChain = line[4]
-      self.residueNumber = line[5]
-      self.residueId = '{}.{}'.format(self.proteinChain, self.residueNumber)
-      self.xCoord = line[6]
-      self.yCoord = line[7]
-      self.zCoord = line[8]
-      self.atomLetter = line[-1]
+      parser = MMCIFParser(QUIET=True)
+      structure = parser.get_structure('pocket', cifFile)
 
-  def getCoords(self):
-    return tuple(map(float, (self.xCoord, self.yCoord, self.zCoord)))
+      io = PDBIO()
+      io.set_structure(structure)
 
+      stream = StringIO()
+      io.save(stream)
 
-class ProteinResidue(data.EMObject):
-  def __init__(self, pdbLine, **kwargs):
-    data.EMObject.__init__(self, **kwargs)
-    self.parseLine(pdbLine)
-
-  def __str__(self):
-    return 'Residue: {}. Type: {}'.format(self.residueId, self.residueType)
-
-  def parseLine(self, pdbLine):
-    if not pdbLine.startswith('ATOM'):
-      print('Passed line does not seems like an pdb ATOM line')
-    else:
-      line = splitPDBLine(pdbLine)
-      self.residueType = line[3]
-      self.proteinChain = line[4]
-      self.residueNumber = line[5]
-      self.residueId = '{}_{}'.format(self.proteinChain, self.residueNumber)
-
+      return stream.getvalue()
 
 class MDSystem(data.EMFile):
   """A system atom structure (prepared for MD). Base class for Gromacs, Amber
@@ -1810,6 +1847,7 @@ class MDSystem(data.EMFile):
 
     self._ligName = pwobj.String(kwargs.get('ligName', 'LIG'))
     self._ligTopFile = pwobj.String(kwargs.get('ligTopFile', None))
+    self._prolifFile = pwobj.String(kwargs.get('prolifFp', None))
 
   def __str__(self):
     return '{} ({}, hasTrj={})'.format(self.getClassName(), os.path.basename(self.getSystemFile()),
@@ -1845,6 +1883,12 @@ class MDSystem(data.EMFile):
     else:
       return False
 
+  def hasLig(self):
+    if self.getLigTopologyFile():
+      return True
+    else:
+      return False
+
   def getTrajectoryFile(self):
     return self._trjFile.get()
 
@@ -1873,6 +1917,11 @@ class MDSystem(data.EMFile):
   def setLigTopologyFile(self, value):
     self._ligTopFile.set(value)
 
+  def getProlifFile(self):
+    return self._prolifFile.get()
+
+  def setProlifFile(self, value):
+    self._prolifFile.set(value)
 
 class PharmFeature(data.EMObject):
   """ Represent a pharmacophore feature """

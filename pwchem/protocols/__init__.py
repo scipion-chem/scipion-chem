@@ -40,6 +40,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ligand_shape_distance import
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprint_distance import ProtocolFingerprintDistance
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolGeneralLigandFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_cluster_mols import ProtClusterMolecules
+from pwchem.protocols.VirtualDrugScreening.protocol_group_byAttribute import ProtChemGroupByAtt
 
 
 from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs
@@ -48,6 +49,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_extract_interactingMols impo
 
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import ProtocolConsensusDocking
 from pwchem.protocols.VirtualDrugScreening.protocol_score_dockings import ProtocolScoreDocking
+from pwchem.protocols.VirtualDrugScreening.protocol_posebusters import ProtocolPoseBusters
 # from pwchem.protocols.VirtualDrugScreening.protocol_oddt_descriptors import ProtocolODDTDescriptors
 from pwchem.protocols.VirtualDrugScreening.protocol_scorch2_pose import ProtocolSCORCH2
 from pwchem.protocols.VirtualDrugScreening.protocol_rmsd_dockings import ProtocolRMSDDocking
@@ -111,3 +113,6 @@ from pwchem.protocols.General.protocol_operate_libraries import ProtocolOperateL
 
 # Molecular dynamics
 from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import ProtocolLigandParametrization
+from pwchem.protocols.MolecularDynamics.protocol_prolif_analysis import ProtocolProlif
+from pwchem.protocols.MolecularDynamics.protocol_import_MDSystem import ProtocolImportMDSystem
+from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import ProtocolTrajectoryClustering
