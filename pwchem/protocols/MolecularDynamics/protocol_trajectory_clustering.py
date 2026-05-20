@@ -291,7 +291,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
         refId = self.refStructId.get()
         myStruct= self.inputSetOfStructs.get().getItem('id', refId).getFileName()
         if myStruct is None:
-            print('The input ligand is not found')
+            print('The reference structure is not found')
         return myStruct
 
     # ── Info ──────────────────────────────────────────────────────────────────
