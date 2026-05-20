@@ -227,7 +227,7 @@ def reorderCluster(clusters):
 def parseArg():
     """Parse command-line arguments and return them as a dictionary."""
     arguments = argparse.ArgumentParser(
-        description="Clusterize molecular dynamics trajectories "
+        description="Clusterize molecular dynamics trajectories or a setOtAtomStruct "
                     "(Amber, Gromacs, CHARMM, NAMD, PDB)")
 
     arguments.add_argument('-f', "--traj",    required=True, nargs='+',
