@@ -87,7 +87,7 @@ def selectionToMdtraj(selIdx, firstRes=None, lastRes=None, ligandId=None):
 # ── Protocol ──────────────────────────────────────────────────────────────────
 
 class ProtocolTrajectoryClustering(EMProtocol):
-    """Clusterize molecular dynamics simulation trajectories using TTClust."""
+    """Clusterize molecular dynamics simulation trajectories or a setOfAtomStruct using TTClust."""
     _label = 'Traj Clustering'
 
     # ── Form ──────────────────────────────────────────────────────────────────
@@ -96,8 +96,7 @@ class ProtocolTrajectoryClustering(EMProtocol):
 
         form.addParam('inputFrom', params.EnumParam,
             choices=["MDSystem", "SetOfAtomStructs"], display=params.EnumParam.DISPLAY_HLIST,
-            default=MDSYSTEM,
-            label='Input object type',
+            default=MDSYSTEM, label='Input object type',
             help='Input can be either:\n'
                  '- MDSystem with trajectory\n'
                  '- SetOfAtomStructs ensemble'
