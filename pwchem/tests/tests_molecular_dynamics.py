@@ -28,6 +28,7 @@
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
 from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering
+from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import MDSYSTEM, SETOFSTRUCTS
 from pwchem.utils import assertHandle
 from pwchem.tests import TestImportMDSystems
 
@@ -59,24 +60,35 @@ class TestProLIFanalysis(TestImportMDSystems):
         )
 
 class TestTrajClustering(TestImportMDSystems):
-    @classmethod
-    def setUpClass(cls):
-        cls.ds = DataSet.getDataSet('mdSystem')
-        setupTestProject(cls)
-        cls._runImportSystem()
 
     @classmethod
-    def _runClustering(cls):
-        protClust= cls.newProtocol(
+    def _runClustering(cls, inputSetOfStructs=None, nGroup=10):
+        inputArgs = {
+            'inputFrom': MDSYSTEM,
+            'inputMDSystem': cls.protImportMDSystem.outputSystem
+        }
+        if inputSetOfStructs is not None:
+            inputArgs = {
+                'inputFrom': SETOFSTRUCTS,
+                'inputSetOfStructs': inputSetOfStructs,
+                'refStructId': 1
+            }
+
+        protClust = cls.newProtocol(
             ProtocolTrajectoryClustering,
-            inputMDSystem=cls.protImportMDSystem.outputSystem,
             clusterMode=1,
-            nGroup=3
+            nGroup=nGroup,
+            **inputArgs
         )
         cls.launchProtocol(protClust)
         cls.outputSetOfAtomStructures = protClust
         return protClust
 
     def test_clustering(self):
-        self._runClustering()
-        assertHandle(self.assertIsNotNone,getattr(self.outputSetOfAtomStructures, 'outputAtomStructs', None))
+        protClust = self._runClustering()
+        assertHandle(self.assertIsNotNone, getattr(protClust, 'outputAtomStructs', None),
+                     cwd=protClust.getWorkingDir())
+
+        protClustFromSet = self._runClustering(inputSetOfStructs=protClust.outputAtomStructs, nGroup=3)
+        assertHandle(self.assertIsNotNone, getattr(protClustFromSet, 'outputAtomStructs', None),
+                     cwd=protClustFromSet.getWorkingDir())
