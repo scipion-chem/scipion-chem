@@ -47,9 +47,136 @@ extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles'
 
 class ConvertStructures(EMProtocol):
     """
-    Convert a set of input ligands or a protein structure to a specific file format
-    """
+    Protocol to convert molecular and structural data between different file formats.
 
+    This tool supports three major input types:
+    - Small molecules (SetOfSmallMolecules)
+    - Macromolecular structures (AtomStruct)
+    - Molecular dynamics systems (MDSystem)
+
+    It provides format conversion using RDKit, OpenBabel, or MDTraj depending on
+    the input type and user configuration.
+
+    Inputs
+    ------
+    inputObject:
+        The object to be converted. It can be:
+        - SetOfSmallMolecules: ligand collections
+        - AtomStruct: protein or macromolecular structure
+        - MDSystem: molecular dynamics system (structure + topology + trajectory)
+
+    Small molecule conversion
+    -------------------------
+    outputFormatSmall:
+        Target format for ligand conversion:
+        - PDB
+        - Mol2
+        - SDF
+        - Smiles
+
+    usePose:
+        Whether to use docked ligand poses instead of original ligand files.
+
+    useManager:
+        Conversion backend:
+        - RDKit
+        - OpenBabel
+
+    Structure conversion (AtomStruct)
+    ----------------------------------
+    outputFormatTarget:
+        Output format for macromolecular structures:
+        - PDB
+        - CIF
+
+    MD system conversion
+    --------------------
+    convSysFile:
+        Convert system coordinate file.
+
+    outputSysFormat:
+        Output format for system structure (currently PDB only supported).
+
+    convTopFile:
+        Convert topology file.
+
+    outputTopFormat:
+        Target topology format:
+        - PSF
+        - TOP
+        - PRMTOP
+
+    convTrjFile:
+        Convert trajectory file.
+
+    outputTrjFormat:
+        Supported trajectory formats:
+        - DCD, GRO, NETCDF, PDB, TRR, XTC
+
+    Workflow
+    --------
+    1. Input type detection
+       - Determines whether input is small molecules, structure, or MD system.
+
+    2. Small molecules conversion
+       - Iterates over ligand set
+       - Extracts ligand file (pose or original)
+       - Converts using RDKit or OpenBabel scripts
+       - Writes converted file per molecule
+       - Creates new SetOfSmallMolecules with updated file paths
+       - Tracks conversion failures
+
+    3. AtomStruct conversion
+       - Converts between PDB and CIF formats
+       - Uses Scipion utilities (toPdb / toCIF)
+       - Copies file if already in correct format
+
+    4. MDSystem conversion
+       - Optionally converts:
+         a) system coordinates (MDTraj)
+         b) topology file (MDTraj + optional GROMACS support)
+         c) trajectory file (MDTraj)
+       - Reconstructs MDSystem object with updated components
+
+    Output
+    ------
+    outputSmallMolecules:
+        Converted ligand dataset (if input is SetOfSmallMolecules)
+
+    outputStructure:
+        Converted macromolecular structure (if input is AtomStruct)
+
+    outputSystem:
+        Converted molecular dynamics system (if input is MDSystem)
+
+    Error handling
+    --------------
+    - Tracks failed ligand conversions
+    - Prints list of molecules that could not be processed
+    - Skips invalid formats with explicit exception
+
+    Validation
+    ----------
+    - Ensures correct structure type is provided
+    - Ensures compatible file formats for conversion
+    - Requires valid input files for each system component
+
+    Summary
+    -------
+    This protocol provides a unified conversion interface for:
+    - Ligand datasets
+    - Protein structures
+    - Molecular dynamics simulations
+
+    It integrates RDKit, OpenBabel, and MDTraj workflows into a single
+    Scipion-compatible pipeline component.
+
+    Notes
+    -----
+    - Conversion quality depends on backend tool (RDKit/OpenBabel/MDTraj).
+    - Some formats may require external dependencies (e.g., GROMACS topology support).
+    - Designed for interoperability between structural biology and cheminformatics workflows.
+    """
     _label = 'Convert structure format'
     _program = ""
 

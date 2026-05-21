@@ -32,7 +32,157 @@ from pwchem.utils import fillEmptyAttributes
 UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK, BEST = list(range(8))
 
 class ProtChemOperateSet(EMProtocol):
-    """Filter a set by a column value or keep just a few columns"""
+    """
+    Protocol to perform operations over generic EMSet objects.
+
+    This protocol provides a flexible framework to manipulate sets by applying
+    classical set operations as well as attribute-based filtering, ranking,
+    and column manipulation.
+
+    Supported operations
+    --------------------
+    Set operations:
+        - Unique:
+            Removes duplicated elements based on a reference column.
+        - Union:
+            Combines multiple sets into one.
+        - Intersection:
+            Keeps only elements present in all input sets.
+        - Difference:
+            Removes elements from the main set that are present in a second set.
+
+    Modification operations:
+        - Filter:
+            Keeps elements that satisfy a condition on a given attribute.
+        - Remove columns:
+            Removes specified attributes from each element.
+        - Ranking:
+            Selects top/bottom elements based on a numeric attribute.
+        - Best:
+            Selects the best element (min/max) per unique reference value.
+
+    Inputs
+    ------
+    operation:
+        Operation to perform. Options include:
+        Unique, Union, Intersection, Difference, Filter,
+        Remove columns, Ranking, Best.
+
+    removeDuplicates:
+        If enabled, duplicated elements (based on reference column)
+        will be removed.
+
+    refColumn:
+        Attribute used as identifier for set operations and duplicate handling.
+        If empty, '_objId' is used by default.
+
+    filterColumn:
+        Attribute used for filtering, ranking, or selecting best elements.
+
+    filterOp:
+        Operation used in filtering:
+        - Numeric: ==, >, >=, <, <=, !=
+        - Range: between
+        - String: startswith, endswith, contains
+        - Negative string: does not startwith, does not end with, does not contain
+
+    filterValue:
+        Reference value used in filtering or ranking.
+
+    filterValue2:
+        Secondary value used for "between" filtering.
+
+    smallerIsBetter:
+        Defines ranking direction for "Best" operation.
+        - True: smaller values are preferred
+        - False: larger values are preferred
+
+    remColumns:
+        List of attributes to remove (semicolon-separated).
+
+    threshold:
+        Used in ranking:
+        - Integer: number of elements to keep
+        - Float (0-1): proportion of dataset
+        - Percentage (e.g., "10%")
+        - Negative values: select lowest values instead of highest
+
+    inputSet:
+        Primary input set (used in most operations).
+
+    inputMultiSet:
+        Multiple input sets (used for Union, Intersection, Best).
+
+    secondSet:
+        Secondary set used in Difference operation.
+
+    Workflow
+    --------
+    1. Operation selection
+       - Determines which logic branch is executed.
+
+    2. Element processing
+       - Iterates through input sets
+       - Extracts reference attribute values
+       - Applies operation-specific logic:
+         * grouping (Union/Intersection)
+         * filtering (Filter)
+         * comparison (Best/Ranking)
+
+    3. Attribute evaluation
+       - Numeric comparisons via operators
+       - String operations (startswith, contains, etc.)
+       - Range filtering (between)
+
+    4. Output construction
+       - Creates a new set based on input type
+       - Clones selected elements
+       - Optionally reassigns object IDs (Union/Intersection/Best)
+
+    Output
+    ------
+    outputSet:
+        A new EMSet containing the processed elements.
+
+    Behavior details
+    ----------------
+    - Duplicate handling:
+        Controlled via `removeDuplicates` and reference column.
+
+    - Attribute handling:
+        Attributes are accessed dynamically using getAttributeValue.
+
+    - Cloning:
+        Items are cloned before insertion to avoid modifying originals.
+
+    - ID reassignment:
+        In some operations (Union, Intersection, Best),
+        object IDs are reassigned sequentially.
+
+    Validation
+    ----------
+    - Ensures required attributes exist in input elements.
+    - Converts filter values to correct data types (int/float) when needed.
+    - Handles missing or None values in comparisons.
+
+    Notes
+    -----
+    - Filtering relies on Python evaluation (`eval`) for numeric operators.
+    - Ranking supports flexible threshold definitions (absolute, relative, percentage).
+    - Best operation groups elements by reference column and selects optimal values.
+    - Designed to work with any EMSet-compatible object in Scipion.
+
+    Summary
+    -------
+    This protocol is a general-purpose tool for:
+    - Set algebra operations
+    - Attribute-based filtering
+    - Data reduction and ranking
+    - Dataset restructuring
+
+    It enables flexible and reusable manipulation of structured datasets
+    within Scipion workflows.
+    """
     _label = 'operate set'
 
     def _defineParams(self, form):

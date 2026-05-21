@@ -48,8 +48,75 @@ from pwchem.constants import OPENBABEL_DIC
 pymolScriptFileName = 'script.pml'
 
 class ProtPymolOperate(EMProtocol):
-    """This protocol provides access to Pymol and allows one to save the result 
-    in the Scipion framework. Files saved in the extra path will be registered as output"""
+    """
+    Protocol to execute PyMOL operations on atomic structures and import the results into Scipion.
+
+    This protocol provides a simple interface to run PyMOL in batch mode using a generated
+    PyMOL script. Input structures are loaded into PyMOL, optional commands are executed,
+    and any resulting PDB/CIF files written to the output directory are automatically
+    registered as Scipion outputs.
+
+    Overview
+    --------
+    The protocol performs three main steps:
+
+    1. Script generation
+       - Creates a PyMOL script (.pml)
+       - Loads all input atomic structures
+       - Appends optional user-defined PyMOL commands
+
+    2. PyMOL execution
+       - Runs PyMOL in background mode using the generated script
+       - Output files are written to the protocol extra directory
+
+    3. Output collection
+       - Scans the output directory
+       - Registers all generated .pdb and .cif files as AtomStruct outputs
+
+    Inputs
+    ------
+    inputPdbFiles:
+        List of atomic structures to be loaded into PyMOL.
+        Supported types:
+        - PDB files
+        - mmCIF files
+
+    extraCommands:
+        Optional raw PyMOL commands appended to the script.
+        Intended for advanced usage and debugging.
+
+    Outputs
+    -------
+    outputStructure_i:
+        One or more AtomStruct objects generated from PyMOL output files.
+        Each detected .pdb or .cif file in the output directory is wrapped
+        as a separate Scipion output.
+
+    Workflow
+    --------
+    1. Input structures are iterated and absolute file paths are written to a PyMOL script.
+    2. Optional commands are appended to the script.
+    3. PyMOL is executed in the protocol extra directory.
+    4. After execution, the directory is scanned for generated structures.
+    5. Each .pdb or .cif file is converted into an AtomStruct output.
+
+    Validation
+    ----------
+    - Ensures PyMOL binary exists before execution.
+    - Fails validation if PyMOL is not found in the configured environment.
+
+    Summary
+    -------
+    This protocol enables scripted PyMOL processing within Scipion workflows,
+    allowing structural manipulation, visualization exports, and downstream
+    integration of generated atomic models.
+
+    Notes
+    -----
+    - Execution depends on a properly configured PyMOL installation.
+    - Output detection is file-based (no explicit PyMOL return handling).
+    - Designed for simple batch-style structural operations rather than interactive use.
+    """
     _version = VERSION_3_0
     _label = 'Pymol operate'
 

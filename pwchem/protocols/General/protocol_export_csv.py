@@ -28,7 +28,77 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import PointerParam
 
 class ProtChemExportCSV(EMProtocol):
-    """Export a set as a csv. It is located in the Run directory"""
+    """
+    Protocol to export a Scipion EMSet into a CSV file.
+
+    This protocol iterates over all elements in a given EMSet and writes
+    their attributes into a structured CSV file located in the protocol
+    run directory.
+
+    Inputs
+    ------
+    inputSet:
+        Input dataset (EMSet) to be exported. Each element in the set
+        must provide attributes accessible via getAttributes().
+
+    CSV format
+    ----------
+    - The first row contains the header with attribute names.
+    - Each subsequent row corresponds to one element in the set.
+    - Values are separated by semicolons ("; ").
+    - Attribute values are extracted using value.get().
+
+    Workflow
+    --------
+    1. Open output CSV file in the run directory.
+
+    2. Iterate over entries in the input set:
+       - Retrieve attribute key-value pairs using getAttributes().
+       - For the first entry:
+         * Build header line using attribute names.
+       - For all entries:
+         * Extract attribute values.
+         * Convert values to string.
+         * Concatenate using ";" separator.
+
+    3. Write:
+       - Header line (only once, for the first element)
+       - One line per entry with attribute values
+
+    4. Close file.
+
+    Output
+    ------
+    output.csv:
+        CSV file stored in the protocol run directory containing
+        all elements and their attributes.
+
+    Error handling
+    --------------
+    - Assumes all entries share the same attribute structure.
+    - Does not validate missing or inconsistent attributes across entries.
+    - If attributes differ between entries, columns may become inconsistent.
+
+    Validation
+    ----------
+    - Requires a valid EMSet input.
+    - Each entry must implement getAttributes() returning key-value pairs.
+
+    Summary
+    -------
+    This protocol provides a simple way to serialize Scipion datasets into
+    a human-readable CSV format, facilitating:
+    - Data inspection
+    - External analysis (Excel, pandas, R, etc.)
+    - Data exchange between workflows
+
+    Notes
+    -----
+    - Separator is fixed to "; " (semicolon + space).
+    - Output file name is always "output.csv".
+    - No quoting or escaping is applied to values.
+    - Recommended for simple datasets with flat attribute structures.
+    """
     _label = 'export csv'
 
     def _defineParams(self, form):

@@ -38,7 +38,116 @@ SET_NOCOPY = ['_size', '_streamState', '_mapperPath']
 TYPE_STR = 'obj_type'
 
 class ProtChemImportExportSet(EMProtocol):
-    """Export a set by copying the elements in a desired directory and import from those created directories
+    """
+    Protocol to export and import Scipion objects and datasets via filesystem serialization.
+
+    This protocol allows saving a Scipion EMObject (including EMSet collections)
+    into a directory structure and later reconstructing it from those files.
+
+    It supports two modes:
+    - Export: serialize object attributes and items into files
+    - Import: reconstruct objects from previously exported files
+
+    Inputs
+    ------
+    mode:
+        Operation mode:
+        - Import: reconstruct object from directory
+        - Export: serialize object into directory
+
+    input:
+        Input EMObject to export (only required in Export mode).
+
+    directory:
+        Target directory for export or source directory for import.
+        If not specified during export, a default directory is created
+        inside the protocol working directory.
+
+    Export mode
+    -----------
+    The protocol serializes the object into three files:
+
+    1. outputType.txt
+       - Stores the full class path of the object.
+
+    2. outputAttributes.csv
+       - First line: attribute names
+       - Second line: attribute values
+
+    3. items.csv (only for EMSet objects)
+       - First line: attribute names (+ obj_type)
+       - Second line: attribute types
+       - Remaining lines: attribute values for each item
+
+    Workflow (Export)
+    -----------------
+    1. Create output directory.
+    2. Save object type.
+    3. Save object attributes.
+    4. If object is a set:
+       - Iterate over items
+       - Save attributes and types
+       - Store file paths as absolute paths
+
+    Import mode
+    -----------
+    The protocol reconstructs the object from exported files.
+
+    Workflow (Import)
+    -----------------
+    1. Read object type from outputType.txt.
+    2. Dynamically import class using importlib.
+    3. Parse object attributes from outputAttributes.csv.
+
+    4. If object is EMSet:
+       - Create empty set
+       - Parse items.csv
+       - Reconstruct each item:
+         * Restore attribute types
+         * Instantiate correct object class
+         * Assign attributes
+         * Copy referenced files if needed
+
+    5. If object is not a set:
+       - Instantiate object
+       - Assign attributes directly
+
+    Output
+    ------
+    importedSet:
+        Reconstructed dataset (if imported object is EMSet)
+
+    importedObject:
+        Reconstructed object (if not EMSet)
+
+    Error handling
+    --------------
+    - Skips missing directories silently.
+    - Copies external files into project if needed.
+    - Assumes exported files follow expected format.
+
+    Validation
+    ----------
+    - Requires valid directory structure for import.
+    - Requires valid class paths for dynamic import.
+    - Attributes must be compatible with String casting or original types.
+
+    Summary
+    -------
+    This protocol enables:
+    - Exporting Scipion objects for portability
+    - Sharing datasets across projects
+    - Reconstructing workflows from serialized outputs
+
+    It provides a lightweight alternative to full project export/import
+    by focusing on individual objects and datasets.
+
+    Notes
+    -----
+    - Uses dynamic class loading (importlib).
+    - File paths are preserved and copied if necessary.
+    - Some internal attributes (e.g. _size, _mapperPath) are not copied.
+    - Attribute types are reconstructed based on stored type metadata.
     """
     _label = 'Import/export output'
 
