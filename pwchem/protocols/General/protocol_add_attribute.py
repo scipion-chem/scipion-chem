@@ -38,7 +38,98 @@ from ...utils import String
 
 OBJECT, ITEM = 0, 1
 
+
 class ProtAddAttribute(EMProtocol):
+    """
+  This protocol adds a custom attribute to a Scipion EM object or to each item
+  inside a Scipion EM set.
+
+  It is designed to annotate datasets with user-defined metadata, either by
+  assigning a constant value or by mapping values from an external file.
+
+  Inputs
+  ------
+  atKey:
+      Name of the attribute to be created or modified.
+
+  atType:
+      Type of the attribute value:
+      - String
+      - Integer
+      - Float
+
+  fromInput:
+      Defines whether the attribute is applied to:
+      - Object → a single EMObject
+      - Items → each element inside an EMSet
+
+  Object mode inputs
+  ------------------
+  inputObject:
+      EMObject to be annotated.
+
+  atValue:
+      Value assigned directly to the attribute for the object.
+
+  Set mode inputs
+  ---------------
+  inputSet:
+      EMSet containing items to be annotated.
+
+  mapKey:
+      Attribute name used as a key to match entries in the mapping file.
+
+  inputFile:
+      CSV file containing mappings in the format:
+      key,value
+
+  Workflow
+  --------
+  1. Input selection
+     - Determines whether annotation applies to a single object or a set.
+
+  2. Object mode (fromInput = Object)
+     - Clones the input object
+     - Assigns a new attribute:
+       atKey = cast(atValue, atType)
+
+  3. Set mode (fromInput = Items)
+     - Reads mapping file into dictionary (key → value)
+     - Iterates over each item in the input set
+     - Extracts mapping key from item attribute
+     - Assigns mapped value as new attribute
+     - Skips items not present in mapping file (with warning)
+
+  4. Attribute assignment
+     - Uses dynamic attribute creation via setattr
+     - Converts value using selected type (String, Integer, Float)
+
+  Output
+  ------
+  outputObject:
+      Annotated EMObject (only when fromInput = Object)
+
+  outputSet:
+      Annotated EMSet where each item contains the new attribute
+      (only when fromInput = Items)
+
+  Validation
+  ----------
+  - Ensures that mapping key exists in input items (set mode)
+  - Warns if mapping file does not contain required entries
+
+  Summary
+  -------
+  This protocol enables flexible metadata annotation of EM datasets,
+  allowing integration of external annotations or manual labeling
+  directly into Scipion workflows.
+
+  Notes
+  -----
+  - Mapping file must be a CSV with "key,value" format per line.
+  - Attribute type conversion is performed via Python eval casting.
+  - Designed for lightweight dataset enrichment and tagging operations.
+  """
   _label = 'Add attribute'
 
   def _defineParams(self, form):

@@ -46,8 +46,149 @@ from pwchem import Plugin as pwchemPlugin
 
 class ProtocolRANXFuse(EMProtocol):
   """
-  This protocol will fuse several result lists into a single list and will
-  also generate a ranking.
+    Protocol to fuse multiple Sets of Statistics into a single combined ranking using Ranx-based
+    score fusion and rank aggregation methods.
+
+    This protocol integrates multiple independent scoring sources (e.g. ΔΔG predictions,
+    mutation scores, docking scores, or other SetOfStats outputs) into a unified consensus
+    score and ranking.
+
+    It supports both score-based and rank-based fusion strategies using the Ranx framework.
+
+    Overview
+    --------
+    The protocol performs three main operations:
+
+    1. Input parsing and alignment
+       - Reads multiple input SetOfStats
+       - Extracts ID attributes and score attributes
+       - Builds per-set dictionaries of scores
+
+    2. Score fusion (external execution)
+       - Prepares a configuration file describing:
+         * normalization method
+         * fusion algorithm
+         * input score dictionaries
+       - Executes external script (ranx_fusion.py) using Ranx library
+
+    3. Output reconstruction
+       - Reads fused results file
+       - Computes final ranking
+       - Rebuilds Scipion SetOfStats with:
+         * fused score
+         * rank
+         * optionally expanded per-set attributes
+
+    Input
+    -----
+    inputSets:
+        List of EMSet objects (typically SetOfStats) containing scored items.
+
+    inSetID:
+        Name/identifier of each input set used in configuration of fusion.
+
+    inAttrName:
+        Attribute used as unique identifier for each item (e.g. mutation ID).
+
+    inAttrVal:
+        Attribute containing the score values to be fused across sets.
+
+    high:
+        Boolean flag indicating whether higher scores are better.
+        If False, scores are inverted internally for correct ranking.
+
+    outName:
+        Name of the output fused score attribute.
+
+    inAttrs:
+        Text configuration defining:
+        - which sets contribute
+        - which attributes are used
+        - mapping between IDs and values
+
+    Fusion configuration
+    --------------------
+    typeAlgorithm:
+        Select fusion family:
+        - Score-based methods
+        - Rank-based methods
+
+    scoreAlgorithm:
+        Score-based fusion methods (e.g. median, average).
+
+    rankAlgorithm:
+        Rank-based fusion methods:
+        - ISR
+        - Log_ISR
+        - LogN_ISR
+        - RRF
+        - RBC
+
+    normStrategy:
+        Normalization strategy applied before fusion (Ranx normalization options).
+
+    sigma:
+        Parameter for LogN_ISR method (controls frequency smoothing).
+
+    kparameter:
+        Parameter for RRF method (controls rank damping).
+
+    phi:
+        Parameter for RBC method (controls rank persistence).
+
+    Workflow
+    --------
+    1. Parse input sets and build per-set ID → score mappings.
+    2. Apply direction normalization (higher/lower is better).
+    3. Generate run dictionaries for each dataset.
+    4. Write parameter file for external Ranx execution.
+    5. Execute ranx_fusion.py via plugin environment.
+    6. Read fused output file (ranked scores).
+    7. Build final ranked dictionary:
+       - score
+       - rank
+    8. Clone original items and attach fused attributes.
+    9. Produce final output SetOfStats.
+
+    Output
+    ------
+    outputSet:
+        EMSet containing original items enriched with:
+        - fused score (outName)
+        - fused rank (RanxRank)
+        - optionally expanded per-set attributes
+
+    Internal data structures
+    -------------------------
+    runDics:
+        Dictionary mapping input set indices and attributes to score dictionaries.
+
+    perSetAttrs:
+        Expanded representation of all attributes per item across sets.
+
+    ranked:
+        Final mapping:
+        ID → {score, rank}
+
+    Validation
+    ----------
+    - Ensures sigma ∈ [0,1] for LogN_ISR
+    - Ensures k ∈ [10,100] for RRF
+    - Ensures phi ∈ [0,1] for RBC
+
+    Summary
+    -------
+    This protocol enables meta-analysis of multiple scoring systems by:
+    - normalizing heterogeneous score sources
+    - applying state-of-the-art fusion algorithms (Ranx)
+    - producing a unified ranking of biological entities
+
+    Notes
+    -----
+    - Relies on external script (ranx_fusion.py) for fusion computation.
+    - Designed for large-scale comparative scoring datasets.
+    - Particularly useful for integrating multiple prediction models.
+    - Final ranking is deterministic based on selected fusion method.
   """
   _label = 'Ranx Score Fusion'
   _devStatus = BETA
