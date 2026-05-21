@@ -53,7 +53,124 @@ def performACPYPE(protocol, molFile, outDir, kwargs):
 
 class ProtocolLigandParametrization(EMProtocol):
     """
-    Performs a ligand parametrization using ACPYPE package to generate appropiate MD files
+    Protocol for ligand parametrization using ACPYPE.
+
+    This protocol prepares a selected ligand from a SetOfSmallMolecules for
+    molecular dynamics simulations by generating force-field compatible files
+    (e.g. GAFF/AMBER formats) through the ACPYPE pipeline.
+
+    It acts as a bridge between small molecule libraries and MD-ready ligand
+    parameters.
+
+    Overview
+    --------
+    The protocol performs the following steps:
+
+    1. Input selection
+       - Takes a SetOfSmallMolecules as input
+       - Selects a specific ligand by name
+
+    2. Parameter setup
+       - Defines charge model, atom type, multiplicity, and quantum method
+       - Optionally sets net charge
+
+    3. Execution of ACPYPE
+       - Builds command-line arguments
+       - Runs ACPYPE via pwchem Plugin
+
+    4. Output extraction
+       - Retrieves generated .mol2 parametrized ligand
+       - Updates molecule object inside a new set
+
+    Input
+    -----
+    inputSmallMolecules:
+        SetOfSmallMolecules containing candidate ligands.
+
+    inputLigand:
+        Name of the ligand to be parametrized (must match molecule identifier).
+
+    chargeMethod:
+        Method used to compute atomic charges:
+        - gas
+        - bcc (AM1-BCC)
+
+    netCharge:
+        Optional total charge of the ligand (if not provided, guessed automatically).
+
+    multip:
+        Spin multiplicity (2S+1), default = 1.
+
+    atomType:
+        Force field atom type definition:
+        - gaff
+        - amber
+        - gaff2 (default)
+        - amber2
+
+    qprog:
+        Quantum chemistry backend used for charge calculation:
+        - mopac
+        - sqm (default)
+        - divcon
+
+    Workflow
+    --------
+    1. Identify ligand inside input set:
+       - Matches molecule by string comparison
+       - Clones selected molecule
+
+    2. Build ACPYPE command:
+       - Input molecule file
+       - Ligand name
+       - Charge method
+       - Multiplicity
+       - Atom type
+       - Quantum program
+       - Optional net charge and output type
+
+    3. Run ACPYPE:
+       - Executed via pwchem Plugin wrapper
+       - Outputs force-field parameter files in .acpype directory
+
+    4. Locate output:
+       - Finds generated .mol2 file
+       - Updates molecule file path
+
+    Output
+    ------
+    outputSmallMolecules:
+        New SetOfSmallMolecules containing:
+        - original molecules
+        - updated ligand with parametrized .mol2 file
+
+    Internal utilities
+    ------------------
+    getSpecifiedMol():
+        Selects and clones the ligand matching inputLigand name.
+
+    getOutDir():
+        Finds ACPYPE output directory (*.acpype).
+
+    getOutMol2():
+        Retrieves generated .mol2 file from ACPYPE output folder.
+
+    performACPYPE():
+        Builds and executes ACPYPE command with selected parameters.
+
+    Summary
+    -------
+    This protocol automates ligand preparation for MD simulations by wrapping
+    ACPYPE execution inside Scipion, ensuring:
+    - consistent ligand selection
+    - reproducible parametrization
+    - integration with molecular workflows
+
+    Key features:
+    - ACPYPE integration
+    - Flexible charge and force field options
+    - Automatic ligand extraction from molecule sets
+    - MD-ready output generation (.mol2)
     """
     _label = 'Ligand parametrization'
 

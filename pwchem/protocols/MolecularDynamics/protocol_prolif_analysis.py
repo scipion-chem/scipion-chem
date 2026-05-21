@@ -35,7 +35,97 @@ from pwchem.objects import MDSystem
 from pwchem.constants import MDTRAJ_DIC
 
 class ProtocolProlif(EMProtocol):
-    """Run ProLIF Target-Ligand trajectory analysis"""
+    """
+    Protocol for Protein-Ligand interaction analysis using ProLIF.
+
+    This protocol runs ProLIF on a Molecular Dynamics (MD) simulation to compute
+    interaction fingerprints between a protein and a ligand (or water bridges)
+    across trajectory frames.
+
+    Overview
+    --------
+    The protocol performs trajectory-based interaction analysis using:
+
+    - Protein–ligand contact fingerprints
+    - Optional water-bridge interaction analysis
+    - Frame-sampled evaluation of interactions
+
+    Input
+    -----
+    inputMDSystem:
+        Molecular Dynamics system containing:
+        - topology file
+        - trajectory file
+        - optional ligand identifier
+
+    type:
+        Type of interaction analysis:
+        - Protein-Ligand
+        - Water bridges
+
+    frameNum:
+        Frame sampling frequency.
+        Example: 10 → analyze every 10 frames.
+
+    Workflow
+    --------
+    1. Extract MD system components:
+       - trajectory file
+       - topology file (or system file for GROMACS)
+
+    2. Configure ligand:
+       - Uses ligand ID if available
+       - Defaults to 'LIG'
+
+    3. Build ProLIF execution command:
+       - Input topology
+       - Trajectory
+       - Output directory
+       - System name
+       - Ligand name
+       - Frame sampling frequency
+
+    4. Optional analysis mode:
+       - Adds "-wb" flag for water-bridge analysis
+
+    5. Execute ProLIF script:
+       - Run via pwchem Plugin
+       - Uses MDTraj environment
+
+    Output
+    ------
+    outputSystem:
+        Cloned MD system enriched with:
+        - ProLIF fingerprint file (.pkl)
+
+    Output file:
+        <system_name>_fingerprint.pkl
+
+    Internal Methods
+    ----------------
+    runProlif():
+        Executes ProLIF analysis over the MD trajectory.
+
+    createOutputStep():
+        Creates output system and attaches fingerprint file.
+
+    _summary():
+        Reports analysis type, frame frequency, and output fingerprint.
+
+    Key Features
+    ------------
+    - Protein-ligand interaction fingerprints
+    - Water bridge detection option
+    - Frame-sampled trajectory analysis
+    - Integration with MD system objects
+    - Automated output attachment
+
+    Notes
+    -----
+    - Requires valid trajectory + topology MD system
+    - Uses MDTraj-based execution environment
+    - Output is stored as serialized pickle fingerprint
+    """
     _label = 'ProLIF analysis'
     _program = "ProLIF"
 
