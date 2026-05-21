@@ -639,9 +639,18 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
     outDir = os.path.abspath(os.path.dirname(sdfFile))
 
   if not os.path.exists(sdfFile) or overWrite:
-    args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
-           f'--outputName {baseName} --overWrite'
-    pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
+    done = False
+    if molFile.endswith('.pdbqt'):
+        try:
+          from autodock import Plugin as autodockPlugin
+          autodockPlugin.convertPDBQT2SDF(protocol, molFile, sdfFile)
+          done = True
+        except:
+          pass
+    if not done:
+      args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
+             f'--outputName {baseName} --overWrite'
+      pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
 
   if addHydrogens:
     addHydrogensToMol(protocol, outDir, sdfFile)
