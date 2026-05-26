@@ -476,9 +476,12 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
   # ----------------------------------Interactions
   def _getData(self):
       structSet = self.getOutPockets()
-
-      with open(structSet._interactScoresFile.get(), 'r') as f:
-          return json.load(f)
+      if hasattr(structSet, '_interactScoresFile') and structSet._interactScoresFile.get():
+          with open(structSet._interactScoresFile.get(), 'r') as f:
+              data = json.load(f)
+      else:
+          data = None
+      return data
 
   def _getEntityNames(self, data):
       roiNames = sorted(data.keys())
