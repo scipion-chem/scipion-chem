@@ -171,14 +171,39 @@ class ProtocolRANXFuse(EMProtocol):
   def createOutputStep(self):
     inSet = self.inputSets[0].get()
     outAttrName = self.getOutAttrName()
-    outScores = self.parseOutputFile()
-
+    outData = self.parseOutputFile()
+    inAttrDic = self.getInputAttrsDic()
+    originalAttrs = self.getOriginalAttrs(inAttrDic)
+    perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
-      scoreComb = outScores[inID]
-      setattr(item, self.outName.get(), Float(scoreComb))
-      outSet.append(item)
+      # Clone item to avoid modifying original object
+      newItem = item.clone()
+
+      # Remove original attributes dynamically
+      for attrName in originalAttrs:
+        if hasattr(newItem, attrName):
+          delattr(newItem, attrName)
+
+      # Add renamed attributes in deterministic order
+      if inID in perSetAttrs:
+
+        orderedAttrs = perSetAttrs[inID]
+
+        for attrName, value in orderedAttrs.items():
+          try:
+            setattr(newItem, attrName, Float(float(value)))
+          except:
+            setattr(newItem, attrName, String(str(value)))
+
+      # Add fusion outputs at the end
+      scoreComb = outData[inID]["score"]
+      rankComb = outData[inID]["rank"]
+
+      setattr(newItem, self.outName.get(), Float(scoreComb))
+      setattr(newItem, "RanxRank", Integer(rankComb))
+      outSet.append(newItem)
 
     self._defineOutputs(outputSet=outSet)
 
@@ -246,6 +271,47 @@ class ProtocolRANXFuse(EMProtocol):
 
     return mutations
 
+  def buildPerSetAttributeDictionary(self, inAttrDic):
+    """ Builds a dictionary where the values for each attribute of each input set are stored.
+    Returns:
+      {
+        itemID: {
+          "attr1_setIdx_0": value,
+          "attr2_setIdx_0": value,
+          "attr1_setIdx_1": value,
+          ...
+        }
+      }
+    """
+    inSets = self.getInputSets()
+    data = {}
+
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, attrID = key.split('-')
+      inSet = inSets[int(inPointIdx)]
+      for obj in inSet:
+        itemID = str(obj.getAttributeValue(attrID))
+        if itemID not in data:
+          data[itemID] = {}
+        for attrVal in attrVals:
+          attrName = attrVal[0]
+          newAttrName = f"{attrName}_setIdx_{inPointIdx}"
+          value = obj.getAttributeValue(attrName)
+          data[itemID][newAttrName] = value
+        
+    orderedData = {}
+    for itemID, attrs in data.items():
+      orderedAttrs = dict(sorted(attrs.items(), key=lambda x: (int(x[0].split('_setIdx_')[-1]), x[0].split('_setIdx_')[0])))
+      orderedData[itemID] = orderedAttrs
+    return orderedData
+
+  def getOriginalAttrs(self, inAttrDic):
+    originalAttrs = set()
+    for _, attrVals in inAttrDic.items():
+      for attrVal in attrVals:
+        originalAttrs.add(attrVal[0])
+    return originalAttrs
+
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
 
@@ -263,13 +329,26 @@ class ProtocolRANXFuse(EMProtocol):
     return paramsFile
 
   def parseOutputFile(self):
-    outDic = {}
+    scores = {}
     with open(self.getOutFile()) as f:
       f.readline()
       for line in f:
         _, mutName, scoreComb = line.strip().split('\t')
-        outDic[mutName] = scoreComb
-    return outDic
+        scores[mutName] = float(scoreComb)
+
+    sortedItems = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    ranked = {}
+    currentRank = 1
+    for idx, (mut, score) in enumerate(sortedItems):
+      currentRank = idx + 1
+      ranked[mut] = {"score": score, "rank": currentRank}
+
+    with open(self.getOutFile(), 'w') as f:
+      f.write("Rank\tMut\tScore\n")
+      for mut, data in ranked.items():
+        f.write(f"{data['rank']}\t{mut}\t{data['score']}\n")
+    return ranked
 
   # --------------------------- INFO functions -----------------------------------
   def _validate(self):

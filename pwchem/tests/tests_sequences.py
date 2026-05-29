@@ -27,11 +27,10 @@ from pwem.protocols import ProtImportPdb, ProtImportSequence
 from pwem.convert.atom_struct import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
+# Scipion chem imports
 from pwchem.protocols.Sequences.protocol_import_setOfSequences import ProtChemImportSetOfSequences
 from pwchem.protocols.Sequences.protocol_peptide_from_sequence import ProtESMatlas
-from pwchem import tests
 from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
-# Scipion chem imports
 from pwchem.tests import TestImportVariants, TestImportSequences
 from pwchem.protocols import ProtDefineSeqROI, ProtChemGenerateVariants, ProtSeqCalculateConservation
 from pwchem.protocols import ProtExtractSeqsROI, ProtOperateSeqROI, ProtDefineSetOfSequences
@@ -432,7 +431,7 @@ class TestSeqLocation(BaseTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        tests.setupTestProject(cls)
+        setupTestProject(cls)
 
     @classmethod
     def _runImportSequence(cls):

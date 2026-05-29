@@ -422,7 +422,7 @@ class ProtDefineContactStructROIs(ProtDefineStructROIs):
 
     def getInputSurfaceStructure(self):
       structure = self.getInputStructure()
-      structSurface = get_surface(structure[0], MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
+      structSurface = Plugin.runMSMS(structure[0])
       return structSurface
 
     def mapSurfaceCoords(self, oCoords, surfStruct):
