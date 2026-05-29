@@ -23,6 +23,7 @@
 # **************************************************************************
 
 import os
+import json
 from subprocess import Popen
 from tkinter.messagebox import askokcancel
 
@@ -181,9 +182,11 @@ class SequenceChemViewer(BaseInteractionViewer):
     def _getData(self):
         outSeqs = self.getOutSequences()
 
-        data = outSeqs.getInteractScoresDic()
-        if data is None:
-            return {}
+        if hasattr(outSeqs, '_interactScoresFile') and outSeqs._interactScoresFile.get():
+            with open(outSeqs._interactScoresFile.get(), 'r') as f:
+                data = json.load(f)
+        else:
+            data = None
         return data
 
     def _getEntityNames(self, data):
