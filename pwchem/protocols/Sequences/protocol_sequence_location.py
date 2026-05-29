@@ -42,8 +42,85 @@ from pwchem.objects import SetOfSequenceROIs, Sequence,SequenceROI
 
 class ProtGetSequenceLocation(EMProtocol):
     """
-    Selects the regions of the protein that are extracellular, transmembrane and intracellular
-    """
+This protocol is used to retrieve and annotate functional regions of protein sequences
+based on UniProt topology information.
+
+It automatically identifies extracellular, transmembrane, and intracellular regions
+by querying the UniProtKB REST API and mapping annotated features back onto the
+input protein sequence as Sequence ROIs (Regions Of Interest).
+
+The resulting regions can be used to study protein topology, membrane organization,
+and functional compartmentalization of proteins.
+
+Workflow
+--------
+1. Input handling:
+   - A protein sequence is provided as a Scipion Sequence object.
+   - The user specifies whether the sequence originates from UniProtKB.
+   - If not, a manual UniProt accession ID is required.
+
+2. Data retrieval:
+   - The protocol queries the UniProt REST API:
+     https://rest.uniprot.org/uniprotkb/
+   - It retrieves JSON-formatted feature annotations including:
+     - Transmembrane regions
+     - Topological domains (extracellular/intracellular regions)
+
+3. Feature extraction:
+   - The JSON response is parsed to extract annotated sequence regions.
+   - Each feature provides start/end positions and a biological label.
+   - Duplicate or repeated annotations are handled by indexing.
+
+4. Region mapping:
+   - Each annotated region is mapped back onto the original sequence.
+   - Sequence slices are extracted according to UniProt coordinates.
+   - Region type (e.g., transmembrane, extracellular) is preserved.
+
+5. ROI creation:
+   - Each region is converted into a SequenceROI object.
+   - ROIs include:
+     - Start and end positions
+     - Region type annotation
+     - Derived subsequence
+     - Updated description with topology information
+
+6. Output generation:
+   - All ROIs are stored in a SetOfSequenceROIs database.
+   - The output preserves linkage to the original input sequence.
+   - Each ROI represents a biologically meaningful structural domain.
+
+Key Concepts
+------------
+UniProtKB:
+    A comprehensive protein sequence and functional annotation database.
+
+Topology Features:
+    Annotated regions describing membrane orientation:
+    - Extracellular regions (outside the cell)
+    - Transmembrane helices (within lipid bilayer)
+    - Intracellular regions (cytoplasmic side)
+
+Sequence ROI:
+    A subregion of a protein sequence defined by start and end positions.
+
+REST API:
+    Web service used to retrieve protein annotations in JSON format.
+
+Output
+------
+outputROIs:
+    A SetOfSequenceROIs containing all detected topological regions.
+
+Each ROI corresponds to a biologically annotated segment of the protein sequence.
+
+Use Cases
+---------
+- Protein topology analysis
+- Membrane protein characterization
+- Functional domain annotation
+- Guiding mutagenesis or epitope design
+- Structural and functional protein studies
+"""
     _label = 'Cellular location of sequence regions'
     BASE_URL = "https://rest.uniprot.org/uniprotkb/"
 

@@ -47,7 +47,90 @@ UNION, INTERSECTION, DIFF, SYM_DIFF, BEST = 0, 1, 2, 3, 4
 
 class ProtOperateSeqROI(EMProtocol):
     """
-    Implements operations for several sets of sequence ROIs: union, intersection, difference...
+    This protocol is used to operate on multiple sets of Sequence ROIs
+    (Regions Of Interest) performing set-based and interval-based operations
+    such as union, intersection, difference, symmetric difference, and selection
+    of the best ROI based on a given attribute.
+
+    The operations are applied sequentially across input sets, meaning that:
+
+    - If multiple sets are provided, operations are applied iteratively in order:
+      (Set1 op Set2) → result op Set3 → result op Set4 → ...
+
+    - Optionally, operations can also be applied within each set before inter-set
+      processing (intra-set operations).
+
+    Key Concepts
+    ------------
+    Sequence ROI:
+        A region defined over a biological sequence using start and end indices.
+
+    Operation Modes:
+        UNION:
+            Combines all positions covered by two ROIs.
+
+        INTERSECTION:
+            Keeps only positions shared by both ROIs.
+
+        DIFFERENCE:
+            Keeps positions in ROI1 not present in ROI2.
+
+        SYMMETRIC DIFFERENCE:
+            Keeps positions present in either ROI but not both.
+
+        BEST:
+            Selects the ROI with the best value for a given attribute.
+
+    Workflow
+    --------
+    1. Input multiple SetOfSequenceROIs.
+    2. Optionally perform intra-set ROI merging/operations.
+    3. Perform inter-set ROI operations iteratively.
+    4. For each ROI pair:
+        - Compute overlap proportion.
+        - If overlap passes threshold (minOverlap), apply operation.
+    5. Generate new ROIs with updated index ranges and sequences.
+    6. Optionally preserve original ROI attributes.
+    7. Output a merged SetOfSequenceROIs object.
+
+    Overlap Handling
+    ----------------
+    - Overlap is defined as intersection of index ranges.
+    - Overlap proportion = overlapped residues / min(size ROI1, ROI2)
+    - Only ROIs above the minimum overlap threshold are processed.
+
+    ROI Representation
+    ------------------
+    Each resulting ROI contains:
+    - Sequence segment (derived from underlying full sequence)
+    - Start and end indices
+    - Optional inherited attributes from parent ROIs
+
+    Special Behavior
+    ----------------
+    - Non-overlapping ROIs can optionally be preserved.
+    - Attribute preservation can be enabled/disabled.
+    - BEST operation uses a user-defined attribute to select ROI.
+    - Consecutive ranges are split into separate ROIs.
+
+    Internal Logic Notes
+    --------------------
+    - ROIs are cloned before modification to avoid side effects.
+    - Index merging is done using set operations followed by sorting.
+    - Consecutive index ranges are reconstructed into continuous ROIs.
+    - Sequence extraction is performed from the parent full sequence.
+
+    Outputs
+    -------
+    outputROIs:
+        SetOfSequenceROIs containing the resulting ROIs after all operations.
+
+    Use Cases
+    ---------
+    - Epitope comparison across proteins
+    - Merging predicted binding sites
+    - Filtering overlapping functional regions
+    - Selecting best-scoring annotated regions
     """
     _label = 'Operate sequence ROIs'
     _operations = ['Union', 'Intersection', 'Difference', 'Symmetric_difference', 'Keep best']

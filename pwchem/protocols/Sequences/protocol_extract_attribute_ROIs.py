@@ -53,7 +53,82 @@ from pwchem import Plugin
 
 class ProtExtractSeqsROI(EMProtocol):
     """
-    Extract SequenceROIs from attributes in a SequenceChem object
+    This protocol is used to define SequenceROIs based on attribute values stored in a SequenceChem object.
+
+    The protocol scans a selected numerical attribute along a sequence and identifies continuous regions
+    that satisfy a threshold condition (above or below). These regions are converted into SequenceROI
+    objects with their corresponding sequence coordinates.
+
+    A Gaussian smoothing option can be applied to the attribute profile before ROI detection to reduce
+    noise and improve region continuity.
+
+    Overview
+    --------
+    1. Input a SequenceChem object containing annotated attributes
+    2. Select the attribute to analyze
+    3. Optionally apply Gaussian smoothing to the attribute signal
+    4. Detect continuous regions based on a threshold
+    5. Filter regions by minimum size
+    6. Generate SequenceROI objects for each detected region
+
+    Input
+    -----
+    inputSequence:
+        SequenceChem object containing sequence and associated attributes.
+
+    inputAttribute:
+        Name of the attribute used to define regions (e.g. conservation, variability, score).
+
+    direction:
+        Defines selection mode:
+        - Below threshold: select low values
+        - Over threshold: select high values
+
+    thres:
+        Threshold value used to define ROI boundaries.
+
+    minSize:
+        Minimum number of residues required for a region to be considered valid.
+
+    performSoftening:
+        If True, applies Gaussian smoothing to attribute values before ROI detection.
+
+    wSize:
+        Window size for Gaussian smoothing (must be odd).
+
+    gStd:
+        Standard deviation for Gaussian kernel.
+
+    Workflow
+    --------
+    1. Retrieve attribute values from SequenceChem object
+    2. Optionally apply Gaussian smoothing
+    3. Scan sequence to identify regions above/below threshold
+    4. Merge consecutive positions into continuous ROIs
+    5. Filter regions by minimum size
+    6. Create SequenceROI objects with coordinates
+
+    Output
+    ------
+    outputROIs:
+        SetOfSequenceROIs containing:
+        - Extracted sequence regions
+        - Start and end coordinates
+        - Sequence fragments corresponding to selected attribute regions
+
+    Key Features
+    ------------
+    - Attribute-driven ROI detection
+    - Supports both high and low threshold extraction
+    - Gaussian smoothing for noise reduction
+    - Minimum region size filtering
+    - Compatible with downstream structural and sequence analysis workflows
+
+    Notes
+    -----
+    - Coordinates are 1-based indexing
+    - Gaps are not counted in region size filtering
+    - Smoothing uses a Gaussian kernel applied in a sliding window manner
     """
     _label = 'Extract sequences ROIs'
 

@@ -42,7 +42,97 @@ REM, ADD, MOD = 0, 1, 2
 
 class ProtModifyMultiEpitope(EMProtocol):
     """
-    Allows to manually modify a MultiEpitope object
+    This protocol maps SequenceROIs (sequence-defined regions of interest)
+    onto 3D structural coordinates in an AtomStruct, generating structural
+    ROIs (StructROIs).
+
+    It converts linear sequence annotations into spatial regions in a
+    protein structure by aligning a reference sequence with the structure-
+    derived sequence and projecting ROI indices into 3D space.
+
+    Overview
+    --------
+    The protocol establishes a bridge between sequence space and structural
+    space, allowing biologically meaningful sequence regions to be analyzed
+    in a structural context.
+
+    It performs:
+    - Pairwise sequence ↔ structure alignment
+    - Mapping of sequence ROI indices to structure residue indices
+    - Extraction of atomic coordinates for mapped residues
+    - Optional projection of coordinates onto molecular surface
+    - Optional clustering of spatial coordinates into structural pockets
+    - Generation of structured ROI objects with geometric metadata
+
+    Input
+    -----
+    inputSequenceROIs:
+        SetOfSequenceROIs defining regions of interest on a reference sequence.
+
+    inputAtomStruct:
+        3D structural model (PDB/mmCIF or compatible format).
+
+    chain_name:
+        JSON string defining model and chain selection:
+        {
+            "chain": "A",
+            "model": 0
+        }
+
+    Options
+    -------
+    doCluster:
+        If True, spatial coordinates are clustered into discrete structural
+        ROIs. If False, one structural ROI is generated per sequence ROI.
+
+    maxIntraDistance:
+        Maximum distance used for clustering spatial coordinates.
+
+    maxDepth:
+        Distance threshold for selecting surface-proximal points.
+
+    Workflow
+    --------
+    1. Extract sequence from SequenceROIs input
+    2. Extract sequence from selected structure chain
+    3. Perform pairwise alignment (sequence ↔ structure sequence)
+    4. Build mapping between sequence positions and structure residues
+    5. For each ROI:
+        - Convert sequence indices to structure residue indices
+        - Extract atomic coordinates for mapped residues
+    6. Optional surface processing:
+        - Compute molecular surface using MSMS
+        - Filter coordinates by proximity to surface
+    7. Optional clustering:
+        - Merge coordinates
+        - Cluster spatial points into compact regions
+    8. Generate pocket files (CIF format)
+    9. Build StructROI objects and compute structural contacts
+
+    Output
+    ------
+    outputStructROIs:
+        SetOfStructROIs containing:
+        - Structural ROI definitions in 3D space
+        - Pocket coordinate files (CIF)
+        - Contact analysis information
+        - Optional clustering metadata
+
+    Key Features
+    ------------
+    - Robust sequence-to-structure ROI mapping
+    - Support for multi-residue and discontinuous ROIs
+    - Atom-level coordinate extraction
+    - Surface-aware structural projection
+    - Distance-based spatial clustering
+    - Compatible with PDB/mmCIF/Schrodinger structures
+
+    Notes
+    -----
+    - Requires correct sequence alignment for accurate mapping
+    - Missing alignment positions are ignored
+    - Chain/model selection must match the structure file
+    - Surface projection improves biological relevance of ROIs
     """
     _label = 'Modify multiepitope'
 

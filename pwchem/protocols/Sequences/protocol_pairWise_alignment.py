@@ -33,7 +33,78 @@ from pwchem.utils.utilsFasta import pairwiseAlign, parseAlnFile
 
 
 class ProtChemPairWiseAlignment(EMProtocol):
-    """Pairwise alignment using Clustal Omega"""
+    """
+    This protocol performs a pairwise sequence alignment between two biological sequences.
+
+    The sequences can be provided either directly as amino acid sequences or
+    extracted from atomic structures (e.g., PDB models). In the case of structures,
+    a specific chain and model can be selected for alignment.
+
+    The alignment is computed using a pairwise alignment method (Clustal Omega-based
+    implementation), and the result is stored as a standard alignment file.
+
+    The protocol then parses the alignment output and converts it into a set of
+    sequence objects, allowing further analysis within the Scipion framework.
+
+    Workflow
+    --------
+    1. Input selection of two sequences:
+       - Either atomic structures (with chain/model selection)
+       - Or raw biological sequences
+
+    2. Sequence extraction:
+       - If structure is provided, the amino acid sequence is extracted from the selected chain
+       - Otherwise, the input sequence is used directly
+
+    3. Pairwise alignment:
+       - The two sequences are aligned using an external alignment tool
+       - The resulting alignment is saved to disk
+
+    4. Output processing:
+       - The alignment file is parsed
+       - Aligned sequences are reconstructed
+       - A SetOfSequencesChem object is created with the aligned sequences
+
+    5. Output generation:
+       - A collection of aligned sequences is produced
+       - The alignment file is attached for reproducibility
+
+    Key Concepts
+    ------------
+    Atomic Structure Input:
+        A protein structure (e.g., PDB) from which a specific chain is selected
+        and converted into an amino acid sequence.
+
+    Sequence Input:
+        A raw amino acid sequence provided directly by the user.
+
+    Pairwise Alignment:
+        A method that aligns two sequences to identify conserved regions,
+        mismatches, and gaps.
+
+    Alignment Output:
+        A text-based representation of aligned sequences with gaps inserted
+        to maximize similarity.
+
+    Output
+    ------
+    outputSequences:
+        A SetOfSequencesChem object containing the two aligned sequences.
+
+        Each sequence is stored with:
+        - Identifier
+        - Aligned amino acid sequence
+        - Original metadata (name, source)
+
+    The alignment file is also stored for downstream analysis.
+
+    Use Cases
+    ---------
+    - Structural vs sequence comparison
+    - Homology analysis
+    - Mutation and conservation analysis
+    - Protein sequence validation
+    """
     _label = 'pairwise alignment'
 
     def _defineParams(self, form):

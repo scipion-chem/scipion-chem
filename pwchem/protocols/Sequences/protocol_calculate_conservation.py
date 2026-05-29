@@ -64,7 +64,121 @@ def kabat(counts):
 
 class ProtSeqCalculateConservation(EMProtocol):
     """
-    Calculates conservation over a set of sequence and adds it into the object
+    ProtSeqCalculateConservation
+
+    Protocol to calculate sequence conservation from a multiple sequence alignment
+    and optionally map the resulting conservation scores onto structural or sequence
+    annotation objects within Scipion.
+
+    Overview
+    --------
+    This protocol computes residue-wise conservation using different variability /
+    diversity measures and stores the results in a SequenceChem object. It can also
+    project conservation scores onto:
+
+    - A 3D protein structure (AtomStruct)
+    - A set of sequence ROIs (SetOfSequenceROIs)
+
+    The analysis is based on a multiple sequence alignment (MSA) provided as input.
+
+    Variability / Conservation metrics
+    ----------------------------------
+    The following methods are available:
+
+    - Shannon Entropy:
+      Measures uncertainty per position (lower entropy → higher conservation)
+
+    - Simpson Diversity Index:
+      Probability-based diversity metric
+
+    - Wu-Kabat Variability Coefficient:
+      Highlights highly variable positions
+
+    - Maximum Proportion Conservation:
+      Fraction of the most frequent residue per column
+
+    Workflow
+    --------
+    1. Input aligned sequences are loaded and optionally normalized in length
+    2. Conservation is computed per alignment column
+    3. Scores are written to a TSV file
+    4. Optional mapping step:
+       - To structure residues (via sequence–structure mapping)
+       - To sequence ROIs (alignment-index-based mapping)
+    5. Output object is generated with conservation annotations
+
+    Input
+    -----
+    inputSequences:
+        SetOfSequences containing a multiple sequence alignment.
+
+    mapCons:
+        Defines mapping strategy:
+        - 0: No mapping (sequence-only output)
+        - 1: Map onto structure (AtomStruct)
+        - 2: Map onto sequence ROIs
+
+    useCons:
+        If True, uses consensus sequence for output.
+        Otherwise a user-defined sequence is used.
+
+    outSeq:
+        Specific sequence name to use when not using consensus.
+
+    inputAS:
+        Protein structure (AtomStruct) used for mapping conservation scores
+        onto 3D coordinates.
+
+    chain_name:
+        JSON string specifying chain and model to use for mapping.
+
+    inputROIs:
+        Set of sequence regions of interest (ROIs) for mapping conservation.
+
+    method:
+        Variability / conservation metric used:
+        - Shannon Entropy
+        - Simpson Diversity Index
+        - Wu-Kabat Variability coefficient
+        - Maximum Proportion Conservation
+
+    Output
+    ------
+    outputSequence:
+        SequenceChem object containing:
+        - Conservation profile per position
+        - Optional consensus or mapped sequence
+
+    outputAtomStruct (optional):
+        Structure annotated with conservation values in CIF format.
+
+    outputROIs (optional):
+        ROIs enriched with average conservation values
+
+    Internal Steps
+    --------------
+    calculateConservationStep:
+        Computes conservation values from MSA.
+
+    mapConservationStep:
+        Aligns and maps sequences to structure or ROIs if required.
+
+    defineOutputStep:
+        Builds output SequenceChem, structure annotations, or ROI dataset.
+
+    Key Features
+    ------------
+    - Multiple conservation metrics (entropy, variability, diversity)
+    - Structure-aware conservation mapping
+    - ROI-level conservation aggregation
+    - Automatic consensus sequence generation
+    - Integration with Biopython MSA tools
+
+    Notes
+    -----
+    - Input sequences must be aligned
+    - Structure mapping requires correct chain/model specification
+    - Gaps are handled by sequence padding to equal length
     """
     _label = 'Calculate conservation'
     _ATTRNAME = 'Conservation'

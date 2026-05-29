@@ -44,10 +44,100 @@ RES, SUBS, VAR, MUT = 'Residues', 'SubSequences', 'Variant', 'Mutations'
 
 class ProtDefineSeqROI(EMProtocol):
     """
-    Defines a list of sequence ROIs, each of them from:\n'
-        1) A residue or range of residues.\n'
-        2) A predefined variant\n'
-        3) One or several mutations
+    Protocol to define a MultiEpitope object from multiple SequenceROIs and/or manual sequences.
+
+    This protocol allows the user to build a synthetic multi-epitope construct by combining
+    previously defined SequenceROI objects and/or manually entered peptide sequences.
+
+    Each element added to the MultiEpitope can be labeled as:
+    - Epitope
+    - Linker
+
+    The protocol concatenates all selected elements into a single sequence and generates
+    a corresponding set of SequenceROI objects with updated coordinates.
+
+    Overview
+    --------
+    The protocol performs the following steps:
+
+    1. Input selection
+       - Select one or more SetOfSequenceROIs or MultiEpitope objects as source
+
+    2. ROI definition
+       - Add ROIs from existing SequenceROI objects
+       - Or define them manually as amino acid sequences
+
+    3. Annotation
+       - Assign type (Epitope/Linker)
+       - Assign optional names
+       - Track start/end positions in concatenated sequence
+
+    4. Construction
+       - Concatenate all sequences into a single MultiEpitope sequence
+       - Map each ROI to its position in the final construct
+
+    Input
+    -----
+    inputROIsSets:
+        One or more SetOfSequenceROIs or MultiEpitope objects used as sources.
+
+    origin:
+        Defines how the ROI is created:
+        - SequenceROI: selected from an existing set
+        - Manually: user-defined sequence
+
+    inSet:
+        Identifier of the input set containing the ROI.
+
+    inROI:
+        Identifier of the specific SequenceROI to include.
+
+    manualROI:
+        Manual amino acid sequence for epitope/linker definition.
+
+    roiType:
+        Type of element:
+        - Epitope
+        - Linker
+
+    roiName:
+        Optional name assigned to the ROI.
+
+    multiSummary:
+        Internal text representation of all selected ROIs used to build the final object.
+
+    Workflow
+    --------
+    1. User selects ROIs or enters manual sequences
+    2. Each entry is stored in a summary line
+    3. Summary is parsed to reconstruct full sequence
+    4. Each ROI is assigned coordinates in concatenated sequence
+    5. MultiEpitope object is created and populated with SequenceROI entries
+
+    Output
+    ------
+    outputROIs:
+        MultiEpitope object containing:
+        - Concatenated full sequence
+        - List of SequenceROI objects with:
+            * type (Epitope/Linker)
+            * start/end positions
+            * optional name
+            * source annotation
+
+    Key Features
+    ------------
+    - Manual and automatic epitope construction
+    - Combination of multiple ROI sources
+    - Automatic coordinate tracking in concatenated sequence
+    - Support for linker/epitope annotation
+    - Compatible with downstream epitope design workflows
+
+    Notes
+    -----
+    - Sequence positions are computed incrementally during concatenation
+    - Both manual sequences and SequenceROI inputs are treated uniformly
+    - Designed for vaccine design and multi-epitope engineering workflows
     """
     _label = 'Define sequence ROIs'
     _inputOptions = ['Sequence', 'SequenceVariants']

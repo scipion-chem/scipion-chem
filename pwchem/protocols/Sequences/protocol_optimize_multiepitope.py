@@ -163,7 +163,87 @@ IEDB, IIITD, DDG, VAXIGN = 'IEDB', 'IIITD', 'DDG', 'VAXIGN'
 
 class ProtOptimizeMultiEpitope(EMProtocol):
   """
-  Optimize a MultiEpitope object based on some scores using Genetic Algorithms
+  This protocol is used to optimize multiepitope constructs using genetic algorithms.
+
+  The protocol designs artificial multiepitope sequences by combining epitope regions
+  extracted from multiple protein sources. These epitopes are optionally connected
+  using linker sequences to form a complete multiepitope construct.
+
+  The optimization process is based on a genetic algorithm that evolves a population
+  of candidate multiepitope sequences over several generations, guided by biological
+  evaluation scores.
+
+  The algorithm performs:
+  - Generation of an initial population of multiepitope individuals
+  - Evaluation of each individual using weighted biological scoring functions
+  - Selection of the best individuals according to fitness values
+  - Application of crossover and mutation operators to create new variants
+  - Iterative improvement across multiple generations and independent runs
+
+  Key Concepts
+  ------------
+  Multiepitope Individual:
+      A candidate sequence composed of multiple epitope regions and linkers,
+      encoded using a grammar-based representation.
+
+  Epitope Source:
+      Regions of interest (ROIs) extracted from input protein sequences that
+      serve as building blocks for multiepitope construction.
+
+  Linkers:
+      Short amino acid sequences used to connect epitopes and control structure
+      and flexibility of the final construct.
+
+  Evaluation Sources:
+      External or internal scoring systems used to estimate biological relevance,
+      such as population coverage, binding prediction, or structural assessment.
+
+  Workflow
+  --------
+  1. Input epitope sets and optional compulsory epitopes.
+  2. Define sampling scores that control epitope selection probability.
+  3. Define linker strategies for connecting epitopes.
+  4. Configure evaluation functions and their relative weights.
+  5. Generate an initial population of multiepitope candidates.
+  6. Iteratively evolve the population using genetic operators:
+      - Selection
+      - Crossover
+      - Mutation
+  7. Evaluate each individual using selected biological criteria.
+  8. Store best-performing individuals across runs (Hall of Fame).
+  9. Convert best individuals into final multiepitope sequences.
+
+  Genetic Encoding
+  ----------------
+  - Each individual encodes a structured multiepitope using a grammar system.
+  - Epitopes are represented as indexed ROIs from input proteins.
+  - Linkers are inserted according to the selected linker strategy.
+  - Grammar constraints ensure valid multiepitope construction.
+
+  Evaluation Strategy
+  -------------------
+  - Each evaluation source contributes a weighted score to fitness.
+  - Scores are combined into a single objective function.
+  - External tools may include immune prediction and vaccine design models.
+  - Missing or invalid evaluations are handled with default scoring rules.
+
+  Output
+  ------
+  outputMultiepitopes:
+      A ranked set of optimized multiepitope sequences, each associated with
+      a fitness score representing predicted biological performance.
+
+  Additionally, the protocol stores:
+  - The best genetic individuals (Hall of Fame)
+  - Mapping between epitope indices and sequences
+  - Generated multiepitope codes for reproducibility
+
+  Use Cases
+  ---------
+  - Vaccine candidate design
+  - Multi-epitope immunogen optimization
+  - Computational immunology pipelines
+  - Epitope selection and combination studies
   """
   _label = 'Optimize multiepitope'
 
