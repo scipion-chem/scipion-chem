@@ -153,6 +153,13 @@ class Plugin(pwem.Plugin):
         installer.addCommand(
             f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]}',
             'MGLTOOLS_ENV_CREATED'
+        ).addCommand(
+            f'eval "$(conda shell.bash hook)" && '
+            f'conda activate {mglEnvName} && '
+            f'PREFIX=$CONDA_PREFIX && '
+            f'rm -rf {cls.getVar(MGL_DIC["home"])} && '
+            f'ln -s $PREFIX {cls.getVar(MGL_DIC["home"])}',
+            'MGLTOOLS_SYMLINK_CREATED'
         ).addPackage(env,dependencies=['conda'],default=default)
 
     @classmethod
