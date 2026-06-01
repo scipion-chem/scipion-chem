@@ -40,8 +40,7 @@ class BaseInteractionViewer(ProtocolViewer):
     """Generic viewer for interaction matrices"""
 
     def _getData(self):
-        """Return the full interaction dictionary"""
-        raise NotImplementedError
+        return self.getInteractionSet().getInteractScoresDic()
 
     def _getEntityNames(self, data):
         """Return (entities1, entities2, scoreTypes)"""
