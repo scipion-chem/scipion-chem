@@ -473,16 +473,6 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
     return pymolV._visualize(pmlFile, cwd=outDir)
 
 
-  # ----------------------------------Interactions
-  def _getData(self):
-      structSet = self.getOutPockets()
-      if hasattr(structSet, '_interactScoresFile') and structSet._interactScoresFile.get():
-          with open(structSet._interactScoresFile.get(), 'r') as f:
-              data = json.load(f)
-      else:
-          data = None
-      return data
-
   def _getEntityNames(self, data):
       roiNames = sorted(data.keys())
       molNames = sorted({
@@ -540,6 +530,9 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
 
   def _getMolSet(self):
       return self.getOutPockets().getInteractMols()
+
+  def getInteractionSet(self):
+      return self.getOutPockets()
 
 
 MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'

@@ -178,17 +178,7 @@ class SequenceChemViewer(BaseInteractionViewer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def _getData(self):
-        outSeqs = self.getOutSequences()
-
-        if hasattr(outSeqs, '_interactScoresFile') and outSeqs._interactScoresFile.get():
-            with open(outSeqs._interactScoresFile.get(), 'r') as f:
-                data = json.load(f)
-        else:
-            data = None
-        return data
-
+        
     def _getEntityNames(self, data):
         seqNames = sorted(data.keys())
 
@@ -273,3 +263,6 @@ class SequenceChemViewer(BaseInteractionViewer):
                     return obj
 
         return self.protocol
+
+    def getInteractionSet(self):
+        return self.getOutSequences()
