@@ -129,9 +129,10 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
                       default=True,
                       help='Display min distance labels on the connecting lines.')
 
-    data = self._getData()
-    if data:
-        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+    if hasattr(self, '_interactScoresFile'):
+        data = self._getData()
+        if data:
+            BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
   def _getVisualizeDict(self):
     d = {
