@@ -129,7 +129,8 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
                       default=True,
                       help='Display min distance labels on the connecting lines.')
 
-    data = self._getData()
+    structs = self.getOutPockets()
+    data = structs._getData()
     if data:
         BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
@@ -473,13 +474,6 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
     return pymolV._visualize(pmlFile, cwd=outDir)
 
 
-  # ----------------------------------Interactions
-  def _getData(self):
-      structSet = self.getOutPockets()
-
-      with open(structSet._interactScoresFile.get(), 'r') as f:
-          return json.load(f)
-
   def _getEntityNames(self, data):
       roiNames = sorted(data.keys())
       molNames = sorted({
@@ -537,6 +531,9 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
 
   def _getMolSet(self):
       return self.getOutPockets().getInteractMols()
+
+  def getInteractionSet(self):
+      return self.getOutPockets()
 
 
 MIXED, FPOCKET, P2RANK, AUTOLIGAND, SITEMAP = 'Mixed', 'FPocket', 'P2Rank', 'AutoLigand', 'Sitemap'

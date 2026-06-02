@@ -23,6 +23,7 @@
 # **************************************************************************
 
 import os
+import json
 from subprocess import Popen
 from tkinter.messagebox import askokcancel
 
@@ -177,15 +178,7 @@ class SequenceChemViewer(BaseInteractionViewer):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def _getData(self):
-        outSeqs = self.getOutSequences()
-
-        data = outSeqs.getInteractScoresDic()
-        if data is None:
-            return {}
-        return data
-
+        
     def _getEntityNames(self, data):
         seqNames = sorted(data.keys())
 
@@ -270,3 +263,6 @@ class SequenceChemViewer(BaseInteractionViewer):
                     return obj
 
         return self.protocol
+
+    def getInteractionSet(self):
+        return self.getOutSequences()

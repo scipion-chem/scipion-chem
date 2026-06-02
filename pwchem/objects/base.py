@@ -145,6 +145,15 @@ class SetClass:
   def setInteractScoresFile(self, intFile):
       self._interactScoresFile.set(intFile)
 
+  def _getData(self):
+    if self.getInteractScoresFile():
+      try:
+        with open(self.getInteractScoresFile(), 'r', encoding='utf-8') as f:
+          return json.load(f)
+      except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    return {}
+
 
 class SetOfDatabaseID(data.EMSet):
   """ Set of DatabaseIDs """
@@ -199,10 +208,6 @@ class SetOfSequencesChem(data.SetOfSequences, SetClass):
     self.initSet(**kwargs)
     self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
     self._alignFile = pwobj.String(kwargs.get('alignFile', None))
-
-  def _getDefaultInteractDic(self):
-      return {seq.getSeqName(): {} for seq in self}
-
 
   def createCopy(self, outputPath, copyInfo=False, copyItems=False, itemSelectedCallback=None, rowFilter=None):
       newSet = self.create(outputPath)
