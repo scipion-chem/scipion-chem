@@ -127,11 +127,10 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
         isAmino = self.database.get() in [1]
         for outFn in outFns:
-            newSeq = Sequence()
+            newSeq = Sequence(fileName=outFn)
             newSeq.importFromFile(outFn, isAmino=isAmino)
             seqName = os.path.splitext(os.path.basename(outFn))[0]
             newSeq.setSeqName(seqName)
-            newSeq.setFileName(outFn)
             outputSequences.append(newSeq)
 
         self._defineOutputs(outputSequences=outputSequences)
