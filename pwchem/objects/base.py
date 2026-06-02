@@ -209,10 +209,6 @@ class SetOfSequencesChem(data.SetOfSequences, SetClass):
     self._aligned = pwobj.Boolean(kwargs.get('aligned', False))
     self._alignFile = pwobj.String(kwargs.get('alignFile', None))
 
-  def _getDefaultInteractDic(self):
-      return {seq.getSeqName(): {} for seq in self}
-
-
   def createCopy(self, outputPath, copyInfo=False, copyItems=False, itemSelectedCallback=None, rowFilter=None):
       newSet = self.create(outputPath)
       if copyInfo:
