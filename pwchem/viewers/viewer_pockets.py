@@ -130,9 +130,10 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
                       help='Display min distance labels on the connecting lines.')
 
     structs = self.getOutPockets()
-    data = structs._getData()
-    if data:
-        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+    if hasattr(structs, '_getData'):
+        data = structs._getData()
+        if data:
+            BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
   def _getVisualizeDict(self):
     d = {
