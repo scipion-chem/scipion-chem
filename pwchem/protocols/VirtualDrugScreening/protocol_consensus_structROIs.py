@@ -468,8 +468,139 @@ def mapMsaResidues(alFile):
 
 class ProtocolConsensusStructROIs(EMProtocol):
     """
-    Executes the consensus on the sets of pockets
-    """
+        This protocol performs consensus analysis of structural regions of interest
+        (structural ROIs or pockets) across multiple input datasets, potentially
+        derived from different protein structures or prediction methods.
+
+        It identifies spatially and sequence-consistent binding pockets by building
+        a residue-based similarity graph and applying community detection algorithms
+        to extract consensus pocket clusters.
+
+        The protocol supports multiple strategies for defining representative
+        pockets, including centroid-based selection, intersection-based consensus
+        residue sets, and structure-size-based selection.
+
+        Core Concepts
+        -------------
+        Structural ROI (Pocket):
+            A set of protein residues forming a spatial region of interest,
+            typically representing a binding pocket or functional site.
+
+        Residue Group:
+            An abstraction of a pocket represented by:
+            - A list of residue identifiers
+            - 3D coordinates of residues
+            - Input dataset identifier (class)
+
+        Consensus Pocket:
+            A cluster of residue groups that represent a structurally and/or
+            sequence-consistent binding region across multiple inputs.
+
+        Residue Similarity:
+            Quantifies overlap between residue sets (Jaccard-like overlap ratio).
+
+        Spatial Similarity:
+            Measures proximity between pocket centroids in 3D space.
+
+        Combined Similarity:
+            Weighted combination of residue overlap and spatial proximity.
+
+        Workflow
+        --------
+        1. Input multiple SetOfStructROIs (pocket sets).
+        2. Optionally map residues and chains across different proteins using
+           sequence alignment (MSA + chain matching).
+        3. Extract residue sets and 3D coordinates for each pocket.
+        4. Build a similarity graph where nodes are pockets and edges represent
+           combined residue + spatial similarity.
+        5. Detect communities using:
+           - Louvain algorithm (modularity optimization), or
+           - Connected components (threshold-based clustering)
+        6. Filter clusters based on:
+           - Minimum number of input sources contributing
+           - Optional class diversity constraints
+        7. Generate consensus representatives:
+           - Existing representative pocket from cluster, or
+           - Synthetic pocket built from residue intersection
+        8. Optionally generate independent consensus sets per input dataset.
+        9. Output final consensus structural ROI sets and summary statistics.
+
+        Clustering Criteria
+        -------------------
+        - minSimil:
+            Minimum combined similarity required to connect two pockets in graph.
+
+        - spatialW:
+            Weight of spatial proximity in similarity calculation
+            (0 = sequence overlap only, 1 = spatial only).
+
+        - clustMethod:
+            Community detection method:
+            - Louvain (resolution-controlled modularity optimization)
+            - Connected components (hard threshold clustering)
+
+        - resolution:
+            Controls granularity of Louvain clustering.
+
+        Cluster Filtering
+        -----------------
+        - numOfOverlap:
+            Minimum number of contributing input sets required per cluster.
+
+        - sameClust:
+            Whether multiple ROIs from the same input count separately.
+
+        - minClasses:
+            Minimum number of distinct input classes required in a cluster.
+
+        Representative Selection Modes
+        ------------------------------
+        Centroid:
+            Selects the pocket most similar to all others in the cluster,
+            optionally weighted by class frequency and spatial similarity.
+
+        Intersection:
+            Constructs a new pocket composed of residues present in a minimum
+            fraction of cluster members.
+
+        Bigger:
+            Selects the pocket with the largest number of residues.
+
+        Contained:
+            Selects pockets that are fully contained within others in the cluster.
+
+        Internal Processing Logic
+        -------------------------
+        - Protein chains are optionally aligned across datasets using MSA.
+        - Residue indices are mapped to a reference protein when necessary.
+        - Pocket residues are converted into residue groups with coordinates.
+        - A similarity graph is constructed using pairwise group comparison.
+        - Community detection identifies structurally consistent regions.
+        - Residue mapping ensures cross-protein comparability.
+        - Representative pockets are selected or constructed per cluster.
+        - Optional independent consensus outputs are generated per input set.
+        - Summary statistics include class distribution and coverage metrics.
+
+        Output
+        ------
+        - outputStructROIs:
+            Set of consensus structural ROI objects representing clustered pockets.
+
+        - outputStructROIs_<XXX> (optional):
+            Independent consensus sets per input dataset.
+
+        - summary.txt:
+            Detailed report of cluster composition, class distribution,
+            and representative residue coverage.
+
+        Use Cases
+        ---------
+        - Identification of conserved binding pockets across protein variants
+        - Comparison of predicted pockets from multiple methods
+        - Detection of functionally relevant conserved regions
+        - Reduction of redundant or overlapping pocket predictions
+        - Cross-structure consensus analysis of binding sites
+        """
     _label = 'Consensus structural ROIs'
     _possibleOutputs = PredictStructROIsOutput
     clustChoices = ['Louvain', 'Connected components']

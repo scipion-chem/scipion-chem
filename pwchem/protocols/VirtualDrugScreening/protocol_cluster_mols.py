@@ -52,7 +52,83 @@ RDKIT_FINGER, ATOMPAIR_FINGER = 'finger == 1', 'finger == 2'
 
 class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
   """
-  Cluster set of small molecules
+This protocol clusters a set of small molecules and identifies representative
+compounds for each resulting cluster.
+
+The goal is to reduce chemical redundancy by grouping structurally similar
+molecules using molecular fingerprints and similarity-based clustering methods.
+
+Workflow
+--------
+1. Input a set of small molecules (or a molecular library).
+2. Convert molecules into numerical representations using molecular fingerprints.
+3. Compute pairwise similarity or distance between molecules.
+4. Apply a clustering algorithm to group similar molecules.
+5. Identify representative molecules for each cluster.
+6. Optionally output:
+   - Only cluster representatives, or
+   - All molecules with assigned cluster labels plus representatives.
+
+Molecular Representation
+-----------------------
+Molecules are transformed into fingerprints that encode structural features.
+Available fingerprint types include:
+- Morgan
+- RDKit
+- AtomPair
+- Topological Torsion
+- MACCS
+- Pattern
+- Layered
+- Avalon
+
+Clustering Methods
+------------------
+The protocol supports multiple clustering strategies, including:
+- Butina clustering (similarity threshold-based)
+- DBSCAN / HDBSCAN (density-based clustering)
+- K-Medoids / Birch (centroid-based clustering)
+- Leader-Pick / MaxMinPick (greedy representative selection methods)
+
+Distance Metrics
+----------------
+Similarity between molecules is computed using:
+- Tanimoto
+- Dice
+- Cosine
+
+Cluster Selection
+----------------
+Each cluster produces one or more representative molecules:
+- Representatives are selected based on clustering algorithm criteria.
+- These molecules best represent the structural diversity of their cluster.
+
+Optional Outputs
+----------------
+The protocol can generate:
+- Only representative molecules (cluster centroids or exemplars)
+- Full annotated dataset with cluster assignments for each molecule
+
+Input
+-----
+SetOfSmallMolecules or molecular library:
+    Collection of molecules to be clustered.
+
+Output
+------
+outputRepSmallMolecules:
+    Representative molecules from each cluster.
+
+outputSmallMolecules (optional):
+    Full set of molecules annotated with cluster identifiers.
+
+Use Cases
+---------
+- Chemical library reduction
+- Diversity analysis of compound datasets
+- Selection of representative screening compounds
+- Preprocessing for virtual screening workflows
+- Structure–activity relationship (SAR) simplification
   """
   _label = 'Cluster molecules'
   _OUTNAME = 'outputAtomStruct'

@@ -71,7 +71,94 @@ def getMatchingFiles(hSize, logPRange):
   return urls
 
 class ProtChemImportMoleculesLibrary(EMProtocol):
-  """Import a small molecules library from local or a web server in a single SMI format file.
+  """
+    ProtChemImportMoleculesLibrary
+
+    Scipion protocol for importing small-molecule libraries from local files
+    or online chemical databases (ZINC20, ZINC22, PubChem).
+
+    This protocol allows users to download, filter, and assemble chemical
+    libraries for downstream computational chemistry workflows, such as
+    docking, screening, or ligand-based analysis.
+
+    Main features
+    -------------
+    - Download predefined molecular libraries from:
+        * ZINC20 (tranche-based chemical space)
+        * ZINC22 (2D subsets with heavy atom and logP filtering)
+        * PubChem (CID-SMILES dataset)
+
+    - Define custom filtering criteria:
+        * Molecular size / heavy atom count
+        * logP range
+        * Reactivity class (ZINC20)
+        * Purchasability class (ZINC20)
+
+    - Support for random sampling of large datasets
+    - Parallel downloading and processing of library fragments
+    - Automatic merging and normalization of SMI files
+    - Output as Scipion `SmallMoleculesLibrary` object
+
+    Input
+    -----
+    - Either a local SMI file, or a predefined library selection
+      (ZINC20, ZINC22, PubChem)
+
+    Parameters
+    ----------
+    - defLibraries (bool):
+        If True, downloads a predefined library from online sources.
+        If False, imports a local SMI file.
+
+    - choicesLibraries (Enum):
+        Selects the source database:
+            ZINC20, ZINC22, PubChem
+
+    - nMols (int):
+        Number of molecules to randomly sample from the dataset.
+
+    - randomSeed (int):
+        Seed for reproducible random sampling.
+
+    - ZINC20 / ZINC22 filtering options:
+        * Size range (heavy atoms / molecular weight)
+        * logP range
+        * Reactivity class (ZINC20 only)
+        * Purchasability class (ZINC20 only)
+
+    Outputs
+    -------
+    - outputLibrary (SmallMoleculesLibrary):
+        A processed molecular library ready for downstream workflows.
+
+    Behavior
+    --------
+    - For ZINC20:
+        Downloads tranche files defined by size/logP/reactivity/purchasability codes,
+        merges them and annotates each molecule with physicochemical metadata.
+
+    - For ZINC22:
+        Downloads 2D subset files or uses random API selection when available,
+        merges them and annotates molecules with heavy atom count and logP.
+
+    - For PubChem:
+        Downloads CID-SMILES dataset, decompresses it, and formats it into SMI.
+
+    - If local input is provided:
+        The file is copied and used directly without modification.
+
+    Notes
+    -----
+    - Large downloads may require significant disk space and time.
+    - Some filtering combinations may force full dataset download before sampling.
+    - Network failures may interrupt downloads if connectivity is unstable.
+
+    Dependencies
+    ------------
+    - requests
+    - gzip
+    - pwchem.utils (downloadUrlFile, runInParallel, reduceNRandomLines, etc.)
+    - pwchem.objects.SmallMoleculesLibrary
   """
   _label = 'import small molecules library'
   stepsExecutionMode = params.STEPS_PARALLEL
