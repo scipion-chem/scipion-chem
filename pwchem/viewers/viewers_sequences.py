@@ -202,38 +202,40 @@ class SequenceChemViewer(BaseInteractionViewer):
 
     def _generateProts(self, paramName=None):
         project = self.getProject()
-        data = self._getData()
+        structs = self.getInteractionSet()
+        if hasattr(structs, '_getData'):
+            data = structs._getData()
 
-        f1 = self.getEnumText('chooseEnt1')
-        f2 = self.getEnumText('chooseEnt2')
-        fScore = self.getEnumText('chooseScore')
+            f1 = self.getEnumText('chooseEnt1')
+            f2 = self.getEnumText('chooseEnt2')
+            fScore = self.getEnumText('chooseScore')
 
-        _, seqNames, _, _ = self._getFilteredData(
-            data, f1, f2, fScore
-        )
-
-        objIds = []
-
-        for seq in self.getOutSequences():
-            if seq.getSeqName() in seqNames:
-                objIds.append(str(seq.getObjId()))
-
-        if not objIds:
-            return
-
-        if askokcancel(
-                "Generate sequences subset",
-                f"Generate subset with {len(objIds)} proteins?"):
-            prot = project.newProtocol(
-                ProtSubSet,
-                inputFullSet=self.getOutSequences(),
-                selectIds=True,
-                range=','.join(objIds)
+            _, seqNames, _, _ = self._getFilteredData(
+                data, f1, f2, fScore
             )
 
-            prot.setObjLabel('Filtered sequences')
+            objIds = []
 
-            project.launchProtocol(prot, wait=True)
+            for seq in self.getOutSequences():
+                if seq.getSeqName() in seqNames:
+                    objIds.append(str(seq.getObjId()))
+
+            if not objIds:
+                return
+
+            if askokcancel(
+                    "Generate sequences subset",
+                    f"Generate subset with {len(objIds)} proteins?"):
+                prot = project.newProtocol(
+                    ProtSubSet,
+                    inputFullSet=self.getOutSequences(),
+                    selectIds=True,
+                    range=','.join(objIds)
+                )
+
+                prot.setObjLabel('Filtered sequences')
+
+                project.launchProtocol(prot, wait=True)
 
     # ---------------------------------------------------
 
