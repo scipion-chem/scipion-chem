@@ -46,4 +46,4 @@ class DataSetMDSystem(Enum):
     amberCrdFile = 'amberSystem/3p6h.rst7'
     amberTrjFile = 'amberSystem/3p6h.nc'
 
-DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in DataSetMDSystem})
+DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in DataSetMDSystem})from .tests_structROI_voting import *
