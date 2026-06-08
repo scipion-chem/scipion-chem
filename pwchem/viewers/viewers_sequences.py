@@ -106,15 +106,15 @@ class SequenceAliViewer(pwviewer.Viewer):
 
         return views
 
-class SequenceGeneralViewer(pwviewer.ProtocolViewer):
+class SequenceGeneralViewer(BaseInteractionViewer):
   """ Protocol viewer to visualize different type of sequence objects
   """
   _label = 'Sequence viewer'
-  _targets = seqTargets
+  _targets = seqTargets + [SetOfSequencesChem]
   _environments = [pwviewer.DESKTOP_TKINTER]
 
   def __init__(self, **kwargs):
-    pwviewer.ProtocolViewer.__init__(self, **kwargs)
+      super().__init__(**kwargs)
 
   def _defineParams(self, form):
     form.addSection(label='Sequence viewer')
@@ -127,22 +127,36 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
       tGroup.addParam('tableLabel', params.LabelParam, label='Display sequences in table format: ',
                       help='Display the output sequences using table format')
 
-  def _getVisualizeDict(self):
-    return {
-      # AliView
-      'aliLabel': self._viewSeqSet,
+    if (isinstance(self.getOutSequences(), SetOfSequencesChem)
+            and self.checkIfInteractions()):
+        BaseInteractionViewer._defineParams(self, form)
 
-      # Table
-      'tableLabel': self._viewTable,
-    }
+  def _getVisualizeDict(self):
+      visDict = {
+          'aliLabel': self._viewSeqSet,
+          'tableLabel': self._viewTable,
+      }
+
+      seqSet = self.getOutSequences()
+
+      if isinstance(seqSet, SetOfSequencesChem) and self.checkIfInteractions():
+          visDict.update(BaseInteractionViewer._getVisualizeDict(self))
+
+      return visDict
 
   def getOutSequences(self):
-    if self.checkIfProtocol():
-      for oAttr in self.protocol.iterOutputAttributes():
-        for oType in seqTargets:
-          if isinstance(getattr(self.protocol, oAttr[0]), oType):
-            return getattr(self.protocol, oAttr[0])
-    else:
+      if hasattr(self.protocol, 'outputSequences'):
+          return self.protocol.outputSequences
+
+      if isinstance(self.protocol, SetOfSequencesChem):
+          return self.protocol
+
+      if hasattr(self.protocol, 'iterOutputAttributes'):
+          for oAttr in self.protocol.iterOutputAttributes():
+              obj = getattr(self.protocol, oAttr[0])
+              if isinstance(obj, tuple(self._targets)):
+                  return obj
+
       return self.protocol
 
   def _viewSeqSet(self, e=None):
@@ -168,103 +182,72 @@ class SequenceGeneralViewer(pwviewer.ProtocolViewer):
 
   def getOutputSet(self):
     return self.protocol
-  
-class SequenceChemViewer(BaseInteractionViewer):
-    """ Protocol viewer to visualize different type of sequence objects
-    """
-    _label = 'Sequence chem viewer'
-    _targets = [SetOfSequencesChem]
-    _environments = [pwviewer.DESKTOP_TKINTER]
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-    def _getEntityNames(self, data):
-        seqNames = sorted(data.keys())
+  def checkIfInteractions(self):
+      seqSet = self.getOutSequences()
 
-        molNames = set()
-        scoreTypes = set()
+      if isinstance(seqSet, SetOfSequencesChem):
+          return seqSet.getInteractMols() is not None
 
-        for seq in data:
-            for mol in data[seq]:
-                molNames.add(mol)
+      return False
 
-                for sc in data[seq][mol]:
-                    scoreTypes.add(sc)
+  def getInteractionSet(self):
+      return self.getOutSequences()
 
-        return seqNames, sorted(molNames), sorted(scoreTypes)
+  def _getEntityNames(self, data):
+      seqNames = sorted(data.keys())
 
-    def _getLabels(self):
-        return "Sequence", "Molecule", "Interaction score"
+      molNames = set()
+      scoreTypes = set()
 
-    def _getMolSet(self):
-        return self.getOutSequences().getInteractMols()
+      for seq in data:
+          for mol in data[seq]:
+              molNames.add(mol)
 
-    def _generateProts(self, paramName=None):
-        project = self.getProject()
-        structs = self.getInteractionSet()
-        if hasattr(structs, '_getData'):
-            data = structs._getData()
+              for sc in data[seq][mol]:
+                  scoreTypes.add(sc)
 
-            f1 = self.getEnumText('chooseEnt1')
-            f2 = self.getEnumText('chooseEnt2')
-            fScore = self.getEnumText('chooseScore')
+      return seqNames, sorted(molNames), sorted(scoreTypes)
 
-            _, seqNames, _, _ = self._getFilteredData(
-                data, f1, f2, fScore
-            )
+  def _getLabels(self):
+      return "Sequence", "Molecule", "Interaction score"
 
-            objIds = []
+  def _getMolSet(self):
+      return self.getOutSequences().getInteractMols()
 
-            for seq in self.getOutSequences():
-                if seq.getSeqName() in seqNames:
-                    objIds.append(str(seq.getObjId()))
+  def _generateProts(self, paramName=None):
+      project = self.getProject()
+      structs = self.getInteractionSet()
+      if hasattr(structs, '_getData'):
+          data = structs._getData()
 
-            if not objIds:
-                return
+          f1 = self.getEnumText('chooseEnt1')
+          f2 = self.getEnumText('chooseEnt2')
+          fScore = self.getEnumText('chooseScore')
 
-            if askokcancel(
-                    "Generate sequences subset",
-                    f"Generate subset with {len(objIds)} proteins?"):
-                prot = project.newProtocol(
-                    ProtSubSet,
-                    inputFullSet=self.getOutSequences(),
-                    selectIds=True,
-                    range=','.join(objIds)
-                )
+          _, seqNames, _, _ = self._getFilteredData(
+              data, f1, f2, fScore
+          )
 
-                prot.setObjLabel('Filtered sequences')
+          objIds = []
 
-                project.launchProtocol(prot, wait=True)
+          for seq in self.getOutSequences():
+              if seq.getSeqName() in seqNames:
+                  objIds.append(str(seq.getObjId()))
 
-    # ---------------------------------------------------
+          if not objIds:
+              return
 
-    def checkIfInteractions(self):
-        if not self.checkIfProtocol():
-            seqSet = self.protocol
-        else:
-            for oAttr in self.protocol.iterOutputAttributes():
-                obj = getattr(self.protocol, oAttr[0])
+          if askokcancel(
+                  "Generate sequences subset",
+                  f"Generate subset with {len(objIds)} proteins?"):
+              prot = project.newProtocol(
+                  ProtSubSet,
+                  inputFullSet=self.getOutSequences(),
+                  selectIds=True,
+                  range=','.join(objIds)
+              )
 
-                if isinstance(obj, SetOfSequencesChem):
-                    seqSet = obj
+              prot.setObjLabel('Filtered sequences')
 
-        return seqSet.getInteractMols() is not None
-
-    def getOutSequences(self):
-        if hasattr(self.protocol, 'outputSequences'):
-            return self.protocol.outputSequences
-
-        if isinstance(self.protocol, SetOfSequencesChem):
-            return self.protocol
-
-        if hasattr(self.protocol, 'iterOutputAttributes'):
-            for oAttr in self.protocol.iterOutputAttributes():
-                obj = getattr(self.protocol, oAttr[0])
-                if isinstance(obj, SetOfSequencesChem):
-                    return obj
-
-        return self.protocol
-
-    def getInteractionSet(self):
-        return self.getOutSequences()
+              project.launchProtocol(prot, wait=True)
