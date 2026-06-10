@@ -103,7 +103,7 @@ def combinedSimilarity(group1: ResidueGroup, group2: ResidueGroup, spatialWeight
     return (1 - spatialWeight) * jaccard + spatialWeight * spatial
 
 
-def buildResidueSimilarityGraph(groups: List[ResidueGroup], minSimilarity: float = 0.2, 
+def buildResidueSimilarityGraph(groups: List[ResidueGroup], minSimilarity: float = 0.2,
                                 spatialWeight: float = 0.6) -> nx.Graph:
     """
     Build weighted graph where nodes are residue groups
@@ -114,9 +114,9 @@ def buildResidueSimilarityGraph(groups: List[ResidueGroup], minSimilarity: float
     # Add nodes with attributes
     for i, group in enumerate(groups):
         graphG.add_node(i,
-                   residueIds=group.residueIds,
-                   coordinates=group.coords,
-                   centroid=group.centroid())
+                        residueIds=group.residueIds,
+                        coordinates=group.coords,
+                        centroid=group.centroid())
 
     # Add weighted edges
     n = len(groups)
@@ -184,6 +184,7 @@ def getClusterRep(communityGroups: List[ResidueGroup], method: str, classWeighte
 
     return repResiduesList
 
+
 def checkClassFilter(commGroups, minClasses, sameClass):
     if sameClass:
         doPass = len(commGroups) >= minClasses
@@ -192,7 +193,7 @@ def checkClassFilter(commGroups, minClasses, sameClass):
         uniqueClasses = set(classDistribution.keys())
         doPass = len(uniqueClasses) >= minClasses
     return doPass
-    
+
 
 def residueCommunityPipeline(
         groups: List[ResidueGroup],
@@ -222,7 +223,7 @@ def residueCommunityPipeline(
         commGroups = [groups[idx] for idx in commIndices]
         if checkClassFilter(commGroups, minClasses, sameClass):
             clusterGroups.append(commGroups)
-    
+
     return clusterGroups, len(communities)
 
 
@@ -318,6 +319,7 @@ def getRepresentativeBigger(
 
     return [(selectedIdx, set(communityGroups[selectedIdx].residueIds))]
 
+
 def getRepresentativeContained(
         communityGroups: List[ResidueGroup],
         specificClass: int = None
@@ -341,6 +343,7 @@ def getRepresentativeContained(
                     break
 
     return containedGroups
+
 
 def getRepresentativeIntersection(
         communityGroups: List[ResidueGroup],
@@ -388,7 +391,7 @@ def getRepresentativeIntersection(
         if info['count'] >= threshold:
             toAdd = True
             if controlSize and not ((info['count'] < prevFreq and len(representative) < communitySize)
-                                or (info['count'] == prevFreq and len(representative) < sizeThreshold)):
+                                    or (info['count'] == prevFreq and len(representative) < sizeThreshold)):
                 toAdd = False
 
             if toAdd and len(info['classes']) >= minClasses:
@@ -410,7 +413,8 @@ def getRepresentativeCentroid(
         spatialWeight: weight for the spatial similarity between ROIs (jaccard similarity weights the opposite proportion)
     """
 
-    if not communityGroups or (specificClass is not None and specificClass not in [g.groupClass for g in communityGroups]):
+    if not communityGroups or (
+            specificClass is not None and specificClass not in [g.groupClass for g in communityGroups]):
         return None, set()
 
     if len(communityGroups) == 1:
@@ -450,6 +454,7 @@ def getRepresentativeCentroid(
 CENTROID, INTERSEC, BIGGEST, CONTAIN = 0, 1, 2, 3
 LOUV, CONNECT = 0, 1
 
+
 def mapMsaResidues(alFile):
     '''Return the mapping of the residues resNumber -> AlignPos
     {seqIdx: {originalPos: alignPos}}
@@ -470,139 +475,147 @@ class ProtocolConsensusStructROIs(EMProtocol):
     """
     AI Generated:
 
-        This protocol performs consensus analysis of structural regions of interest
-        (structural ROIs or pockets) across multiple input datasets, potentially
-        derived from different protein structures or prediction methods.
+Consensus Structural ROIs Protocol
 
-        It identifies spatially and sequence-consistent binding pockets by building
-        a residue-based similarity graph and applying community detection algorithms
-        to extract consensus pocket clusters.
+This protocol is used to compute consensus structural regions of interest (ROIs),
+typically protein binding pockets, from multiple input sets of structural ROIs.
 
-        The protocol supports multiple strategies for defining representative
-        pockets, including centroid-based selection, intersection-based consensus
-        residue sets, and structure-size-based selection.
+The goal is to identify consistent pocket regions across different sources
+and produce representative consensus pockets based on spatial and residue-level similarity.
 
-        Core Concepts
-        -------------
-        Structural ROI (Pocket):
-            A set of protein residues forming a spatial region of interest,
-            typically representing a binding pocket or functional site.
+Core Concepts
+-------------
+Residue-based Pocket Representation:
+    Each pocket is represented as a group of residues with associated 3D coordinates.
 
-        Residue Group:
-            An abstraction of a pocket represented by:
-            - A list of residue identifiers
-            - 3D coordinates of residues
-            - Input dataset identifier (class)
+Graph-based Similarity:
+    Pockets are compared using a weighted combination of:
+    - Residue overlap similarity
+    - Spatial (centroid distance) similarity
 
-        Consensus Pocket:
-            A cluster of residue groups that represent a structurally and/or
-            sequence-consistent binding region across multiple inputs.
+Community Detection:
+    A similarity graph is built where nodes are pockets and edges represent
+    structural similarity. Communities are detected using:
+    - Louvain algorithm (modularity optimization)
+    - Connected components (threshold-based clustering)
 
-        Residue Similarity:
-            Quantifies overlap between residue sets (Jaccard-like overlap ratio).
+Consensus Generation:
+    Each cluster of similar pockets is reduced to a representative structure using:
+    - Centroid-based selection (medoid-like representative)
+    - Intersection-based consensus residues
+    - Largest pocket selection
+    - Containment-based selection
 
-        Spatial Similarity:
-            Measures proximity between pocket centroids in 3D space.
+Cross-Protein Mapping (Optional):
+    When input proteins differ, residue mapping is performed using:
+    - Pairwise sequence alignment (BLOSUM scoring)
+    - Multiple sequence alignment (MAFFT)
+    - Residue index mapping across chains
 
-        Combined Similarity:
-            Weighted combination of residue overlap and spatial proximity.
+Workflow
+--------
+1. Input loading:
+    Multiple SetOfStructROIs objects are provided as input.
 
-        Workflow
-        --------
-        1. Input multiple SetOfStructROIs (pocket sets).
-        2. Optionally map residues and chains across different proteins using
-           sequence alignment (MSA + chain matching).
-        3. Extract residue sets and 3D coordinates for each pocket.
-        4. Build a similarity graph where nodes are pockets and edges represent
-           combined residue + spatial similarity.
-        5. Detect communities using:
-           - Louvain algorithm (modularity optimization), or
-           - Connected components (threshold-based clustering)
-        6. Filter clusters based on:
-           - Minimum number of input sources contributing
-           - Optional class diversity constraints
-        7. Generate consensus representatives:
-           - Existing representative pocket from cluster, or
-           - Synthetic pocket built from residue intersection
-        8. Optionally generate independent consensus sets per input dataset.
-        9. Output final consensus structural ROI sets and summary statistics.
+2. Pocket extraction:
+    Each pocket is converted into a ResidueGroup containing:
+    - residue IDs
+    - atomic coordinates
+    - input origin identifier
 
-        Clustering Criteria
-        -------------------
-        - minSimil:
-            Minimum combined similarity required to connect two pockets in graph.
+3. Similarity computation:
+    Pairwise similarity between all pockets is computed using:
+    - residue overlap
+    - centroid distance
 
-        - spatialW:
-            Weight of spatial proximity in similarity calculation
-            (0 = sequence overlap only, 1 = spatial only).
+4. Graph construction:
+    A weighted graph is created where:
+    - nodes = pockets
+    - edges = similarity above threshold
 
-        - clustMethod:
-            Community detection method:
-            - Louvain (resolution-controlled modularity optimization)
-            - Connected components (hard threshold clustering)
+5. Clustering:
+    The graph is partitioned into communities using:
+    - Louvain or connected components
 
-        - resolution:
-            Controls granularity of Louvain clustering.
+6. Filtering:
+    Clusters are filtered based on:
+    - minimum number of input classes
+    - optional same-class constraints
 
-        Cluster Filtering
-        -----------------
-        - numOfOverlap:
-            Minimum number of contributing input sets required per cluster.
+7. Representative selection:
+    Each cluster is reduced to a consensus pocket using the selected strategy.
 
-        - sameClust:
-            Whether multiple ROIs from the same input count separately.
+8. Output generation:
+    A SetOfStructROIs is created containing consensus pockets.
+    Optionally, per-input consensus sets are also generated.
 
-        - minClasses:
-            Minimum number of distinct input classes required in a cluster.
+Representative Selection Methods
+---------------------------------
+- Centroid:
+    Selects the pocket most similar (medoid-like) to all others in the cluster.
 
-        Representative Selection Modes
-        ------------------------------
-        Centroid:
-            Selects the pocket most similar to all others in the cluster,
-            optionally weighted by class frequency and spatial similarity.
+- Intersection:
+    Builds a new pocket from residues shared across a minimum frequency threshold.
 
-        Intersection:
-            Constructs a new pocket composed of residues present in a minimum
-            fraction of cluster members.
+- Bigger:
+    Selects the pocket with the largest number of residues.
 
-        Bigger:
-            Selects the pocket with the largest number of residues.
+- Contained:
+    Selects pockets fully contained within other pockets in the cluster.
 
-        Contained:
-            Selects pockets that are fully contained within others in the cluster.
+Clustering Methods
+------------------
+- Louvain:
+    Community detection based on modularity optimization.
 
-        Internal Processing Logic
-        -------------------------
-        - Protein chains are optionally aligned across datasets using MSA.
-        - Residue indices are mapped to a reference protein when necessary.
-        - Pocket residues are converted into residue groups with coordinates.
-        - A similarity graph is constructed using pairwise group comparison.
-        - Community detection identifies structurally consistent regions.
-        - Residue mapping ensures cross-protein comparability.
-        - Representative pockets are selected or constructed per cluster.
-        - Optional independent consensus outputs are generated per input set.
-        - Summary statistics include class distribution and coverage metrics.
+- Connected components:
+    Groups pockets based on direct similarity connections.
 
-        Output
-        ------
-        - outputStructROIs:
-            Set of consensus structural ROI objects representing clustered pockets.
+Input
+-----
+- inputStructROIsSets:
+    List of SetOfStructROIs containing structural pockets from different sources.
 
-        - outputStructROIs_<XXX> (optional):
-            Independent consensus sets per input dataset.
+Parameters
+----------
+- minSimil:
+    Minimum similarity required to connect two pockets in the graph.
 
-        - summary.txt:
-            Detailed report of cluster composition, class distribution,
-            and representative residue coverage.
+- spatialW:
+    Weight of spatial similarity in the combined score.
 
-        Use Cases
-        ---------
-        - Identification of conserved binding pockets across protein variants
-        - Comparison of predicted pockets from multiple methods
-        - Detection of functionally relevant conserved regions
-        - Reduction of redundant or overlapping pocket predictions
-        - Cross-structure consensus analysis of binding sites
-        """
+- clustMethod:
+    Clustering method (Louvain or connected components).
+
+- repChoice:
+    Strategy used to select consensus representative.
+
+- minFreq:
+    Minimum frequency threshold for intersection-based consensus.
+
+- numOfOverlap:
+    Minimum number of overlapping input classes required in a cluster.
+
+- sameClust:
+    Whether to count pockets from the same input set during clustering.
+
+Output
+------
+- outputStructROIs:
+    SetOfStructROIs containing consensus structural pockets.
+
+Optional Outputs
+----------------
+- Per-input consensus sets (if enabled):
+    Independent consensus pockets per input dataset.
+
+Use Cases
+----------
+- Identification of conserved binding pockets across multiple structures
+- Comparison of predicted vs experimental binding sites
+- Consensus pocket generation for docking campaigns
+- Structural bioinformatics and protein-ligand analysis pipelines
+"""
     _label = 'Consensus structural ROIs'
     _possibleOutputs = PredictStructROIsOutput
     clustChoices = ['Louvain', 'Connected components']
@@ -636,7 +649,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     expertLevel=params.LEVEL_ADVANCED, condition='clustMethod==0',
                     help='Resolution used in the Louvain algorithm')
 
-
         g3 = form.addGroup('Representative')
         g3.addParam('repChoice', params.EnumParam, default=INTERSEC,
                     label='Representant choice: ', choices=self.repChoices,
@@ -661,12 +673,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
         g3.addParam('sizeThres', params.FloatParam, default=0.2, label='Control size threshold: ',
                     expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC} and controlSize',
                     help='Hard threshold to control the size so it does not grow x over the cluster average.')
-    
+
         g3.addParam('outIndv', params.BooleanParam, default=False, condition=f'repChoice not in [{INTERSEC}]',
                     label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
                     help='Creates an output set related to each input set, with the elements from each input'
                          'present in the consensus clusters')
-
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
@@ -712,7 +723,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
         for i, outPock in enumerate(self.consensusPockets):
             newPock = outPock.clone()
-            newPock.setObjId(i+1)
+            newPock.setObjId(i + 1)
             if newPock.getVolume() is None:
                 newPock.setVolume(newPock.getPocketVolume())
             outPockets.append(newPock)
@@ -724,8 +735,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         if self.outIndv.get():
             indepOutputs = self.createIndepOutputs()
             for setId in indepOutputs:
-                #Index should be the same as in the input
-                suffix = '_{:03d}'.format(setId+1)
+                # Index should be the same as in the input
+                suffix = '_{:03d}'.format(setId + 1)
                 outName = 'outputStructROIs' + suffix
                 outSet = indepOutputs[setId]
                 if outSet.getSize() > 0:
@@ -785,7 +796,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
         if self.checkDifferentInput():
             names = self.getInputProtNames()
             warnings.append('The protein this structural ROIs are calculated might not be the same for all the inputs.'
-                  '\nDetected protein names: {}'.format(' | '.join(set(names))))
+                            '\nDetected protein names: {}'.format(' | '.join(set(names))))
         return warnings
 
     def checkDifferentInput(self):
@@ -801,7 +812,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
             names.append(inSet.get().getProteinName())
         return names
 
-
     # --------------------------- UTILS functions -----------------------------------
     def buildStructROIs(self, clustersGroups, groupDic, specificClass=None):
         outPockets, newGroups = [], []
@@ -811,8 +821,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         i = 0
         for cluster in clustersGroups:
             repResiduesList = getClusterRep(cluster, repMethod, not self.sameClust.get(), self.spatialW.get(),
-                                               self.minFreq.get(), self.numOfOverlap.get(), specificClass,
-                                               self.controlSize.get(), self.sizeThres.get())
+                                            self.minFreq.get(), self.numOfOverlap.get(), specificClass,
+                                            self.controlSize.get(), self.sizeThres.get())
 
             for repId, repResidues in repResiduesList:
                 i += 1
@@ -947,7 +957,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def performMSA(self, inpChainDic, group, refChain):
         iFile, oFile = self._getTmpPath(f'chains_{refChain}.fa'), \
-                       self._getExtraPath(f'chains_{refChain}_alignment.fa')
+            self._getExtraPath(f'chains_{refChain}_alignment.fa')
         with open(iFile, 'w') as f:
             for i, chain in enumerate(group):
                 seq = inpChainDic[i][chain]
@@ -967,7 +977,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
     def createIndepOutputs(self):
         outSets = {}
         for setId, pockSet in self.indepConsensusSets.items():
-            suffix = '_{:03d}'.format(setId+1)
+            suffix = '_{:03d}'.format(setId + 1)
             newSet = SetOfStructROIs(filename=self._getExtraPath('ConsensusStructROIs{}.sqlite'.format(suffix)))
             if pockSet:
                 for pock in pockSet:
@@ -1020,7 +1030,6 @@ class ProtocolConsensusStructROIs(EMProtocol):
         )
 
         return clusterGroups, nCommunities
-
 
     def getIndepClusters(self, clusters):
         indepClustersDic = {}
@@ -1220,8 +1229,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         '''Return the set with the reordered ids and a mapper dictionary {newId: oldId}'''
         idsDic = {}
         for i, item in enumerate(inSet):
-            idsDic[i+1] = item.getObjId()
-            item.setObjId(i+1)
+            idsDic[i + 1] = item.getObjId()
+            item.setObjId(i + 1)
         return inSet, idsDic
 
     def getTemplateOutPDB(self):
@@ -1254,7 +1263,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def pdbLineReplacement(self, line, oldId, newId):
         oldLen, newLen = len(oldId), len(newId)
-        oldStr = 'APOL STP C{}'.format((4-oldLen)*' ' + oldId)
-        newStr = 'APOL STP C{}'.format((4-newLen)*' ' + newId)
+        oldStr = 'APOL STP C{}'.format((4 - oldLen) * ' ' + oldId)
+        newStr = 'APOL STP C{}'.format((4 - newLen) * ' ' + newId)
         line = line.replace(oldStr, newStr)
         return line
