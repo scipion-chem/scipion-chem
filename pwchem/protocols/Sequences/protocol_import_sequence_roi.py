@@ -42,6 +42,8 @@ from pwchem.utils import *
 
 class ProtImportSeqROI(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to import a set of sequence ROIs (Regions of Interest) from external files,
     such as IEDB epitope datasets.
 

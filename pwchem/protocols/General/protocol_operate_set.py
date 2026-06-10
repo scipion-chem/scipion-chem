@@ -33,6 +33,8 @@ UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK, BEST = list(range
 
 class ProtChemOperateSet(EMProtocol):
     """
+    AI Generated:
+
     Protocol to perform operations over generic EMSet objects.
 
     This protocol provides a flexible framework to manipulate sets by applying

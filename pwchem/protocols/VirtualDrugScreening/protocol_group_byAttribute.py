@@ -32,6 +32,8 @@ from pyworkflow.protocol import params
 
 class ProtChemGroupByAtt(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to group elements of a Scipion EMSet based on the value
     of a selected attribute. It splits an input dataset into multiple subsets,
     where each subset contains items sharing the same value for a given field.

@@ -46,6 +46,8 @@ RDIC = {LIPINSKI: 'ro5', RO3: 'ro3'}
 
 class ProtocolADMEFiltering(EMProtocol):
     """
+    AI Generated:
+
     This protocol performs ADME (Absorption, Distribution, Metabolism and Excretion)
     filtering on small molecules.
 

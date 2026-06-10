@@ -36,6 +36,8 @@ from pwchem.objects import SequenceVariants
 
 class ProtChemImportVariants(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to import a protein sequence together with its natural or user-defined
     variants, generating a SequenceVariants object for downstream analysis.
 

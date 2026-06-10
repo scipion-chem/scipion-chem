@@ -31,6 +31,8 @@ from pyworkflow.protocol.params import *
 
 class ProtChemGenerateVariants(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to generate a set of sequence variants from a SequenceVariants object.
 
     The protocol allows the creation of new sequences derived from an input reference sequence

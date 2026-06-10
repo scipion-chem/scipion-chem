@@ -34,6 +34,8 @@ from pwchem.utils.utilsFasta import pairwiseAlign, parseAlnFile
 
 class ProtChemPairWiseAlignment(EMProtocol):
     """
+    AI Generated:
+
     This protocol performs a pairwise sequence alignment between two biological sequences.
 
     The sequences can be provided either directly as amino acid sequences or

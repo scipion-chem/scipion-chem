@@ -49,6 +49,8 @@ pymolScriptFileName = 'script.pml'
 
 class ProtPymolOperate(EMProtocol):
     """
+    AI Generated:
+
     Protocol to execute PyMOL operations on atomic structures and import the results into Scipion.
 
     This protocol provides a simple interface to run PyMOL in batch mode using a generated

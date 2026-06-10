@@ -88,6 +88,8 @@ def selectionToMdtraj(selIdx, firstRes=None, lastRes=None, ligandId=None):
 
 class ProtocolTrajectoryClustering(EMProtocol):
     """
+    AI Generated:
+
     Protocol for clustering molecular dynamics trajectories (TTClust-based analysis).
 
     This protocol performs clustering of MD simulation trajectories or ensembles

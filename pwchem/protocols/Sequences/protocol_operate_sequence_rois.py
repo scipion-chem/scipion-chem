@@ -47,6 +47,8 @@ UNION, INTERSECTION, DIFF, SYM_DIFF, BEST = 0, 1, 2, 3, 4
 
 class ProtOperateSeqROI(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to operate on multiple sets of Sequence ROIs
     (Regions Of Interest) performing set-based and interval-based operations
     such as union, intersection, difference, symmetric difference, and selection

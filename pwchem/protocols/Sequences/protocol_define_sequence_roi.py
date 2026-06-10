@@ -44,6 +44,8 @@ RES, SUBS, VAR, MUT = 'Residues', 'SubSequences', 'Variant', 'Mutations'
 
 class ProtDefineSeqROI(EMProtocol):
     """
+    AI Generated:
+
     Protocol to define a MultiEpitope object from multiple SequenceROIs and/or manual sequences.
 
     This protocol allows the user to build a synthetic multi-epitope construct by combining

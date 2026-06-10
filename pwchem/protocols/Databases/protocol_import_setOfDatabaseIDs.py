@@ -32,6 +32,8 @@ from pwchem.objects import DatabaseID, SetOfDatabaseID
 
 class ProtChemImportSetOfDatabaseIDs(EMProtocol):
     """
+    AI Generated:
+
     This protocol imports a set of database identifiers from a plain text file
     and converts them into a structured SetOfDatabaseID object for use in
     downstream bioinformatics and chemoinformatics workflows.

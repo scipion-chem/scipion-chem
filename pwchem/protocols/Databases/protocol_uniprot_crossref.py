@@ -41,6 +41,8 @@ dbChoices = ['PDB', 'UniProtKB', 'EMBL', 'ChEMBL', 'DrugBank', 'BindingDB', 'GO'
 
 class ProtChemUniprotCrossRef(EMProtocol):
     """
+    AI Generated:
+
     This protocol extracts cross-references from UniProt entries to other biological
     and chemical databases such as PDB, ChEMBL, DrugBank, BindingDB, GO, Pfam, and others.
 

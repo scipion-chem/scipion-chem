@@ -46,6 +46,8 @@ from pwchem import Plugin as pwchemPlugin
 
 class ProtocolRANXFuse(EMProtocol):
   """
+  AI Generated:
+
     Protocol to fuse multiple Sets of Statistics into a single combined ranking using Ranx-based
     score fusion and rank aggregation methods.
 

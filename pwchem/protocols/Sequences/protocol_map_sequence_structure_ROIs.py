@@ -48,6 +48,8 @@ from pwchem.protocols import ProtDefineStructROIs
 
 class ProtMapSequenceROI(ProtDefineStructROIs):
     """
+    AI Generated:
+
     This protocol maps SequenceROIs (sequence-defined regions of interest)
     onto 3D structural coordinates in an AtomStruct, generating structural
     ROIs (StructROIs).

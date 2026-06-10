@@ -53,6 +53,8 @@ INTERACTIONSFILENAME = "interacting_residues.csv"
 
 class ProtDefineStructROIs(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to manually define structural regions from coordinates,
     residues, or docked small molecules.
 

@@ -53,6 +53,8 @@ from pwchem import Plugin
 
 class ProtExtractSeqsROI(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to define SequenceROIs based on attribute values stored in a SequenceChem object.
 
     The protocol scans a selected numerical attribute along a sequence and identifies continuous regions

@@ -50,6 +50,8 @@ RESIDUE, ATOM = 0, 1
 
 class ProtDefineContactStructROIs(ProtDefineStructROIs):
     """
+    AI Generated:
+
     This protocol is used to define structural regions of interest (StructROIs)
     based on physical contacts between a set of docked small molecules and a
     receptor structure.

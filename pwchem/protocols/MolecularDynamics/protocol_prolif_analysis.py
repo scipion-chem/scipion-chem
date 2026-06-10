@@ -36,6 +36,8 @@ from pwchem.constants import MDTRAJ_DIC
 
 class ProtocolProlif(EMProtocol):
     """
+    AI Generated:
+
     Protocol for Protein-Ligand interaction analysis using ProLIF.
 
     This protocol runs ProLIF on a Molecular Dynamics (MD) simulation to compute

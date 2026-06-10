@@ -47,6 +47,8 @@ extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles'
 
 class ConvertStructures(EMProtocol):
     """
+    AI Generated:
+
     Protocol to convert molecular and structural data between different file formats.
 
     This tool supports three major input types:

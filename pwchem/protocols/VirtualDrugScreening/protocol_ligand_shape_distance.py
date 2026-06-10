@@ -74,8 +74,69 @@ def parseResultsShapeit(resultsFile, scoreName):
 
 class ProtocolShapeDistances(ProtocolBaseLibraryToSetOfMols):
     """
-    Performs shape distance calculation of a set of molecules against another reference molecule
-    """
+    AI Generated:
+
+This protocol performs shape-based distance calculations between a set of small molecules and a reference molecule for use in virtual screening workflows.
+
+It evaluates how structurally similar each ligand is to a chosen reference compound by applying 3D shape comparison methods. The resulting similarity values are converted into distances, where lower values indicate higher structural similarity.
+
+Core Concepts
+-------------
+Small Molecules:
+    A collection of ligands provided as input, typically originating from previous preparation or screening steps.
+
+Reference Molecule:
+    A user-defined compound used as the structural template for all comparisons.
+
+Shape Comparison:
+    The protocol evaluates molecular similarity based on 3D shape overlap, using either RDKit or Shape-it methodologies.
+
+Distance Metric:
+    Similarity scores are transformed into distances (1 - similarity), allowing easier interpretation in ranking contexts.
+
+Supported Methods
+-----------------
+RDKit:
+    Provides shape comparison using metrics such as Tanimoto, Protrude, and RMSD-based distances. Optionally supports molecular pre-alignment to improve structural matching.
+
+Shape-it:
+    Uses volumetric overlap-based similarity scores, including Tanimoto and Tversky variants derived from shape alignment methods.
+
+Pre-alignment (RDKit):
+    Optionally attempts to align molecules before computing distances based on substructure matching. This improves robustness when common scaffolds exist.
+
+Hydrogen Handling:
+    Hydrogen atoms can be included or ignored depending on configuration, affecting the computed distances.
+
+Workflow
+--------
+1. Input a set of small molecules.
+2. Select a reference molecule for comparison.
+3. Choose a shape comparison method (RDKit or Shape-it).
+4. Optionally enable pre-alignment and hydrogen handling options.
+5. Compute pairwise shape similarity between each ligand and the reference.
+6. Convert similarity values into distances.
+7. Export results as an annotated molecular set or library.
+
+Output
+------
+- Annotated set of small molecules with shape distance values.
+- Optionally an updated molecular library including computed descriptors.
+- Tabular results summarizing distances for each molecule.
+
+Use Cases
+---------
+- Virtual screening based on 3D shape similarity
+- Ligand prioritization against a known active compound
+- Lead optimization and scaffold hopping
+- Comparative evaluation of shape-based scoring methods
+
+Notes
+-----
+- RDKit and Shape-it may produce different rankings due to different shape representations.
+- Pre-alignment can significantly influence results when structural overlap is weak.
+- Distance values are derived from similarity scores (1 - similarity), so lower values indicate higher similarity.
+"""
 
     _label = 'Shape Distance calculation'
     _distanceType = ['Tanimoto', 'Protrude', 'RMSD']

@@ -43,6 +43,8 @@ SROI, MANU = 0, 1
 
 class ProtDefineMultiEpitope(EMProtocol):
     """
+    AI Generated:
+
     Protocol to manually define a MultiEpitope object from one or more
     SetOfSequenceROIs or manually entered peptide fragments.
 

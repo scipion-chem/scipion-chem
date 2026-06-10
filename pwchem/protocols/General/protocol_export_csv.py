@@ -29,6 +29,8 @@ from pyworkflow.protocol.params import PointerParam
 
 class ProtChemExportCSV(EMProtocol):
     """
+    AI Generated:
+
     Protocol to export a Scipion EMSet into a CSV file.
 
     This protocol iterates over all elements in a given EMSet and writes

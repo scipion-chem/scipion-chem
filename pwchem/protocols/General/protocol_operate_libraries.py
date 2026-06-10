@@ -64,6 +64,8 @@ SMI, NAME = 0, 1
 
 class ProtocolOperateLibrary(EMProtocol):
     """
+    AI Generated:
+
     Protocol to perform operations over small molecule libraries.
 
     This tool allows combining, filtering, ranking, and modifying

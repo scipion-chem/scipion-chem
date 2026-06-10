@@ -45,6 +45,8 @@ reactChoices = ['not-anodyne', 'hot-ok', 'hot', 'reactive', 'standard', 'anodyne
 
 class ProtChemZINCFilter(EMProtocol):
     """
+    AI Generated:
+
     This protocol filters a set of small molecules based on their membership
     in predefined ZINC database subsets (ZINC15).
 

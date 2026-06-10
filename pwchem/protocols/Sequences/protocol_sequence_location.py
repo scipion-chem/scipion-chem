@@ -42,6 +42,8 @@ from pwchem.objects import SetOfSequenceROIs, Sequence,SequenceROI
 
 class ProtGetSequenceLocation(EMProtocol):
     """
+    AI Generated:
+
 This protocol is used to retrieve and annotate functional regions of protein sequences
 based on UniProt topology information.
 

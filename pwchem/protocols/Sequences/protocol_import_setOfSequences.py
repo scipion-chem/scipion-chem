@@ -34,6 +34,8 @@ from pwem.objects import Sequence, SetOfSequences
 
 class ProtChemImportSetOfSequences(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to import a set of biological sequences and generate a SetOfSequences object.
 
     Sequences can be imported either from local FASTA files or downloaded directly from external

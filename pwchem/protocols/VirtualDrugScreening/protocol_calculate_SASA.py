@@ -44,6 +44,8 @@ from pwchem.constants import MGL_DIC
 
 class ProtCalculateSASA(EMProtocol):
     """
+    AI Generated:
+
     This protocol calculates the Solvent Accessible Surface Area (SASA) of a protein structure
     (AtomStruct) and optionally maps the resulting accessibility values onto the sequence.
 

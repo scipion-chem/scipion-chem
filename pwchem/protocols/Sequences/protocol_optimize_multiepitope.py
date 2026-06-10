@@ -163,6 +163,8 @@ IEDB, IIITD, DDG, VAXIGN = 'IEDB', 'IIITD', 'DDG', 'VAXIGN'
 
 class ProtOptimizeMultiEpitope(EMProtocol):
   """
+  AI Generated:
+
   This protocol is used to optimize multiepitope constructs using genetic algorithms.
 
   The protocol designs artificial multiepitope sequences by combining epitope regions

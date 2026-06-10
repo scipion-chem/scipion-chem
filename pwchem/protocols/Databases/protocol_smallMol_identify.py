@@ -41,6 +41,8 @@ DbChoices = ['PubChemID', 'PubChemName', 'ZINC_ID', 'ChEMBL_ID']
 
 class ProtChemSmallMolIdentify(EMProtocol):
     """
+    AI Generated:
+
     This protocol performs automatic identification of small molecules by
     converting their structures (SMILES or 3D files) and querying PubChem
     to retrieve chemical identifiers and metadata.

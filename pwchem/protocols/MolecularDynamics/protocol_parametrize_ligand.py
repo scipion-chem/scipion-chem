@@ -53,6 +53,8 @@ def performACPYPE(protocol, molFile, outDir, kwargs):
 
 class ProtocolLigandParametrization(EMProtocol):
     """
+    AI Generated:
+
     Protocol for ligand parametrization using ACPYPE.
 
     This protocol prepares a selected ligand from a SetOfSmallMolecules for

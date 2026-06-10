@@ -36,6 +36,8 @@ CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
     """
+    AI Generated:
+
     Runs multiple sequence alignment for a set of sequences.
 
     This protocol performs multiple sequence alignment (MSA) on an input set

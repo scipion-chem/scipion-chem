@@ -35,6 +35,8 @@ from pwchem.utils import getFilteredOutput
 
 class ProtExtractInteractingMols(EMProtocol):
   """
+  AI Generated:
+  
   This protocol is used to define structural regions (ROIs) based on ligand–receptor
   contacts extracted from docked small molecules.
 

@@ -40,6 +40,8 @@ import os
 
 class ProtDrawMolecules(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to create and manage small molecule structures by drawing
     them interactively using JChemPaint and integrating the resulting molecules
     into a Scipion-compatible workflow.

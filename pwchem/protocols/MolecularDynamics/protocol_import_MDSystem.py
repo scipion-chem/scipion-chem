@@ -34,6 +34,8 @@ from pwem.protocols import EMProtocol
 from pwchem.objects import MDSystem
 class ProtocolImportMDSystem(EMProtocol):
     """
+    AI Generated:
+
     Protocol to import a Molecular Dynamics (MD) system into the Scipion/pwchem framework.
 
     This protocol creates a unified MDSystem object (or backend-specific variant such as OpenMM,

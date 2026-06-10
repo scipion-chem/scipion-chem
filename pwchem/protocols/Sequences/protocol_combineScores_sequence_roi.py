@@ -41,6 +41,8 @@ from pwchem.utils import Float
 
 class ProtCombineScoresSeqROI(EMProtocol):
     """
+    AI Generated:
+
     Protocol for combining and scoring Sequence ROIs based on user-defined attributes
     and optional conditional information from other ROI sets.
 

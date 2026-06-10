@@ -50,6 +50,8 @@ fastaName = "pairWise.fasta"
 
 class ProtMapAttributeToSeqROIs(EMProtocol):
     """
+    AI Generated:
+    
     This protocol maps residue-level attributes from a structural or sequence source
     onto predefined SequenceROI regions and computes the average attribute value per ROI.
 

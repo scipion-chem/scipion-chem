@@ -39,6 +39,8 @@ TYPE_STR = 'obj_type'
 
 class ProtChemImportExportSet(EMProtocol):
     """
+    AI Generated:
+
     Protocol to export and import Scipion objects and datasets via filesystem serialization.
 
     This protocol allows saving a Scipion EMObject (including EMSet collections)

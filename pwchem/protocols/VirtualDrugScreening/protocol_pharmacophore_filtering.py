@@ -38,8 +38,67 @@ scriptName = 'pharmacophore_filtering.py'
 
 class ProtocolPharmacophoreFiltering(EMProtocol):
     """
-    Perform the filtering of a set of small molecules that match an input pharmacophore.
-    """
+    AI Generated:
+
+This protocol performs pharmacophore-based filtering of a set of small molecules.
+
+It identifies compounds that are compatible with a given pharmacophore model by aligning and evaluating
+their spatial and chemical feature correspondence. Only molecules that satisfy the pharmacophore constraints
+within defined geometric tolerances are retained.
+
+Core Concepts
+-------------
+Small Molecules:
+    Input dataset of ligands, optionally containing docking poses or 3D conformations.
+
+Pharmacophore Model:
+    A 3D abstract representation of essential molecular features required for biological activity,
+    such as hydrogen bond donors/acceptors, hydrophobic regions, and aromatic centers.
+
+Pharmacophore Matching:
+    The process of aligning each ligand to the pharmacophore and evaluating whether it satisfies
+    spatial constraints and feature correspondence.
+
+Alignment Scoring:
+    Each ligand–pharmacophore alignment is evaluated using geometric deviation measures (e.g., SSD),
+    and optionally optimized to improve fit.
+
+Workflow
+--------
+1. Input a set of small molecules (optionally with docking poses).
+2. Define or import a pharmacophore model describing key interaction features.
+3. Convert ligand structures to compatible 3D formats if needed.
+4. Subset molecules for parallel processing.
+5. Align each ligand to the pharmacophore using multiple possible mappings.
+6. Optionally optimize ligand conformations during alignment.
+7. Filter molecules based on:
+   - Maximum number of alignments
+   - Maximum allowed deviation (SSD threshold)
+   - Pharmacophore feature matching quality
+8. Collect molecules that satisfy pharmacophore constraints.
+
+Output
+------
+- outputSmallMolecules:
+    Set of molecules that successfully match the pharmacophore model.
+    Each entry contains:
+    - Aligned ligand pose
+    - Alignment score or deviation metric
+    - Pose identifier within the pharmacophore fit
+
+Use Cases
+---------
+- Pharmacophore-based virtual screening
+- Identification of ligands compatible with a known binding hypothesis
+- Prioritization of docking results based on feature matching
+- Lead discovery using 3D pharmacophore models
+
+Notes
+-----
+- Results depend strongly on the quality of the pharmacophore model.
+- Downsampling can speed up processing but may reduce alignment robustness.
+- Optimization improves fit quality but increases computational cost.
+"""
     _label = 'Pharmacophore filtering'
     stepsExecutionMode = params.STEPS_PARALLEL
 

@@ -56,6 +56,9 @@ class ResSelect(Select):
 
 class ProtocolLigandsFetching(EMProtocol):
     """
+
+    AI Generated:
+
     This protocol performs the extraction of ligands that bind to target proteins
     from multiple biological databases (PDB, ChEMBL, BindingDB, ZINC, PubChem, DrugBank).
 

@@ -468,6 +468,8 @@ def mapMsaResidues(alFile):
 
 class ProtocolConsensusStructROIs(EMProtocol):
     """
+    AI Generated:
+
         This protocol performs consensus analysis of structural regions of interest
         (structural ROIs or pockets) across multiple input datasets, potentially
         derived from different protein structures or prediction methods.

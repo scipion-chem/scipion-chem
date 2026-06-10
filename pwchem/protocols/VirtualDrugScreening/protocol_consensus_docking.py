@@ -46,6 +46,8 @@ MIN, MAX = 0, 1
 
 class ProtocolConsensusDocking(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to perform consensus docking analysis across multiple
     sets of docked small molecules. It clusters docking poses based on RMSD
     similarity and identifies consensus binding modes supported by multiple

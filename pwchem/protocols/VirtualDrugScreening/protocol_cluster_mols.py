@@ -52,6 +52,8 @@ RDKIT_FINGER, ATOMPAIR_FINGER = 'finger == 1', 'finger == 2'
 
 class ProtClusterMolecules(ProtocolBaseLibraryToSetOfMols):
   """
+  AI Generated:
+
 This protocol clusters a set of small molecules and identifies representative
 compounds for each resulting cluster.
 

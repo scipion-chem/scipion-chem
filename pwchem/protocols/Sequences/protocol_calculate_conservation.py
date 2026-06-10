@@ -64,6 +64,8 @@ def kabat(counts):
 
 class ProtSeqCalculateConservation(EMProtocol):
     """
+    AI Generated:
+
     ProtSeqCalculateConservation
 
     Protocol to calculate sequence conservation from a multiple sequence alignment

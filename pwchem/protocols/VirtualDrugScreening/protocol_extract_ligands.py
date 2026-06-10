@@ -55,6 +55,8 @@ class ResidueSelect(Select):
 
 class ProtExtractLigands(EMProtocol):
     """
+    AI Generated:
+
     This protocol is used to extract ligands from an atomic structure (PDB, CIF, or ENT)
     and generate a SetOfSmallMolecules compatible with downstream Scipion workflows.
 

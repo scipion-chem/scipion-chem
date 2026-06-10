@@ -42,6 +42,8 @@ from pwchem.utils.utilsFasta import parseFasta
 
 class ProtDefineSetOfSequences(EMProtocol):
     """
+    AI Generated:
+
     Protocol: Define Set of Sequences
 
     This protocol generates a SetOfSequences object from multiple possible inputs:

@@ -72,6 +72,8 @@ def getMatchingFiles(hSize, logPRange):
 
 class ProtChemImportMoleculesLibrary(EMProtocol):
   """
+  AI Generated:
+
     ProtChemImportMoleculesLibrary
 
     Scipion protocol for importing small-molecule libraries from local files

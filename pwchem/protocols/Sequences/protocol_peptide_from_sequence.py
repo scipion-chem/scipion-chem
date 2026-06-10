@@ -47,6 +47,8 @@ URL="https://api.esmatlas.com/foldSequence/v1/pdb/"
 
 class ProtESMatlas(EMProtocol):
     """
+    AI Generated:
+
 This protocol is used to generate peptide 3D structures (PDB files) from amino acid sequences
 using the ESM Metagenomics Atlas API.
 
