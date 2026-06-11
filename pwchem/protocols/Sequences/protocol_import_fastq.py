@@ -28,6 +28,8 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, FileParam, StringParam
 from pyworkflow.object import String
 
+from pwchem import Plugin
+from pwchem.constants import FASTQC_DIC
 from pwchem.objects import FastqFile
 
 class ProtImportFastq(EMProtocol):
@@ -74,7 +76,7 @@ class ProtImportFastq(EMProtocol):
     Notes
     ----------------------------
 
-    - FastQC must be installed and accessible in the system PATH.
+    - FastQC must be installed through the plugin binaries.
     - Generated HTML reports are stored in the protocol's extra directory.
     """
 
@@ -144,7 +146,7 @@ class ProtImportFastq(EMProtocol):
             fn2 = self.inputFastq2.get()
             arguments += f' "{fn2}"'
 
-        self.runJob('fastqc', arguments=arguments)
+        Plugin.runCondaCommand(self, arguments, FASTQC_DIC, 'fastqc')
 
         htmlFiles = self._getFastqcHtmlFiles(outDir)
 
