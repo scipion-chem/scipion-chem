@@ -208,8 +208,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
 
 
     group = form.addGroup('Local files', condition=NO_DEF_LIB)
-    group.addParam('filePath', params.PathParam, condition=NO_DEF_LIB,
-                   label='Library file: ', help='File path to the SMI library in local.')
+    group.addParam('filePath', params.PathParam, condition=NO_DEF_LIB, label='Library file: ',
+                   help='File path to the SMI library in local. Columns should be tab separated.')
     group.addParam('headers', params.StringParam, condition=NO_DEF_LIB,
                    label='Library headers: ', default='',
                    help='Headers of the selected library file. Set them separated by commas. e.g: SMI,Name')
@@ -219,8 +219,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
   # --------------------------- INSERT steps functions --------------------
   def _insertAllSteps(self):
     if self.defLibraries:
-      self._insertFunctionStep('downloadStep')
-    self._insertFunctionStep('createOutputStep')
+      self._insertFunctionStep(self.downloadStep)
+    self._insertFunctionStep(self.createOutputStep)
 
   def downloadStep(self):
     libChoice = self.choicesLibraries.get()
@@ -248,6 +248,8 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
       if nMols > 0:
         reduceNRandomLines(smiFile, nMols, oDir=self._getTmpPath(), seed=self.randomSeed.get())
       swapColumns(smiFile, oDir=self._getTmpPath())
+
+    self.ensureTabDelimiter(oFile)
 
   def createOutputStep(self):
     oFile = self.getOutLibraryFile()
@@ -453,5 +455,13 @@ class ProtChemImportMoleculesLibrary(EMProtocol):
         headers = [h.strip() for h in self.headers.get().split(',')]
     return headers
 
+  def ensureTabDelimiter(self, oFile):
+      tmpFile = 'tabi.tsv'
+      with open(oFile) as fIn:
+          with open(tmpFile, 'w') as fOut:
+              for line in fIn:
+                  fOut.write('\t'.join(line.split()) + '\n')
 
+      os.rename(tmpFile, oFile)
+      return oFile
 

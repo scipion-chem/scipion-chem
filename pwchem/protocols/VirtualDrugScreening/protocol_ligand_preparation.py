@@ -116,6 +116,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
         failedCharges, failedConfs = [], []
         for fnSmall in self.getInputMolFiles(it):
+            fnSmall = fnSmall.replace(' ', '_')
             oFile, fail = self.performAddCharges(fnSmall, it)
             if fail is not None:
               failedCharges.append(fail)
@@ -332,7 +333,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
             baseNames[line.split()[1]] = line
       else:
         for mol in self.inputSmallMolecules.get():
-            fnSmall = mol.getFileName()
+            fnSmall = mol.getFileName().replace(' ', '_')
             baseNames[getBaseName(fnSmall)] = mol.clone()
       return baseNames
 

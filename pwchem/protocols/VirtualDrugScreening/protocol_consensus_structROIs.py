@@ -32,6 +32,7 @@ sources
 
 """
 
+import os
 import numpy as np
 from Bio import pairwise2, AlignIO
 from Bio.Align import substitution_matrices
@@ -43,14 +44,415 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
-from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName
+from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName, invertDic
 from pwchem.utils.utilsFasta import getMultipleAlignmentCline
 
-MAXVOL, MAXSURF, CONTAIN, INTERSEC = 0, 1, 2, 3
+import networkx as nx
+from typing import List, Dict
+from collections import Counter
+
+
+class ResidueGroup:
+    """A group of residues, each with a centroid coordinate."""
+
+    def __init__(self, residueIds: List[int], coordinates: np.ndarray, inputId: int):
+        """
+        residueIds: list of residue identifiers
+        coordinates: numpy array of shape (n_residues, 3)
+        groupClass: input identifier (int)
+        """
+        self.residueIds = residueIds  # e.g., [1, 2, 3, 4]
+        self.coords = coordinates  # shape (n_residues, 3)
+        self.groupClass = inputId
+
+    def __repr__(self):
+        return f"ResidueGroup(class={self.groupClass}, residues={self.residueIds}, size={len(self.residueIds)})"
+
+    def centroid(self) -> np.ndarray:
+        """Geometric center of all residues in this group."""
+        return np.mean(self.coords, axis=0) if len(self.coords) > 0 else None
+
+
+def residuesSimilarity(group1: ResidueGroup, group2: ResidueGroup) -> float:
+    """Set similarity based on residue IDs."""
+    set1 = set(group1.residueIds)
+    set2 = set(group2.residueIds)
+
+    intersection = len(set1 & set2)
+    smallOne = min(len(set1), len(set2))
+
+    return intersection / smallOne
+
+
+def spatialSimilarity(group1: ResidueGroup, group2: ResidueGroup, maxDistance: float = 20.0) -> float:
+    """
+    Spatial similarity based on the groups centroids distance
+    """
+    rmsd = np.linalg.norm(group1.centroid() - group2.centroid())
+    return max(0, 1 - rmsd / maxDistance)
+
+
+def combinedSimilarity(group1: ResidueGroup, group2: ResidueGroup, spatialWeight: float = 0.6) -> float:
+    """
+    Combined similarity metric.
+    spatialWeight: 0 = only set similarity, 1 = only spatial similarity
+    """
+    jaccard = residuesSimilarity(group1, group2)
+    spatial = spatialSimilarity(group1, group2)
+
+    return (1 - spatialWeight) * jaccard + spatialWeight * spatial
+
+
+def buildResidueSimilarityGraph(groups: List[ResidueGroup], minSimilarity: float = 0.2, 
+                                spatialWeight: float = 0.6) -> nx.Graph:
+    """
+    Build weighted graph where nodes are residue groups
+    and edges represent similarity between groups.
+    """
+    graphG = nx.Graph()
+
+    # Add nodes with attributes
+    for i, group in enumerate(groups):
+        graphG.add_node(i,
+                   residueIds=group.residueIds,
+                   coordinates=group.coords,
+                   centroid=group.centroid())
+
+    # Add weighted edges
+    n = len(groups)
+    for i in range(n):
+        for j in range(i + 1, n):
+            similarity = combinedSimilarity(groups[i], groups[j], spatialWeight)
+
+            if similarity >= minSimilarity:
+                graphG.add_edge(i, j, weight=similarity)
+
+    print(f"Built graph with {graphG.number_of_nodes()} nodes and {graphG.number_of_edges()} edges")
+    return graphG
+
+
+def detectClusters(graphG: nx.Graph, method: str = "louvain", resolution: float = 1.0) -> List[List[int]]:
+    """
+    Detect communities (Clusters) in the similarity graph.
+
+    Returns:
+        List of communities, each community is a list of group indices
+    """
+    if method == "louvain":
+        import community as community_louvain
+        partition = community_louvain.best_partition(
+            graphG, weight='weight', resolution=resolution
+        )
+
+        # Group nodes by community
+        communitiesDict = {}
+        for node, commId in partition.items():
+            communitiesDict.setdefault(commId, []).append(node)
+
+        return list(communitiesDict.values())
+
+    elif method == "connected_components":
+        # Fallback: use connected components
+        return [list(comp) for comp in nx.connected_components(graphG)]
+
+    else:
+        raise ValueError(f"Unsupported method: {method}")
+
+
+def getClusterRep(communityGroups: List[ResidueGroup], method: str, classWeighted: bool, spatialWeight: float,
+                  minFreq: float, minClasses: int, specificClass: int = None,
+                  controlSize: bool = True, sizeThres: float = 0.2):
+    """
+    Extract a spatially dense representative set of residues for a community.
+
+    Args:
+        communityGroups: All ResidueGroups in this community
+        method: 'centroid', 'intersection', or 'bigger'
+
+    Returns:
+        Set of residue IDs forming the dense core
+    """
+
+    if method == 'centroid':
+        repResiduesList = getRepresentativeCentroid(communityGroups, classWeighted, spatialWeight, specificClass)
+    elif method == 'intersection':
+        repResiduesList = getRepresentativeIntersection(communityGroups, minFreq, minClasses, controlSize, sizeThres)
+    elif method == 'contained':
+        repResiduesList = getRepresentativeContained(communityGroups, specificClass)
+    else:
+        repResiduesList = getRepresentativeBigger(communityGroups, specificClass)
+
+    return repResiduesList
+
+def checkClassFilter(commGroups, minClasses, sameClass):
+    if sameClass:
+        doPass = len(commGroups) >= minClasses
+    else:
+        classDistribution = Counter(g.groupClass for g in commGroups)
+        uniqueClasses = set(classDistribution.keys())
+        doPass = len(uniqueClasses) >= minClasses
+    return doPass
+    
+
+def residueCommunityPipeline(
+        groups: List[ResidueGroup],
+        minSimilarity: float = 0.2,
+        spatialWeight: float = 0.6,
+        communityMethod: str = "louvain",
+        resolution: float = 1.0,
+        minClasses: int = 2,
+        sameClass: bool = False
+):
+    """
+    Builds the clusters of pockets using the community detection in graph.
+
+    Args:
+        minClasses: Minimum number of distinct classes required in a cluster
+
+    Returns:
+        clusterGroups: clusters of ResidueGroup objects
+        len(communities): number of original clusters prior to class filtering (for summary only)
+    """
+    graphG = buildResidueSimilarityGraph(groups, minSimilarity, spatialWeight)
+    communities = detectClusters(graphG, communityMethod, resolution)
+
+    clusterGroups = []
+    for commId, commIndices in enumerate(communities):
+        # Get groups in this community
+        commGroups = [groups[idx] for idx in commIndices]
+        if checkClassFilter(commGroups, minClasses, sameClass):
+            clusterGroups.append(commGroups)
+    
+    return clusterGroups, len(communities)
+
+
+def analyzeResults(results: List[Dict], nComms):
+    """Print detailed analysis including class diversity."""
+
+    s = "\n=== Consensus pockets analysis ==="
+
+    if results:
+        s += f"\nTotal clusters found: {nComms}"
+        s += f"\nClusters passing class filter: {len(results)} ({len(results) / nComms:.1%})"
+
+    s += f"\n\nFiltered clusters: {len(results)}"
+
+    if not results:
+        s += "\nNo clusters passed the class filter."
+        return s
+
+    # Summary statistics
+    avgClasses = np.mean([r['n_classes'] for r in results])
+    avgGroups = np.mean([r['n_groups'] for r in results])
+    avgRepresentative = np.mean([r['n_representative'] for r in results])
+
+    s += f"\nAverage input classes per clusters: {avgClasses:.1f}"
+    s += f"\nAverage pockets per clusters: {avgGroups:.1f}"
+    s += f"\nAverage representative size: {avgRepresentative:.1f} residues"
+
+    # Detailed community info
+    s += "\nDetailed clusters information:"
+    for res in sorted(results, key=lambda x: (x['n_classes'], x['n_groups']), reverse=True):
+        s += f"\n\nCluster {res['community_id']}:"
+        s += f"\n  Contains {res['n_groups']} pockets from {res['n_classes']} input classes"
+        s += f"\n  Classes: {sorted(res['uniqueClasses'])}"
+
+        # Show class distribution
+        s += "\n  Class distribution:"
+        for cls, count in sorted(res['classDistribution'].items()):
+            fraction = count / res['n_groups']
+            s += f"\n    {cls}: {count} pockets ({fraction:.1%})"
+
+        s += f"\n  Representative: {res['n_representative']} residues"
+        s += f"\n  Coverage: {res['coverage']:.1%}"
+
+        # Show first few representative residues
+        repList = sorted(res['representative_residues'])
+        if len(repList) <= 8:
+            s += f"\n  Representative residues: {repList}"
+        else:
+            s += f"\n  Representative residues (first 8): {repList[:8]}..."
+    return s
+
+
+def getRepresentativeBigger(
+        communityGroups: List[ResidueGroup],
+        specificClass: int = None
+):
+    """
+    Get representative as the group with the most residues.
+
+    Args:
+        tie_breaker: How to handle ties ("random", "first", "centroid")
+    """
+    if specificClass is not None:
+        communityGroups = [g for g in communityGroups if g.groupClass == specificClass]
+
+    if not communityGroups:
+        return None, set()
+
+    # Find groups with maximum size
+    maxSize = max(len(g.residueIds) for g in communityGroups)
+    candidateIndices = [
+        i for i, g in enumerate(communityGroups)
+        if len(g.residueIds) == maxSize
+    ]
+
+    # Handle ties
+    if len(candidateIndices) == 1:
+        selectedIdx = candidateIndices[0]
+    else:
+        # Among ties, choose the centroid
+        avgSimilarities = []
+        for idx in candidateIndices:
+            # Calculate average similarity to all groups
+            totalSim = 0
+            for j, otherGroup in enumerate(communityGroups):
+                if idx != j:
+                    totalSim += combinedSimilarity(
+                        communityGroups[idx], otherGroup
+                    )
+            avgSimilarities.append(totalSim / (len(communityGroups) - 1))
+
+        selectedIdx = candidateIndices[np.argmax(avgSimilarities)]
+
+    return [(selectedIdx, set(communityGroups[selectedIdx].residueIds))]
+
+def getRepresentativeContained(
+        communityGroups: List[ResidueGroup],
+        specificClass: int = None
+):
+    """
+    Get representative as the group that is contained in some other group
+
+    """
+
+    if not communityGroups:
+        return None, set()
+
+    containedGroups = []
+    for i, g in enumerate(communityGroups):
+        gRes = set(g.residueIds)
+        for g2 in communityGroups:
+            if g != g2:
+                g2Res = set(g2.residueIds)
+                if len(gRes - g2Res) == 0 and (not specificClass or g.groupClass == specificClass):
+                    containedGroups.append((i, gRes))
+                    break
+
+    return containedGroups
+
+def getRepresentativeIntersection(
+        communityGroups: List[ResidueGroup],
+        minFreq: float = 0.7,
+        minClasses: int = 2,
+        controlSize: bool = True,
+        sizeThres: float = 0.2):
+    """
+    Intersection representative with class awareness.
+
+    Args:
+        minFreq: minimum frequency in a cluster for a residue to be considered intersection
+        controlSize: the output representative size is controled to be as much as the average of the community groups
+        sizeThres: if not None, the output group size should be close to the average of the community groups size.
+                      This threshold establishes how flexible this limit is.
+                      0.2 means it cannot be bigger than 20% of average
+        minClasses: minimum number of classes a residue needs to appear in to be considered
+    """
+    if not communityGroups:
+        return None, set()
+
+    # Count occurrences and track classes
+    residueInfo = {}  # residueId -> {'count': 0, 'classes': set()}
+    groupSizes = []
+    for group in communityGroups:
+        groupClass = group.groupClass
+        groupSizes.append(len(group.residueIds))
+        for residueId in group.residueIds:
+            if residueId not in residueInfo:
+                residueInfo[residueId] = {'count': 0, 'classes': set()}
+            residueInfo[residueId]['count'] += 1
+            residueInfo[residueId]['classes'].add(groupClass)
+
+    totalGroups = len(communityGroups)
+    threshold = minFreq * totalGroups
+    communitySize = sum(groupSizes) / len(groupSizes)
+    sizeThreshold = communitySize * (1 + sizeThres)
+
+    sortedItems = sorted(residueInfo.items(), key=lambda item: item[1]['count'], reverse=True)
+
+    # Filter residues
+    prevFreq = totalGroups
+    representative = set()
+    for residueId, info in sortedItems:
+        if info['count'] >= threshold:
+            toAdd = True
+            if controlSize and not ((info['count'] < prevFreq and len(representative) < communitySize)
+                                or (info['count'] == prevFreq and len(representative) < sizeThreshold)):
+                toAdd = False
+
+            if toAdd and len(info['classes']) >= minClasses:
+                representative.add(residueId)
+                prevFreq = info['count']
+
+    return [(None, representative)]
+
+
+def getRepresentativeCentroid(
+        communityGroups: List[ResidueGroup],
+        classWeighted: bool = True,
+        spatialWeight: float = 0.6,
+        specificClass: int = None):
+    """
+    Centroid representative with class weighting.
+    Args:
+        classWeighted: weight the importance of the ROIs based on how numerous they are (the less the better)
+        spatialWeight: weight for the spatial similarity between ROIs (jaccard similarity weights the opposite proportion)
+    """
+
+    if not communityGroups or (specificClass is not None and specificClass not in [g.groupClass for g in communityGroups]):
+        return None, set()
+
+    if len(communityGroups) == 1:
+        return 0, set(communityGroups[0].residueIds)
+
+    n = len(communityGroups)
+    similarities = np.zeros((n, n))
+    classWeights = np.ones(n)
+
+    # Calculate class diversity weights if requested
+    if classWeighted:
+        classCounts = Counter(g.groupClass for g in communityGroups)
+        for i, group in enumerate(communityGroups):
+            # Groups from rarer classes get higher weight
+            classWeights[i] = 1.0 / classCounts[group.groupClass]
+        # Normalize weights
+        classWeights = classWeights / classWeights.sum()
+
+    # Calculate weighted similarities
+    for i in range(n):
+        for j in range(i + 1, n):
+            sim = combinedSimilarity(communityGroups[i], communityGroups[j], spatialWeight)
+            # Weight by class importance
+            weightedSim = sim * (classWeights[i] + classWeights[j]) / 2
+            similarities[i, j] = weightedSim
+            similarities[j, i] = weightedSim
+
+    # Find medoid
+    totalSimilarities = similarities.sum(axis=1)
+    for i in sorted(range(len(totalSimilarities)), key=lambda i: totalSimilarities[i], reverse=True):
+        if specificClass is None or communityGroups[i].groupClass == specificClass:
+            medoidIdx = i
+
+    return [(medoidIdx, set(communityGroups[medoidIdx].residueIds))]
+
+
+CENTROID, INTERSEC, BIGGEST, CONTAIN = 0, 1, 2, 3
+LOUV, CONNECT = 0, 1
 
 def mapMsaResidues(alFile):
     '''Return the mapping of the residues resNumber -> AlignPos
-    {seqIdx: {resNum: alignPos}}
+    {seqIdx: {originalPos: alignPos}}
     '''
     alignment = AlignIO.read(alFile, "clustal")
     align2Ori = {}
@@ -70,89 +472,118 @@ class ProtocolConsensusStructROIs(EMProtocol):
     """
     _label = 'Consensus structural ROIs'
     _possibleOutputs = PredictStructROIsOutput
-    repChoices = ['MaxVolume', 'MaxSurface', 'Contained', 'Intersection']
+    clustChoices = ['Louvain', 'Connected components']
+    repChoices = ['Centroid', 'Intersection', 'Bigger', 'Contained']
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         """ """
         form.addSection(label=Message.LABEL_INPUT)
-        iGroup = form.addGroup('Input')
-        iGroup.addParam('inputStructROIsSets', params.MultiPointerParam,
-                        pointerClass='SetOfStructROIs', allowsNull=False,
-                        label="Input Sets of Structural ROIs: ",
-                        help='Select the structural ROIs sets to make the consensus')
-        iGroup.addParam('outIndv', params.BooleanParam, default=False,
-                        label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
-                        help='Creates an output set related to each input set, with the elements from each input'
-                             'present in the consensus clusters')
+        g1 = form.addGroup('Input')
+        g1.addParam('inputStructROIsSets', params.MultiPointerParam,
+                    pointerClass='SetOfStructROIs', allowsNull=False,
+                    label="Input Sets of Structural ROIs: ",
+                    help='Select the structural ROIs sets to make the consensus')
 
-        pGroup = form.addGroup('Parameters')
-        pGroup.addParam('overlap', params.FloatParam, default=0.75, label='Proportion of residues for overlapping: ',
-                        help="Min proportion of residues (from the smaller) of two structural regions to be considered "
-                             "overlapping")
-        pGroup.addParam('numOfOverlap', params.IntParam, default=2, important=True,
-                        label='Minimum number of overlapping structural regions: ',
-                        help="Min number of structural regions to be considered consensus StructROIs")
-        pGroup.addParam('sameClust', params.BooleanParam, default=False,
-                        label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
-                        help='Whether to count overlapping structural ROIs from the same input set when calculating '
-                             'the cluster size')
+        g2 = form.addGroup('Clustering')
+        g2.addParam('clustMethod', params.EnumParam, default=0,
+                    label='Clustering method: ', choices=self.clustChoices,
+                    help='Clustering method based on graph communities based on residues overlapping.'
+                         '\nLouvain selects the best partition of communities.'
+                         '\nConnected components select those clusters with enough similarity.')
+        g2.addParam('minSimil', params.FloatParam, default=0.8, label='Minimum similarity: ',
+                    help="Minimum similarity for two ROIs to be considered in the same cluster. "
+                         "It is calculated as the weighted sum of residue proportion of overlap and spatial similarity")
+        g2.addParam('spatialW', params.FloatParam, default=0.4, label='Spatial weight: ',
+                    expertLevel=params.LEVEL_ADVANCED,
+                    help="Weight of the spatial part of the similarity. It takes into account how close the residues "
+                         "in two ROIs are, disregarding the overlap.")
 
-        rGroup = form.addGroup('Cluster representative')
-        rGroup.addParam('repChoice', params.EnumParam, default=INTERSEC,
-                        label='Representant choice: ', choices=self.repChoices,
-                        help='How to choose the representative ROI from a cluster of overlapping ROIs. MaxSurface and '
-                             'MaxVolume chooses the existing pocket with maximum surface or volume, respectively. '
-                             '\nIntersection creates a new standard pocket with the interecting residues from the '
-                             'ROIs in the cluster (if any)')
+        g2.addParam('resolution', params.FloatParam, default=0.9, label='Resolution for Louvain algorithm: ',
+                    expertLevel=params.LEVEL_ADVANCED, condition='clustMethod==0',
+                    help='Resolution used in the Louvain algorithm')
 
-        rGroup.addParam('fromSet', params.StringParam, label="Preference set: ",
-                         default='', condition=f'repChoice<{INTERSEC}', expertLevel=params.LEVEL_ADVANCED,
-                         help='If not empty, output pockets will be chosen from those in this set.')
-        rGroup.addParam('fallbackToOtherSets', params.BooleanParam, default=True, expertLevel=params.LEVEL_ADVANCED,
-                        label='Add pockets from other sets if none in chosen set: ', condition=f'repChoice<{CONTAIN}',
-                        help='If True, choose representative from any other input set when the chosen set has no '
-                             'pockets in the cluster. If False, ignore cluster.')
+
+        g3 = form.addGroup('Representative')
+        g3.addParam('repChoice', params.EnumParam, default=INTERSEC,
+                    label='Representant choice: ', choices=self.repChoices,
+                    help='How to choose the representative ROI from a cluster of overlapping ROIs. \n'
+                         'Centroid: chooses the ROI with bigger similarity to the rest in the cluster.\n'
+                         'Intersection: creates a new standard pocket with the residues shared by x proportion of '
+                         'the cluster ROIS\nBigger: chooses the ROI with higher number of residues in contact.')
+        g3.addParam('numOfOverlap', params.IntParam, default=2,
+                    label='Minimun number of overlapping structural regions: ',
+                    help="Min number of structural regions to be considered consensus StructROIs")
+        g3.addParam('sameClust', params.BooleanParam, default=False,
+                    label='Count ROIs from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                    help='Whether to count overlapping structural ROIs from the same input set when calculating the '
+                         'cluster size')
+
+        g3.addParam('minFreq', params.FloatParam, default=0.6, label='Minimum frequency for intersection: ',
+                    expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC}',
+                    help='Minimum frequency a residue bust appear in a cluster to be considered intersection.')
+        g3.addParam('controlSize', params.BooleanParam, default=True, label='Control intersection size: ',
+                    expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC}',
+                    help='Control intersection size so it does not grow far from the cluster average.')
+        g3.addParam('sizeThres', params.FloatParam, default=0.2, label='Control size threshold: ',
+                    expertLevel=params.LEVEL_ADVANCED, condition=f'repChoice=={INTERSEC} and controlSize',
+                    help='Hard threshold to control the size so it does not grow x over the cluster average.')
+    
+        g3.addParam('outIndv', params.BooleanParam, default=False, condition=f'repChoice not in [{INTERSEC}]',
+                    label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                    help='Creates an output set related to each input set, with the elements from each input'
+                         'present in the consensus clusters')
+
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         # Insert processing steps
-        self._insertFunctionStep('consensusStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.consensusStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def consensusStep(self):
         self.doMap = False
         if self.checkDifferentInput():
             self.chainsMapDic = self.buildChainsMapDic()
             self.residuesMapDic = self.buildResiduesMapDic()
-            self.resPositionMapDic = self.buildResPositionMapDic()
+            self.resId2PositionDic, self.resPosition2IdDic = self.buildResPositionMapDic()
             self.doMap = True
 
         self.pocketDic = self.buildPocketDic()
-        pocketClusters = self.generatePocketClusters()
 
-        # Getting the representative of the clusters from any of the inputs
-        ref = None
-        if self.doMap:
-            ref = self.getPrefSetId() if self.getPrefSetId() else 0
-        self.consensusPockets = self.cluster2representative(pocketClusters, onlyRef=ref)
+        residueGroups, groupDic = [], {}
+        for i, pockSet in enumerate(self.inputStructROIsSets):
+            for newPock in pockSet.get():
+                coords = self.getPocketCoords(newPock)
+                residues = self.getPocketResidues(newPock)
+                inSetId = self.pocketDic[newPock.getFileName()]
+                group = ResidueGroup(residues, coords, inSetId)
 
-        if self.outIndv.get():
+                residueGroups.append(group)
+                groupDic[group] = newPock.clone()
+
+        pocketClusters, nComms = self.generatePocketClusters(residueGroups)
+        self.consensusPockets, clustersConsensus = self.buildStructROIs(pocketClusters, groupDic)
+        self.buildSummary(clustersConsensus, self.consensusPockets, nComms)
+
+        if self.outIndv.get() and self.repChoice.get() != INTERSEC:
             self.indepConsensusSets = {}
             for inSetId in range(len(self.inputStructROIsSets)):
                 # Getting independent representative for each input set
-                self.indepConsensusSets[inSetId] = self.cluster2representative(pocketClusters, onlyRef=inSetId)
+                self.indepConsensusSets[inSetId], _ = self.buildStructROIs(pocketClusters, groupDic, inSetId)
 
     def createOutputStep(self):
         self.consensusPockets = self.fillEmptyAttributes(self.consensusPockets)
         self.consensusPockets, idsDic = self.reorderIds(self.consensusPockets)
 
         outPockets = SetOfStructROIs(filename=self._getPath('ConsensusStructROIs_All.sqlite'))
-        for outPock in self.consensusPockets:
+        for i, outPock in enumerate(self.consensusPockets):
             newPock = outPock.clone()
+            newPock.setObjId(i+1)
             if newPock.getVolume() is None:
                 newPock.setVolume(newPock.getPocketVolume())
             outPockets.append(newPock)
+
         if outPockets.getSize() > 0:
             outPockets.buildPDBhetatmFile(suffix='_All')
             self._defineOutputs(**{self._possibleOutputs.outputStructROIs.name: outPockets})
@@ -170,8 +601,45 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     self._defineSourceRelation(self.inputStructROIsSets[setId].get(), outSet)
 
     # --------------------------- INFO functions -----------------------------------
+
+    def buildSummary(self, pocketClusters, reps, nComms):
+        results = []
+        for i, cluster in enumerate(pocketClusters):
+            # Calculate community statistics
+            allResidues = set()
+            allCoords = []
+            for group in cluster:
+                allResidues.update(group.residueIds)
+                allCoords.append(group.coords)
+
+            classDistribution = Counter(g.groupClass for g in cluster)
+            uniqueClasses = set(classDistribution.keys())
+            repResidues = reps[i].getDecodedCResidues()
+
+            # Store results including class info
+            result = {
+                'community_id': i, 'groups': cluster, 'n_groups': len(cluster),
+                'classDistribution': classDistribution,
+                'uniqueClasses': uniqueClasses, 'n_classes': len(uniqueClasses),
+                'allResidues': allResidues, 'n_all_residues': len(allResidues),
+                'representative_id': reps[i], 'representative_residues': repResidues,
+                'n_representative': len(repResidues),
+                'coverage': len(repResidues) / len(allResidues) if allResidues else 0,
+            }
+            results.append(result)
+
+        with open(self.getSummaryFile(), 'w') as f:
+            f.write(analyzeResults(results, nComms))
+
+    def getSummaryFile(self):
+        return self._getExtraPath('summary.txt')
+
     def _summary(self):
         summary = []
+        if os.path.exists(self.getSummaryFile()):
+            with open(self.getSummaryFile()) as f:
+                summary += [f.read()]
+
         return summary
 
     def _methods(self):
@@ -202,6 +670,36 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
 
     # --------------------------- UTILS functions -----------------------------------
+    def buildStructROIs(self, clustersGroups, groupDic, specificClass=None):
+        outPockets, newGroups = [], []
+        asFile = self.inputStructROIsSets[0].get().getProteinFile()
+        repMethod = self.getEnumText('repChoice').lower()
+
+        i = 0
+        for cluster in clustersGroups:
+            repResiduesList = getClusterRep(cluster, repMethod, not self.sameClust.get(), self.spatialW.get(),
+                                               self.minFreq.get(), self.numOfOverlap.get(), specificClass,
+                                               self.controlSize.get(), self.sizeThres.get())
+
+            for repId, repResidues in repResiduesList:
+                i += 1
+                if repId is not None:
+                    outPocket = groupDic[cluster[repId]]
+                    outPockets.append(outPocket)
+                    if cluster not in newGroups:
+                        newGroups.append(cluster)
+                else:
+                    if len(repResidues) > 0:
+                        pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
+                        coords = self.getResidueCoords(repResidues, asFile, avgResidue=False)
+                        createPocketFile(coords, i, pocketFile)
+                        outPocket = StructROI(pocketFile, asFile)
+                        outPocket.setContactResidues(outPocket.encodeIds(repResidues))
+                        outPockets.append(outPocket)
+                        if cluster not in newGroups:
+                            newGroups.append(cluster)
+        return outPockets, newGroups
+
     def getPrefSetId(self):
         """Return the index of the set whose name matches fromSet"""
         targetName = self.fromSet.get()
@@ -285,8 +783,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
         Second level is a mapping where the key is the chainId of that input and the value is the reference chainId.
         Therefore, first item will be just the first input mapped to itself
 
-        :return: {  refChain0: {seqIdx: {resNum: alignPos}, seqIdx2: {resNum: alignPos}, ...}
-                    refChain1: {seqIdx: {resNum: alignPos}, seqIdx2: {resNum: alignPos}, ...},
+        :return: {  refChain0: {seqIdx: {originalPos: alignPos}, seqIdx2: {originalPos: alignPos}, ...}
+                    refChain1: {seqIdx: {originalPos: alignPos}, seqIdx2: {originalPos: alignPos}, ...},
                   }
         '''
         chainGroups = self.getChainGroups()
@@ -300,14 +798,19 @@ class ProtocolConsensusStructROIs(EMProtocol):
         return resMap
 
     def buildResPositionMapDic(self):
-        '''Builds a dictionary that maps the ID of each residue in the inputs to their position index in the sequence
+        '''Builds a dictionary that maps the ID of each residue in the inputs to their position index in the sequence.
         {seqIdx: {chainID: {resId: resPos}}}
+        Also returns the inverse dic:
+        {seqIdx: {chainID: {resPos: resId}}}
         '''
-        dic = {}
+        dic, invDic = {}, {}
         for i, pPointer in enumerate(self.inputStructROIsSets):
             pSet = pPointer.get()
             dic[i] = pSet.getProteinSequencesResIdsDic()
-        return dic
+            invDic[i] = {}
+            for chain in dic[i]:
+                invDic[i][chain] = invertDic(dic[i][chain])
+        return dic, invDic
 
     def performMSA(self, inpChainDic, group, refChain):
         iFile, oFile = self._getTmpPath(f'chains_{refChain}.fa'), \
@@ -330,11 +833,12 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def createIndepOutputs(self):
         outSets = {}
-        for setId in self.indepConsensusSets:
+        for setId, pockSet in self.indepConsensusSets.items():
             suffix = '_{:03d}'.format(setId+1)
             newSet = SetOfStructROIs(filename=self._getExtraPath('ConsensusStructROIs{}.sqlite'.format(suffix)))
-            for pock in self.indepConsensusSets[setId]:
-                newSet.append(pock.clone())
+            if pockSet:
+                for pock in pockSet:
+                    newSet.append(pock.clone())
             outSets[setId] = newSet
         return outSets
 
@@ -344,36 +848,46 @@ class ProtocolConsensusStructROIs(EMProtocol):
             inpProteinFiles.append(inpSet.get().getProteinFile())
         return inpProteinFiles
 
-    def generatePocketClusters(self):
-        '''Generate the pocket clusters based on the overlapping residues
-        Return (clusters): [[pock1, pock2], [pock3], [pock4, pock5, pock6]]'''
-        clusters = []
-        #For each set of pockets
-        for i, pockSet in enumerate(self.inputStructROIsSets):
-            #For each of the pockets in the set
-            for newPock in pockSet.get():
-                newClusters, newClust = [], [newPock.clone()]
-                #Check for each of the clusters
-                for clust in clusters:
-                    #Check for each of the pockets in the cluster
-                    overClust = False
-                    for cPocket in clust:
-                        propOverlap = self.calculateResiduesOverlap(newPock, cPocket)
-                        #If there is overlap with the new pocket from the set
-                        if propOverlap > self.overlap.get():
-                            overClust = True
-                            break
+    def getPDBName(self):
+        pdbFile = self.inputStructROIsSets[0].get().getFirstItem().getProteinFile().split('/')[-1]
+        return pdbFile.split('_out')[0]
 
-                    #newClust: Init with only the newPocket, grow with each clust which overlaps with newPocket
-                    if overClust:
-                        newClust += clust
-                    #If no overlap, the clust keeps equal
-                    else:
-                        newClusters.append(clust)
-                #Add new cluster containing newPocket + overlapping previous clusters
-                newClusters.append(newClust)
-                clusters = newClusters.copy()
-        return clusters
+    def getPocketResidues(self, pock):
+        res = pock.getDecodedCResidues()
+        if self.doMap:
+            inSetId = self.pocketDic[pock.getFileName()]
+            res = self.performMapping(res, inSetId)
+        return res
+
+    def getResidueCoords(self, residues, asFile, avgResidue=True):
+        coordDic = self.parseResidueCoords(asFile)
+        atomCoordsList = [coordDic[resId] for resId in residues]
+        if avgResidue:
+            resCoords = [np.mean(atomCoords, axis=0) for atomCoords in atomCoordsList]
+        else:
+            resCoords = [atomCoord for atomCoords in atomCoordsList for atomCoord in atomCoords]
+        return resCoords
+
+    def getPocketCoords(self, pock):
+        asFile = pock.getProteinFile()
+        residues = pock.getDecodedCResidues()
+        return self.getResidueCoords(residues, asFile)
+
+    def generatePocketClusters(self, residueGroups):
+        clustMethod = 'louvain' if self.clustMethod.get() == LOUV else 'connected_components'
+
+        clusterGroups, nCommunities = residueCommunityPipeline(
+            residueGroups,
+            minSimilarity=self.minSimil.get(),
+            spatialWeight=self.spatialW.get(),
+            communityMethod=clustMethod,
+            resolution=self.resolution.get(),
+            minClasses=self.numOfOverlap.get(),
+            sameClass=self.sameClust.get(),
+        )
+
+        return clusterGroups, nCommunities
+
 
     def getIndepClusters(self, clusters):
         indepClustersDic = {}
@@ -419,6 +933,7 @@ class ProtocolConsensusStructROIs(EMProtocol):
                     # If there is a Preference set, filter for it
                     filteredClust = self.filterPocketsBySet(clust, self.getPrefSetId())
 
+                outPockets = None
                 if self.repChoice.get() == MAXVOL and filteredClust:
                     outPockets = [self.getMaxVolumePocket(filteredClust)]
                 elif self.repChoice.get() == MAXSURF and filteredClust:
@@ -429,7 +944,9 @@ class ProtocolConsensusStructROIs(EMProtocol):
                 elif self.repChoice.get() == INTERSEC:
                     # As intersection creates a new pocket rather than choosing, it uses all pockets, no the filtered
                     outPockets = [self.getIntersectionPocket(clust, i)]
-                representatives += outPockets
+
+                if outPockets is not None:
+                    representatives += outPockets
 
         return representatives
 
@@ -492,22 +1009,26 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def getIntersectionPocket(self, cluster, i):
         '''Return the pocket as set of intersection residues in a cluster.'''
-        inters = cluster[0].getDecodedCResidues()
-        pdbFile = cluster[0].getProteinFile()
-        for pocket in cluster:
-            pRes = pocket.getDecodedCResidues()
-            inters = set(inters).intersection(set(pRes))
+        if len(cluster) > 1:
+            inters = cluster[0].getDecodedCResidues()
+            pdbFile = cluster[0].getProteinFile()
+            for pocket in cluster:
+                pRes = pocket.getDecodedCResidues()
+                inters = set(inters).intersection(set(pRes))
 
-        if len(inters) > 0:
-            coords = []
-            resCoordDic = self.parseResidueCoords(pdbFile)
-            for res in inters:
-                coords += resCoordDic[res]
+            if len(inters) > 0:
+                coords = []
+                resCoordDic = self.parseResidueCoords(pdbFile)
+                for res in inters:
+                    coords += resCoordDic[res]
 
-            pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
-            createPocketFile(coords, i, pocketFile)
-            outPocket = StructROI(pocketFile, pdbFile)
-            outPocket.calculateContacts()
+                pocketFile = self._getExtraPath(f'pocketFile_{i}.cif')
+                createPocketFile(coords, i, pocketFile)
+                outPocket = StructROI(pocketFile, pdbFile)
+                outPocket.setObjId(i)
+                outPocket.calculateContacts()
+            else:
+                outPocket = self.getMaxSurfacePocket(cluster)
         else:
             outPocket = self.getMaxSurfacePocket(cluster)
 
@@ -515,9 +1036,8 @@ class ProtocolConsensusStructROIs(EMProtocol):
 
     def getPocketsIntersection(self, pock1, pock2):
         res1, res2 = pock1.getDecodedCResidues(), pock2.getDecodedCResidues()
-        inSetId1, inSetId2 = self.pocketDic[pock1.getFileName()], self.pocketDic[pock2.getFileName()]
-
         if self.doMap:
+            inSetId1, inSetId2 = self.pocketDic[pock1.getFileName()], self.pocketDic[pock2.getFileName()]
             res1, res2 = self.performMapping(res1, inSetId1), self.performMapping(res2, inSetId2)
         overlap = set(res1).intersection(set(res2))
         return overlap
@@ -526,10 +1046,11 @@ class ProtocolConsensusStructROIs(EMProtocol):
         mapResList = []
         for resId in resList:
             chain, res = resId.split('_')
-            resIdx = self.resPositionMapDic[setId][chain][int(res)]
+            resIdx = self.resId2PositionDic[setId][chain][int(res)]
             if chain in self.chainsMapDic[setId]:
                 refChain = self.chainsMapDic[setId][chain]
-                refRes = self.residuesMapDic[refChain][setId][resIdx]
+                refPos = self.residuesMapDic[refChain][setId][resIdx]
+                refRes = self.resPosition2IdDic[setId][refChain][refPos]
             else:
                 refChain, refRes = setId, setId
             mapResList.append(f'{refChain}_{refRes}')

@@ -52,6 +52,7 @@ __version__ = version.__version__
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        cls.addNetworkX(env)
         cls.addRDKitPackage(env)
         cls.addOpenbabelPackage(env)
         cls.addMGLToolsPackage(env)
@@ -118,6 +119,17 @@ class Plugin(pwem.Plugin):
 
 ######################## PACKAGES #########################
     @classmethod
+    def addNetworkX(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(NETWORKX_DIC['name'], packageHome=cls.getVar(NETWORKX_DIC['home']),
+                                  packageVersion=NETWORKX_DIC['version'])
+
+        # Installing package
+        installer.addCommand(f'conda install -y conda-forge::networkx={NETWORKX_DIC["version"]} '
+                             f'conda-forge::python-louvain=0.16') \
+            .addPackage(env, dependencies=['conda'], default=default)
+
+    @classmethod
     def addRDKitPackage(cls, env, default=True):
         # Instantiating install helper
         installer = InstallHelper(RDKIT_DIC['name'], packageHome=cls.getVar(RDKIT_DIC['home']), packageVersion=RDKIT_DIC['version'])
@@ -140,14 +152,17 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-        # Defining file names
-        tar_file = cls.getDefTar(MGL_DIC)
+        mglEnvName = cls.getEnvName(MGL_DIC)
 
-        # Installing package
-        installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tar_file)\
-            .addCommand(f'tar -xf {tar_file} --strip-components 1 && rm {tar_file}', 'MGLTOOLS_EXTRACTED')\
-            .addCommand('export DISPLAY= && {}'.format(cls.getDefPath(MGL_DIC, 'install.sh')), 'MGLTOOLS_INSTALLED')\
-            .addPackage(env, dependencies=['wget', 'tar'], default=default)
+        installer.addCommand(
+            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]}',
+            'MGLTOOLS_ENV_CREATED'
+        ).addCommand(
+            f'{cls.getEnvActivationCommand(MGL_DIC)} && '
+            f'rm -rf {cls.getVar(MGL_DIC["home"])} && '
+            f'ln -s $CONDA_PREFIX {cls.getVar(MGL_DIC["home"])}',
+            'MGLTOOLS_SYMLINK_CREATED'
+        ).addPackage(env,dependencies=['conda'],default=default)
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=True):
@@ -173,7 +188,6 @@ class Plugin(pwem.Plugin):
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
             .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
-            .addCondaPackages(['mdanalysis'], channel='conda-forge',  targetName='MDANALYSIS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
@@ -223,7 +237,10 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-        installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
+        installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge') \
+            .addCondaPackages(['prolif', 'ipython'], channel='conda-forge', targetName='PROLIF_INSTALLED') \
+            .addCondaPackages(['scipy', 'scikit-learn', 'numba', 'progressbar2', 'prettytable'],
+                              channel='conda-forge', targetName='TTCLUST_INSTALLED') \
             .addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
@@ -382,6 +399,19 @@ class Plugin(pwem.Plugin):
         fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
+    @classmethod
+    def runMSMS(cls, structModel):
+        """ Run MSMS command from a given protocol. """
+        from Bio.PDB.ResidueDepth import get_surface
+        envName = Plugin.getEnvName(MGL_DIC)
+        prefix = Plugin.getMGLToolsPrefix(envName=envName)
+        msmsPath = os.path.join(
+            prefix,
+            "MGLToolsPckgs/binaries/msms"
+        )
+        structSurface = get_surface(structModel, MSMS=msmsPath)
+        return structSurface
+
 ##################### UTILS ###########################
     @classmethod
     def getPluginHome(cls, path=""):
@@ -417,6 +447,18 @@ class Plugin(pwem.Plugin):
             'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
         }, position=pos)
         return environ
+
+    @classmethod
+    def getMGLToolsPrefix(cls,envName):
+        result = subprocess.run(
+            ["conda", "env", "list"],
+            capture_output=True,
+            text=True
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith(envName):
+                return line.split()[-1]
+        raise RuntimeError(f"Cannot find conda env {envName}")
 
     @classmethod
     def getODDTModelsPath(cls, path=''):

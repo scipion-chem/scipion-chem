@@ -74,7 +74,7 @@ class ProtocolLigandParametrization(EMProtocol):
 
 
     def _defineACPYPEparams(self, form, condition=True):
-      pGroup = form.addGroup('Parameters', condition=condition)
+      pGroup = form.addGroup('Ligand parametrization', condition=condition)
       pGroup.addParam('chargeMethod', params.EnumParam, default=1, label='Charge methods: ',
                       choices=_chargeMethods, condition=condition,
                       help="Method used to calculate charges.\n")
