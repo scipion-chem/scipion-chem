@@ -1940,16 +1940,56 @@ class PharmacophoreChem(data.EMSet):
       self.append(feat)
 
 
-class FastqFile(data.EMFile):
+class SequenceFile(data.EMFile):
+  """Base object representing a biological sequence file."""
+
+  def __init__(self, filename=None, **kwargs):
+    super().__init__(filename=filename, **kwargs)
+
+    self._format = pwobj.String(kwargs.get('format', None))
+    self._hasQuality = pwobj.Boolean(kwargs.get('hasQuality', False))
+    self._isCompressed = pwobj.Boolean(kwargs.get('isCompressed', False))
+
+  def getFormat(self):
+    return self._format.get()
+
+  def setFormat(self, value):
+    self._format.set(value)
+
+  def hasQuality(self):
+    return self._hasQuality.get()
+
+  def setHasQuality(self, value):
+    self._hasQuality.set(value)
+
+  def isCompressed(self):
+    return self._isCompressed.get()
+
+  def setIsCompressed(self, value):
+    self._isCompressed.set(value)
+
+  def supportsFastQC(self):
+    return self.hasQuality()
+
+  def getFiles(self):
+    return [self.getFileName()]
+
+  def getObjLabel(self):
+    fn = self.getFileName()
+    return os.path.basename(fn) if fn else 'sequence file'
+
+class FastqFile(SequenceFile):
   """Object representing a FASTQ dataset."""
 
   def __init__(self, filename=None, **kwargs):
+    kwargs.setdefault('format', 'FASTQ')
+    kwargs.setdefault('hasQuality', True)
+
     super().__init__(filename=filename, **kwargs)
 
     self._filename2 = pwobj.String(kwargs.get('filename2', None))
     self._sampleName = pwobj.String(kwargs.get('sampleName', None))
     self._isPaired = pwobj.Boolean(kwargs.get('isPaired', False))
-    self._isCompressed = pwobj.Boolean(kwargs.get('isCompressed', False))
 
   def getFileName2(self):
     return self._filename2.get()
@@ -1972,20 +2012,14 @@ class FastqFile(data.EMFile):
   def setIsPaired(self, value):
     self._isPaired.set(value)
 
-  def isCompressed(self):
-    return self._isCompressed.get()
-
-  def setIsCompressed(self, value):
-    self._isCompressed.set(value)
-
-  def hasQuality(self):
-    return True
+  def supportsFastQC(self):
+    return self.getFormat() == 'FASTQ' and self.hasQuality()
 
   def getFiles(self):
-    files = [self.getFileName()]
     if self.isPaired() and self.hasFileName2():
-      files.append(self.getFileName2())
-    return [f for f in files if f]
+      return [self.getFileName(), self.getFileName2()]
+
+    return [self.getFileName()]
 
   def __str__(self):
     sample = self.getSampleName() or 'unnamed'
@@ -1996,6 +2030,7 @@ class FastqFile(data.EMFile):
     sample = self.getSampleName()
     if sample:
       return sample
+
     fn = self.getFileName()
     return os.path.basename(fn) if fn else 'fastq'
 
