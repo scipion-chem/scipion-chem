@@ -31,7 +31,7 @@ This module will extract the ligand from a complex pdb.
 """
 
 import os, sys, json
-from Bio.PDB import PDBParser, PDBIO, Select, MMCIFParser
+from Bio.PDB import PDBParser, PDBIO, Select, MMCIFParser, MMCIFIO
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
@@ -139,17 +139,19 @@ class ProtExtractLigands(EMProtocol):
             exit()
 
         ligandFiles = []
-        io = PDBIO()
-        io.set_structure(struct)
         for model in struct:
             for chain in model:
                 for residue in chain:
-                    heavyAtoms = [atom for atom in residue if atom.element != 'H']
-                    if not isHet(residue) or len(heavyAtoms) < self.nAtoms.get():
-                        continue
-                    print(f"saving {chain} {residue}")
-                    outFile = self._getPath(f"{struct_name}_{residue.get_resname()}.pdb")
+                    if not isHet(residue): continue
+                    heavyAtoms = [a for a in residue if a.element != 'H']
+                    if len(heavyAtoms) < self.nAtoms.get(): continue
+                    resname = residue.get_resname().strip()
+                    res_id = residue.get_id()[1]
+                    outFile = self._getPath(f"{struct_name}_{resname}_{res_id}.cif")
+
+                    io = MMCIFIO()
+                    io.set_structure(residue)
+                    io.save(outFile)
                     ligandFiles.append(outFile)
-                    io.save(outFile, ResidueSelect(chain, residue))
 
         return ligandFiles
