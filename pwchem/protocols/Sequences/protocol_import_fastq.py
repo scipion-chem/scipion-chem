@@ -149,11 +149,11 @@ class ProtImportFastq(EMProtocol):
         htmlFiles = self._getFastqcHtmlFiles(outDir)
 
         if not htmlFiles:
-            raise Exception('FastQC finished but no HTML report was generated.')
+            raise RuntimeError('FastQC finished but no HTML report was generated.')
 
         if self.isPaired.get():
             if len(htmlFiles) < 2:
-                raise Exception('Expected two FastQC HTML reports for paired-end data.')
+                raise RuntimeError('Expected two FastQC HTML reports for paired-end data.')
 
             self._defineOutputs(
                 outputFastqcHtmlR1=String(htmlFiles[0]),
