@@ -44,8 +44,107 @@ reactChoices = ['not-anodyne', 'hot-ok', 'hot', 'reactive', 'standard', 'anodyne
 
 
 class ProtChemZINCFilter(EMProtocol):
-    """Filter a set of small molecules by being in all selected catalogs of ZINC.
-       See https://zinc15.docking.org/substances/subsets/"""
+    """
+    AI Generated:
+
+    This protocol filters a set of small molecules based on their membership
+    in predefined ZINC database subsets (ZINC15).
+
+    It allows selecting molecules that are either present or absent in specific
+    ZINC catalog categories such as availability, bioactivity, biogenic origin,
+    reactivity, and other curated chemical subsets.
+
+    Inputs
+    ------
+    inputSet:
+        SetOfSmallMolecules object containing molecules to be filtered.
+        Each molecule must include a valid ZINC identifier either in:
+        - mol.getMolName() containing "ZINC", or
+        - a ZINC_ID attribute.
+
+    Filtering configuration
+    ----------------------
+    mode:
+        Defines filtering behavior:
+        - Remove → discard molecules matching selected subsets
+        - Keep → retain only molecules matching selected subsets
+
+    subGroup:
+        High-level ZINC subset category to filter by:
+        - Availability (e.g. in-stock, for-sale)
+        - Bioactive and Drugs
+        - Biogenic
+        - Other
+        - Reactivity
+
+    subset_<category>:
+        Specific subset selection within each category.
+        Each category has its own enumerated list of ZINC subset labels.
+
+    filterList:
+        Manual list of filter expressions defining rules in the form:
+        "Keep <subset>" or "Remove <subset>"
+
+    Workflow
+    --------
+    1. Input parsing
+       - Reads input small molecule set
+       - Extracts ZINC IDs from molecule metadata
+
+    2. Filter parsing
+       - Parses user-defined filter expressions (Keep/Remove rules)
+       - Builds dictionaries of subsets to enforce
+
+    3. Parallel evaluation
+       - Distributes molecules across threads
+       - For each molecule:
+         a) Retrieves ZINC web page
+         b) Parses subset membership information
+         c) Detects presence in ZINC categories
+
+    4. Filtering logic
+       - Keeps molecule if:
+         * It satisfies all required "Keep" subsets
+         * AND does not appear in any "Remove" subset
+
+    5. Output aggregation
+       - Collects all passing molecules
+       - Generates per-thread presence reports
+       - Writes summary file with KEEP/REMOVE status per molecule
+
+    6. Output generation
+       - Produces filtered SetOfSmallMolecules
+       - Maintains original molecular metadata
+
+    Output
+    ------
+    outputSmallMolecules:
+        Filtered SetOfSmallMolecules containing only molecules that satisfy
+        ZINC subset constraints.
+
+    Summary file:
+        Text report containing per-molecule subset membership and decision
+        (keep/remove), saved in:
+        summary.txt
+
+    Validation
+    ----------
+    - Ensures molecules contain ZINC identifiers
+    - Prevents contradictory filters (same subset in Keep and Remove)
+    - Suggests using prior ZINC identification protocols if missing IDs
+
+    Summary
+    -------
+    This protocol enables rule-based filtering of chemical libraries based on
+    ZINC database subset annotations, supporting chemical curation workflows,
+    virtual screening preparation, and dataset refinement.
+
+    Notes
+    -----
+    - Requires internet access to query ZINC15 website.
+    - Performance depends on network latency due to HTML parsing.
+    - Designed for Scipion/pwchem small molecule pipelines.
+    """
     _label = 'ZINC filter'
     subGroups = {'Availability': avaiChoices, 'Bioactive and Drugs': bioActChoices, 'Biogenic': bioGenChoices,
                  'Other': otherChoices, 'Reactivity': reactChoices}

@@ -51,9 +51,88 @@ class ResidueNameSelect(Select):
 
 class ProtocolRMSDDocking(ProtocolConsensusDocking):
     """
-    Calculates the RMSD between a docked molecule and another molecule in the same receptor, either from an AtomStruct
-    or a docked SetOfSmallMolecules
-    """
+    AI Generated:
+
+This protocol computes the Root Mean Square Deviation (RMSD) between docked
+ligand poses and a reference ligand structure within the same receptor context.
+
+It is used to quantitatively evaluate how closely a predicted docking pose
+matches a known or reference binding mode, and is commonly applied in docking
+validation and benchmarking workflows.
+
+Overview
+--------
+The protocol compares each ligand pose in a SetOfSmallMolecules against a
+reference ligand that can originate from either:
+
+- An AtomStruct (e.g., crystallographic structure containing a bound ligand)
+- Another SetOfSmallMolecules (previous docking results or curated poses)
+
+The RMSD is computed using RDKit-based alignment procedures, optionally
+restricted to heavy atoms only.
+
+Reference Selection
+-------------------
+The reference ligand can be defined in two ways:
+
+1. AtomStruct-based reference:
+   - Extracts a ligand directly from a PDB or mmCIF structure
+   - Filters residues by ligand name using structural selection tools
+   - Writes the extracted ligand to a temporary PDB file for comparison
+
+2. Small-molecule-based reference:
+   - Uses a molecule already present in a SetOfSmallMolecules
+   - Selects the reference by matching molecule name
+
+RMSD Calculation
+----------------
+- RMSD is computed between each docked pose and the reference ligand
+- Computation is parallelized to improve performance on large datasets
+- Supports multi-conformer or multi-pose ligand sets
+
+- Optional heavy-atom mode:
+  When enabled, hydrogen atoms are ignored to focus on structural backbone
+  geometry and reduce noise in RMSD estimation.
+
+Workflow
+--------
+1. Input a set of docked ligands
+2. Select reference ligand source (AtomStruct or SmallMolecule set)
+3. Extract and standardize reference ligand structure if needed
+4. Align each docked pose to the reference structure
+5. Compute RMSD values per molecule (or per pose)
+6. Assign RMSD values to output molecular objects
+
+Output
+------
+- outputSmallMolecules:
+    A copy of the input ligand set enriched with an additional attribute:
+
+    - _rmsdToRef:
+        Numeric RMSD value between docked pose and reference ligand.
+        If no valid match is found, a large default value is assigned.
+
+Key Features
+------------
+- Flexible reference selection (structure-based or dataset-based)
+- RDKit-based RMSD computation
+- Parallel execution for scalability
+- Optional heavy-atom-only RMSD mode
+- Integration with Scipion docking workflows
+
+Use Cases
+---------
+- Validation of docking accuracy against crystal structures
+- Benchmarking docking protocols
+- Pose selection based on structural similarity
+- Post-processing of virtual screening results
+
+Notes
+-----
+- Requires consistent ligand naming between reference and docked poses
+- RMSD values depend strongly on atom mapping correctness
+- Heavy-atom mode improves robustness for hydrogen-inconsistent datasets
+"""
     _label = 'RMSD docking'
 
     # -------------------------- DEFINE param functions ----------------------

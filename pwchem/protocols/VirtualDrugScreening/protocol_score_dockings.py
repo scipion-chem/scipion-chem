@@ -49,8 +49,103 @@ VINA, RFSCORE, NNSCORE, PLECSCORE = 0, 1, 2, 3
 
 class ProtocolScoreDocking(EMProtocol):
     """
-    Executes the scoring of a set of molecules which have been previously docked.
-    """
+    AI Generated:
+
+This protocol performs scoring of protein–ligand docking poses using the
+Open Drug Discovery Toolkit (ODDT), a cheminformatics framework that provides
+multiple empirical and machine-learning-based scoring functions for evaluating
+binding affinity and pose quality.
+
+ODDT scoring enables rapid rescoring of docked ligands using classical
+physics-inspired and data-driven models, improving ranking performance over
+raw docking scores.
+
+Overview
+--------
+The protocol takes one or more SetOfSmallMolecules containing docked ligand
+poses and computes interaction scores using configurable ODDT scoring
+functions.
+
+Multiple scoring strategies can be combined in a workflow, allowing users to
+compare and integrate different scoring paradigms.
+
+Supported Scoring Functions
+---------------------------
+The protocol supports three main ODDT-based scoring families:
+
+- Vina Score:
+  Empirical scoring function derived from AutoDock Vina, estimating binding
+  affinity based on physical interaction terms.
+
+- RFScore:
+  Random Forest-based scoring model trained on protein–ligand complexes
+  from PDBBind. Captures statistical interaction patterns between atom types.
+
+- NNScore:
+  Neural network-based scoring function that predicts binding affinity using
+  learned representations of protein–ligand interactions.
+
+Additionally, extended models such as PLEC fingerprints can be used to encode
+protein–ligand interaction environments for scoring.
+
+Workflow Overview
+----------------
+1. Input docked ligand poses (SetOfSmallMolecules)
+2. Optionally split input into batches for parallel execution
+3. Convert ligand and receptor structures to ODDT-compatible formats
+4. Generate interaction features (e.g., RF, PLEC, NN descriptors)
+5. Load or train scoring models depending on configuration
+6. Compute per-pose scoring values for each ligand
+7. Aggregate results if multiple scoring steps are defined
+8. Collect and parse result files per batch
+9. Assign scoring attributes to each ligand object
+
+Batch Processing
+----------------
+- Input molecules are split into batches to enable parallel execution
+- Each batch is processed independently to improve scalability
+- Results are merged after all scoring steps are completed
+
+Input Handling
+--------------
+- Input is a SetOfSmallMolecules containing docked poses
+- Each ligand must contain an associated receptor structure
+- Ligands may originate from different docking tools or formats
+
+Output
+------
+- outputSmallMolecules:
+    Copy of the input ligand set enriched with scoring attributes:
+
+    - _oddtScore_<i>:
+        Numeric score produced by the i-th scoring step in the workflow.
+
+Scores are stored per pose and can be used for ranking, filtering, or
+consensus scoring across multiple functions.
+
+Key Features
+------------
+- Multi-model scoring (Vina, RFScore, NNScore, PLEC)
+- Support for multiple scoring configurations per workflow
+- Batch processing for large docking datasets
+- Parallel execution support
+- Integration with pretrained or custom-trained models
+- Flexible scoring pipelines with user-defined workflows
+
+Use Cases
+---------
+- Rescoring of docking poses after virtual screening
+- Consensus scoring using multiple ODDT models
+- Ranking refinement of docking results
+- Large-scale ligand prioritization
+
+Notes
+-----
+- Requires ODDT installation and compatible model files
+- Performance depends on ligand preprocessing quality
+- Batch size affects memory usage and runtime efficiency
+- Multiple scoring steps may be combined in a single workflow
+"""
     _label = 'ODDT score docking'
     actionChoices = ['MaxScore', 'MinEnergy']
 
