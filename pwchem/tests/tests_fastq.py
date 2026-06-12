@@ -61,8 +61,6 @@ class TestImportFastq(BaseTest):
                 'IIIIIIIIIIIIIIIIIIII\n'
             )
 
-
-
     def testImportSingleFastqWithFastqc(self):
         print("\nImport FASTQ: single-end with FastQC")
 
@@ -75,15 +73,18 @@ class TestImportFastq(BaseTest):
         )
 
         self.launchProtocol(prot)
+
+        outputFastq = getattr(prot, 'outputFastq', None)
+
         assertHandle(
             self.assertIsNotNone,
-            getattr(prot, 'outputFastq', None),
+            outputFastq,
             cwd=prot.getWorkingDir()
         )
 
         assertHandle(
-            self.assertIsNotNone,
-            getattr(prot, 'outputFastqcHtml', None),
+            self.assertTrue,
+            outputFastq.hasFastqcHtml(),
             cwd=prot.getWorkingDir()
         )
 
@@ -101,20 +102,22 @@ class TestImportFastq(BaseTest):
 
         self.launchProtocol(prot)
 
+        outputFastq = getattr(prot, 'outputFastq', None)
+
         assertHandle(
             self.assertIsNotNone,
-            getattr(prot, 'outputFastq', None),
+            outputFastq,
             cwd=prot.getWorkingDir()
         )
 
         assertHandle(
-            self.assertIsNotNone,
-            getattr(prot, 'outputFastqcHtmlR1', None),
+            self.assertTrue,
+            outputFastq.hasFastqcHtmlR1(),
             cwd=prot.getWorkingDir()
         )
 
         assertHandle(
-            self.assertIsNotNone,
-            getattr(prot, 'outputFastqcHtmlR2', None),
+            self.assertTrue,
+            outputFastq.hasFastqcHtmlR2(),
             cwd=prot.getWorkingDir()
         )
