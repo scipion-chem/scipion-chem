@@ -64,7 +64,148 @@ SMI, NAME = 0, 1
 
 class ProtocolOperateLibrary(EMProtocol):
     """
-    Operates a set of small molecules libraries.
+    AI Generated:
+
+    Protocol to perform operations over small molecule libraries.
+
+    This tool allows combining, filtering, ranking, and modifying
+    SmallMoleculesLibrary objects using different strategies.
+
+    Supported operations
+    --------------------
+    1. Set operations (multiple libraries required):
+       - Union:
+           Merge multiple libraries. Duplicate entries (based on reference attribute)
+           are merged into a single entry.
+       - Intersection:
+           Keep only molecules present in all input libraries.
+       - Difference:
+           Keep molecules from the first library that are not present in the others.
+
+    2. Modification operations (single library):
+       - Filter:
+           Keep molecules that satisfy one or more conditions over attributes.
+       - Ranking:
+           Select top or bottom molecules based on a given attribute.
+       - Remove columns:
+           Remove selected attributes from the library.
+
+    Inputs
+    ------
+    operation:
+        Operation to perform:
+        - Union
+        - Intersection
+        - Difference
+        - Filter
+        - Ranking
+        - Remove columns
+
+    refAttribute:
+        Attribute used as reference for set operations:
+        - SMI (SMILES string)
+        - Name
+
+    inputLibraries:
+        List of input libraries (used in set operations).
+
+    inputLibrary:
+        Single input library (used in filter, ranking, remove operations).
+
+    Filtering parameters
+    --------------------
+    filterAttr:
+        Attribute used for filtering or ranking.
+
+    mode:
+        Filtering condition:
+        - Over
+        - Below
+        - Equal
+        - Different
+
+    filterValue:
+        Value used for:
+        - Threshold filtering
+        - Ranking selection:
+            * Positive → top values
+            * Negative → bottom values
+            * Fraction (0–1) → proportion of dataset
+            * Percentage (e.g. "30%")
+
+    filterList:
+        List of filter expressions applied sequentially.
+
+    Ranking parameters
+    ------------------
+    filterAttr:
+        Attribute used for ranking.
+
+    filterValue:
+        Number or proportion of elements to retain.
+
+    Removal parameters
+    ------------------
+    removeList:
+        List of attribute names to remove from the library.
+
+    maxPerStep:
+        Maximum number of molecules processed per step (for parallel filtering).
+
+    Workflow
+    --------
+    1. Operation selection:
+       - Determines which processing path to execute.
+
+    2. Set operations:
+       - Build mapping dictionaries using reference attribute
+       - Merge, intersect, or subtract entries
+       - Combine attributes across libraries
+
+    3. Filtering:
+       - Split input file into chunks
+       - Apply one or multiple filter conditions
+       - Process in parallel for large datasets
+
+    4. Ranking:
+       - Iterate through file
+       - Maintain heap of best/worst elements
+       - Output top-N or bottom-N molecules
+
+    5. Column removal:
+       - Remove selected attributes from dataset
+       - Process file in chunks
+
+    6. Output generation:
+       - Merge intermediate files (if parallel execution)
+       - Build final SmallMoleculesLibrary object
+       - Recalculate library size
+
+    Output
+    ------
+    outputLibrary:
+        Resulting SmallMoleculesLibrary after applying the selected operation.
+
+    Performance considerations
+    --------------------------
+    - Large libraries are processed in chunks to reduce memory usage.
+    - Filtering and column removal support parallel execution.
+    - Ranking uses a heap-based approach for efficiency.
+
+    Error handling
+    --------------
+    - Skips invalid numeric conversions during filtering/ranking.
+    - Handles missing attributes gracefully.
+    - Ensures compatibility of input libraries.
+
+    Notes
+    -----
+    - Set operations rely on exact matching of the reference attribute.
+    - Filtering expressions are applied sequentially (logical AND).
+    - Ranking behavior depends on the sign of the input value:
+        * Positive → highest values
+        * Negative → lowest values
+    - Designed for large-scale virtual screening and cheminformatics workflows.
     """
     _label = 'operate library'
     stepsExecutionMode = params.STEPS_PARALLEL

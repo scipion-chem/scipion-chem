@@ -46,8 +46,100 @@ MIN, MAX = 0, 1
 
 class ProtocolConsensusDocking(EMProtocol):
     """
-    Executes the consensus on the sets of SmallMolecules. The poses of the different molecules are clustered
-    with respect to their RMSD
+    AI Generated:
+
+    This protocol is used to perform consensus docking analysis across multiple
+    sets of docked small molecules. It clusters docking poses based on RMSD
+    similarity and identifies consensus binding modes supported by multiple
+    inputs (either from the same docking run or different docking software).
+
+    The protocol can optionally generate independent consensus sets per input
+    molecule set and supports multiple representative selection strategies,
+    including medoid-based and attribute-based selection (e.g., docking score).
+
+    Core Concepts
+    -------------
+    Docked Molecules:
+        Small molecules with multiple docking poses associated with a receptor.
+
+    Pose Clustering:
+        Docking poses are clustered using hierarchical clustering based on
+        pairwise RMSD distances.
+
+    Consensus Cluster:
+        A cluster of poses representing a consistent binding mode shared across
+        multiple input sets.
+
+    Representative Pose:
+        The selected pose that best represents a cluster. It can be chosen as:
+        - Medoid (minimum total RMSD to other members)
+        - Best/worst value of a user-defined attribute (e.g., docking score)
+
+    Workflow
+    --------
+    1. Input multiple SetOfSmallMolecules (docked pose sets).
+    2. Convert input structures into standardized file formats if needed
+       (PDB, MAE, etc.).
+    3. Compute pairwise RMSD distances between all docking poses.
+    4. Perform hierarchical clustering using a selected linkage method.
+    5. Cut clusters based on a maximum RMSD threshold.
+    6. Filter clusters by minimum number of supporting poses (consensus size).
+    7. Select representative molecule for each cluster.
+    8. Optionally generate:
+       - Global consensus set
+       - Independent consensus sets per input molecule set
+    9. Output clustered and representative docking poses.
+
+    Clustering Criteria
+    -------------------
+    - RMSD threshold (maxRMSD):
+        Defines the maximum allowed structural deviation within a cluster.
+
+    - Minimum overlap (numOfOverlap):
+        Minimum number of poses required for a cluster to be considered valid.
+
+    - Same-set counting (sameClust):
+        Controls whether multiple poses from the same input set count separately
+        when evaluating cluster support.
+
+    Representative Selection Modes
+    ------------------------------
+    Medoid:
+        Selects the molecule with the smallest sum of RMSD distances to all
+        other cluster members.
+
+    Attribute-based:
+        Selects molecule with minimum or maximum value of a specified attribute
+        (e.g., docking score, binding energy).
+
+    Internal Processing Logic
+    -------------------------
+    - Input molecules are grouped and assigned set identifiers.
+    - Files are converted to compatible formats when necessary.
+    - Pairwise RMSD matrices are computed in parallel for efficiency.
+    - Hierarchical clustering is applied using SciPy linkage methods.
+    - Flat clusters are extracted using distance cutoff (maxRMSD).
+    - Cluster centrality is computed using summed RMSD distances.
+    - Clusters are filtered based on consensus constraints.
+    - Representative poses are cloned to avoid side effects.
+
+    Output
+    ------
+    - outputSmallMolecules:
+        Set containing consensus representative docking poses.
+
+    - outputSmallMolecules_<XXX> (optional):
+        Independent consensus sets per input set when enabled.
+
+    - outputSmallMolecules_All:
+        Full consensus docking set including all clustered poses.
+
+    Use Cases
+    ---------
+    - Identification of stable binding modes across docking runs
+    - Cross-docking consensus analysis
+    - Reduction of redundant docking poses
+    - Prioritization of reproducible ligand–receptor interactions
     """
     _label = 'Consensus docking'
 

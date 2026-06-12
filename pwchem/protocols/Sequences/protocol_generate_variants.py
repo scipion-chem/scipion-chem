@@ -30,7 +30,73 @@ from pyworkflow.protocol.params import *
 
 
 class ProtChemGenerateVariants(EMProtocol):
-    """Generates a set of variants from a sequence and a list of mutations / variants"""
+    """
+    AI Generated:
+
+    This protocol is used to generate a set of sequence variants from a SequenceVariants object.
+
+    The protocol allows the creation of new sequences derived from an input reference sequence
+    by applying either predefined variant definitions or explicit mutation lists. Each generated
+    variant is stored as a Sequence object within a SetOfSequences output.
+
+    Overview
+    --------
+    The protocol supports two modes of sequence generation:
+    - Variant-based generation: applies predefined mutation sets (lineages)
+    - Mutation-based generation: applies user-specified residue substitutions
+
+    Input
+    -----
+    inputSequenceVariants:
+        SequenceVariants object containing the reference sequence and mutation definitions.
+
+    fromVariant:
+        Defines the generation mode:
+        - Variant: generate sequences from predefined variant definitions
+        - Mutations: generate sequences from explicit mutation lists
+
+    selectVariant:
+        Name of a predefined variant to generate (used when fromVariant = Variant)
+
+    selectMutation:
+        List of mutations to apply to the sequence (used when fromVariant = Mutations)
+
+    toMutateList:
+        Internal list of selected variants/mutations to be processed
+
+    Workflow
+    --------
+    1. Parse user-defined variant or mutation list
+    2. Identify generation mode for each entry
+    3. Generate sequence:
+       - Original sequence (no modification)
+       - Variant lineage reconstruction
+       - Substitution-based mutant generation
+    4. Create Sequence objects for each result
+    5. Store all sequences in a SetOfSequences container
+    6. Export resulting sequences to FASTA format
+
+    Output
+    ------
+    outputSequences:
+        SetOfSequences containing:
+        - Reference sequence (if selected)
+        - Variant-derived sequences
+        - Mutation-derived sequences
+
+    Key Features
+    ------------
+    - Supports both variant lineage reconstruction and explicit mutation application
+    - Produces standardized Sequence objects
+    - Exports results in FASTA format for interoperability
+    - Integrates with SequenceVariants mutation models
+
+    Notes
+    -----
+    - Variants are assumed to be defined in the input SequenceVariants object
+    - Mutations are applied as residue substitutions on the reference sequence
+    - Sequence identifiers encode origin and mutation information for traceability
+    """
     _label = 'Generates a set of sequence variants'
     _originOptions = ['Variant', 'Mutations']
 

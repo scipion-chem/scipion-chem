@@ -45,8 +45,65 @@ scriptName = 'descriptors_docking_oddt.py'
 
 class ProtocolODDTDescriptors(EMProtocol):
     """
-    Extracts the descriptors of docked ligands
-    """
+    AI Generated:
+
+This protocol extracts molecular descriptors for ligands that have been docked to a protein structure using the Open Drug Discovery Toolkit (ODDT).
+
+It is designed to evaluate ligand–protein docking results by computing scoring functions that estimate binding quality based on different empirical or machine-learning-based models.
+
+Core Concepts
+-------------
+Docked Small Molecules:
+    A set of ligands that have been positioned inside a protein binding site using a docking procedure. Each molecule includes its pose information relative to the receptor.
+
+Receptor Protein:
+    The protein structure used as the target for docking. It is required for computing structure-dependent descriptors.
+
+Molecular Descriptors:
+    Numerical scores that estimate binding affinity or interaction quality between ligand and receptor. These descriptors are computed using ODDT scoring functions.
+
+Supported Scoring Functions
+---------------------------
+Vina:
+    Score derived from the AutoDock Vina scoring function, estimating binding affinity based on empirical energy terms.
+
+RFScore:
+    Machine-learning-based scoring function trained on protein–ligand complexes. It evaluates interaction patterns using different model versions.
+
+NNScore:
+    Neural network-based scoring function that predicts binding affinity from structural features.
+
+PLECScore:
+    Descriptor based on protein–ligand extended connectivity fingerprints capturing interaction patterns in the binding site.
+
+Workflow
+--------
+1. Input one or more sets of docked small molecules.
+2. Extract ligand poses associated with a receptor protein.
+3. Select a descriptor type (Vina, RFScore, NNScore, or PLECScore).
+4. Optionally select scoring model variants when applicable.
+5. Compute interaction descriptors for each ligand–receptor complex.
+6. Aggregate results into an annotated molecular dataset.
+
+Output
+------
+- Set of docked small molecules annotated with computed ODDT descriptors.
+- Tabular results containing scoring values per ligand.
+- Updated molecular dataset compatible with downstream analysis workflows.
+
+Use Cases
+---------
+- Evaluation of docking campaigns in virtual screening
+- Ranking of ligand poses based on predicted binding affinity
+- Post-processing of docking results for lead selection
+- Comparative assessment of scoring functions
+
+Notes
+-----
+- Results depend on docking pose quality and receptor preparation.
+- Different scoring functions may produce non-comparable score distributions.
+- RFScore and NNScore may vary depending on model version and training set.
+"""
     _label = 'ODDT descriptors docking'
     _descChoices = ['Vina', 'RFScore', 'NNScore', 'PLECScore']#, 'Fingerprint']
     _vChoices = ['1', '2', '3']
