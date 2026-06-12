@@ -33,7 +33,91 @@ from pwem.protocols import EMProtocol
 from pwem.objects import Sequence, SetOfSequences
 
 class ProtChemImportSetOfSequences(EMProtocol):
-    """Import a set of sequences either from a combined fasta or from multiple fasta files in a directory
+    """
+    AI Generated:
+
+    This protocol is used to import a set of biological sequences and generate a SetOfSequences object.
+
+    Sequences can be imported either from local FASTA files or downloaded directly from external
+    biological databases such as UniProt or ENA. The protocol supports both single and multiple
+    sequence imports and automatically converts them into standardized Sequence objects for
+    downstream analysis.
+
+    Overview
+    --------
+    The protocol provides two main import modes:
+    - File-based import: load sequences from FASTA files (single or multiple files in a directory)
+    - Database-based import: download sequences using database identifiers
+
+    Input
+    -----
+    fromFile:
+        If True, sequences are imported from local files.
+        If False, sequences are downloaded from a database.
+
+    From file
+    ---------
+    multiple:
+        If True, each file in a directory is treated as an independent sequence.
+        If False, a single FASTA file containing multiple sequences is imported.
+
+    filesPath:
+        Directory containing FASTA files (used when multiple=True).
+
+    filesPattern:
+        File pattern used to filter input files (e.g. "*.fasta").
+
+    filePath:
+        Path to a single FASTA file (used when multiple=False).
+
+    seqType:
+        Type of sequences:
+        - Protein
+        - Nucleotide
+
+    From database
+    --------------
+    database:
+        External database used for download:
+        - UniProt
+        - ENA
+
+    inputListID:
+        List of sequence identifiers to download (one per line).
+
+    Workflow
+    --------
+    File import mode:
+    1. Read FASTA file(s) from disk
+    2. Copy files to working directory
+    3. Parse sequences into Sequence objects
+    4. Add them to a SetOfSequences container
+
+    Database import mode:
+    1. Read list of database IDs
+    2. Build download URLs (UniProt or ENA REST API)
+    3. Retrieve FASTA files from remote server
+    4. Parse downloaded FASTA files into Sequence objects
+    5. Store results in SetOfSequences
+
+    Output
+    ------
+    outputSequences:
+        SetOfSequences containing all imported sequences as Sequence objects.
+
+    Key Features
+    ------------
+    - Supports both local and remote sequence import
+    - Handles multiple FASTA files in batch mode
+    - Integrates with UniProt and ENA REST APIs
+    - Automatically converts FASTA into structured Sequence objects
+    - Compatible with Scipion EM workflow system
+
+    Notes
+    -----
+    - Protein vs nucleotide type affects internal parsing behavior
+    - Download failures are handled gracefully with warning messages
+    - Each sequence is stored with standardized identifiers
     """
     _label = 'Import set of sequences'
 
@@ -127,8 +211,10 @@ class ProtChemImportSetOfSequences(EMProtocol):
 
         isAmino = self.database.get() in [1]
         for outFn in outFns:
-            newSeq = Sequence()
+            newSeq = Sequence(fileName=outFn)
             newSeq.importFromFile(outFn, isAmino=isAmino)
+            seqName = os.path.splitext(os.path.basename(outFn))[0]
+            newSeq.setSeqName(seqName)
             outputSequences.append(newSeq)
 
         self._defineOutputs(outputSequences=outputSequences)

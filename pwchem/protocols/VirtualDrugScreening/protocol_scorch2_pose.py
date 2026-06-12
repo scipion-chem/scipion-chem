@@ -51,8 +51,104 @@ currentDir = Path(__file__).parent.resolve()
 
 class ProtocolSCORCH2(EMProtocol):
     """
-    Computes the best poses of protein-ligand interactions using SCORCH2: https://github.com/LinCompbio/SCORCH2
-    """
+    AI Generated:
+
+This protocol performs molecular rescoring of protein–ligand docking poses
+using SCORCH2 (SC2), a machine-learning-based scoring framework designed for
+interaction-aware virtual screening.
+
+SCORCH2 combines multiple learned scoring models to estimate the quality of
+ligand binding poses, enabling improved ranking of docked compounds beyond
+classical docking scores.
+
+Overview
+--------
+The protocol takes a SetOfSmallMolecules containing docked ligand poses and
+computes refined binding scores using SCORCH2 models.
+
+It supports both GPU and CPU execution and can optionally aggregate multiple
+poses per compound to produce a single representative score.
+
+SCORCH2 Scoring Components
+--------------------------
+SCORCH2 evaluates ligand poses using two complementary models:
+
+- SC2-PS (Protein Score):
+  Predicts protein–ligand interaction quality based on structural and
+  physicochemical features of the binding interface.
+
+- SC2-PB (Pose/Bond Score):
+  Evaluates ligand pose plausibility and internal chemical consistency.
+
+These two components are combined using user-defined weights:
+
+    final_score = psWeight * SC2-PS + pbWeight * SC2-PB
+
+Input Handling
+--------------
+- Input ligands are provided as a SetOfSmallMolecules
+- The dataset is split into batches for parallel processing
+- Each batch is processed independently to improve scalability
+
+Protein Handling
+----------------
+- The receptor (protein) is extracted from the input dataset
+- It is copied and prepared for compatibility with SCORCH2
+- Ligand and protein directories are organized per batch
+
+File Conversion
+---------------
+- Input ligand and protein files are converted to PDBQT format if needed
+- CIF and PDB formats are supported via OpenBabel conversion
+- Temporary files are cleaned after conversion to ensure consistency
+
+Workflow
+--------
+1. Input docked ligand poses and associated receptor
+2. Organize protein and ligand structures into batch directories
+3. Convert input files to SCORCH2-compatible formats (PDBQT)
+4. Run SCORCH2 rescoring script per batch
+5. Optionally use GPU acceleration
+6. Optionally aggregate multiple poses per compound
+7. Collect batch-wise TSV results
+8. Parse SC2 scores and map them to ligand identifiers
+9. Assign final scores to molecular objects
+
+Output
+------
+- outputSmallMolecules:
+    A copy of the input ligand set enriched with:
+
+    - scorchScore:
+        Continuous numeric score representing SCORCH2-predicted binding
+        quality. Higher scores indicate more favorable binding poses.
+
+If aggregation is enabled, scores may represent per-compound summaries
+rather than per-pose values.
+
+Key Features
+------------
+- Machine-learning-based rescoring of docking poses
+- Combination of protein–ligand and pose-quality models
+- GPU acceleration support
+- Batch processing for large-scale virtual screening
+- Optional aggregation of multiple poses per compound
+- Automatic file conversion and preprocessing (PDB/CIF → PDBQT)
+
+Use Cases
+---------
+- Post-docking rescoring in virtual screening pipelines
+- Prioritization of docking hits using ML-based scoring
+- Improvement of ranking accuracy over classical docking scores
+- Large-scale compound library screening
+
+Notes
+-----
+- Requires SCORCH2 environment and pretrained models installed
+- GPU usage is optional but recommended for large datasets
+- Score quality depends on correct ligand naming and preprocessing
+- Batch processing may slightly vary results depending on aggregation mode
+"""
     _label = 'SCORCH2 rescoring'
     _defaultName = 'prot'
     stepsExecutionMode = params.STEPS_PARALLEL

@@ -35,7 +35,80 @@ from pwchem.objects import SetOfSequencesChem, Sequence
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'
 
 class ProtChemMultipleSequenceAlignment(EMProtocol):
-    """Runs multiple sequence alignment for a set of sequences"""
+    """
+    AI Generated:
+
+    Runs multiple sequence alignment for a set of sequences.
+
+    This protocol performs multiple sequence alignment (MSA) on an input set
+    of biological sequences using one of several external alignment programs
+    (Clustal Omega, MUSCLE, or MAFFT). It is designed to integrate with the
+    Scipion/EM workflow framework and produces aligned sequence sets suitable
+    for downstream structural or functional analysis.
+
+    Overview
+    --------
+    The protocol takes a SetOfSequences object and generates a multiple
+    sequence alignment using the selected algorithm. The resulting alignment
+    is stored both as an alignment file and as a SetOfSequencesChem object
+    with aligned sequences.
+
+    Supported Programs
+    ------------------
+    - Clustal Omega (default)
+    - MUSCLE
+    - MAFFT
+
+    Input
+    -----
+    inputSequences:
+        SetOfSequences containing the sequences to be aligned.
+
+    programList:
+        Alignment program to use:
+        - Clustal_Omega
+        - Muscle
+        - Mafft
+
+    extraParams:
+        Optional program-specific parameters. If not provided, sensible
+        defaults are used depending on the selected algorithm.
+
+    Output
+    ------
+    outputSequences:
+        SetOfSequencesChem containing:
+        - Aligned sequences
+        - Sequence identifiers
+        - Alignment file path reference
+        - Flag indicating alignment status
+
+    Optional Output
+    ---------------
+    additionalFormat:
+        If enabled, generates an additional output file in an EMBOSS
+        sequence format selected by the user.
+
+    Workflow
+    --------
+    1. Export input sequences to a FASTA file.
+    2. Select alignment program.
+    3. Build command-line invocation for the chosen tool.
+    4. Execute external alignment program.
+    5. Parse output alignment:
+       - FASTA parsing for MUSCLE
+       - Alignment parsing for Clustal Omega / MAFFT
+    6. Create SetOfSequencesChem with aligned sequences.
+    7. Store alignment file reference.
+    8. Optionally convert to EMBOSS format.
+
+    Notes
+    -----
+    - Requires external installation of Clustal Omega, MUSCLE, or MAFFT.
+    - MUSCLE outputs are parsed as FASTA; others as alignment formats.
+    - Default parameters are automatically selected if none are provided.
+    - Designed for integration within Scipion EM/PW workflows.
+    """
     _label = 'multiple sequence alignment'
 
     def _defineParams(self, form):

@@ -43,12 +43,70 @@ scriptName = 'RDKit_PAINS_script.py'
 
 class ProtocolPainsRdkitFiltering(EMProtocol):
     """
-    Perform the PAINS search in molecules from smi, sdf, pdb, mol or mol2 file format.
-    PAINS file can be uploaded and must have the following format: on each line, the first position is reserved for the PAINS molecule
-    in SMART format, and the second position for the PAINS name, both elements must be
-    space separated; or it can be used the predefined PAINS catalogue offered by the RDKit library.
+    AI Generated:
 
-    """
+This protocol performs PAINS (Pan-Assay INterference Compounds) filtering on a set of small molecules.
+
+PAINS are molecular substructures known to frequently generate false positives in high-throughput screening assays
+due to non-specific interactions with biological targets. This protocol identifies and separates molecules that
+contain PAINS patterns from those that do not.
+
+Core Concepts
+-------------
+Small Molecules:
+    Input dataset consisting of chemical compounds in formats such as SMI, SDF, PDB, MOL, or MOL2.
+
+PAINS Substructures:
+    Predefined or user-provided SMARTS patterns corresponding to problematic chemical motifs associated with
+    assay interference and non-specific binding.
+
+Filtering Process:
+    Each molecule is analyzed to detect the presence of PAINS patterns. Based on the results, molecules are
+    classified into clean compounds or PAINS-positive compounds.
+
+PAINS Sources
+-------------
+RDKit Catalogue:
+    Default PAINS substructure definitions provided by the RDKit library.
+
+Custom PAINS File:
+    User-defined file containing PAINS patterns. Each line must include:
+    - A SMARTS pattern describing the substructure
+    - A name/label for the PAINS pattern
+
+Workflow
+--------
+1. Input a set of small molecules.
+2. Convert molecular formats if required for compatibility.
+3. Apply PAINS detection using RDKit or a custom PAINS catalogue.
+4. Identify molecules containing PAINS substructures.
+5. Split molecules into:
+   - Clean molecules (no PAINS detected)
+   - PAINS-positive molecules (contain at least one PAINS pattern)
+6. Annotate PAINS-positive molecules with detected pattern information.
+7. Generate separate output datasets.
+
+Output
+------
+- outputSmallMolecules:
+    Set of molecules that passed the PAINS filter (clean compounds).
+
+- outputSmallMoleculesPains:
+    Set of molecules flagged as PAINS-positive, annotated with detected PAINS information.
+
+Use Cases
+---------
+- Pre-filtering compound libraries before virtual screening
+- Removal of assay-interfering compounds in drug discovery pipelines
+- Quality control of chemical libraries
+- Identification of promiscuous binders in screening datasets
+
+Notes
+-----
+- PAINS filtering is a heuristic method and may produce false positives or negatives.
+- It should be used as a prioritization tool rather than an absolute exclusion criterion.
+- Custom PAINS definitions allow adaptation to specific screening campaigns or chemical spaces.
+"""
     _label = 'PAINS RDKit filtering'
     _possibleOutputs = {"SmallMoleculesCleaned": SetOfSmallMolecules,"SmallMoleculesPains": SetOfSmallMolecules}
 
