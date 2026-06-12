@@ -40,9 +40,104 @@ PUBCHEMID, PUBCHEMNAME, ZINC, CHEMBL = 1, 2, 3, 4
 DbChoices = ['PubChemID', 'PubChemName', 'ZINC_ID', 'ChEMBL_ID']
 
 class ProtChemSmallMolIdentify(EMProtocol):
-    """Uses the PubChem search tools to identify the ligands from their SMILES.
-    If no exact match is found, Tanimoto similarity check can also be performed
-    Info: https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest"""
+    """
+    AI Generated:
+
+    This protocol performs automatic identification of small molecules by
+    converting their structures (SMILES or 3D files) and querying PubChem
+    to retrieve chemical identifiers and metadata.
+
+    It supports both exact and similarity-based matching and can enrich
+    molecules with external database identifiers such as PubChem ID,
+    PubChem name, ZINC ID, and ChEMBL ID.
+
+    Inputs
+    ------
+    inputSmallMolecules:
+        SetOfSmallMolecules object containing ligand structures to identify.
+
+    useManager:
+        Structure conversion backend:
+        - RDKit or OpenBabel for SMILES extraction from structures.
+
+    nameDatabase:
+        Database used to replace molecule names (optional):
+        - None, PubChemID, PubChemName, ZINC_ID, ChEMBL_ID
+
+    Workflow
+    --------
+    1. Input partitioning
+       - Splits input molecules into subsets for parallel processing
+       - Generates per-thread input files
+
+    2. Structure conversion
+       - Converts input structures into SMILES format using:
+         - RDKit (preferred for standard formats)
+         - OpenBabel (fallback for specific formats like MAE/MOL2)
+       - Writes SMILES files per subset
+
+    3. Identifier resolution (PubChem lookup)
+       For each SMILES:
+       - Queries PubChem PUG REST API for exact CID match
+       - If no exact match:
+         - Performs similarity search (Tanimoto-based)
+         - Retrieves closest CID candidates
+
+    4. Identifier enrichment
+       - From CID, retrieves:
+         - PubChem ID
+         - PubChem name
+         - ZINC ID (if present in synonyms)
+         - ChEMBL ID (if present in synonyms)
+
+    5. Output writing (per thread)
+       - Writes:
+         - identification.txt (SMI → IDs mapping)
+         - similarIds.txt (SMI → similar CID list)
+
+    6. Output merging
+       - Concatenates thread files into global results
+       - Parses identification and SMILES mapping files
+
+    7. Molecule annotation
+       - Creates a new SetOfSmallMolecules based on input set
+       - Attaches identifiers as attributes:
+         - PubChemID
+         - PubChemName
+         - ZINC_ID
+         - ChEMBL_ID
+       - Optionally replaces molecule name using selected database field
+
+    8. Output generation
+       - Produces annotated small molecule dataset
+       - Maintains linkage to original input molecules
+
+    Output
+    ------
+    outputSmallMolecules:
+        SetOfSmallMolecules enriched with:
+        - PubChem CID
+        - PubChem name
+        - ZINC ID (if available)
+        - ChEMBL ID (if available)
+        - Original structure files and mappings
+
+    Summary
+    -------
+    This protocol enables automated chemical identity annotation of small
+    molecules by integrating structure conversion pipelines with PubChem
+    and similarity-based compound search.
+
+    It is designed for ligand preprocessing, database standardization,
+    and downstream virtual screening or chemoinformatics analysis.
+
+    Notes
+    -----
+    - Requires internet access to PubChem REST API.
+    - Uses RDKit or OpenBabel for structure-to-SMILES conversion.
+    - Similarity search is used when exact match is not found.
+    - Designed for high-throughput ligand annotation workflows.
+    """
     _label = 'Small molecule identification'
 
     def __init__(self, *args, **kwargs):

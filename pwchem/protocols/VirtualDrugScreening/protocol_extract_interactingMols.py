@@ -34,7 +34,101 @@ from pwchem.utils import getFilteredOutput
 
 
 class ProtExtractInteractingMols(EMProtocol):
-  """Extract a subset of the interacting molecules stored in the set of sequences"""
+  """
+  AI Generated:
+  
+  This protocol is used to define structural regions (ROIs) based on ligand–receptor
+  contacts extracted from docked small molecules.
+
+  The protocol identifies residues or atoms in the receptor that are within a given
+  distance threshold of ligand atoms and groups them into structurally coherent regions
+  of interest (ROIs). These ROIs can be clustered spatially and optionally mapped to
+  surface coordinates to better represent binding pockets.
+
+  Core Concepts
+  -------------
+  Small Molecules:
+      Docked ligands provided as a SetOfSmallMolecules, each associated with
+      a receptor structure.
+
+  Contact Definition:
+      A ligand–receptor contact is defined when any ligand atom is within a
+      user-specified distance threshold (Å) from a receptor atom.
+
+  Contact Representation:
+      Contacts can be stored at either atom-level or residue-level resolution
+      for both ligand and receptor.
+
+  ROI (Region of Interest):
+      A spatial cluster of receptor contact points representing a putative
+      binding pocket or interaction region.
+
+  Surface Mapping:
+      Optionally maps contact coordinates to the nearest solvent-accessible
+      surface points using MSMS-generated surface data.
+
+  Workflow
+  --------
+  1. Input a SetOfSmallMolecules with associated receptor structure.
+  2. Convert ligand files into a unified format (PDB or MAE conversion if needed).
+  3. Parse receptor and ligand atomic structures.
+  4. Compute pairwise distances between ligand and receptor atoms.
+  5. Identify atom–atom contacts using a distance threshold.
+  6. Store contacts in structured text files (per ligand).
+  7. Aggregate contacts across ligands and extract unique receptor contact points.
+  8. Optionally filter contacts by chain selection.
+  9. Convert contact points into 3D coordinates.
+  10. Optionally map coordinates to molecular surface points.
+  11. Cluster coordinates into ROIs using hierarchical spatial clustering.
+  12. Generate structural ROI objects and store results.
+
+  Contact Analysis
+  ----------------
+  - Distance threshold (threshold):
+      Maximum distance between ligand and receptor atoms to consider a contact.
+
+  - Ligand contact level:
+      Defines whether ligand contacts are stored at atom or residue level.
+
+  - Receptor contact level:
+      Defines whether receptor contacts are stored at atom or residue level.
+
+  - Contact dictionary:
+      Maps ligand atoms → list of receptor atoms in contact.
+
+  Clustering Logic
+  ----------------
+  - Spatial clustering is performed using pairwise Euclidean distances.
+  - Clusters are defined using a maximum intra-cluster distance (maxIntraDistance).
+  - Optionally, surface mapping replaces raw coordinates with nearest surface points.
+  - Clusters can be further refined depending on ligand grouping or selection mode.
+
+  Surface Mapping
+  ---------------
+  When enabled:
+  - Contact coordinates are projected onto solvent-accessible surface points.
+  - A maximum depth threshold (maxDepth) defines allowable mapping distance.
+  - MSMS is used to compute molecular surface representation.
+
+  Output
+  ------
+  - outputStructROIs:
+      SetOfStructROIs containing clustered structural regions.
+
+  - StructROI objects:
+      Each ROI includes:
+          - Pocket coordinates
+          - Contact annotations
+          - Optional surface-mapped representation
+          - Optional PDB/hetatm export
+
+  Use Cases
+  ---------
+  - Identification of ligand binding pockets
+  - Extraction of interaction hotspots from docking experiments
+  - Structural comparison of binding regions across ligands
+  - Preparation of regions for downstream docking or drug design workflows
+  """
   _label = 'extract interacting molecules'
 
   def __init__(self, **kwargs):
