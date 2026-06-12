@@ -66,7 +66,6 @@ class Plugin(pwem.Plugin):
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
 
-        cls.addFastQCPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -80,7 +79,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
-        cls._defineEmVar(FASTQC_DIC['home'], cls.getEnvName(FASTQC_DIC))
+
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -187,7 +186,7 @@ class Plugin(pwem.Plugin):
         openbabelInstaller.addCommand(f'conda create -y -c conda-forge --name {obEnvName} python=3.11 '
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
-            .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
+            .addCondaPackages(['clustalo', 'fastqc','pip=25'], channel='bioconda', targetName='BIOCONDA_TOOLS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
@@ -326,19 +325,6 @@ class Plugin(pwem.Plugin):
         )
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
-
-    @classmethod
-    def addFastQCPackage(cls, env, default=True):
-        installer = InstallHelper(
-            FASTQC_DIC['name'],
-            packageHome=cls.getVar(FASTQC_DIC['home']),
-            packageVersion=FASTQC_DIC['version']
-        )
-
-        installer.getCondaEnvCommand().addCondaPackages(
-            [f"fastqc={FASTQC_DIC['version']}"],
-            channel='bioconda'
-        ).addPackage(env, dependencies=['conda'], default=default)
 
     ##################### RUN CALLS ######################
     @classmethod

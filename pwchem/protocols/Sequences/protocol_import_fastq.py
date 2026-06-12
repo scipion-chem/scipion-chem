@@ -26,10 +26,9 @@
 import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, FileParam, StringParam
-from pyworkflow.object import String
 
 from pwchem import Plugin
-from pwchem.constants import FASTQC_DIC
+from pwchem.constants import OPENBABEL_DIC
 from pwchem.objects import FastqFile
 
 class ProtImportFastq(EMProtocol):
@@ -68,9 +67,7 @@ class ProtImportFastq(EMProtocol):
     outputFastq : FastqFile
         Imported FASTQ dataset ready for downstream analysis.
 
-    outputFastqcHtml / outputFastqcHtmlR1 / outputFastqcHtmlR2 : String
-        Path(s) to the generated FastQC HTML report(s), depending on whether
-        the data is single-end or paired-end.
+    FastQC HTML reports are stored as attributes of the outputFastq object.
 
     ----------------------------
     Notes
@@ -88,7 +85,7 @@ class ProtImportFastq(EMProtocol):
         form.addParam('sampleName', StringParam,
                       label='Sample name',
                       allowsNull=True,
-                      help='Name used to identify the sample.')
+                      help='Name used to identify the sample. If empty, it will be inferred from the FASTQ file name.')
 
         form.addParam('isPaired', BooleanParam,
                       default=False,
@@ -106,13 +103,13 @@ class ProtImportFastq(EMProtocol):
 
         form.addParam('runFastqc', BooleanParam,
                       default=False,
-                      label='Run FastQC',
+                      label='Run FastQC:',
                       help='Execute FastQC and generate HTML reports.')
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('importStep')
+        self._insertFunctionStep(self.importStep)
         if self.runFastqc.get():
-            self._insertFunctionStep('fastqcStep')
+            self._insertFunctionStep(self.fastqcStep)
 
     def importStep(self):
         fn1 = self.inputFastq1.get()
@@ -125,8 +122,8 @@ class ProtImportFastq(EMProtocol):
         fastq.setHasQuality(True)
 
         sample = self.sampleName.get()
-        if sample and sample.strip():
-            fastq.setSampleName(sample.strip())
+        sampleName = sample.strip() if sample and sample.strip() else self._getDefaultSampleName(fn1)
+        fastq.setSampleName(sampleName)
 
         if self.isPaired.get():
             fn2 = self.inputFastq2.get()
@@ -146,25 +143,39 @@ class ProtImportFastq(EMProtocol):
             fn2 = self.inputFastq2.get()
             arguments += f' "{fn2}"'
 
-        Plugin.runCondaCommand(self, arguments, FASTQC_DIC, 'fastqc')
+        Plugin.runCondaCommand(self, arguments, OPENBABEL_DIC, 'fastqc')
 
         htmlFiles = self._getFastqcHtmlFiles(outDir)
 
         if not htmlFiles:
             raise RuntimeError('FastQC finished but no HTML report was generated.')
 
+        fastq = self.outputFastq
         if self.isPaired.get():
             if len(htmlFiles) < 2:
                 raise RuntimeError('Expected two FastQC HTML reports for paired-end data.')
 
-            self._defineOutputs(
-                outputFastqcHtmlR1=String(htmlFiles[0]),
-                outputFastqcHtmlR2=String(htmlFiles[1])
-            )
+            fastq.setFastqcHtmlR1(htmlFiles[0])
+            fastq.setFastqcHtmlR2(htmlFiles[1])
         else:
-            self._defineOutputs(
-                outputFastqcHtml=String(htmlFiles[0])
-            )
+            fastq.setFastqcHtml(htmlFiles[0])
+
+        self._store(fastq)
+
+    def _getDefaultSampleName(self, fn):
+        sampleName = os.path.basename(fn)
+
+        for ext in ['.fastq.gz', '.fq.gz', '.fastq', '.fq']:
+            if sampleName.endswith(ext):
+                sampleName = sampleName[:-len(ext)]
+                break
+
+        for suffix in ['_R1', '_R2', '_1', '_2', '.R1', '.R2', '.1', '.2']:
+            if sampleName.endswith(suffix):
+                sampleName = sampleName[:-len(suffix)]
+                break
+
+        return sampleName
 
     def _getFastqcHtmlFiles(self, outDir):
         return sorted([
@@ -199,13 +210,13 @@ class ProtImportFastq(EMProtocol):
 
         sample = self.sampleName.get()
         fn1 = self.inputFastq1.get()
+        sampleName = sample.strip() if sample and sample.strip() else self._getDefaultSampleName(fn1)
 
         summary.append('Format: FASTQ')
         summary.append('Quality scores: yes')
 
-        if sample and sample.strip():
-            summary.append(f'Sample name: {sample.strip()}')
 
+        summary.append(f'Sample name: {sampleName}')
         summary.append(f'Read 1: {fn1}')
 
         if self.isPaired.get():
@@ -230,8 +241,10 @@ class ProtImportFastq(EMProtocol):
             methods.append('A single-end FASTQ dataset was imported.')
 
         sample = self.sampleName.get()
-        if sample and sample.strip():
-            methods.append(f'Sample name: {sample.strip()}.')
+        fn1 = self.inputFastq1.get()
+        sampleName = sample.strip() if sample and sample.strip() else self._getDefaultSampleName(fn1)
+
+        methods.append(f'Sample name: {sampleName}.')
 
         if self.runFastqc.get():
             methods.append('FastQC quality control was performed.')
