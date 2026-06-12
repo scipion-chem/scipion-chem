@@ -50,7 +50,110 @@ RESIDUE, ATOM = 0, 1
 
 class ProtDefineContactStructROIs(ProtDefineStructROIs):
     """
-    Defines a set of structural ROIs ligand-receptor contacts
+    AI Generated:
+
+    This protocol is used to define structural regions of interest (StructROIs)
+    based on physical contacts between a set of docked small molecules and a
+    receptor structure.
+
+    It identifies receptor binding regions by computing atomic or residue-level
+    contacts between ligands and the receptor within a user-defined distance
+    threshold. These contacts are then clustered spatially to generate coherent
+    structural regions representing potential binding sites.
+
+    The protocol supports flexible selection of ligand subsets, different levels
+    of contact resolution (atom or residue), and optional filtering of receptor
+    chains involved in ligand binding.
+
+    Core Concepts
+    -------------
+    Ligand–Receptor Contacts:
+        Physical interactions defined by a distance threshold between ligand and
+        receptor atoms.
+
+    Contact Representation:
+        Contacts can be stored at:
+        - Residue level (default for receptor)
+        - Atom level (fine-grained representation)
+
+    Structural ROI (StructROI):
+        A spatial cluster of receptor contact points representing a putative
+        binding site derived from ligand interactions.
+
+    Ligand Selection:
+        Supports selection of:
+        - All ligands in the dataset
+        - Specific ligand groups
+        - Individual ligands or subsets defined by user input
+
+    Workflow
+    --------
+    1. Input a SetOfSmallMolecules containing docked ligands and receptor.
+    2. Select ligand subsets based on user-defined selection rules.
+    3. Convert ligand structures to compatible formats (PDB, MAE, etc.).
+    4. Parse receptor and ligand atomic structures.
+    5. Compute pairwise distances between ligand and receptor atoms.
+    6. Identify contacts using a distance threshold.
+    7. Store contact mappings for each ligand.
+    8. Aggregate receptor contact points across all ligands.
+    9. Optionally filter receptor chains not involved in contacts.
+    10. Cluster contact coordinates into spatial regions.
+    11. Generate StructROI objects representing each contact cluster.
+    12. Output a SetOfStructROIs representing binding regions.
+
+    Contact Detection
+    -----------------
+    - Distance threshold:
+        Defines the maximum distance (Å) between ligand and receptor atoms
+        to be considered in contact.
+
+    - Contact levels:
+        Receptor:
+            - Residue level (default)
+            - Atom level
+        Ligand:
+            - Residue level
+            - Atom level
+
+    Contact Representation:
+        Contacts are stored as mappings:
+            ligand_atom → [receptor_atoms]
+
+    Clustering Strategy
+    -------------------
+    - Contact coordinates are extracted from receptor atoms/residues.
+    - Coordinates can optionally be projected onto a molecular surface.
+    - Spatial clustering is applied using distance-based clustering.
+    - Clusters define candidate structural regions of interest.
+
+    Optional Features
+    -----------------
+    Chain Filtering:
+        Retains only receptor chains that participate in ligand contacts.
+
+    Surface Mapping:
+        Maps contact coordinates onto solvent-accessible surface points
+        (using MSMS-derived surfaces).
+
+    Parallel Execution:
+        Contact computation across ligands can be parallelized.
+
+    Output
+    ------
+    - outputStructROIs:
+        Set of StructROI objects representing clustered ligand-contact regions.
+
+    Each StructROI includes:
+        - PDB/CIF file representing the region
+        - Contact residues or atoms
+        - Cluster membership information
+
+    Use Cases
+    ---------
+    - Identification of ligand binding sites in protein structures
+    - Mapping interaction hot-spots from docking simulations
+    - Comparison of binding regions across ligand sets
+    - Preparation of structural regions for downstream analysis
     """
     _label = 'Define contact structural ROIs'
     typeLabels = {'All': 'set', 'ROI': 'pocket', 'Molecule': 'molecule',

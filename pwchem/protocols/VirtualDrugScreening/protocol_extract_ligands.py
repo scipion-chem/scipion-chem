@@ -54,6 +54,92 @@ class ResidueSelect(Select):
 
 
 class ProtExtractLigands(EMProtocol):
+    """
+    AI Generated:
+
+    This protocol is used to extract ligands from an atomic structure (PDB, CIF, or ENT)
+    and generate a SetOfSmallMolecules compatible with downstream Scipion workflows.
+
+    The protocol identifies heteroatoms (HETATM records) in a protein–ligand complex,
+    filters them based on size criteria, and exports each ligand as an independent
+    small molecule structure. Optionally, the receptor structure can be cleaned by
+    removing waters and selected chains before ligand extraction.
+
+    Core Concepts
+    -------------
+    Atomic Structure:
+        A macromolecular structure file (PDB, CIF, or similar) containing protein
+        chains, water molecules, ions, and potential bound ligands.
+
+    Ligand Identification:
+        Ligands are detected as hetero-residues (HETATM) that are not water and
+        contain a minimum number of heavy atoms.
+
+    Heavy Atoms:
+        Non-hydrogen atoms used to filter out small artifacts such as waters or ions.
+
+    Residue Selection:
+        A Biopython-based selection strategy used to extract individual ligand residues
+        from a full structure.
+
+    Structure Cleaning (optional):
+        Pre-processing step to remove waters and/or selected chains before ligand
+        extraction.
+
+    Workflow
+    --------
+    1. Input atomic structure (PDB / CIF / ENT format).
+    2. Optionally clean structure:
+       - Remove water molecules
+       - Remove selected chains
+    3. Parse structure using Biopython PDB/MMCIF parser.
+    4. Identify hetero-residues (ligands).
+    5. Filter ligands by minimum number of heavy atoms.
+    6. Extract each ligand as an independent structure file.
+    7. Save receptor (cleaned structure) separately.
+    8. Build SetOfSmallMolecules object containing all extracted ligands.
+
+    Ligand Filtering Criteria
+    -------------------------
+    - Must be a hetero-residue (HETATM).
+    - Must not be water molecules.
+    - Must contain at least `nAtoms` heavy atoms (default: 4).
+
+    Structure Cleaning Options
+    --------------------------
+    Clean Structure:
+        Enables preprocessing of the input structure before ligand extraction.
+
+    Remove Waters:
+        Removes crystallographic water molecules from the structure.
+
+    Remove Chains:
+        Allows selection of specific protein chains to keep in the receptor model.
+
+    Ligand Representation
+    ---------------------
+    Each ligand is stored as:
+    - Independent PDB file
+    - SmallMolecule object with:
+      - molName (derived from residue name)
+      - poseFile (ligand structure file)
+      - gridId and confId (incremental identifiers)
+
+    Output
+    ------
+    - outputSmallMolecules:
+        SetOfSmallMolecules containing all extracted ligands.
+
+    - Protein structure (cleaned):
+        Receptor structure without ligands (and optionally without waters/chains).
+
+    Use Cases
+    ---------
+    - Preparation of ligand libraries from co-crystal structures
+    - Extraction of bound ligands for docking validation
+    - Generation of datasets for binding site analysis
+    - Separation of receptor and ligand for molecular modeling workflows
+    """
     _label = 'Extract Ligand from structure'
 
     def _cleanStructureParams(self, form):

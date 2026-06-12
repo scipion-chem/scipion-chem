@@ -42,7 +42,79 @@ from pwchem.utils.utilsFasta import parseFasta
 
 class ProtDefineSetOfSequences(EMProtocol):
     """
-    Generates a SetOfSequences from AtomStructs, Sequences objects
+    AI Generated:
+
+    Protocol: Define Set of Sequences
+
+    This protocol generates a SetOfSequences object from multiple possible inputs:
+    - Individual Sequence objects
+    - AtomStruct objects (extracting chains)
+    - External PDB codes
+
+    It is designed to unify different sequence sources into a single
+    Scipion-compatible SetOfSequences container for downstream analysis.
+
+    Overview
+    --------
+    The protocol collects user-defined inputs and constructs a curated set of
+    biological sequences, optionally specifying chain selection and positional
+    metadata.
+
+    Input options
+    -------------
+    inputOrigin:
+        Defines the source type of the sequence:
+        - Sequence: direct Sequence object
+        - AtomStruct: extract sequence from a structure
+        - PDB code: retrieve sequence from a PDB identifier
+
+    inputSequence:
+        Sequence object to be included (if inputOrigin = Sequence)
+
+    inputAtomStruct:
+        Structural object from which a chain sequence is extracted
+
+    inputPDB:
+        PDB identifier used to retrieve structural sequence
+
+    inpChain:
+        Chain identifier used when extracting sequence from structures or PDB
+
+    inpPositions:
+        Optional positional information associated with the sequence
+
+    inputList:
+        Internal list of encoded sequence entries to be processed
+
+    Workflow
+    --------
+    1. User adds sequences from different origins
+    2. Each input is stored in a structured JSON-like entry
+    3. During execution, each entry is parsed
+    4. FASTA files are read to reconstruct sequences
+    5. Sequence objects are created and added to a SetOfSequences
+
+    Output
+    ------
+    outputSequences:
+        SetOfSequences object containing:
+        - Sequence objects created from all selected inputs
+        - Standardized identifiers (name/id)
+        - Raw sequence strings extracted from FASTA representations
+
+    Key Features
+    ------------
+    - Supports multiple input sources (Sequence, structure, PDB)
+    - Converts heterogeneous inputs into a unified sequence set
+    - Uses FASTA parsing for sequence reconstruction
+    - Fully compatible with Scipion sequence workflows
+    - Enables downstream comparative or alignment analysis
+
+    Notes
+    -----
+    - Input list entries are expected in JSON format encoded in text lines
+    - Sequence names are used as keys to extract FASTA entries
+    - Only valid parsed entries are included in the final set
     """
     _label = 'Define set of sequences'
 
