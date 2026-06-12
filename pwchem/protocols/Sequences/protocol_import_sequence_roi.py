@@ -42,7 +42,65 @@ from pwchem.utils import *
 
 class ProtImportSeqROI(EMProtocol):
     """
-    Defines a set of sequence ROIs from a file containing those ROIs
+    AI Generated:
+
+    This protocol is used to import a set of sequence ROIs (Regions of Interest) from external files,
+    such as IEDB epitope datasets.
+
+    The protocol parses an input file containing epitope/ROI annotations and converts them into
+    SequenceROI objects associated with their corresponding parent sequences. Each group of ROIs
+    is organized by UniProt identifier and stored as a SetOfSequenceROIs.
+
+    Overview
+    --------
+    The protocol reads epitope definitions (including continuous and discontinuous regions),
+    retrieves the corresponding protein sequences (e.g. from UniProt), and builds structured
+    ROI objects with sequence and coordinate information.
+
+    Input
+    -----
+    inputFile:
+        Path to the file containing ROI/epitope definitions.
+
+    fileFormat:
+        Format of the input file:
+        - None of listed: generic format (not implemented)
+        - IEDB: Immune Epitope Database format
+
+    Workflow
+    --------
+    1. Read and parse input file (CSV-based format for IEDB)
+    2. Identify whether epitopes are continuous or discontinuous
+    3. For each epitope:
+       - Extract sequence fragments
+       - Extract residue position ranges
+    4. Retrieve parent protein sequence (UniProt) if not already available
+    5. Build SequenceROI objects linking epitope to parent sequence
+    6. Group ROIs by UniProt ID
+    7. Store each group as a SetOfSequenceROIs output object
+
+    Output
+    ------
+    outputROIs_<uniprotID>:
+        SetOfSequenceROIs objects grouped by UniProt identifier, each containing:
+        - SequenceROI objects representing epitope regions
+        - Mapped sequence coordinates
+        - Associated parent protein sequence
+
+    Key Features
+    ------------
+    - Supports IEDB epitope format parsing
+    - Handles both continuous and discontinuous epitopes
+    - Automatically retrieves UniProt sequences if needed
+    - Groups ROIs by parent protein for downstream analysis
+    - Converts raw epitope annotations into structured ROI objects
+
+    Notes
+    -----
+    - Discontinuous epitopes are reconstructed by grouping nearby residues
+    - Large gaps between residues are used to split ROIs
+    - UniProt sequences are downloaded dynamically when required
+    - Each ROI is associated with both sequence fragment and coordinate range
     """
     _label = 'Import sequence ROI'
 

@@ -46,11 +46,64 @@ RDIC = {LIPINSKI: 'ro5', RO3: 'ro3'}
 
 class ProtocolADMEFiltering(EMProtocol):
     """
-    Performs the analysis of ADME (Absortion, Distribution, Metabolism, Excretion) properties.
-    This filtering is particularly useful for testing compounds whose pharmacological
-    properties/activity have already been proven.
+    AI Generated:
 
-    It is possible to analyze molecules in  mol, mol2, pdb, sdf and smi format.
+    This protocol performs ADME (Absorption, Distribution, Metabolism and Excretion)
+    filtering on small molecules.
+
+    It evaluates compounds using drug-likeness rules such as Lipinski’s Rule of Five
+    or the Rule of Three, filtering molecules based on their physicochemical properties.
+
+    Workflow
+    --------
+    1. Input a set of small molecules in common formats (SDF, MOL, MOL2, PDB, SMILES).
+    2. Convert structures when necessary (e.g. PDBQT → PDB using OpenBabel).
+    3. Generate a parameter file with:
+       - Selected ADME rule
+       - List of ligand files
+       - Output configuration
+    4. Run an external RDKit-based script to compute molecular descriptors.
+    5. Parse the resulting TSV file.
+    6. Select molecules that pass the chosen filtering criteria.
+    7. Output the filtered set of molecules.
+
+    Filtering Rules
+    ---------------
+    Lipinski Rule of Five:
+        Drug-likeness criteria based on:
+        - Molecular weight
+        - Lipophilicity (LogP)
+        - Hydrogen bond donors
+        - Hydrogen bond acceptors
+
+    Rule of Three:
+        Stricter criteria used for fragment-based drug design:
+        - Lower molecular weight
+        - Reduced complexity and polarity
+
+    Input
+    -----
+    SetOfSmallMolecules:
+        Collection of chemical compounds to be filtered.
+
+    Output
+    ------
+    SetOfSmallMolecules:
+        Subset of molecules that satisfy the selected ADME rule.
+
+    Special Behavior
+    ----------------
+    - Converts PDBQT files to PDB automatically when needed.
+    - Uses RDKit-based external scripts for descriptor calculation.
+    - Identifies molecules based on input filenames.
+    - Preserves original metadata in the output set.
+
+    Use Cases
+    ---------
+    - Drug discovery filtering
+    - Virtual screening preprocessing
+    - Fragment library refinement
+    - Lead optimization
     """
     _label = 'ADME ligand filtering'
 
