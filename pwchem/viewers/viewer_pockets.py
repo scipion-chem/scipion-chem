@@ -61,7 +61,8 @@ class StructROIPointsViewer(pwviewer.Viewer):
   # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
-    if not hasattr(obj, '_hetatmFile') or not getattr(obj, '_hetatmFile'):
+    objProtId, fileProtId = obj.getProtocolId(), obj.getHetatmFileProtId()
+    if objProtId != fileProtId or not fileProtId:
         obj.buildPDBhetatmFile()
     pmlFile = obj.createPML(bBox=bBox)
 
