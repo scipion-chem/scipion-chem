@@ -29,6 +29,28 @@ from pyworkflow.tests import BaseTest, setupTestProject
 from pwchem.protocols import ProtImportFastq
 from pwchem.utils import assertHandle
 
+FASTQ_R1_CONTENT = (
+    '@READ_1\n'
+    'ACGTACGTACGTACGTACGT\n'
+    '+\n'
+    'IIIIIIIIIIIIIIIIIIII\n'
+    '@READ_2\n'
+    'TTTTCCCCAAAAGGGGTTTT\n'
+    '+\n'
+    'IIIIIIIIIIIIIIIIIIII\n'
+)
+
+FASTQ_R2_CONTENT = (
+    '@READ_1\n'
+    'TGCATGCATGCATGCATGCA\n'
+    '+\n'
+    'IIIIIIIIIIIIIIIIIIII\n'
+    '@READ_2\n'
+    'AAAACCCCGGGGTTTTAAAA\n'
+    '+\n'
+    'IIIIIIIIIIIIIIIIIIII\n'
+)
+
 class TestImportFastq(BaseTest):
     @classmethod
     def setUpClass(cls):
@@ -38,28 +60,10 @@ class TestImportFastq(BaseTest):
         cls.fastqR2 = cls.proj.getTmpPath('sample_R2.fastq')
 
         with open(cls.fastqR1, 'w') as f:
-            f.write(
-                '@READ_1\n'
-                'ACGTACGTACGTACGTACGT\n'
-                '+\n'
-                'IIIIIIIIIIIIIIIIIIII\n'
-                '@READ_2\n'
-                'TTTTCCCCAAAAGGGGTTTT\n'
-                '+\n'
-                'IIIIIIIIIIIIIIIIIIII\n'
-            )
+            f.write(FASTQ_R1_CONTENT)
 
         with open(cls.fastqR2, 'w') as f:
-            f.write(
-                '@READ_1\n'
-                'TGCATGCATGCATGCATGCA\n'
-                '+\n'
-                'IIIIIIIIIIIIIIIIIIII\n'
-                '@READ_2\n'
-                'AAAACCCCGGGGTTTTAAAA\n'
-                '+\n'
-                'IIIIIIIIIIIIIIIIIIII\n'
-            )
+            f.write(FASTQ_R2_CONTENT)
 
     def testImportSingleFastqWithFastqc(self):
         print("\nImport FASTQ: single-end with FastQC")

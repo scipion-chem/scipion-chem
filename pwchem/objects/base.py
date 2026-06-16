@@ -2046,7 +2046,7 @@ class PharmacophoreChem(data.EMSet):
       self.append(feat)
 
 
-class BioFile(data.EMFile):
+class SequencingFile(data.EMFile):
   """Base object representing a bioinformatics data file."""
 
   def __init__(self, filename=None, **kwargs):
@@ -2084,7 +2084,7 @@ class BioFile(data.EMFile):
     fn = self.getFileName()
     return os.path.basename(fn) if fn else 'BioFile'
 
-class FastqFile(BioFile):
+class FastqFile(SequencingFile):
   """Object representing a FASTQ dataset."""
 
   def __init__(self, filename=None, **kwargs):
@@ -2099,6 +2099,7 @@ class FastqFile(BioFile):
     self._fastqcHtml = pwobj.String(kwargs.get('fastqcHtml', None))
     self._fastqcHtmlR1 = pwobj.String(kwargs.get('fastqcHtmlR1', None))
     self._fastqcHtmlR2 = pwobj.String(kwargs.get('fastqcHtmlR2', None))
+    self._fastpHtml = pwobj.String(kwargs.get('fastpHtml', None))
 
   def getFileName2(self):
     return self._filename2.get()
@@ -2163,6 +2164,15 @@ class FastqFile(BioFile):
       self.getFastqcHtmlR1(),
       self.getFastqcHtmlR2()
     ] if fn]
+
+  def getFastpHtml(self):
+    return self._fastpHtml.get()
+
+  def setFastpHtml(self, value):
+    self._fastpHtml.set(value)
+
+  def hasFastpHtml(self):
+    return bool(self.getFastpHtml())
 
   def __str__(self):
     sample = self.getSampleName() or 'unnamed'
