@@ -90,14 +90,14 @@ if __name__ == "__main__":
 
         plt.figure()
         if args.rmsd:
-            rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
+            rmsd = mdtraj.rmsd(trajectory, trajectory, 0, atom_indices=list(index))
             plt.plot(trajectory.time, rmsd * 10,  'r', label='RMSD')
             plt.title('RMSD')
             plt.xlabel(psXlabel)
             plt.ylabel('RMSD (Å)')
 
         elif args.rmsf:
-            rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
+            rmsf = mdtraj.rmsf(trajectory, trajectory, 0, atom_indices=list(index))
             plt.plot(rmsf * 10, 'r', label='RMSF')
             plt.title('RMSF')
             plt.xlabel('Selected atom numbers')
