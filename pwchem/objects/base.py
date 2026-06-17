@@ -1647,12 +1647,24 @@ class SetOfStructROIs(data.EMSet, SetClass):
 
     return oFile
 
+  def getProtocolId(self):
+    return self.getFileName().split('/')[1].split('_')[0]
+
+  def getHetatmFileProtId(self):
+    protId = None
+    atmFile = self.getProteinHetatmFile()
+    if atmFile != None:
+      protId = atmFile.split('_')[-2]
+    return protId
+
   def buildPDBhetatmFile(self, suffix=''):
     protName = self.getProteinName()
     protFile = self.getProteinFile()
     ext = os.path.splitext(protFile)[1]
+    protId = self.getProtocolId()
+
     outDir = self.getSetDir()
-    outFile = os.path.join(outDir, protName + f'{suffix}_out{ext}')
+    outFile = os.path.join(outDir, f'{protName}{suffix}_{protId}_out{ext}')
 
     with open(outFile, 'w') as f:
       if ext in ('.pdb', '.pdbqt'):
