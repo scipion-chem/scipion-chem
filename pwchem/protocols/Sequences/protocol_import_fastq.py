@@ -2,7 +2,7 @@
 # *
 # * Authors:     Laura Pérez Liens (laura.perez@cnb.csic.es)
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * Unidad de Bioinformatica of Centro Nacional de Biotecnologia, CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -11,25 +11,28 @@
 # *
 # * This program is distributed in the hope that it will be useful,
 # * but WITHOUT ANY WARRANTY; without even the implied warranty of
-# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # * GNU General Public License for more details.
 # *
 # * You should have received a copy of the GNU General Public License
 # * along with this program; if not, write to the Free Software
 # * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
-# * 02111-1307  USA
+# * 02111-1307 USA
 # *
-# *  All comments concerning this program package may be sent to the
-# *  e-mail address 'scipion@cnb.csic.es'
+# * All comments concerning this program package may be sent to the
+# * e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
 import os
+
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, FileParam, StringParam
 
 from pwchem import Plugin
 from pwchem.constants import OPENBABEL_DIC
 from pwchem.objects import FastqFile
+
 
 class ProtImportFastq(EMProtocol):
     """
@@ -49,13 +52,14 @@ class ProtImportFastq(EMProtocol):
         Identifier assigned to the sample.
 
     isPaired : bool
-        If True, the input is treated as paired-end data and two FASTQ files are required.
+        If True, the input is treated as paired-end data and two FASTQ files
+        are required.
 
     inputFastq1 : file
-        FASTQ file corresponding to read 1 (or single-end data).
+        FASTQ file corresponding to read 1 or single-end data.
 
     inputFastq2 : file, optional
-        FASTQ file corresponding to read 2 (only required if isPaired=True).
+        FASTQ file corresponding to read 2. Only required for paired-end data.
 
     runFastqc : bool
         If True, FastQC is executed and quality control reports are generated.
@@ -74,7 +78,7 @@ class ProtImportFastq(EMProtocol):
     ----------------------------
 
     - FastQC must be installed through the plugin binaries.
-    - Generated HTML reports are stored in the protocol's extra directory.
+    - Generated HTML reports are stored in the protocol extra directory.
     """
 
     _label = 'import fastq'
@@ -83,33 +87,32 @@ class ProtImportFastq(EMProtocol):
         form.addSection(label='Input')
 
         form.addParam('sampleName', StringParam,
-                      label='Sample name',
+                      label='Sample name: ',
                       allowsNull=True,
-                      help='Name used to identify the sample. If empty, it will be inferred from the FASTQ file name.')
+                      help='Name used to identify the sample. If empty, '
+                           'it will be inferred from the FASTQ file name.')
 
         form.addParam('isPaired', BooleanParam,
                       default=False,
-                      label='Paired-end',
+                      label='Paired-end: ',
                       help='Select Yes if paired-end sequencing.')
 
         form.addParam('inputFastq1', FileParam,
-                      label='FASTQ file (read 1 / single-end)',
+                      label='FASTQ file (read 1 / single-end): ',
                       allowsNull=False)
 
         form.addParam('inputFastq2', FileParam,
                       condition='isPaired',
-                      label='FASTQ file (read 2)',
+                      label='FASTQ file (read 2): ',
                       allowsNull=False)
 
         form.addParam('runFastqc', BooleanParam,
                       default=False,
-                      label='Run FastQC:',
+                      label='Run FastQC: ',
                       help='Execute FastQC and generate HTML reports.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self.importStep)
-        if self.runFastqc.get():
-            self._insertFunctionStep(self.fastqcStep)
 
     def importStep(self):
         fn1 = self.inputFastq1.get()
@@ -122,7 +125,8 @@ class ProtImportFastq(EMProtocol):
         fastq.setHasQuality(True)
 
         sample = self.sampleName.get()
-        sampleName = sample.strip() if sample and sample.strip() else self._getDefaultSampleName(fn1)
+        sampleName = sample.strip() if sample and sample.strip() else \
+            self._getDefaultSampleName(fn1)
         fastq.setSampleName(sampleName)
 
         if self.isPaired.get():
@@ -130,9 +134,23 @@ class ProtImportFastq(EMProtocol):
             fastq.setFileName2(fn2)
             fastq.setIsCompressed(fn1.endswith('.gz') and fn2.endswith('.gz'))
 
+        if self.runFastqc.get():
+            htmlFiles = self._runFastqc()
+
+            if self.isPaired.get():
+                if len(htmlFiles) < 2:
+                    raise RuntimeError(
+                        'Expected two FastQC HTML reports for paired-end data.'
+                    )
+
+                fastq.setFastqcHtmlR1(htmlFiles[0])
+                fastq.setFastqcHtmlR2(htmlFiles[1])
+            else:
+                fastq.setFastqcHtml(htmlFiles[0])
+
         self._defineOutputs(outputFastq=fastq)
 
-    def fastqcStep(self):
+    def _runFastqc(self):
         fn1 = self.inputFastq1.get()
         outDir = self._getExtraPath('fastqc')
         os.makedirs(outDir, exist_ok=True)
@@ -148,19 +166,11 @@ class ProtImportFastq(EMProtocol):
         htmlFiles = self._getFastqcHtmlFiles(outDir)
 
         if not htmlFiles:
-            raise RuntimeError('FastQC finished but no HTML report was generated.')
+            raise RuntimeError(
+                'FastQC finished but no HTML report was generated.'
+            )
 
-        fastq = self.outputFastq
-        if self.isPaired.get():
-            if len(htmlFiles) < 2:
-                raise RuntimeError('Expected two FastQC HTML reports for paired-end data.')
-
-            fastq.setFastqcHtmlR1(htmlFiles[0])
-            fastq.setFastqcHtmlR2(htmlFiles[1])
-        else:
-            fastq.setFastqcHtml(htmlFiles[0])
-
-        self._store(fastq)
+        return htmlFiles
 
     def _getDefaultSampleName(self, fn):
         sampleName = os.path.basename(fn)
@@ -210,12 +220,11 @@ class ProtImportFastq(EMProtocol):
 
         sample = self.sampleName.get()
         fn1 = self.inputFastq1.get()
-        sampleName = sample.strip() if sample and sample.strip() else self._getDefaultSampleName(fn1)
+        sampleName = sample.strip() if sample and sample.strip() else \
+            self._getDefaultSampleName(fn1)
 
         summary.append('Format: FASTQ')
         summary.append('Quality scores: yes')
-
-
         summary.append(f'Sample name: {sampleName}')
         summary.append(f'Read 1: {fn1}')
 
@@ -242,7 +251,8 @@ class ProtImportFastq(EMProtocol):
 
         sample = self.sampleName.get()
         fn1 = self.inputFastq1.get()
-        sampleName = sample.strip() if sample and sample.strip() else self._getDefaultSampleName(fn1)
+        sampleName = sample.strip() if sample and sample.strip() else \
+            self._getDefaultSampleName(fn1)
 
         methods.append(f'Sample name: {sampleName}.')
 
