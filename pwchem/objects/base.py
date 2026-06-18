@@ -850,7 +850,7 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split('\t')[col].replace(' ', '_')
+        molName = line.split('\t')[col].replace(' ', '_').strip()
 
         oFile = os.path.join(outDir, f'{molName}.smi')
         with open(oFile, 'w') as fO:
