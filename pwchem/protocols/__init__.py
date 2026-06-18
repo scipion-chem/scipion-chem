@@ -116,3 +116,4 @@ from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import Proto
 from pwchem.protocols.MolecularDynamics.protocol_prolif_analysis import ProtocolProlif
 from pwchem.protocols.MolecularDynamics.protocol_import_MDSystem import ProtocolImportMDSystem
 from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import ProtocolTrajectoryClustering
+from pwchem.protocols.VirtualDrugScreening.protocol_structROI_voting import ProtROIVoting
