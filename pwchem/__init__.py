@@ -66,6 +66,7 @@ class Plugin(pwem.Plugin):
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
 
+
     @classmethod
     def _defineVariables(cls):
         # Package home directories
@@ -79,6 +80,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
 
+
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
         cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
@@ -86,6 +88,7 @@ class Plugin(pwem.Plugin):
         cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
                                      description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
                                                              'and IO overuse')
+
 
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
@@ -183,7 +186,7 @@ class Plugin(pwem.Plugin):
         openbabelInstaller.addCommand(f'conda create -y -c conda-forge --name {obEnvName} python=3.11 '
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
-            .addCondaPackages(['clustalo', 'pip=25'], channel='bioconda', targetName='CLUSTALO_INSTALLED') \
+            .addCondaPackages(['clustalo', 'fastqc','fastp','pip=25'], channel='bioconda', targetName='BIOCONDA_TOOLS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\

@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import gzip
 import enum, io, pickle, os
 import subprocess as sp
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict
@@ -2057,6 +2057,231 @@ class PharmacophoreChem(data.EMSet):
       feat.setObjId(featId)
       self.append(feat)
 
+
+class SequencingFile(data.EMFile):
+  """Base object representing a bioinformatics data file."""
+
+  def __init__(self, filename=None, **kwargs):
+    super().__init__(filename=filename, **kwargs)
+
+    self._format = pwobj.String(kwargs.get('format', None))
+    self._hasQuality = pwobj.Boolean(kwargs.get('hasQuality', False))
+    self._isCompressed = pwobj.Boolean(kwargs.get('isCompressed', False))
+
+  def getFormat(self):
+    return self._format.get()
+
+  def setFormat(self, value):
+    self._format.set(value)
+
+  def hasQuality(self):
+    return self._hasQuality.get()
+
+  def setHasQuality(self, value):
+    self._hasQuality.set(value)
+
+  def isCompressed(self):
+    return self._isCompressed.get()
+
+  def setIsCompressed(self, value):
+    self._isCompressed.set(value)
+
+  def supportsFastQC(self):
+    return self.hasQuality()
+
+  def getFiles(self):
+    return [self.getFileName()]
+
+  def getObjLabel(self):
+    fn = self.getFileName()
+    return os.path.basename(fn) if fn else 'BioFile'
+
+
+class FastqFile(SequencingFile):
+  """Object representing a FASTQ dataset."""
+
+  def __init__(self, filename=None, **kwargs):
+    kwargs.setdefault('format', 'FASTQ')
+    kwargs.setdefault('hasQuality', True)
+
+    super().__init__(filename=filename, **kwargs)
+
+    self._filename2 = pwobj.String(kwargs.get('filename2', None))
+    self._sampleName = pwobj.String(kwargs.get('sampleName', None))
+    self._isPaired = pwobj.Boolean(kwargs.get('isPaired', False))
+
+    # FASTQ statistics
+    self._readLength = pwobj.Integer(kwargs.get('readLength', 0))
+    self._numReads = pwobj.Integer(kwargs.get('numReads', 0))
+
+    # FastQC reports
+    self._fastqcHtml = pwobj.String(kwargs.get('fastqcHtml', None))
+    self._fastqcHtmlR1 = pwobj.String(kwargs.get('fastqcHtmlR1', None))
+    self._fastqcHtmlR2 = pwobj.String(kwargs.get('fastqcHtmlR2', None))
+
+    # fastp reports
+    self._fastpHtml = pwobj.String(kwargs.get('fastpHtml', None))
+    self._fastpJson = pwobj.String(kwargs.get('fastpJson', None))
+
+  # -------------------------------------------------------
+  # Input files
+  # -------------------------------------------------------
+
+  def getFileName2(self):
+    return self._filename2.get()
+
+  def setFileName2(self, value):
+    self._filename2.set(value)
+
+  def hasFileName2(self):
+    return bool(self.getFileName2())
+
+  # -------------------------------------------------------
+  # Sample information
+  # -------------------------------------------------------
+
+  def getSampleName(self):
+    return self._sampleName.get()
+
+  def setSampleName(self, value):
+    self._sampleName.set(value)
+
+  def isPaired(self):
+    return self._isPaired.get()
+
+  def setIsPaired(self, value):
+    self._isPaired.set(value)
+
+  # -------------------------------------------------------
+  # FASTQ statistics
+  # -------------------------------------------------------
+
+  def getReadLength(self):
+    return self._readLength.get()
+
+  def setReadLength(self, value):
+    self._readLength.set(value)
+
+  def getNumReads(self):
+    return self._numReads.get()
+
+  def setNumReads(self, value):
+    self._numReads.set(value)
+
+  # -------------------------------------------------------
+  # Capabilities
+  # -------------------------------------------------------
+
+  def supportsFastQC(self):
+    return self.getFormat() == 'FASTQ' and self.hasQuality()
+
+  # -------------------------------------------------------
+  # Files
+  # -------------------------------------------------------
+
+  def getFiles(self):
+    if self.isPaired() and self.hasFileName2():
+      return [self.getFileName(), self.getFileName2()]
+
+    return [self.getFileName()]
+
+  # -------------------------------------------------------
+  # FastQC
+  # -------------------------------------------------------
+
+  def getFastqcHtml(self):
+    return self._fastqcHtml.get()
+
+  def setFastqcHtml(self, value):
+    self._fastqcHtml.set(value)
+
+  def getFastqcHtmlR1(self):
+    return self._fastqcHtmlR1.get()
+
+  def setFastqcHtmlR1(self, value):
+    self._fastqcHtmlR1.set(value)
+
+  def getFastqcHtmlR2(self):
+    return self._fastqcHtmlR2.get()
+
+  def setFastqcHtmlR2(self, value):
+    self._fastqcHtmlR2.set(value)
+
+  def hasFastqcHtml(self):
+    return bool(self.getFastqcHtml())
+
+  def hasFastqcHtmlR1(self):
+    return bool(self.getFastqcHtmlR1())
+
+  def hasFastqcHtmlR2(self):
+    return bool(self.getFastqcHtmlR2())
+
+  def getFastqcFiles(self):
+    return [fn for fn in [
+      self.getFastqcHtml(),
+      self.getFastqcHtmlR1(),
+      self.getFastqcHtmlR2()
+    ] if fn]
+
+  # -------------------------------------------------------
+  # fastp
+  # -------------------------------------------------------
+
+  def getFastpHtml(self):
+    return self._fastpHtml.get()
+
+  def setFastpHtml(self, value):
+    self._fastpHtml.set(value)
+
+  def hasFastpHtml(self):
+    return bool(self.getFastpHtml())
+
+  def getFastpJson(self):
+    return self._fastpJson.get()
+
+  def setFastpJson(self, value):
+    self._fastpJson.set(value)
+
+  def hasFastpJson(self):
+    return bool(self.getFastpJson())
+
+  # -------------------------------------------------------
+  # HTML reports
+  # -------------------------------------------------------
+
+  def getHtmlFiles(self):
+    htmlFiles = []
+
+    if self.hasFastpHtml():
+      htmlFiles.append(self.getFastpHtml())
+
+    htmlFiles.extend(self.getFastqcFiles())
+
+    return htmlFiles
+
+  # -------------------------------------------------------
+  # Representation
+  # -------------------------------------------------------
+
+  def __str__(self):
+    sample = self.getSampleName() or 'unnamed'
+
+    return '{} ({}, paired={}, reads={}, readLength={})'.format(
+      self.getClassName(),
+      sample,
+      self.isPaired(),
+      self.getNumReads(),
+      self.getReadLength()
+    )
+
+  def getObjLabel(self):
+    sample = self.getSampleName()
+
+    if sample:
+      return sample
+
+    fn = self.getFileName()
+    return os.path.basename(fn) if fn else 'fastq'
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################
