@@ -50,7 +50,7 @@ FASTQ_R2_CONTENT = (
     'IIIIIIIIIIIIIIIIIIII\n'
 )
 
-def write_fastq_files(cls, prefix):
+def writeFastqFiles(cls, prefix):
     cls.fastqR1 = cls.proj.getTmpPath(f'{prefix}_R1.fastq')
     cls.fastqR2 = cls.proj.getTmpPath(f'{prefix}_R2.fastq')
 
@@ -61,7 +61,7 @@ def write_fastq_files(cls, prefix):
         f.write(FASTQ_R2_CONTENT)
 
 
-def assert_output_exists(test, protocol, outputFastq):
+def assertOutputExists(test, protocol, outputFastq):
     assertHandle(
         test.assertIsNotNone,
         outputFastq,
@@ -69,7 +69,7 @@ def assert_output_exists(test, protocol, outputFastq):
     )
 
 
-def assert_fastq_stats(test, protocol, outputFastq, sampleName,
+def assertFastqStats(test, protocol, outputFastq, sampleName,
                       numReads=2, readLength=20):
     assertHandle(
         test.assertEqual,
@@ -98,7 +98,7 @@ class TestImportFastq(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        write_fastq_files(cls, 'sample')
+        writeFastqFiles(cls, 'sample')
 
     def testImportSingleFastqWithFastqc(self):
         print("\nImport FASTQ: single-end with FastQC")
@@ -115,8 +115,8 @@ class TestImportFastq(BaseTest):
 
         outputFastq = getattr(prot, 'outputFastq', None)
 
-        assert_output_exists(self, prot, outputFastq)
-        assert_fastq_stats(self, prot, outputFastq, 'test_single')
+        assertOutputExists(self, prot, outputFastq)
+        assertFastqStats(self, prot, outputFastq, 'test_single')
 
         assertHandle(
             self.assertFalse,
@@ -146,8 +146,8 @@ class TestImportFastq(BaseTest):
 
         outputFastq = getattr(prot, 'outputFastq', None)
 
-        assert_output_exists(self, prot, outputFastq)
-        assert_fastq_stats(self, prot, outputFastq, 'test_paired')
+        assertOutputExists(self, prot, outputFastq)
+        assertFastqStats(self, prot, outputFastq, 'test_paired')
 
         assertHandle(
             self.assertTrue,
@@ -180,7 +180,7 @@ class TestFastpFilter(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        write_fastq_files(cls, 'fastp_sample')
+        writeFastqFiles(cls, 'fastp_sample')
 
     def _importFastq(self, sampleName, isPaired):
         kwargs = {
@@ -240,8 +240,8 @@ class TestFastpFilter(BaseTest):
         protFastp = self._runFastp(protImport.outputFastq)
         outputFastq = getattr(protFastp, 'outputFastq', None)
 
-        assert_output_exists(self, protFastp, outputFastq)
-        assert_fastq_stats(self, protFastp, outputFastq, 'fastp_single')
+        assertOutputExists(self, protFastp, outputFastq)
+        assertFastqStats(self, protFastp, outputFastq, 'fastp_single')
 
         assertHandle(
             self.assertFalse,
@@ -262,8 +262,8 @@ class TestFastpFilter(BaseTest):
         protFastp = self._runFastp(protImport.outputFastq)
         outputFastq = getattr(protFastp, 'outputFastq', None)
 
-        assert_output_exists(self, protFastp, outputFastq)
-        assert_fastq_stats(self, protFastp, outputFastq, 'fastp_paired')
+        assertOutputExists(self, protFastp, outputFastq)
+        assertFastqStats(self, protFastp, outputFastq, 'fastp_paired')
 
         assertHandle(
             self.assertTrue,
