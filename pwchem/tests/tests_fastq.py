@@ -21,7 +21,6 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
-
 # Scipion em imports
 from pyworkflow.tests import BaseTest, setupTestProject
 
@@ -51,20 +50,55 @@ FASTQ_R2_CONTENT = (
     'IIIIIIIIIIIIIIIIIIII\n'
 )
 
+def _writeFastqFiles(cls, prefix):
+    cls.fastqR1 = cls.proj.getTmpPath(f'{prefix}_R1.fastq')
+    cls.fastqR2 = cls.proj.getTmpPath(f'{prefix}_R2.fastq')
+
+    with open(cls.fastqR1, 'w') as f:
+        f.write(FASTQ_R1_CONTENT)
+
+    with open(cls.fastqR2, 'w') as f:
+        f.write(FASTQ_R2_CONTENT)
+
+
+def _assertOutputExists(test, protocol, outputFastq):
+    assertHandle(
+        test.assertIsNotNone,
+        outputFastq,
+        cwd=protocol.getWorkingDir()
+    )
+
+
+def _assertFastqStats(test, protocol, outputFastq, sampleName,
+                      numReads=2, readLength=20):
+    assertHandle(
+        test.assertEqual,
+        outputFastq.getSampleName(),
+        sampleName,
+        cwd=protocol.getWorkingDir()
+    )
+
+    assertHandle(
+        test.assertEqual,
+        outputFastq.getNumReads(),
+        numReads,
+        cwd=protocol.getWorkingDir()
+    )
+
+    assertHandle(
+        test.assertEqual,
+        outputFastq.getReadLength(),
+        readLength,
+        cwd=protocol.getWorkingDir()
+    )
+
 
 class TestImportFastq(BaseTest):
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-
-        cls.fastqR1 = cls.proj.getTmpPath('sample_R1.fastq')
-        cls.fastqR2 = cls.proj.getTmpPath('sample_R2.fastq')
-
-        with open(cls.fastqR1, 'w') as f:
-            f.write(FASTQ_R1_CONTENT)
-
-        with open(cls.fastqR2, 'w') as f:
-            f.write(FASTQ_R2_CONTENT)
+        _writeFastqFiles(cls, 'sample')
 
     def testImportSingleFastqWithFastqc(self):
         print("\nImport FASTQ: single-end with FastQC")
@@ -81,11 +115,8 @@ class TestImportFastq(BaseTest):
 
         outputFastq = getattr(prot, 'outputFastq', None)
 
-        assertHandle(
-            self.assertIsNotNone,
-            outputFastq,
-            cwd=prot.getWorkingDir()
-        )
+        _assertOutputExists(self, prot, outputFastq)
+        _assertFastqStats(self, prot, outputFastq, 'test_single')
 
         assertHandle(
             self.assertFalse,
@@ -96,26 +127,6 @@ class TestImportFastq(BaseTest):
         assertHandle(
             self.assertTrue,
             outputFastq.hasFastqcHtml(),
-            cwd=prot.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getNumReads(),
-            2,
-            cwd=prot.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getReadLength(),
-            20,
-            cwd=prot.getWorkingDir()
-        )
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getSampleName(),
-            'test_single',
             cwd=prot.getWorkingDir()
         )
 
@@ -135,11 +146,8 @@ class TestImportFastq(BaseTest):
 
         outputFastq = getattr(prot, 'outputFastq', None)
 
-        assertHandle(
-            self.assertIsNotNone,
-            outputFastq,
-            cwd=prot.getWorkingDir()
-        )
+        _assertOutputExists(self, prot, outputFastq)
+        _assertFastqStats(self, prot, outputFastq, 'test_paired')
 
         assertHandle(
             self.assertTrue,
@@ -166,59 +174,34 @@ class TestImportFastq(BaseTest):
             cwd=prot.getWorkingDir()
         )
 
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getNumReads(),
-            2,
-            cwd=prot.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getReadLength(),
-            20,
-            cwd=prot.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getSampleName(),
-            'test_paired',
-            cwd=prot.getWorkingDir()
-        )
-
 
 class TestFastpFilter(BaseTest):
 
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
+        _writeFastqFiles(cls, 'fastp_sample')
 
-        cls.fastqR1 = cls.proj.getTmpPath('fastp_sample_R1.fastq')
-        cls.fastqR2 = cls.proj.getTmpPath('fastp_sample_R2.fastq')
+    def _importFastq(self, sampleName, isPaired):
+        kwargs = {
+            'sampleName': sampleName,
+            'isPaired': isPaired,
+            'inputFastq1': self.fastqR1,
+            'runFastqc': False
+        }
 
-        with open(cls.fastqR1, 'w') as f:
-            f.write(FASTQ_R1_CONTENT)
+        if isPaired:
+            kwargs['inputFastq2'] = self.fastqR2
 
-        with open(cls.fastqR2, 'w') as f:
-            f.write(FASTQ_R2_CONTENT)
-
-    def testFastpFilterSingleEnd(self):
-        print("\nFASTP filter: single-end")
-
-        protImport = self.newProtocol(
-            ProtImportFastq,
-            sampleName='fastp_single',
-            isPaired=False,
-            inputFastq1=self.fastqR1,
-            runFastqc=False
-        )
-
+        protImport = self.newProtocol(ProtImportFastq, **kwargs)
         self.launchProtocol(protImport)
 
+        return protImport
+
+    def _runFastp(self, inputFastq):
         protFastp = self.newProtocol(
             ProtFastpFilter,
-            inputFastq=protImport.outputFastq,
+            inputFastq=inputFastq,
             runFastqc=False,
             lengthRequired=1,
             threads=1,
@@ -231,20 +214,34 @@ class TestFastpFilter(BaseTest):
 
         self.launchProtocol(protFastp)
 
+        return protFastp
+
+    def _assertFastpReports(self, protocol, outputFastq):
+        assertHandle(
+            self.assertTrue,
+            outputFastq.hasFastpHtml(),
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertTrue,
+            outputFastq.hasFastpJson(),
+            cwd=protocol.getWorkingDir()
+        )
+
+    def testFastpFilterSingleEnd(self):
+        print("\nFASTP filter: single-end")
+
+        protImport = self._importFastq(
+            sampleName='fastp_single',
+            isPaired=False
+        )
+
+        protFastp = self._runFastp(protImport.outputFastq)
         outputFastq = getattr(protFastp, 'outputFastq', None)
 
-        assertHandle(
-            self.assertIsNotNone,
-            outputFastq,
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getSampleName(),
-            'fastp_single',
-            cwd=protFastp.getWorkingDir()
-        )
+        _assertOutputExists(self, protFastp, outputFastq)
+        _assertFastqStats(self, protFastp, outputFastq, 'fastp_single')
 
         assertHandle(
             self.assertFalse,
@@ -252,75 +249,21 @@ class TestFastpFilter(BaseTest):
             cwd=protFastp.getWorkingDir()
         )
 
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getNumReads(),
-            2,
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getReadLength(),
-            20,
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertTrue,
-            outputFastq.hasFastpHtml(),
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertTrue,
-            outputFastq.hasFastpJson(),
-            cwd=protFastp.getWorkingDir()
-        )
+        self._assertFastpReports(protFastp, outputFastq)
 
     def testFastpFilterPairedEnd(self):
         print("\nFASTP filter: paired-end")
 
-        protImport = self.newProtocol(
-            ProtImportFastq,
+        protImport = self._importFastq(
             sampleName='fastp_paired',
-            isPaired=True,
-            inputFastq1=self.fastqR1,
-            inputFastq2=self.fastqR2,
-            runFastqc=False
+            isPaired=True
         )
 
-        self.launchProtocol(protImport)
-
-        protFastp = self.newProtocol(
-            ProtFastpFilter,
-            inputFastq=protImport.outputFastq,
-            runFastqc=False,
-            lengthRequired=1,
-            threads=1,
-            qualifiedQualityPhred=15,
-            unqualifiedPercentLimit=40,
-            nBaseLimit=10,
-            averageQual=0,
-            disableAdapterTrimming=True
-        )
-
-        self.launchProtocol(protFastp)
-
+        protFastp = self._runFastp(protImport.outputFastq)
         outputFastq = getattr(protFastp, 'outputFastq', None)
 
-        assertHandle(
-            self.assertIsNotNone,
-            outputFastq,
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getSampleName(),
-            'fastp_paired',
-            cwd=protFastp.getWorkingDir()
-        )
+        _assertOutputExists(self, protFastp, outputFastq)
+        _assertFastqStats(self, protFastp, outputFastq, 'fastp_paired')
 
         assertHandle(
             self.assertTrue,
@@ -334,28 +277,4 @@ class TestFastpFilter(BaseTest):
             cwd=protFastp.getWorkingDir()
         )
 
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getNumReads(),
-            2,
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertEqual,
-            outputFastq.getReadLength(),
-            20,
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertTrue,
-            outputFastq.hasFastpHtml(),
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertTrue,
-            outputFastq.hasFastpJson(),
-            cwd=protFastp.getWorkingDir()
-        )
+        self._assertFastpReports(protFastp, outputFastq)
