@@ -325,10 +325,12 @@ class Plugin(pwem.Plugin):
 
     ##################### RUN CALLS ######################
     @classmethod
-    def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None, pyStr='python'):
+    def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True,
+                  scriptDir=None, pyStr='python', gpuIdx=None):
         """ Run a script from a given protocol using a specific environment """
         scriptName = cls.getScriptsDir(scriptName) if scriptDir == None else os.path.join(scriptDir, scriptName)
-        fullProgram = '%s && %s %s' % (cls.getEnvActivationCommand(env), pyStr, scriptName)
+        gpuStr = f'CUDA_VISIBLE_DEVICES={gpuIdx}' if gpuIdx else ''
+        fullProgram = '%s && %s %s %s' % (cls.getEnvActivationCommand(env), gpuStr, pyStr, scriptName)
 
         if not popen:
             protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd)
@@ -339,10 +341,12 @@ class Plugin(pwem.Plugin):
                 subprocess.Popen(f'{fullProgram} {args}', cwd=cwd, shell=True)
 
     @classmethod
-    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True, retOut=False):
+    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False,
+                        silent=True, retOut=False, gpuIdx=None):
         """ General function to run conda commands """
         result = None
-        fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
+        gpuStr = f'CUDA_VISIBLE_DEVICES={gpuIdx}' if gpuIdx else ''
+        fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {gpuStr} {program} '
         if not popen and not retOut:
             protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
         else:
