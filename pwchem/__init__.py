@@ -186,7 +186,7 @@ class Plugin(pwem.Plugin):
         openbabelInstaller.addCommand(f'conda create -y -c conda-forge --name {obEnvName} python=3.11 '
                                       f'openbabel={OPENBABEL_DIC["version"]} pymol-open-source')\
             .addCondaPackages(['swig', 'plip', 'pdbfixer'], channel='conda-forge')\
-            .addCondaPackages(['clustalo', 'fastqc','pip=25'], channel='bioconda', targetName='BIOCONDA_TOOLS_INSTALLED') \
+            .addCondaPackages(['clustalo', 'fastqc','fastp','pip=25'], channel='bioconda', targetName='BIOCONDA_TOOLS_INSTALLED') \
             .addCommand(f'{cls.getEnvActivationCommand(OPENBABEL_DIC)} && '
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\

@@ -25,6 +25,7 @@
 # **************************************************************************
 
 import os
+import gzip
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, FileParam, StringParam
@@ -41,7 +42,11 @@ class ProtImportFastq(EMProtocol):
     This protocol imports single-end or paired-end FASTQ files into Scipion
     and generates a FastqFile object for downstream processing.
 
-    Optionally, FastQC can be executed to assess read quality and produce
+    Basic FASTQ metadata, including sequencing type, number of reads and mean
+    read length, are extracted from the input FASTQ file(s) and stored in the
+    output object for downstream analysis.
+
+    Optionally, FastQC can be executed to assess read quality and generate
     HTML reports.
 
     ----------------------------
@@ -71,14 +76,29 @@ class ProtImportFastq(EMProtocol):
     outputFastq : FastqFile
         Imported FASTQ dataset ready for downstream analysis.
 
-    FastQC HTML reports are stored as attributes of the outputFastq object.
+        The output object contains:
+
+        - FASTQ file path(s).
+        - Sample name.
+        - Sequencing type (single-end or paired-end).
+        - Number of reads.
+        - Mean read length.
+        - FastQC HTML report, if generated.
+        - FastQC HTML reports for read 1 and read 2, if paired-end.
 
     ----------------------------
     Notes
     ----------------------------
 
     - FastQC must be installed through the plugin binaries.
-    - Generated HTML reports are stored in the protocol extra directory.
+    - Number of reads and mean read length are calculated directly from the
+      input FASTQ file(s).
+    - For paired-end datasets, read counts are validated to ensure that read 1
+      and read 2 contain the same number of reads.
+    - The reported read length corresponds to the mean read length. For paired-end
+      datasets, the mean value from read 1 and read 2 is stored.
+    - Generated HTML reports are stored as attributes of the output FastqFile
+      object.
     """
 
     _label = 'import fastq'
@@ -116,6 +136,7 @@ class ProtImportFastq(EMProtocol):
 
     def importStep(self):
         fn1 = self.inputFastq1.get()
+        numReads, readLength = self._getFastqStats(fn1)
 
         fastq = FastqFile()
         fastq.setFileName(fn1)
@@ -123,6 +144,8 @@ class ProtImportFastq(EMProtocol):
         fastq.setIsCompressed(fn1.endswith('.gz'))
         fastq.setFormat('FASTQ')
         fastq.setHasQuality(True)
+        fastq.setNumReads(numReads)
+        fastq.setReadLength(readLength)
 
         sample = self.sampleName.get()
         sampleName = sample.strip() if sample and sample.strip() else \
@@ -131,8 +154,19 @@ class ProtImportFastq(EMProtocol):
 
         if self.isPaired.get():
             fn2 = self.inputFastq2.get()
+            numReads2, readLength2 = self._getFastqStats(fn2)
+
+            if numReads != numReads2:
+                raise RuntimeError(
+                    'Paired FASTQ files have different number of reads: '
+                    'R1={} R2={}'.format(numReads, numReads2)
+                )
+
             fastq.setFileName2(fn2)
             fastq.setIsCompressed(fn1.endswith('.gz') and fn2.endswith('.gz'))
+
+            readLength = int(round((readLength + readLength2) / 2))
+            fastq.setReadLength(readLength)
 
         if self.runFastqc.get():
             htmlFiles = self._runFastqc()
@@ -149,6 +183,37 @@ class ProtImportFastq(EMProtocol):
                 fastq.setFastqcHtml(htmlFiles[0])
 
         self._defineOutputs(outputFastq=fastq)
+
+    def _openFastq(self, fn):
+        if fn.endswith('.gz'):
+            return gzip.open(fn, 'rt')
+
+        return open(fn, 'r')
+
+    def _getFastqStats(self, fn):
+        """
+        Calculate number of reads and mean read length from a FASTQ file.
+        """
+        numReads = 0
+        totalLength = 0
+
+        with self._openFastq(fn) as f:
+            while True:
+                header = f.readline()
+
+                if not header:
+                    break
+
+                seq = f.readline().strip()
+                f.readline()
+                f.readline()
+
+                numReads += 1
+                totalLength += len(seq)
+
+        readLength = int(round(totalLength / numReads)) if numReads else 0
+
+        return numReads, readLength
 
     def _runFastqc(self):
         fn1 = self.inputFastq1.get()
@@ -223,14 +288,27 @@ class ProtImportFastq(EMProtocol):
         sampleName = sample.strip() if sample and sample.strip() else \
             self._getDefaultSampleName(fn1)
 
+        numReads, readLength = self._getFastqStats(fn1)
+
         summary.append('Format: FASTQ')
         summary.append('Quality scores: yes')
         summary.append(f'Sample name: {sampleName}')
         summary.append(f'Read 1: {fn1}')
+        summary.append(f'Number of reads: {numReads}')
+
+        if readLength > 0:
+            summary.append(f'Mean read length: {readLength} bp')
 
         if self.isPaired.get():
             fn2 = self.inputFastq2.get()
+            numReads2, readLength2 = self._getFastqStats(fn2)
+
             summary.append(f'Read 2: {fn2}')
+            summary.append(f'Number of reads R2: {numReads2}')
+
+            if readLength2 > 0:
+                summary.append(f'Mean read length R2: {readLength2} bp')
+
             summary.append('Sequencing type: paired-end')
         else:
             summary.append('Sequencing type: single-end')

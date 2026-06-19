@@ -2084,6 +2084,7 @@ class SequencingFile(data.EMFile):
     fn = self.getFileName()
     return os.path.basename(fn) if fn else 'BioFile'
 
+
 class FastqFile(SequencingFile):
   """Object representing a FASTQ dataset."""
 
@@ -2096,10 +2097,23 @@ class FastqFile(SequencingFile):
     self._filename2 = pwobj.String(kwargs.get('filename2', None))
     self._sampleName = pwobj.String(kwargs.get('sampleName', None))
     self._isPaired = pwobj.Boolean(kwargs.get('isPaired', False))
+
+    # FASTQ statistics
+    self._readLength = pwobj.Integer(kwargs.get('readLength', 0))
+    self._numReads = pwobj.Integer(kwargs.get('numReads', 0))
+
+    # FastQC reports
     self._fastqcHtml = pwobj.String(kwargs.get('fastqcHtml', None))
     self._fastqcHtmlR1 = pwobj.String(kwargs.get('fastqcHtmlR1', None))
     self._fastqcHtmlR2 = pwobj.String(kwargs.get('fastqcHtmlR2', None))
+
+    # fastp reports
     self._fastpHtml = pwobj.String(kwargs.get('fastpHtml', None))
+    self._fastpJson = pwobj.String(kwargs.get('fastpJson', None))
+
+  # -------------------------------------------------------
+  # Input files
+  # -------------------------------------------------------
 
   def getFileName2(self):
     return self._filename2.get()
@@ -2109,6 +2123,10 @@ class FastqFile(SequencingFile):
 
   def hasFileName2(self):
     return bool(self.getFileName2())
+
+  # -------------------------------------------------------
+  # Sample information
+  # -------------------------------------------------------
 
   def getSampleName(self):
     return self._sampleName.get()
@@ -2122,14 +2140,42 @@ class FastqFile(SequencingFile):
   def setIsPaired(self, value):
     self._isPaired.set(value)
 
+  # -------------------------------------------------------
+  # FASTQ statistics
+  # -------------------------------------------------------
+
+  def getReadLength(self):
+    return self._readLength.get()
+
+  def setReadLength(self, value):
+    self._readLength.set(value)
+
+  def getNumReads(self):
+    return self._numReads.get()
+
+  def setNumReads(self, value):
+    self._numReads.set(value)
+
+  # -------------------------------------------------------
+  # Capabilities
+  # -------------------------------------------------------
+
   def supportsFastQC(self):
     return self.getFormat() == 'FASTQ' and self.hasQuality()
+
+  # -------------------------------------------------------
+  # Files
+  # -------------------------------------------------------
 
   def getFiles(self):
     if self.isPaired() and self.hasFileName2():
       return [self.getFileName(), self.getFileName2()]
 
     return [self.getFileName()]
+
+  # -------------------------------------------------------
+  # FastQC
+  # -------------------------------------------------------
 
   def getFastqcHtml(self):
     return self._fastqcHtml.get()
@@ -2165,6 +2211,10 @@ class FastqFile(SequencingFile):
       self.getFastqcHtmlR2()
     ] if fn]
 
+  # -------------------------------------------------------
+  # fastp
+  # -------------------------------------------------------
+
   def getFastpHtml(self):
     return self._fastpHtml.get()
 
@@ -2174,13 +2224,47 @@ class FastqFile(SequencingFile):
   def hasFastpHtml(self):
     return bool(self.getFastpHtml())
 
+  def getFastpJson(self):
+    return self._fastpJson.get()
+
+  def setFastpJson(self, value):
+    self._fastpJson.set(value)
+
+  def hasFastpJson(self):
+    return bool(self.getFastpJson())
+
+  # -------------------------------------------------------
+  # HTML reports
+  # -------------------------------------------------------
+
+  def getHtmlFiles(self):
+    htmlFiles = []
+
+    if self.hasFastpHtml():
+      htmlFiles.append(self.getFastpHtml())
+
+    htmlFiles.extend(self.getFastqcFiles())
+
+    return htmlFiles
+
+  # -------------------------------------------------------
+  # Representation
+  # -------------------------------------------------------
+
   def __str__(self):
     sample = self.getSampleName() or 'unnamed'
-    return '{} ({}, paired={})'.format(
-      self.getClassName(), sample, self.isPaired())
+
+    return '{} ({}, paired={}, reads={}, readLength={})'.format(
+      self.getClassName(),
+      sample,
+      self.isPaired(),
+      self.getNumReads(),
+      self.getReadLength()
+    )
 
   def getObjLabel(self):
     sample = self.getSampleName()
+
     if sample:
       return sample
 
