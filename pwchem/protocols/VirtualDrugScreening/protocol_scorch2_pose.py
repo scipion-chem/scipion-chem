@@ -279,7 +279,7 @@ Notes
             args.append("--gpu")
 
         insistentRun(self, 'python', args,
-                     envDic=SCORCH2_DIC, nMax=5, cwd=os.path.abspath(Plugin.getVar(SCORCH2_DIC['home'])), sleepTime=5)
+                     envDic=SCORCH2_DIC, nMax=5, cwd=scriptRescoringDir, sleepTime=5)
 
     def createOutputStep(self):
         inMols = self.inputSmallMolecules.get()
