@@ -46,7 +46,7 @@ class ProtRNASeqAlignment(EMProtocol):
     SPECIES_HUMAN = 0
     SPECIES_MOUSE = 1
 
-    _label = 'RNA-seq alignment: '
+    _label = 'RNA-seq alignment'
 
     def _defineParams(self, form):
         form.addSection(label='Input FASTQ')

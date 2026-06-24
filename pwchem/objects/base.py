@@ -2057,7 +2057,7 @@ class PharmacophoreChem(data.EMSet):
       feat.setObjId(featId)
       self.append(feat)
 
-  class AlignmentFile(data.EMFile):
+class AlignmentFile(data.EMFile):
     """Object representing an aligned sequencing dataset."""
 
     def __init__(self, filename=None, **kwargs):
@@ -2191,7 +2191,7 @@ class PharmacophoreChem(data.EMSet):
       fn = self.getFileName()
       return os.path.basename(fn) if fn else 'alignment'
 
-  class GenomeIndex(data.EMFile):
+class GenomeIndex(data.EMFile):
     """Object representing a genome reference index for RNA-seq alignment."""
 
     def __init__(self, filename=None, **kwargs):
