@@ -66,6 +66,8 @@ class Plugin(pwem.Plugin):
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
 
+        cls.addRNASeqPackage(env)
+
     @classmethod
     def _defineVariables(cls):
         # Package home directories
@@ -78,6 +80,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
+        cls._defineEmVar(RNASEQ_DIC['home'], cls.getEnvName(RNASEQ_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -86,6 +89,7 @@ class Plugin(pwem.Plugin):
         cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
                                      description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
                                                              'and IO overuse')
+
 
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
@@ -323,6 +327,28 @@ class Plugin(pwem.Plugin):
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
+    @classmethod
+    def addRNASeqPackage(cls, env, default=True):
+        installer = InstallHelper(
+            RNASEQ_DIC['name'],
+            packageHome=cls.getVar(RNASEQ_DIC['home']),
+            packageVersion=RNASEQ_DIC['version']
+        )
+
+        rnaseqEnvName = cls.getEnvName(RNASEQ_DIC)
+
+        installer.addCommand(
+            f'conda create -y -n {rnaseqEnvName} '
+            f'-c conda-forge -c bioconda '
+            f'star={STAR_DIC["version"]} '
+            f'hisat2={HISAT2_DIC["version"]} '
+            f'samtools={SAMTOOLS_DIC["version"]}',
+            'RNASEQ_ENV_CREATED'
+        ).addPackage(
+            env,
+            dependencies=['conda'],
+            default=default
+        )
     ##################### RUN CALLS ######################
     @classmethod
     def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None, pyStr='python'):

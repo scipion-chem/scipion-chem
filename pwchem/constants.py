@@ -40,6 +40,10 @@ DEAP_DIC =      {'name': 'deap',        'version': '1.4',           'home': 'DEA
 RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RANKX_HOME'}
 POSEB_DIC =     {'name': 'posebusters',      'version': '0.6.3',           'home': 'POSEB_HOME'}
 SCORCH2_DIC = {'name': 'scorch2', 'version': '1.0', 'home': 'SCORCH2_HOME'}
+RNASEQ_DIC = {'name': 'rnaseq', 'version': '1.0', 'home': 'RNASEQ_HOME'}
+STAR_DIC = {'name': 'star', 'version': '2.7.11b'}
+HISAT2_DIC = {'name': 'hisat2', 'version': '2.2.1'}
+SAMTOOLS_DIC = {'name': 'samtools','version': '1.20'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
