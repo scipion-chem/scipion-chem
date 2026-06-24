@@ -2057,6 +2057,197 @@ class PharmacophoreChem(data.EMSet):
       feat.setObjId(featId)
       self.append(feat)
 
+class AlignmentFile(data.EMFile):
+    """Object representing an aligned sequencing dataset."""
+
+    def __init__(self, filename=None, **kwargs):
+      super().__init__(filename=filename, **kwargs)
+
+      self._format = pwobj.String(kwargs.get('format', 'BAM'))
+
+      self._sampleName = pwobj.String(kwargs.get('sampleName', None))
+
+      self._aligner = pwobj.String(kwargs.get('aligner', None))
+      self._referenceGenome = pwobj.String(
+        kwargs.get('referenceGenome', None)
+      )
+
+      self._isSorted = pwobj.Boolean(kwargs.get('isSorted', False))
+      self._isIndexed = pwobj.Boolean(kwargs.get('isIndexed', False))
+
+      self._indexFile = pwobj.String(kwargs.get('indexFile', None))
+      self._logFile = pwobj.String(kwargs.get('logFile', None))
+
+    # -------------------------------------------------------
+    # Format
+    # -------------------------------------------------------
+
+    def getFormat(self):
+      return self._format.get()
+
+    def setFormat(self, value):
+      self._format.set(value)
+
+    # -------------------------------------------------------
+    # Sample information
+    # -------------------------------------------------------
+
+    def getSampleName(self):
+      return self._sampleName.get()
+
+    def setSampleName(self, value):
+      self._sampleName.set(value)
+
+    # -------------------------------------------------------
+    # Alignment information
+    # -------------------------------------------------------
+
+    def getAligner(self):
+      return self._aligner.get()
+
+    def setAligner(self, value):
+      self._aligner.set(value)
+
+    def getReferenceGenome(self):
+      return self._referenceGenome.get()
+
+    def setReferenceGenome(self, value):
+      self._referenceGenome.set(value)
+
+    # -------------------------------------------------------
+    # Sorting / indexing
+    # -------------------------------------------------------
+
+    def isSorted(self):
+      return self._isSorted.get()
+
+    def setIsSorted(self, value):
+      self._isSorted.set(value)
+
+    def isIndexed(self):
+      return self._isIndexed.get()
+
+    def setIsIndexed(self, value):
+      self._isIndexed.set(value)
+
+    # -------------------------------------------------------
+    # Associated files
+    # -------------------------------------------------------
+
+    def getIndexFile(self):
+      return self._indexFile.get()
+
+    def setIndexFile(self, value):
+      self._indexFile.set(value)
+
+    def hasIndexFile(self):
+      return bool(self.getIndexFile())
+
+    def getLogFile(self):
+      return self._logFile.get()
+
+    def setLogFile(self, value):
+      self._logFile.set(value)
+
+    def hasLogFile(self):
+      return bool(self.getLogFile())
+
+    # -------------------------------------------------------
+    # Files
+    # -------------------------------------------------------
+
+    def getFiles(self):
+      files = [self.getFileName()]
+
+      if self.hasIndexFile():
+        files.append(self.getIndexFile())
+
+      if self.hasLogFile():
+        files.append(self.getLogFile())
+
+      return files
+
+    # -------------------------------------------------------
+    # Representation
+    # -------------------------------------------------------
+
+    def __str__(self):
+      sample = self.getSampleName() or 'unnamed'
+
+      return '{} ({}, {}, sorted={}, indexed={})'.format(
+        self.getClassName(),
+        sample,
+        self.getFormat(),
+        self.isSorted(),
+        self.isIndexed()
+      )
+
+    def getObjLabel(self):
+      sample = self.getSampleName()
+
+      if sample:
+        return sample
+
+      fn = self.getFileName()
+      return os.path.basename(fn) if fn else 'alignment'
+
+class GenomeIndex(data.EMFile):
+    """Object representing a genome reference index for RNA-seq alignment."""
+
+    def __init__(self, filename=None, **kwargs):
+      super().__init__(filename=filename, **kwargs)
+
+      self._species = pwobj.String(kwargs.get('species', None))
+      self._source = pwobj.String(kwargs.get('source', None))
+      self._fastaFile = pwobj.String(kwargs.get('fastaFile', None))
+      self._gtfFile = pwobj.String(kwargs.get('gtfFile', None))
+      self._indexDir = pwobj.String(kwargs.get('indexDir', None))
+      self._aligner = pwobj.String(kwargs.get('aligner', None))
+
+    def getSpecies(self):
+      return self._species.get()
+
+    def setSpecies(self, value):
+      self._species.set(value)
+
+    def getSource(self):
+      return self._source.get()
+
+    def setSource(self, value):
+      self._source.set(value)
+
+    def getFastaFile(self):
+      return self._fastaFile.get()
+
+    def setFastaFile(self, value):
+      self._fastaFile.set(value)
+
+    def getGtfFile(self):
+      return self._gtfFile.get()
+
+    def setGtfFile(self, value):
+      self._gtfFile.set(value)
+
+    def getIndexDir(self):
+      return self._indexDir.get()
+
+    def setIndexDir(self, value):
+      self._indexDir.set(value)
+
+    def getAligner(self):
+      return self._aligner.get()
+
+    def setAligner(self, value):
+      self._aligner.set(value)
+
+    def getObjLabel(self):
+      species = self.getSpecies()
+      aligner = self.getAligner()
+
+      if species and aligner:
+        return '{} ({})'.format(species, aligner)
+
+      return 'genome index'
 
 class SequencingFile(data.EMFile):
   """Base object representing a bioinformatics data file."""
