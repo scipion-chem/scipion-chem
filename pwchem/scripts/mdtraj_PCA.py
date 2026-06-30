@@ -9,8 +9,8 @@ from itertools import combinations
 def plotPcCoords(traj):
     """PCA of the coordinates"""
     pca = PCA(n_components=2, random_state=42)
-    backboneIndices = topo.topology.select('backbone')
-    traj.superpose(topo, atom_indices=backboneIndices)
+    backboneIndices = traj.topology.select('backbone')
+    traj.superpose(traj, 0, atom_indices=backboneIndices)
 
     reducedCartesian = pca.fit_transform(
         traj.xyz.reshape(traj.n_frames, traj.n_atoms * 3)
@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    topo = mdtraj.load(args.inputFilename)
+    topo = mdtraj.load_topology(args.inputFilename)
     traj = mdtraj.load(args.inputTraj, top=topo)
 
     if args.pca_coord:

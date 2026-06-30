@@ -41,10 +41,16 @@ _ANAL_SASA      = 4
 _ANAL_PCA       = 5
 _ANAL_DISTANCE  = 6
 
-_ANAL_CHOICES = ['RMSD', 'RMSF', 'Rg', 'Secondary Structure', 'SASA', 'PCA', 'Atom distance']
+ANAL_CHOICES = ['RMSD', 'RMSF', 'Rg', 'Secondary Structure', 'SASA', 'PCA', 'Atom distance']
 
 # Analyses that use the atom-selection dropdown
 _USES_SEL_ATOMS   = [_ANAL_RMSD, _ANAL_RMSF]
+
+# Reference structure for RMSD / RMSF
+_REF_FIRST      = 0
+_REF_INITIAL    = 1
+_REF_MINIMIZED  = 2
+REF_CHOICES = ['First frame', 'Initial structure', 'Minimized structure']
 
 class MDSystemViewer(pwviewer.Viewer):
   _label = 'Viewer Molecular Dynamics system'
@@ -109,7 +115,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         group.addParam('mdAnalChoices', params.EnumParam,
                        label='Analysis type: ',
-                       choices=_ANAL_CHOICES, default=_ANAL_RMSD,
+                       choices=ANAL_CHOICES, default=_ANAL_RMSD,
                        help='Select the MDTraj analysis to run.\n'
                             'Relevant parameters will appear below.')
 
@@ -125,6 +131,16 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        label='Use only heavy atoms: ', default=True,
                        condition=f'mdAnalChoices in {_USES_SEL_ATOMS}',
                        help='Restrict analysis to non-hydrogen atoms.')
+
+        # ── Reference structure (RMSD only) ──────────
+        group.addParam('refStructure', params.EnumParam,
+                       label='Reference structure: ', default=_REF_FIRST,
+                       choices=REF_CHOICES,
+                       condition=f'mdAnalChoices == {_ANAL_RMSD}',
+                       help='Structure the trajectory is compared against for RMSD:\n'
+                            '"First frame": first frame of the trajectory.\n'
+                            '"Initial structure": the structure the system was prepared from.\n'
+                            '"Minimized structure": the energy-minimized structure.\n')
 
         # ── Secondary Structure sub-options ─────────────────────────
         group.addParam('ssDisplayType', params.EnumParam, default=0,
@@ -242,20 +258,51 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                       system.getTrajectoryFile(), trjExt)
         return [VmdViewPopen('-e {}'.format(outTcl))]
 
+    def _getAnalysisTopFile(self):
+        return self.getMDSystem().getFileName()
+
     def _showMDTrajRMSDRMSF(self, paramName=None):
         """Handles both RMSD and RMSF (distinguished by mdAnalChoices text)."""
         system   = self.getMDSystem()
         analFlag = self.getEnumText('mdAnalChoices').lower()   # 'rmsd' or 'rmsf'
         selAtoms = self.getEnumText('selAtoms')
-        args = (f'-i {system.getFileName()} -t {system.getTrajectoryFile()} '
+        args = (f'-i {self._getAnalysisTopFile()} -t {system.getTrajectoryFile()} '
                 f'-o {system.getSystemName()} -{analFlag} -sa {selAtoms} ')
         if self.heavyAtoms.get():
             args += '-ha '
+        if analFlag == 'rmsd':
+            try:
+                refFile = self._getReferenceStructFile()
+            except ValueError as e:
+                return [self.errorMessage(str(e), 'Reference structure not found')]
+            if refFile:
+                args += f'-ref {refFile} '
         Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
+
+    def _getReferenceStructFile(self):
+        """Reference structure file for RMSD/RMSF, or None to use the trajectory's first frame.
+        'Initial structure' is the prepared system structure (MDSystem.getSystemFile);
+        'Minimized structure' is read from MDSystem.getMinimizedFile, which the MD plugin
+        populates on its system object."""
+        if not hasattr(self, 'refStructure'):
+            return None
+        refChoice = self.getEnumText('refStructure')
+        getterName = {REF_CHOICES[_REF_INITIAL]: 'getSystemFile',
+                      REF_CHOICES[_REF_MINIMIZED]: 'getMinimizedFile'}.get(refChoice)
+        if not getterName:
+            # 'First frame': no reference file, the script uses the trajectory's first frame
+            return None
+        system = self.getMDSystem()
+        refFile = getattr(system, getterName)() if hasattr(system, getterName) else None
+        if refFile and os.path.exists(refFile):
+            return os.path.abspath(refFile)
+        raise ValueError(
+            f'"{refChoice}" was selected as the reference for the analysis, but its structure '
+            f'file is not available in the MD system.')
 
     def _showMDTrajRGAnalysis(self, paramName=None):
         system   = self.getMDSystem()
-        args = (f'-i {system.getFileName()} -t {system.getTrajectoryFile()} '
+        args = (f'-i {self._getAnalysisTopFile()} -t {system.getTrajectoryFile()} '
                 f'-o {system.getSystemName()} -rg ')
         Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
@@ -263,13 +310,13 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         system   = self.getMDSystem()
         ssFlags  = ['--per-residue', '--per-frame', '--heatmap']
         flag     = ssFlags[self.ssDisplayType.get()]
-        args = (f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {flag} ')
+        args = (f'-i {self._getAnalysisTopFile()} -t {system.getTrajectoryFile()} {flag} ')
         Plugin.runScript(self, 'mdtraj_SS.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showMDTrajSASAAnalysis(self, paramName=None):
         system   = self.getMDSystem()
         selAtoms = self.getEnumText('sasaScope')
-        args = (f'-i {system.getFileName()} -t {system.getTrajectoryFile()} '
+        args = (f'-i {self._getAnalysisTopFile()} -t {system.getTrajectoryFile()} '
                 f'-o {system.getSystemName()} -sa {selAtoms} -sasa ')
         Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 
@@ -277,13 +324,13 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         system   = self.getMDSystem()
         pcaFlags = ['--pca-coord', '--pca-dist']
         flag     = pcaFlags[self.pcaType.get()]
-        args = (f'-i {system.getFileName()} -t {system.getTrajectoryFile()} {flag} ')
+        args = (f'-i {self._getAnalysisTopFile()} -t {system.getTrajectoryFile()} {flag} ')
         Plugin.runScript(self, 'mdtraj_PCA.py', args, env=MDTRAJ_DIC, popen=True, wait=False)
 
     def _showDistance(self, paramName=None):
         system       = self.getMDSystem()
         atom1, atom2 = self.atom1.get(), self.atom2.get()
-        args = (f' -distance -i {system.getFileName()} -t {system.getTrajectoryFile()} '
+        args = (f' -distance -i {self._getAnalysisTopFile()} -t {system.getTrajectoryFile()} '
                 f'-o {system.getSystemName()} -a1 {atom1} -a2 {atom2}')
         Plugin.runScript(self, self._mdtrajScript, args, env=MDTRAJ_DIC, popen=True, wait=False)
 

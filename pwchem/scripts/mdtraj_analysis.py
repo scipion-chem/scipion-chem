@@ -39,12 +39,12 @@ def getAtomSelection(selStr, ligName='LIG'):
         aSel = selStr.lower()
     return aSel
 
-def getSelectionIndex(topo, selStr):
+def getSelectionIndex(topology, selStr):
     aSel = getAtomSelection(selStr)
-    index = set(topo.topology.select(aSel))
+    index = set(topology.select(aSel))
     if not index and selStr == 'Ligand':
         aSel = getAtomSelection(selStr, ligName='UNK')
-        index = set(topo.topology.select(aSel))
+        index = set(topology.select(aSel))
     return index
 
 
@@ -66,6 +66,11 @@ if __name__ == "__main__":
 
     parser.add_argument('-sa', '--selectAtoms', type=str, help='Atoms to select for the analysis')
     parser.add_argument('-ha', '--heavyAtoms', default=False, action='store_true', help='Analysis only on heavy atoms')
+    parser.add_argument('-ref', '--reference', type=str, default=None,
+                        help='Reference structure file for RMSD/RMSF. If not provided, the first '
+                             'frame of the trajectory is used as reference. May have a different '
+                             'atom indexing than the trajectory (e.g. the pre-solvation initial '
+                             'structure): the selected atoms are matched on both.')
     parser.add_argument('-rg', default=False, action='store_true', help='Plots the Radius of gyration of the system through the trajectory')
     parser.add_argument('-sasa', default=False, action='store_true',
                         help='Plots the Solvent Accessible Surface Area (SASA) of the selected atoms')
@@ -76,28 +81,38 @@ if __name__ == "__main__":
     parser.add_argument('-a2', '--atom2', type=str, help='Second atom selection for distance calculation')
 
     args = parser.parse_args()
-    inpFile, outFile, trjFile = args.inputFilename, args.outputName, args.inputTraj
+    inpFile, outFile, trjFile, refFile = args.inputFilename, args.outputName, args.inputTraj, args.reference
 
-    topo = mdtraj.load(inpFile)
-    trajectory = mdtraj.load(trjFile, top=topo)
+    topology = mdtraj.load_topology(inpFile)
+    trajectory = mdtraj.load(trjFile, top=topology)
+
+    reference = mdtraj.load(refFile) if refFile else trajectory
+
+    def selectIndices(topology, selStr, heavy):
+        '''Selected atom indices, heavy-atom-filtered, sorted so the same selection on two
+        structures (trajectory and reference) is matched in the same order.'''
+        idx = getSelectionIndex(topology, selStr)
+        if heavy:
+            idx = idx.intersection({atom.index for atom in topology.atoms if atom.element.symbol != 'H'})
+        return sorted(idx)
 
     # Atom selection
     psXlabel = 'Simulation time (ps)'
     if args.selectAtoms:
-        index = getSelectionIndex(topo, args.selectAtoms)
-        if args.heavyAtoms:
-            index = index.intersection(set([atom.index for atom in topo.topology.atoms if atom.element.symbol != 'H']))
+        index = selectIndices(topology, args.selectAtoms, args.heavyAtoms)
+        refIndex = selectIndices(reference.topology, args.selectAtoms, args.heavyAtoms) if refFile else index
 
         plt.figure()
         if args.rmsd:
-            rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
+            rmsd = mdtraj.rmsd(trajectory, reference, 0, atom_indices=index, ref_atom_indices=refIndex)
             plt.plot(trajectory.time, rmsd * 10,  'r', label='RMSD')
             plt.title('RMSD')
             plt.xlabel(psXlabel)
             plt.ylabel('RMSD (Å)')
 
         elif args.rmsf:
-            rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
+            trajectory.superpose(trajectory, 0, atom_indices=index)
+            rmsf = mdtraj.rmsf(trajectory, None, atom_indices=index)
             plt.plot(rmsf * 10, 'r', label='RMSF')
             plt.title('RMSF')
             plt.xlabel('Selected atom numbers')
@@ -130,8 +145,8 @@ if __name__ == "__main__":
             print('Error: Distance calculation requires both -a1 and -a2 arguments')
         else:
             atom_pairs = np.array([[int(args.atom1)-1, int(args.atom2)-1]])
-            atom1 = topo.topology.atom(int(args.atom1)-1)
-            atom2 = topo.topology.atom(int(args.atom2)-1)
+            atom1 = topology.atom(int(args.atom1)-1)
+            atom2 = topology.atom(int(args.atom2)-1)
             distances = mdtraj.compute_distances(trajectory, atom_pairs)
 
             plt.plot(trajectory.time, distances[:, 0] * 10, 'purple', label='Distance')

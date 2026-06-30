@@ -78,7 +78,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Load Trajectory
-    topo = mdtraj.load(args.inputFilename)
+    topo = mdtraj.load_topology(args.inputFilename)
     traj = mdtraj.load(args.inputTraj, top=topo)
 
     # Compute DSSP Once
