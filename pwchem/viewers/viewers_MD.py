@@ -23,13 +23,15 @@
 # **************************************************************************
 
 import os
+import subprocess
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params
+from pwem.viewers import Chimera, ChimeraView
 
 # pwchem imports
 from .. import Plugin
-from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, PML_MD_STR_AMBER, TCL_MD_LIG_STR
+from ..constants import MDTRAJ_DIC, OPENBABEL_DIC, TCL_MD_STR, PML_MD_STR, PML_MD_STR_AMBER, TCL_MD_LIG_STR
 from ..viewers import PyMolViewer, PyMolView, VmdViewPopen
 from ..objects import MDSystem
 
@@ -102,6 +104,68 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        label='Display trajectory with VMD: ',
                        help='Display trajectory with VMD.\n'
                             'Protein as NewCartoon, waters as dots.')
+
+    def _defineVideoParams(self, form):
+        form.addSection(label='Generate MD video')
+        group = form.addGroup('Cinematic trajectory video',
+                              help='Render a movie of the MD trajectory. The camera is auto-framed on '
+                                   'the molecule and the frames are encoded into an mp4 (or gif). '
+                                   'Inspired by the VisualFactory project (FindPerspective auto-camera '
+                                   '+ UltimateSmoothMD smoothing).')
+
+        group.addParam('vidEngine', params.EnumParam,
+                       label='Rendering engine: ', default=0,
+                       choices=['PyMol', 'ChimeraX'],
+                       help='Engine used to render the movie.\n'
+                            '* PyMol: head-less ray-tracing (no display needed). Robust default.\n'
+                            '* ChimeraX: GPU-accelerated, VisualFactory-style cinematic quality. '
+                            'Needs a graphical display (opens the ChimeraX window).')
+
+        group.addParam('vidStyle', params.EnumParam,
+                       label='Protein style: ', default=0,
+                       choices=['Cartoon', 'Cartoon + sticks', 'Surface', 'Sticks', 'Ribbon'],
+                       help='Representation used for the protein in the movie.')
+        group.addParam('vidBg', params.EnumParam,
+                       label='Background: ', default=0, choices=['White', 'Black'],
+                       help='Background color of the rendered frames.')
+        group.addParam('vidHighlightLig', params.BooleanParam,
+                       label='Highlight ligand: ', default=True,
+                       help='Show the ligand (resname "%s") as coloured sticks.'
+                            % self.getMDSystem().getLigandID())
+
+        group.addParam('vidResolution', params.EnumParam,
+                       label='Resolution: ', default=1,
+                       choices=['480p', '720p (HD)', '1080p (Full HD)', '2160p (4K)'],
+                       help='Frame resolution. Higher resolutions render more slowly.')
+        group.addParam('vidFps', params.IntParam,
+                       label='Frames per second: ', default=15,
+                       help='Playback speed of the resulting video.')
+        group.addParam('vidStride', params.IntParam,
+                       label='Frame stride: ', default=1,
+                       help='Render every Nth trajectory frame (use >1 for long trajectories).')
+
+        group.addParam('vidSmooth', params.IntParam,
+                       label='Smoothing window: ', default=0, expertLevel=params.LEVEL_ADVANCED,
+                       condition='vidEngine==0',
+                       help='[PyMol only] Coordinate-smoothing window applied before rendering '
+                            '(0 = none). Removes thermal jitter for cleaner playback '
+                            '(visualization only).')
+        group.addParam('vidRay', params.BooleanParam,
+                       label='Cinematic ray-tracing: ', default=True, expertLevel=params.LEVEL_ADVANCED,
+                       condition='vidEngine==0',
+                       help='[PyMol only] Ray-trace each frame with soft shadows. '
+                            'Disable for a faster, flatter preview.')
+        group.addParam('vidSpin', params.BooleanParam,
+                       label='Camera spin: ', default=False, expertLevel=params.LEVEL_ADVANCED,
+                       help='Add a full 360 degree camera rotation across the trajectory.')
+        group.addParam('vidFormat', params.EnumParam,
+                       label='Output format: ', default=0, choices=['mp4', 'gif'],
+                       help='Video container. mp4 needs ffmpeg; otherwise a gif is produced.')
+
+        group.addParam('displayMDVideo', params.LabelParam,
+                       label='Generate and open MD video: ',
+                       help='Render the video and open it with the default system player. '
+                            'The file is saved next to the trajectory as <systemName>_MDvideo.<ext>.')
 
     def _defineMDTrajParams(self, form):
         form.addSection(label='Trajectory analysis')
@@ -184,6 +248,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         if self.getMDSystem().hasTrajectory():
             self._defineSimParams(form)
+            self._defineVideoParams(form)
             self._defineMDTrajParams(form)
 
     def getMDSystem(self, objType=MDSystem):
@@ -197,6 +262,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
             'displayMdPymol':         self._showMdPymol,
             'displayMdVMD':           self._showMdVMD,
             'displayMDTrajAnalysis':  self._showMDTrajAnalysis,
+            'displayMDVideo':         self._showMDVideo,
             'displayFingerprint':     self._showProlifFp,
             'displayInterNetwork':    self._showProlifNetwork,
             'displayProlifMatrix':    self._showProlifMatrix,
@@ -241,6 +307,148 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         self.writeTCL(outTcl, system.getFileName(), sysExt,
                       system.getTrajectoryFile(), trjExt)
         return [VmdViewPopen('-e {}'.format(outTcl))]
+
+    # Common option tables shared by both engines.
+    _VID_STYLES  = ['cartoon', 'cartoon+sticks', 'surface', 'sticks', 'ribbon']
+    _VID_BGS     = ['white', 'black']
+    _VID_RESOS   = [(854, 480), (1280, 720), (1920, 1080), (3840, 2160)]
+    _VID_FORMATS = ['mp4', 'gif']
+
+    def _getVideoPaths(self):
+        system  = self.getMDSystem()
+        # Both engines read the structure file (.gro/.pdb) as topology, never .top/.tpr.
+        structFile = os.path.abspath(system.getSystemFile())
+        trjFile    = os.path.abspath(system.getTrajectoryFile())
+        workDir    = os.path.dirname(trjFile)
+        outBase    = '{}_MDvideo'.format(system.getSystemName())
+        return system, structFile, trjFile, workDir, outBase
+
+    def _showMDVideo(self, paramName=None):
+        if self.vidEngine.get() == 1:
+            return self._showMDVideoChimeraX()
+        return self._showMDVideoPymol()
+
+    def _showMDVideoPymol(self):
+        system, structFile, trjFile, workDir, outBase = self._getVideoPaths()
+        resos = ['480p', '720p', '1080p', '4K']
+
+        args  = (f'-- -i "{structFile}" -t "{trjFile}" -o "{outBase}" --workdir "{workDir}" '
+                 f'--style {self._VID_STYLES[self.vidStyle.get()]} --bg {self._VID_BGS[self.vidBg.get()]} '
+                 f'--ligand {system.getLigandID()} --highlightLig {int(self.vidHighlightLig.get())} '
+                 f'--resolution {resos[self.vidResolution.get()]} --fps {self.vidFps.get()} '
+                 f'--stride {max(1, self.vidStride.get())} --smooth {max(0, self.vidSmooth.get())} '
+                 f'--ray {int(self.vidRay.get())} --spin {int(self.vidSpin.get())} '
+                 f'--format {self._VID_FORMATS[self.vidFormat.get()]} --open 1')
+
+        # create_MDvideo.py lives in pwchem/scripts and runs inside PyMol (bundled in the
+        # OpenBabel env): "pymol -cq create_MDvideo.py -- args".
+        Plugin.runScript(self, 'create_MDvideo.py', args, env=OPENBABEL_DIC,
+                         pyStr='pymol -cq', popen=True, wait=False, cwd=workDir)
+
+    def _showMDVideoChimeraX(self):
+        """Render the movie with ChimeraX (VisualFactory-style cinematic quality).
+
+        We write a ChimeraX command file (.cxc) and launch it with the standard pwem
+        ChimeraView -- the same mechanism the other chem viewers use (see
+        viewers_data._viewChimera). A .cxc (NOT a Python script) is mandatory for
+        movie recording: ChimeraX runs .cxc commands through its frame-aware command
+        queue, so `coordset` playback advances and `wait` works. The equivalent calls
+        from a Python script block the event loop and freeze ChimeraX.
+
+        This ChimeraX also rejects the 'end' keyword in the coordset range
+        (`coordset #1 1,end` -> "Expected a keyword"); only a NUMERIC range works. So
+        we count the trajectory frames first (mdtraj) and bake the number in.
+        It needs a graphical display (opens the ChimeraX window).
+        """
+        system, structFile, trjFile, workDir, outBase = self._getVideoPaths()
+        width, height = self._VID_RESOS[self.vidResolution.get()]
+        bg     = self._VID_BGS[self.vidBg.get()]
+        style  = self._VID_STYLES[self.vidStyle.get()]
+        fmt    = self._VID_FORMATS[self.vidFormat.get()]
+        outFile = os.path.join(workDir, '{}.{}'.format(outBase, 'mp4' if fmt == 'gif' else fmt))
+
+        nFrames = self._countTrajFrames(structFile, trjFile, workDir)
+        cxc = self._buildChimeraXCxc(structFile, trjFile, workDir, outFile, style, bg,
+                                     width, height, self.vidFps.get(), nFrames,
+                                     bool(self.vidSpin.get()), system.getLigandID(),
+                                     bool(self.vidHighlightLig.get()))
+        cxcFile = os.path.join(workDir, '{}.cxc'.format(outBase))
+        with open(cxcFile, 'w') as f:
+            f.write(cxc)
+        return [ChimeraView(cxcFile)]
+
+    def _countTrajFrames(self, structFile, trjFile, workDir):
+        """Count trajectory frames with mdtraj (memory-light iterload), so the
+        ChimeraX coordset range can be NUMERIC. Returns an int, or None on failure."""
+        counter = os.path.join(workDir, '_count_frames.py')
+        with open(counter, 'w') as f:
+            f.write("import sys, mdtraj as md\n"
+                    "n = 0\n"
+                    "for ch in md.iterload(sys.argv[1], top=sys.argv[2], chunk=500):\n"
+                    "    n += ch.n_frames\n"
+                    "print('NFRAMES', n)\n")
+        cmd = '{} && python "{}" "{}" "{}"'.format(
+            Plugin.getEnvActivationCommand(MDTRAJ_DIC), counter, trjFile, structFile)
+        try:
+            out = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT)
+            for line in out.splitlines():
+                if line.startswith('NFRAMES'):
+                    return int(line.split()[1])
+        except Exception:
+            pass
+        return None
+
+    def _buildChimeraXCxc(self, structFile, trjFile, workDir, outFile, style, bg,
+                          width, height, fps, nFrames, spin, ligand, highlightLig):
+        """Assemble the ChimeraX .cxc command script. Silhouettes (the black
+        outlines) are turned OFF and 'lighting soft' gives the clean VisualFactory
+        look; 'view' auto-frames the camera (FindPerspective idea)."""
+        prot = '#1 & protein'
+        repCmds = []
+        if style == 'surface':
+            repCmds += ['hide #1 atoms', 'surface {}'.format(prot), 'color {} #6699cc'.format(prot)]
+        elif style in ('cartoon', 'ribbon'):
+            repCmds += ['hide #1 atoms', 'show {} cartoon'.format(prot), 'rainbow {}'.format(prot)]
+        elif style == 'cartoon+sticks':
+            repCmds += ['show {} cartoon'.format(prot), 'show {} atoms'.format(prot),
+                        'style {} stick'.format(prot), 'rainbow {}'.format(prot)]
+        elif style == 'sticks':
+            repCmds += ['show #1 atoms', 'style #1 stick', 'rainbow {}'.format(prot)]
+
+        ligCmds = []
+        if highlightLig:
+            lig = '#1 & :{}'.format(ligand)
+            ligCmds += ['show {} atoms'.format(lig), 'style {} stick'.format(lig),
+                        'color {} yellow'.format(lig), 'color {} byhetero'.format(lig)]
+
+        # Numeric coordset range (the 'end' keyword is rejected). If the frame count
+        # could not be determined, fall back to playing from the model's first frame.
+        coordsetCmd = 'coordset #1 1,{}'.format(nFrames) if nFrames else 'coordset #1'
+        spinCmds = ['turn y 2 180'] if spin else []   # 360 deg spin, recorded after playback
+        lines = [
+            'cd "{}"'.format(workDir),
+            'set bgColor {}'.format(bg),
+            'open "{}"'.format(structFile),
+            'open "{}" structureModel #1'.format(trjFile),
+            # DELETE (not hide) solvent/ions: tens of thousands of waters otherwise
+            # fragment the protein surface into disconnected blobs (same fix as PyMol).
+            'delete solvent',
+            'delete ions',
+        ]
+        lines += repCmds + ligCmds
+        lines += [
+            'graphics silhouettes false',
+            'lighting soft',
+            'view',
+            'movie record size {},{} supersample 3'.format(width, height),
+            coordsetCmd,
+        ]
+        lines += spinCmds
+        lines += [
+            'wait',
+            'movie encode "{}" framerate {} quality high'.format(outFile, fps),
+        ]
+        return '\n'.join(lines) + '\n'
 
     def _showMDTrajRMSDRMSF(self, paramName=None):
         """Handles both RMSD and RMSF (distinguished by mdAnalChoices text)."""
