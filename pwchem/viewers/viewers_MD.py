@@ -298,8 +298,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
             return os.path.abspath(refFile)
         raise ValueError(
             f'"{refChoice}" was selected as the reference for the analysis, but its structure '
-            f'file is not available in the MD system. Re-run the simulation so it is generated, '
-            f'or choose "{REF_CHOICES[_REF_FIRST]}" as the reference.')
+            f'file is not available in the MD system.')
 
     def _showMDTrajRGAnalysis(self, paramName=None):
         system   = self.getMDSystem()
