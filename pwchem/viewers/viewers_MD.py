@@ -41,7 +41,7 @@ _ANAL_SASA      = 4
 _ANAL_PCA       = 5
 _ANAL_DISTANCE  = 6
 
-_ANAL_CHOICES = ['RMSD', 'RMSF', 'Rg', 'Secondary Structure', 'SASA', 'PCA', 'Atom distance']
+ANAL_CHOICES = ['RMSD', 'RMSF', 'Rg', 'Secondary Structure', 'SASA', 'PCA', 'Atom distance']
 
 # Analyses that use the atom-selection dropdown
 _USES_SEL_ATOMS   = [_ANAL_RMSD, _ANAL_RMSF]
@@ -50,7 +50,7 @@ _USES_SEL_ATOMS   = [_ANAL_RMSD, _ANAL_RMSF]
 _REF_FIRST      = 0
 _REF_INITIAL    = 1
 _REF_MINIMIZED  = 2
-_REF_CHOICES = ['First frame', 'Initial structure', 'Minimized structure']
+REF_CHOICES = ['First frame', 'Initial structure', 'Minimized structure']
 
 class MDSystemViewer(pwviewer.Viewer):
   _label = 'Viewer Molecular Dynamics system'
@@ -115,7 +115,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         group.addParam('mdAnalChoices', params.EnumParam,
                        label='Analysis type: ',
-                       choices=_ANAL_CHOICES, default=_ANAL_RMSD,
+                       choices=ANAL_CHOICES, default=_ANAL_RMSD,
                        help='Select the MDTraj analysis to run.\n'
                             'Relevant parameters will appear below.')
 
@@ -135,7 +135,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         # ── Reference structure (RMSD only) ──────────
         group.addParam('refStructure', params.EnumParam,
                        label='Reference structure: ', default=_REF_FIRST,
-                       choices=_REF_CHOICES,
+                       choices=REF_CHOICES,
                        condition=f'mdAnalChoices == {_ANAL_RMSD}',
                        help='Structure the trajectory is compared against for RMSD:\n'
                             '"First frame": first frame of the trajectory.\n'
@@ -287,8 +287,8 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         if not hasattr(self, 'refStructure'):
             return None
         refChoice = self.getEnumText('refStructure')
-        getterName = {_REF_CHOICES[_REF_INITIAL]:   'getSystemFile',
-                      _REF_CHOICES[_REF_MINIMIZED]: 'getMinimizedFile'}.get(refChoice)
+        getterName = {REF_CHOICES[_REF_INITIAL]: 'getSystemFile',
+                      REF_CHOICES[_REF_MINIMIZED]: 'getMinimizedFile'}.get(refChoice)
         if not getterName:
             # 'First frame': no reference file, the script uses the trajectory's first frame
             return None
@@ -299,7 +299,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
         raise ValueError(
             f'"{refChoice}" was selected as the reference for the analysis, but its structure '
             f'file is not available in the MD system. Re-run the simulation so it is generated, '
-            f'or choose "{_REF_CHOICES[_REF_FIRST]}" as the reference.')
+            f'or choose "{REF_CHOICES[_REF_FIRST]}" as the reference.')
 
     def _showMDTrajRGAnalysis(self, paramName=None):
         system   = self.getMDSystem()
