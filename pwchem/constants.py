@@ -26,6 +26,8 @@
 # **************************************************************************
 
 #Constant dictionaries
+DOCKQ_DIC =  {'name': 'DockQ',    'version': '2.1.3',         'home': 'DOCKQ_HOME'}
+USALIGN_DIC =  {'name': 'USalign',    'version': '1.0',         'home': 'USALIGN_HOME'}
 NETWORKX_DIC =  {'name': 'networkx',    'version': '3.1',         'home': 'NETWORKX_HOME'}
 MGL_DIC =       {'name': 'mgltools',    'version': '1.5.7',         'home': 'MGL_HOME'}
 JCHEM_DIC =     {'name': 'jchempaint',  'version': '3.2.0',         'home': 'JCHEM_HOME'}

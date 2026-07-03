@@ -43,6 +43,7 @@ from pwem.convert import AtomicStructHandler
 from pwem.objects import AtomStruct, Sequence, Pointer
 
 from pwchem.protocols import *
+from pwchem.protocols.StructureValidation.protocol_usalign import ProtocolUSalign
 
 from pwchem.viewers.viewers_sequences import SequenceAliView
 from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
@@ -430,6 +431,15 @@ SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+
+SelectChainWizardQT().addTarget(protocol=ProtocolUSalign,
+                              targets=['chain1'],
+                              inputs=['inputStructure1'],
+                              outputs=['chain1'])
+SelectChainWizardQT().addTarget(protocol=ProtocolUSalign,
+                              targets=['chain2'],
+                              inputs=['inputStructure2'],
+                              outputs=['chain2'])
 
 
 SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,

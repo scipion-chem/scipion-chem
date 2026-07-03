@@ -65,6 +65,8 @@ class Plugin(pwem.Plugin):
 
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
+        cls.addUSalignPackage(env)
+        cls.addDockQPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -78,6 +80,8 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
+        cls._defineEmVar(USALIGN_DIC['home'], cls.getEnvName(USALIGN_DIC))
+        cls._defineEmVar(DOCKQ_DIC['home'], cls.getEnvName(DOCKQ_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -322,6 +326,55 @@ class Plugin(pwem.Plugin):
         )
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
+
+    @classmethod
+    def addUSalignPackage(cls, env, default=True):
+        installer = InstallHelper(
+            USALIGN_DIC['name'],
+            packageHome=cls.getVar(USALIGN_DIC['home']),
+            packageVersion=USALIGN_DIC['version']
+        )
+
+        installer.getCondaEnvCommand(
+            USALIGN_DIC['name'],
+            binaryVersion=USALIGN_DIC['version'],
+            pythonVersion='3.11'
+        ).addCommand(
+            f"{cls.getEnvActivationCommand(USALIGN_DIC)} && "
+            "git clone https://github.com/pylelab/USalign.git",
+            "USALIGN_CLONED"
+        ).addCommand(
+            "cd USalign && make",
+            "USALIGN_COMPILED"
+        ).addPackage(
+            env,
+            dependencies=['git', 'make', 'g++'],
+            default=default
+        )
+
+    @classmethod
+    def addDockQPackage(cls, env, default=True):
+        installer = InstallHelper(
+            DOCKQ_DIC['name'],
+            packageHome=cls.getVar(DOCKQ_DIC['home']),
+            packageVersion=DOCKQ_DIC['version']
+        )
+
+        installer.getCondaEnvCommand(
+            DOCKQ_DIC['name'],
+            binaryVersion=DOCKQ_DIC['version'],
+            pythonVersion='3.11'
+        ).addCommand(
+            "git clone https://github.com/bjornwallner/DockQ/",
+        ).addCommand(
+            f"{cls.getEnvActivationCommand(DOCKQ_DIC)} && "
+            "cd DockQ && python -m pip install .",
+            "DOCKQ_INSTALLED"
+        ).addPackage(
+            env,
+            dependencies=['git', 'pip'],
+            default=default
+        )
 
     ##################### RUN CALLS ######################
     @classmethod
