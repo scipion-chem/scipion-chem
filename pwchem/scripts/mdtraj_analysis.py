@@ -68,9 +68,7 @@ if __name__ == "__main__":
     parser.add_argument('-ha', '--heavyAtoms', default=False, action='store_true', help='Analysis only on heavy atoms')
     parser.add_argument('-ref', '--reference', type=str, default=None,
                         help='Reference structure file for RMSD/RMSF. If not provided, the first '
-                             'frame of the trajectory is used as reference. May have a different '
-                             'atom indexing than the trajectory (e.g. the pre-solvation initial '
-                             'structure): the selected atoms are matched on both.')
+                             'frame of the trajectory is used as reference.')
     parser.add_argument('-rg', default=False, action='store_true', help='Plots the Radius of gyration of the system through the trajectory')
     parser.add_argument('-sasa', default=False, action='store_true',
                         help='Plots the Solvent Accessible Surface Area (SASA) of the selected atoms')
