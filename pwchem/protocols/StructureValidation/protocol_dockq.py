@@ -85,7 +85,7 @@ class ProtocolDockQ(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.runDockQStep)
-        #self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def runDockQStep(self):
         struct1 = os.path.abspath(self.inputStructure1.get().getFileName())
@@ -119,6 +119,13 @@ class ProtocolDockQ(EMProtocol):
     def createOutputStep(self):
         outStruct = AtomStruct()
         outStruct.setFileName(self._getExtraPath("superposed.cif"))
+        dockQ, rmsd = self.getScores()
+
+        outStruct.DockQ = Float()
+        outStruct.setAttributeValue('DockQ', dockQ)
+
+        outStruct.iRMSD = Float()
+        outStruct.setAttributeValue('iRMSD', rmsd)
 
         self._defineOutputs(outputStructure=outStruct)
 
@@ -195,13 +202,27 @@ class ProtocolDockQ(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def getTerParam(self):
-        if self.alignmentMode.get() == 0:
-            ter = None
-        elif self.alignmentMode.get() == 1:
-            ter = 1
-        else:
-            ter = 0
-        return ter
+    def getScores(self):
+        summaryFile = self._getExtraPath("summary.txt")
+        outDockQ =None
+        outiRMSD =None
+        with open(summaryFile) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("Total DockQ"):
+                    m = re.search(
+                        r"Total DockQ over (\d+) native interfaces: ([\d.]+) with (.+) model:native mapping",
+                        line
+                    )
+                    if m:
+                        totalDockQ = m.group(2)
+                elif line.startswith("DockQ:"):
+                    dockQ = line.split(":")[1].strip()
+                elif line.startswith("iRMSD:"):
+                    iRMSD = line.split(":")[1].strip()
+        if totalDockQ: outDockQ = totalDockQ
+        else: outDockQ = dockQ
+
+        return outDockQ, outiRMSD
 
 

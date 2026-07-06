@@ -136,6 +136,10 @@ class ProtocolUSalign(EMProtocol):
     def createOutputStep(self):
         outStruct = AtomStruct()
         outStruct.setFileName(self._getExtraPath("superposed.cif"))
+        tmScore = self.getScore()
+
+        outStruct.TM_score = Float()
+        outStruct.setAttributeValue('TM_score', tmScore)
 
         self._defineOutputs(outputStructure=outStruct)
 
@@ -223,5 +227,22 @@ class ProtocolUSalign(EMProtocol):
         else:
             ter = 0
         return ter
+
+    def getScore(self):
+        summaryFile = self._getExtraPath("summary.txt")
+        with open(summaryFile) as f:
+            for line in f:
+                if line.startswith("TM-score="):
+                    m = re.search(
+                        r'TM-score=\s*([\d.]+).*Structure_(\d)',
+                        line
+                    )
+
+                    if m:
+                        score = m.group(1)
+
+                        if m.group(2) == "2":
+                            tmReference = score
+        return tmReference
 
 
