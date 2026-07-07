@@ -42,6 +42,121 @@ from pwchem import Plugin, USALIGN_DIC
 class ProtocolUSalign(EMProtocol):
     """
     AI Generated:
+
+    This protocol aligns two protein, nucleic acid, or macromolecular complex
+    structures using the US-align algorithm. It computes an optimal structural
+    superposition, reports several structural similarity metrics, and generates
+    the aligned structure for visualization and downstream analysis.
+
+    US-align extends the TM-align family of algorithms to support proteins,
+    RNA, DNA, and biological assemblies, providing robust structural
+    comparisons independently of sequence similarity.
+
+    Core Concepts
+    -------------
+    US-align:
+        Structural alignment algorithm capable of aligning proteins, nucleic
+        acids, and macromolecular complexes. It identifies the optimal
+        superposition between two structures and reports similarity metrics.
+
+    TM-score:
+        Length-independent measure of structural similarity ranging from 0 to 1.
+        Values above approximately 0.5 generally indicate similar overall
+        folds, while values below approximately 0.2 typically correspond to
+        unrelated structures.
+
+        The protocol reports two TM-scores:
+        - Normalized by the reference structure (Structure 2)
+        - Normalized by the input structure (Structure 1)
+
+    RMSD:
+        Root-mean-square deviation between aligned atoms after optimal
+        superposition. Lower values indicate greater structural similarity.
+
+    Sequence Identity:
+        Percentage of identical aligned residues reported by US-align for the
+        structural alignment.
+
+    Workflow
+    --------
+    1. Load the input structure.
+    2. Load the reference structure.
+    3. Optionally restrict the alignment to selected chains.
+    4. Select the molecule type (protein, RNA/DNA, or automatic detection).
+    5. Choose monomer or biological assembly alignment mode.
+    6. Optionally enable fast alignment or include HETATM records.
+    7. Execute US-align.
+    8. Parse the reported alignment statistics.
+    9. Generate the superposed structure and store the TM-score.
+
+    Input
+    -----
+    - inputStructure1:
+        Structure that will be aligned.
+
+    - inputStructure2:
+        Reference structure used for comparison.
+
+    - chain1:
+        Optional list of chains from the first structure to include.
+
+    - chain2:
+        Optional list of chains from the second structure to include.
+
+    Parameters
+    ----------
+    - Molecule type:
+        Specifies whether the structures correspond to proteins, nucleic acids,
+        or lets US-align determine the type automatically.
+
+    - Alignment mode:
+        Performs either monomer alignment or biological assembly/complex
+        alignment.
+
+    - Fast mode:
+        Uses a faster alignment strategy that may slightly reduce alignment
+        quality.
+
+    - Include HETATM:
+        Includes HETATM records during alignment.
+
+    Output
+    ------
+    - outputStructure:
+        Superposed atomic structure in CIF format.
+
+        The output structure also stores the TM-score normalized by the
+        reference structure as an attribute for use in downstream Scipion
+        workflows.
+
+    Reported Metrics
+    ----------------
+    The protocol extracts and summarizes:
+
+    - TM-score normalized by the reference structure
+    - TM-score normalized by the input structure
+    - RMSD
+    - Aligned length
+    - Sequence identity
+
+    Use Cases
+    ---------
+    - Comparing predicted and experimental structures
+    - Evaluating AlphaFold or other structure prediction methods
+    - Assessing structural similarity between homologous proteins
+    - Comparing RNA and DNA structures
+    - Superposing biological assemblies and protein complexes
+    - Preparing structures for visualization or further structural analyses
+
+    Notes
+    -----
+    - TM-score is generally more informative than RMSD for comparing overall
+      structural similarity because it is less sensitive to protein length and
+      local structural deviations.
+
+    - For most benchmarking applications, the TM-score normalized by the
+      reference structure is the preferred metric, as it allows comparisons
+      against the experimentally determined target.
     """
     _label = 'US-align structures'
     stepsExecutionMode = params.STEPS_PARALLEL

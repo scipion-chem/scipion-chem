@@ -41,6 +41,123 @@ from pwchem import Plugin, DOCKQ_DIC
 class ProtocolDockQ(EMProtocol):
     """
     AI Generated:
+
+    This protocol evaluates the quality of a predicted protein-protein or
+    protein-nucleic acid complex by comparing it against a reference complex
+    using the DockQ scoring framework.
+
+    DockQ combines several interface quality metrics into a single continuous
+    score that correlates with CAPRI quality classifications, making it a
+    standard metric for assessing docking and complex structure predictions.
+
+    Core Concepts
+    -------------
+    DockQ:
+        Composite score ranging from 0 to 1 that combines interface RMSD,
+        ligand RMSD, and the fraction of native contacts into a single measure
+        of docking quality. Higher values indicate better agreement with the
+        reference complex.
+
+    iRMSD (Interface RMSD):
+        Root-mean-square deviation computed using interface residues after
+        optimal superposition. Measures the accuracy of the binding interface.
+
+    LRMSD (Ligand RMSD):
+        RMSD of the ligand chains after superposing the receptor. Measures how
+        accurately the ligand is positioned relative to the receptor.
+
+    Fnat:
+        Fraction of native residue-residue contacts reproduced by the predicted
+        complex.
+
+    F1 Score:
+        Harmonic mean of interface precision and recall, evaluating how well
+        interface contacts are recovered.
+
+    Chain Mapping:
+        Defines the correspondence between chains in the predicted and
+        reference complexes. DockQ can automatically determine the mapping or
+        use a user-provided mapping.
+
+    Workflow
+    --------
+    1. Load the predicted complex.
+    2. Load the reference (native) complex.
+    3. Optionally define chain mappings between both structures.
+    4. Optionally disable structural alignment and compare structures using
+       residue numbering.
+    5. Execute DockQ.
+    6. Parse the reported quality metrics.
+    7. Store the DockQ score and interface RMSD as attributes of the output
+       structure.
+
+    Input
+    -----
+    - inputStructure1:
+        Predicted complex to evaluate.
+
+    - inputStructure2:
+        Reference (native) complex.
+
+    Parameters
+    ----------
+    - Chain mapping:
+        Optional mapping between chains of the predicted and reference
+        complexes. This can also restrict the evaluation to specific
+        interfaces.
+
+    - Align:
+        Whether DockQ should structurally align both complexes before
+        comparison. If disabled, residue numbering is used directly.
+
+    - Allowed sequence mismatches:
+        Maximum number of mismatches permitted while mapping sequences between
+        model and reference.
+
+    - Optimize DockQ_F1:
+        Optimizes the interface F1 score instead of the standard DockQ score.
+
+    Output
+    ------
+    - outputStructure:
+        Structure associated with the docking evaluation.
+
+        The output contains the following attributes:
+
+        - DockQ:
+            Overall docking quality score.
+
+        - iRMSD:
+            Interface RMSD between predicted and reference complexes.
+
+    Reported Metrics
+    ----------------
+    The protocol extracts and summarizes:
+
+    - Overall DockQ score
+    - Chain mapping used during evaluation
+    - Interface DockQ score
+    - Interface RMSD (iRMSD)
+    - Ligand RMSD (LRMSD)
+    - Fraction of native contacts (Fnat)
+    - Interface contact F1 score
+    - Number of interface clashes
+
+    Use Cases
+    ---------
+    - Evaluating protein-protein docking predictions
+    - Benchmarking AlphaFold-Multimer or similar complex prediction methods
+    - Comparing predicted complexes against experimental structures
+    - Assessing docking quality in CAPRI-style evaluations
+    - Measuring interface accuracy after docking refinement
+
+    Notes
+    -----
+    - DockQ provides a more comprehensive assessment than RMSD alone by
+      combining geometric and contact-based measures into a single score.
+
+    - When multiple interfaces are present, DockQ reports an overall score as
+      well as interface-specific metrics, depending on the evaluated complex.
     """
     _label = 'DockQ quality measure'
     stepsExecutionMode = params.STEPS_PARALLEL
