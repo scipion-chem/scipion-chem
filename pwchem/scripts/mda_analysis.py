@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors: Scipion-chem team
+# * Authors: Joaquin Algorta
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -25,11 +25,7 @@
 # *
 # **************************************************************************
 
-"""Protein-ligand and free-energy-landscape analyses of an MD trajectory, using
-MDAnalysis. A single MDAnalysis ``Universe`` is built and reused across every
-analysis (no duplicated trajectory loading). Plots are shown with
-``plt.show()``, matching the other MDTraj analysis scripts; the Scipion viewer
-launches this script with ``popen``, so the plot window does not block the GUI.
+"""Several analyses of an MD trajectory, using MDAnalysis.
 
 Analyses:
   * ``--distance``  Protein-ligand minimum distance per frame.
@@ -47,8 +43,7 @@ from MDAnalysis.analysis.distances import distance_array
 from MDAnalysis.analysis.rms import RMSD
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
 
-# Boltzmann constant in kcal/(mol K); F = -RT ln(P) is expressed in kcal/mol,
-# matching the MD_quick_plot reference.
+# Boltzmann constant in kcal/(mol K); F = -RT ln(P) is expressed in kcal/mol
 _KB_KCAL_MOL_K = 0.001987
 
 # ------------------------------------------------------------------
@@ -65,7 +60,7 @@ def resolveLigandSelection(universe, ligandSel=None, ligandID='LIG'):
     if ligandSel:
         return ligandSel if len(universe.select_atoms(ligandSel)) else None
 
-    for resname in [ligandID, 'LIG', 'UNK', 'UNL', 'DRG']:
+    for resname in [ligandID, 'LIG', 'UNK', 'UNL']:
         if resname:
             sel = f'resname {resname}'
             if len(universe.select_atoms(sel)):
@@ -246,7 +241,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Single Universe, reused by every analysis below.
+    # Single Universe
     universe = buildUniverse(args.inputFilename, args.inputTraj)
 
     if args.distance or args.hbonds:
