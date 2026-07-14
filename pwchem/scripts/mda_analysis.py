@@ -81,17 +81,17 @@ def getTimesNs(universe):
 # Core analyses (reusable functions)
 # ------------------------------------------------------------------
 
-def computeProtLigDistance(universe, protein_sel, ligand_sel):
+def computeProtLigDistance(universe, proteinSel, ligandSel):
     """Minimum protein-ligand distance per frame.
 
     Returns ``(time_ns, min_distance)`` as numpy arrays, with distances in Å.
     """
-    protein = universe.select_atoms(protein_sel)
-    ligand = universe.select_atoms(ligand_sel)
+    protein = universe.select_atoms(proteinSel)
+    ligand = universe.select_atoms(ligandSel)
     if not len(protein) or not len(ligand):
         raise ValueError('Protein or ligand selection matched no atoms '
-                         f'(protein="{protein_sel}": {len(protein)} atoms, '
-                         f'ligand="{ligand_sel}": {len(ligand)} atoms).')
+                         f'(protein="{proteinSel}": {len(protein)} atoms, '
+                         f'ligand="{ligandSel}": {len(ligand)} atoms).')
 
     times, minDist = [], []
     for ts in universe.trajectory:
@@ -105,7 +105,7 @@ def computeProtLigDistance(universe, protein_sel, ligand_sel):
 
 
 def computeProtligHbonds(universe, proteinSel, ligandSel,
-                         DACutoff=3.5, DHAAngleCutoff=150.0):
+                         daCutoff=3.5, dhaAngleCutoff=150.0):
     """Protein-ligand hydrogen-bond count per frame."""
     if not len(universe.select_atoms(ligandSel)):
         raise ValueError(f'Ligand selection "{ligandSel}" matched no atoms.')
@@ -121,8 +121,8 @@ def computeProtligHbonds(universe, proteinSel, ligandSel,
                                    donors_sel=donorsSel,
                                    hydrogens_sel=hydrogensSel,
                                    acceptors_sel=acceptorsSel,
-                                   d_a_cutoff=DACutoff,
-                                   d_h_a_angle_cutoff=DHAAngleCutoff,
+                                   d_a_cutoff=daCutoff,
+                                   d_h_a_angle_cutoff=dhaAngleCutoff,
                                    update_selections=False)
         hba.run()
         counts[:] += hba.count_by_time()
