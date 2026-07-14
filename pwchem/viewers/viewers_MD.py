@@ -309,8 +309,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
     def _getReferenceStructFile(self):
         """Reference structure file for RMSD/RMSF, or None to use the trajectory's first frame.
         'Initial structure' is the prepared system structure (MDSystem.getSystemFile);
-        'Minimized structure' is read from MDSystem.getMinimizedFile, which the MD plugin
-        populates on its system object."""
+        'Minimized structure' minimed system (MDSystem.getMinimizedFile)."""
         if not hasattr(self, 'refStructure'):
             return None
         refChoice = self.getEnumText('refStructure')
