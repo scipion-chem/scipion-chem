@@ -42,6 +42,7 @@ import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
 from MDAnalysis.analysis.rms import RMSD
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
+from scripts import ligand_filter_script
 
 # Boltzmann constant in kcal/(mol K); F = -RT ln(P) is expressed in kcal/mol
 _KB_KCAL_MOL_K = 0.001987
@@ -80,7 +81,7 @@ def getTimesNs(universe):
 # Core analyses (reusable functions)
 # ------------------------------------------------------------------
 
-def compute_protein_ligand_distance(universe, protein_sel, ligand_sel):
+def computeProtLigDistance(universe, protein_sel, ligand_sel):
     """Minimum protein-ligand distance per frame.
 
     Returns ``(time_ns, min_distance)`` as numpy arrays, with distances in Å.
@@ -103,54 +104,54 @@ def compute_protein_ligand_distance(universe, protein_sel, ligand_sel):
     return times / 1000.0, np.array(minDist)
 
 
-def compute_protein_ligand_hbonds(universe, protein_sel, ligand_sel,
-                                   d_a_cutoff=3.5, d_h_a_angle_cutoff=150.0):
+def computeProtligHbonds(universe, proteinSel, ligandSel,
+                         DACutoff=3.5, DHAAngleCutoff=150.0):
     """Protein-ligand hydrogen-bond count per frame."""
-    if not len(universe.select_atoms(ligand_sel)):
-        raise ValueError(f'Ligand selection "{ligand_sel}" matched no atoms.')
+    if not len(universe.select_atoms(ligandSel)):
+        raise ValueError(f'Ligand selection "{ligandSel}" matched no atoms.')
 
     nFrames = universe.trajectory.n_frames
     counts = np.zeros(nFrames, dtype=float)
 
-    def _accumulate(donors_sel, hydrogens_sel, acceptors_sel):
-        if not len(universe.select_atoms(hydrogens_sel)) or \
-           not len(universe.select_atoms(acceptors_sel)):
+    def accumulate(donorsSel, hydrogensSel, acceptorsSel):
+        if not len(universe.select_atoms(hydrogensSel)) or \
+           not len(universe.select_atoms(acceptorsSel)):
             return
         hba = HydrogenBondAnalysis(universe=universe,
-                                   donors_sel=donors_sel,
-                                   hydrogens_sel=hydrogens_sel,
-                                   acceptors_sel=acceptors_sel,
-                                   d_a_cutoff=d_a_cutoff,
-                                   d_h_a_angle_cutoff=d_h_a_angle_cutoff,
+                                   donors_sel=donorsSel,
+                                   hydrogens_sel=hydrogensSel,
+                                   acceptors_sel=acceptorsSel,
+                                   d_a_cutoff=DACutoff,
+                                   d_h_a_angle_cutoff=DHAAngleCutoff,
                                    update_selections=False)
         hba.run()
         counts[:] += hba.count_by_time()
 
     # protein donor -> ligand acceptor
-    _accumulate(f'({protein_sel}) and (name N* O* S*)',
-                f'({protein_sel}) and (name H*)',
-                f'({ligand_sel}) and (name N* O* S* F*)')
+    accumulate(f'({proteinSel}) and (name N* O* S*)',
+                f'({proteinSel}) and (name H*)',
+                f'({ligandSel}) and (name N* O* S* F*)')
     # ligand donor -> protein acceptor
-    _accumulate(f'({ligand_sel}) and (name N* O* S*)',
-                f'({ligand_sel}) and (name H*)',
-                f'({protein_sel}) and (name N* O* S*)')
+    accumulate(f'({ligandSel}) and (name N* O* S*)',
+                f'({ligandSel}) and (name H*)',
+                f'({proteinSel}) and (name N* O* S*)')
 
     return getTimesNs(universe), counts
 
 
-def compute_rmsd_rg(universe, protein_sel='protein', align_sel='protein and name CA'):
+def computeRmsdRg(universe, proteinSel='protein', alignSel='protein and name CA'):
     """RMSD (Å, aligned on ``align_sel``, first frame as reference) and radius of
     gyration (Å, on ``protein_sel``) per frame."""
-    rmsdAnal = RMSD(universe, universe, select=align_sel, ref_frame=0)
+    rmsdAnal = RMSD(universe, universe, select=alignSel, ref_frame=0)
     rmsdAnal.run()
     rmsd = rmsdAnal.results.rmsd[:, 2]
 
-    protein = universe.select_atoms(protein_sel)
+    protein = universe.select_atoms(proteinSel)
     rg = np.array([protein.radius_of_gyration() for _ in universe.trajectory])
     return rmsd, rg
 
 
-def compute_free_energy_landscape(rmsd, rg, bins=50, temperature=300):
+def computeFreeEnergyLandscape(rmsd, rg, bins=50, temperature=300):
     """Free energy landscape F(RMSD, Rg) = -RT ln(P)."""
     hist, xedges, yedges = np.histogram2d(rmsd, rg, bins=bins)
     prob = hist / hist.sum()
@@ -165,7 +166,7 @@ def compute_free_energy_landscape(rmsd, rg, bins=50, temperature=300):
 # Plotting (displayed with plt.show, like the other MDTraj scripts)
 # ------------------------------------------------------------------
 
-def plot_distance(timeNs, minDist):
+def plotDistance(timeNs, minDist):
     plt.figure()
     plt.plot(timeNs, minDist, color='#1D3557', lw=1.5, label='Min. distance')
     plt.axhline(minDist.mean(), color='red', ls='--', alpha=0.7,
@@ -178,7 +179,7 @@ def plot_distance(timeNs, minDist):
     plt.legend()
     plt.show()
 
-def plot_hbonds(timeNs, counts):
+def plotHbonds(timeNs, counts):
     import matplotlib.ticker as ticker
     plt.figure()
     plt.fill_between(timeNs, counts, color='#2DC653', alpha=0.35)
@@ -193,7 +194,7 @@ def plot_hbonds(timeNs, counts):
     plt.legend()
     plt.show()
 
-def plot_fel(fel, xedges, yedges):
+def plotFel(fel, xedges, yedges):
     # histogram2d indexes [x, y]; transpose so the mesh matches (X=RMSD, Y=Rg).
     xmesh, ymesh = np.meshgrid(xedges[:-1], yedges[:-1])
 
@@ -252,24 +253,24 @@ if __name__ == '__main__':
         else:
             if args.distance:
                 try:
-                    timeNs, minDist = compute_protein_ligand_distance(
+                    timeNs, minDist = computeProtLigDistance(
                         universe, args.proteinSel, ligandSel)
-                    plot_distance(timeNs, minDist)
+                    plotDistance(timeNs, minDist)
                 except Exception as e:
                     print(f'Protein-ligand distance analysis could not be run: {e}')
             if args.hbonds:
                 try:
-                    timeNs, counts = compute_protein_ligand_hbonds(
+                    timeNs, counts = computeProtligHbonds(
                         universe, args.proteinSel, ligandSel)
-                    plot_hbonds(timeNs, counts)
+                    plotHbonds(timeNs, counts)
                 except Exception as e:
                     print(f'Protein-ligand hydrogen-bond analysis could not be run: {e}')
 
     if args.fel:
         try:
-            rmsd, rg = compute_rmsd_rg(universe, protein_sel=args.proteinSel)
-            fel, xedges, yedges = compute_free_energy_landscape(
+            rmsd, rg = computeRmsdRg(universe, proteinSel=args.proteinSel)
+            fel, xedges, yedges = computeFreeEnergyLandscape(
                 rmsd, rg, bins=args.bins, temperature=args.temperature)
-            plot_fel(fel, xedges, yedges)
+            plotFel(fel, xedges, yedges)
         except Exception as e:
             print(f'Free energy landscape analysis could not be run: {e}')
