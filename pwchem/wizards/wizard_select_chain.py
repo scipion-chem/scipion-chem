@@ -538,6 +538,11 @@ SelectMultiChainWizard().addTarget(protocol=ProtChemPrepareReceptor,
                                    inputs=['inputAtomStruct'],
                                    outputs=['chain_name'])
 
+SelectMultiChainWizard().addTarget(protocol=ProtCocadaInteractions,
+                                   targets=['chainsParam'],
+                                   inputs=['inputAtomStruct'],
+                                   outputs=['chainsParam'])
+
 class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
