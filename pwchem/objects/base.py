@@ -1640,23 +1640,28 @@ class SetOfStructROIs(data.EMSet):
 
           maxId = max(map(int, cifDic['_atom_site.id']))
           for pocket in self:
-              for seqId, (x, y, z) in enumerate(pocket.getPointsCoords(), start=1):
+              # auth/label_seq_id must identify the POCKET (like the objId used in the .pdb
+              # branch / formatPocketStr), not the point index: PML_STR groups ROI points in
+              # PyMol by "resi", so reusing a per-pocket-reset index here made every pocket
+              # collide with every other pocket sharing the same point index.
+              pocketId = pocket.getObjId()
+              for x, y, z in pocket.getPointsCoords():
                   maxId += 1
 
                   cifDic['_atom_site.id'].append(str(maxId))
                   cifDic['_atom_site.group_PDB'].append('HETATM')
                   cifDic['_atom_site.type_symbol'].append('C')
-                  cifDic['_atom_site.label_atom_id'].append(f'C{seqId}')
+                  cifDic['_atom_site.label_atom_id'].append(f'C{maxId}')
                   cifDic['_atom_site.label_alt_id'].append('.')
                   cifDic['_atom_site.label_comp_id'].append('STP')
                   cifDic['_atom_site.label_asym_id'].append('A')
                   cifDic['_atom_site.label_entity_id'].append('1')
-                  cifDic['_atom_site.label_seq_id'].append(str(seqId))
+                  cifDic['_atom_site.label_seq_id'].append(str(pocketId))
                   cifDic['_atom_site.Cartn_x'].append(str(x))
                   cifDic['_atom_site.Cartn_y'].append(str(y))
                   cifDic['_atom_site.Cartn_z'].append(str(z))
                   cifDic['_atom_site.auth_asym_id'].append('A')
-                  cifDic['_atom_site.auth_seq_id'].append(str(seqId))
+                  cifDic['_atom_site.auth_seq_id'].append(str(pocketId))
                   cifDic['_atom_site.pdbx_PDB_ins_code'].append('?')
                   cifDic['_atom_site.occupancy'].append('1.00')
                   cifDic['_atom_site.B_iso_or_equiv'].append('0.00')
