@@ -68,8 +68,9 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
         of chemical substructures (e.g. rings, functional groups).
 
     Similarity metrics:
-        Fingerprints are compared using similarity coefficients (Tanimoto or Dice),
-        which produce values between 0 (completely different) and 1 (identical).
+        Fingerprints are compared using similarity coefficients (Tanimoto, Dice or
+        Tversky_Ref), which produce values between 0 (completely different) and
+        1 (identical / fully contained).
 
     Distance transformation:
         Similarity is converted into distance as:
@@ -89,10 +90,28 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
     Similarity Coefficients
     -----------------------
     Tanimoto:
-        Measures overlap between fingerprint sets; widely used in chemoinformatics.
+        Symmetric overlap between fingerprint sets; widely used in chemoinformatics.
+        Penalizes size mismatch, so a large molecule that contains a small reference
+        still scores low.
 
     Dice:
-        Similar to Tanimoto but gives slightly different weighting to shared features.
+        Symmetric, monotonically related to Tanimoto (same ranking, different scale).
+
+    Tversky_Ref:
+        Asymmetric measure with the reference weighted (a=1, b=0), reducing to
+        shared_bits / reference_bits. It is size-blind and identifies database
+        compounds whose fingerprint is a SUPERSET of the reference, i.e. larger
+        molecules that CONTAIN the (small) reference fragment. This is the
+        recommended coefficient for fragment-based / fragment-growing selection.
+
+    Tversky_DB:
+        The mirror of Tversky_Ref, with the database molecule weighted (a=0, b=1),
+        reducing to shared_bits / library_molecule_bits. It identifies database
+        compounds whose fingerprint is a SUBSET of the reference, i.e. molecules
+        contained in / smaller than the reference.
+
+    All:
+        Runs Tanimoto, Dice, Tversky_Ref and Tversky_DB together.
 
     Workflow
     --------
@@ -111,13 +130,14 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
     Use Cases
     ---------
     - Ligand-based virtual screening
+    - Fragment-based selection (Tversky_Ref: find molecules containing a fragment)
     - Chemical library diversity analysis
     - Lead compound similarity assessment
     - Clustering of small molecule datasets
     """
     _label = 'Fingerprint distance'
     _fpChoices = ['Morgan', 'MACCS', 'Both']
-    _coefChoices = ['Tanimoto', 'Dice', 'Both']
+    _coefChoices = ['Tanimoto', 'Dice', 'Tversky_Ref', 'Tversky_DB', 'All']
     stepsExecutionMode = params.STEPS_PARALLEL
 
     ##### -------------------------- DEFINE param functions ----------------------
@@ -143,7 +163,17 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
 
         group.addParam('coefChoice', params.EnumParam, default=0, label='Similarity coefficient: ',
                         choices=self._coefChoices,
-                        help="Chosen fingerprint type to perform the filtering")
+                        help="Similarity coefficient used to score each molecule against the "
+                             "reference.\n"
+                             "- Tanimoto / Dice: symmetric; penalize size differences.\n"
+                             "- Tversky_Ref: asymmetric (reference weighted, a=1/b=0); "
+                             "size-blind, selects molecules that CONTAIN the reference "
+                             "fragment (superset search). Recommended when the reference is "
+                             "a small fragment and the library molecules are larger.\n"
+                             "- Tversky_DB: mirror of Tversky_Ref (db weighted, a=0/b=1); "
+                             "selects molecules that are a SUBSET of the reference "
+                             "(smaller than / contained in it).\n"
+                             "- All: runs Tanimoto, Dice, Tversky_Ref and Tversky_DB.")
 
         form.addParallelSection(threads=4)
 
@@ -191,4 +221,3 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
 
     def getCoefficient(self):
         return self.getEnumText('coefChoice')
-
