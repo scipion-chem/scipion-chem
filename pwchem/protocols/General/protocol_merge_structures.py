@@ -125,7 +125,7 @@ class ProtMergeStructs(EMProtocol):
 
   # --------------------------- Steps functions --------------------
   def _insertAllSteps(self):
-    self._insertFunctionStep('createOutputStep')
+    self._insertFunctionStep(self.createOutputStep)
 
   def createOutputStep(self):
       structure = Structure.Structure("merged")
