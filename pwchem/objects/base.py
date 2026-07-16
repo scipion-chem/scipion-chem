@@ -1882,6 +1882,7 @@ class MDSystem(data.EMFile):
     super().__init__(filename=filename, **kwargs)
     self._topoFile = pwobj.String(kwargs.get('topoFile', None))
     self._trjFile = pwobj.String(kwargs.get('trjFile', None))
+    self._minFile = pwobj.String(kwargs.get('minFile', None))
     self._ff = pwobj.String(kwargs.get('ff', None))
     self._wff = pwobj.String(kwargs.get('wff', None))
 
@@ -1935,6 +1936,13 @@ class MDSystem(data.EMFile):
   def setTrajectoryFile(self, value):
     value = os.path.relpath(value)
     self._trjFile.set(value)
+
+  def getMinimizedFile(self):
+    return self._minFile.get()
+
+  def setMinimizedFile(self, value):
+    value = os.path.relpath(value)
+    self._minFile.set(value)
 
   def getForceField(self):
     return self._ff.get()
