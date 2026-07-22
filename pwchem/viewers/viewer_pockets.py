@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os
+import os, csv
 import json
 from pathlib import Path
 from pwem.viewers import EmPlotter
@@ -37,6 +37,7 @@ import numpy as np
 from pyworkflow.protocol import params, Protocol
 
 import pyworkflow.viewer as pwviewer
+from pyworkflow.gui.dialog import showError
 
 from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER
 from matplotlib import pyplot as plt, cm
@@ -48,7 +49,9 @@ from pwchem.utils import getFilteredOutput
 from pwchem.viewers.viewer_interaction import BaseInteractionViewer
 from .viewers_utils import heatmap, annotateHeatmap
 
+from pwchem import Plugin as pwchemPlugin
 from pwchem.objects import SetOfStructROIs
+from pwchem.utils import pdbFromASFile
 from pwchem.viewers.viewers_data import BioinformaticsDataViewer, PyMolViewer, VmdViewPopen
 from pwchem.protocols import ProtocolConsensusStructROIs
 
@@ -136,11 +139,46 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
         if data:
             BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
+    if self.checkIfCocadaBonds():
+        form.addSection(label='COCADA bonds view')
+        form.addParam('displayCocadaBonds', params.LabelParam,
+                      label='Display COCADA contacts as PyMol bonds, grouped by type: ',
+                      help='Show the AtomStruct with a dashed distance line per COCADA contact, '
+                           'grouped and colored by interaction type (hydrogen bonds, hydrophobic, '
+                           'salt bridges...) so each type can be shown/hidden independently from '
+                           "PyMol's object panel.")
+
+        chainPairLabels = self._getPLIPChainPairLabels()
+        if chainPairLabels:
+            group = form.addGroup('PLIP protein-protein interaction')
+            group.addParam('plipChainPair', params.EnumParam,
+                           choices=chainPairLabels, default=0,
+                           label='Interacting chain pair: ',
+                           help="Pair of chains, among those found in contact by COCADA above, "
+                                "to send to PLIP's own protein-protein interactions mode "
+                                "(https://plip-tool.biotec.tu-dresden.de/plip-web/plip/help#"
+                                "section-interactions). PLIP recomputes its non-covalent "
+                                'interactions (hydrogen bonds, hydrophobic contacts, salt '
+                                'bridges, pi-stacking...) for the pair independently of the '
+                                'COCADA contacts shown above; the two are not guaranteed to '
+                                'match exactly.')
+            group.addParam('plipHideRest', params.BooleanParam, default=True,
+                           label='Hide the rest of the protein? ',
+                           help='If Yes, only the residues/atoms taking part in the interface '
+                                '(plus the PLIP interaction lines) are shown; everything else '
+                                'in both chains is hidden. If No, the full chains are shown as '
+                                "PLIP normally displays them, which can get crowded for "
+                                'protein-protein interfaces with many contacts.')
+            group.addParam('showPLIPInterface', params.LabelParam,
+                           label='Open PLIP protein-protein interaction view ')
+
   def _getVisualizeDict(self):
     d = {
       'displayAtomStruct': self._showAtomStruct,
       'displayTable': self._viewSet,
-      'labelDistances': self._viewResidueInteractions
+      'labelDistances': self._viewResidueInteractions,
+      'displayCocadaBonds': self._showCocadaBonds,
+      'showPLIPInterface': self._viewPLIPInterface,
     }
     d.update(BaseInteractionViewer._getVisualizeDict(self))
 
@@ -214,6 +252,117 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
 
       plt.show()
       return []
+
+  def checkIfCocadaBonds(self):
+      molObj = self.getObject()
+      return getattr(molObj, '_cocadaBondsPml', None) is not None
+
+  def _showCocadaBonds(self, paramName=None):
+      molObj = self.getObject()
+      pmlFile = os.path.abspath(molObj._cocadaBondsPml.get())
+      pymolV = PyMolViewer(project=self.getProject())
+      return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
+
+  # =========================================================================
+  # PLIP protein-protein interaction view
+  # =========================================================================
+
+  def _getCocadaChainPairs(self):
+      '''Unique (chain1, chain2) pairs found in inter-chain contact by COCADA, read from the
+      "interacting residues" csv (the same file behind the "Residue interaction view" section)'''
+      molObj = self.getObject()
+      csvFile = molObj.getInteractingResiduesFile()
+      if not csvFile:
+          return []
+      csvFile = os.path.abspath(csvFile)
+      if not os.path.exists(csvFile):
+          return []
+
+      pairs, seen = [], set()
+      with open(csvFile) as f:
+          for row in csv.DictReader(f):
+              pair = (row['Chain1'].strip(), row['Chain2'].strip())
+              if pair[0] != pair[1] and pair not in seen:
+                  seen.add(pair)
+                  pairs.append(pair)
+      return pairs
+
+  def _getPLIPChainPairLabels(self):
+      return ['Chain {}  -  Chain {} (protein-protein)'.format(c1, c2)
+              for c1, c2 in self._getCocadaChainPairs()]
+
+  def _viewPLIPInterface(self, paramName=None):
+      pairs = self._getCocadaChainPairs()
+      if not pairs:
+          showError('PLIP', 'No interchain contacts found by COCADA to analyze with PLIP.',
+                    self.getTkRoot())
+          return []
+
+      molObj = self.getObject()
+      chainA, chainB = pairs[self.plipChainPair.get()]
+
+      outDir = os.path.join(os.path.abspath(molObj.getSetDir()),
+                            'plip_ppi_{}_{}'.format(chainA, chainB))
+      os.makedirs(outDir, exist_ok=True)
+
+      # PLIP's own PDB parser (plip.structure.preparation.PDBParser.fix_pdbline) assumes fixed
+      # PDB column widths and chokes on COCADA's .cif protein file (getProteinFile()), so it
+      # needs converting to .pdb first regardless of the original AtomStruct format.
+      structFile = pdbFromASFile(os.path.abspath(molObj.getProteinFile()),
+                                 os.path.join(outDir, 'plip_input.pdb'))
+
+      # PLIP protein-protein interactions mode: --chains "[[A],[B]]" (see
+      # https://plip-tool.biotec.tu-dresden.de/plip-web/plip/help#section-interactions). PLIP's
+      # CLI internally still labels the two groups "receptor"/"ligand", but for COCADA's
+      # protein-protein contacts this is a plain pair of chains, not a ligand-receptor pair, so
+      # a single explicit pair is used instead of --inter/--peptides (which would default to
+      # checking one chain against every other chain in the structure).
+      chainsArg = "[[{}],[{}]]".format(chainA, chainB)
+      args = '-f {} --chains "{}" -y -o {}'.format(structFile, chainsArg, outDir)
+      pwchemPlugin.runPLIP(args, cwd=outDir)
+
+      pseFile = None
+      for root, _, files in os.walk(outDir):
+          for fn in files:
+              if fn.endswith('.pse'):
+                  pseFile = os.path.join(root, fn)
+                  break
+          if pseFile:
+              break
+
+      if pseFile is None:
+          showError('PLIP', 'PLIP found no interactions between chains {} and {}.'.
+                    format(chainA, chainB), self.getTkRoot())
+          return []
+
+      if self.plipHideRest.get():
+          pseFile = self._buildPLIPInterfacePml(pseFile, outDir)
+
+      pymolV = PyMolViewer(project=self.getProject())
+      return pymolV._visualize(os.path.abspath(pseFile), cwd=os.path.dirname(pseFile))
+
+  def _buildPLIPInterfacePml(self, pseFile, outDir):
+      '''Wrap the PLIP .pse session in a small PyMol script that hides every represented atom
+      outside the interface (i.e. the rest of both chains, including the full-chain cartoons
+      PLIP draws by default in its protein-protein/peptide mode), keeping the PLIP interaction
+      lines intact, so only the interacting residues/atoms remain visible.
+      "AllBSRes" (protein-side interacting residues) and the "*-L" glob (ligand-side
+      interacting-atom selections, e.g. Hydrophobic-L/HBondDonor-L...) are PLIP's own selection
+      names, created by its pymol visualization module (plip.visualization.pymol.
+      PyMOLVisualizer); a glob still resolves (to no atoms) if none of those selections exist.
+      "metals"/"solvent" are plain PyMol selection keywords (not PLIP-specific selection names)
+      used defensively for the same reason: unlike a glob, a literal PLIP selection name such as
+      "Water" or "Metal-P" errors out the whole command if PLIP ended up deleting it for being
+      empty (it prunes unused selections when saving the session).'''
+      interfaceSel = 'byres (AllBSRes or *-L or metals or solvent)'
+      pmlFile = os.path.join(outDir, 'plip_interface_only.pml')
+      with open(pmlFile, 'w') as f:
+          f.write('load {}\n'.format(os.path.abspath(pseFile)))
+          f.write('hide everything, not ({})\n'.format(interfaceSel))
+          f.write('show sticks, {}\n'.format(interfaceSel))
+          f.write('zoom {}, 5\n'.format(interfaceSel))
+      return pmlFile
+
 
       # ----------------UTILS-----------------
 

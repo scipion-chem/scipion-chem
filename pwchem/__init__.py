@@ -331,8 +331,7 @@ class Plugin(pwem.Plugin):
         installer = InstallHelper(COCADA_DIC['name'], packageHome=cls.getVar(COCADA_DIC['home']),
                                                             packageVersion=COCADA_DIC['version'])
 
-        # COCADA requires numpy>=2.0.1 and psutil>=6.0.0, incompatible with the scipion3 env
-        # (numpy 1.24.4 / psutil 5.9.6), so it needs its own conda env
+        # COCADA requires numpy>=2.0.1 and psutil>=6.0.0, so it needs its own conda env
         zipName = f"COCaDA-{COCADA_DIC['version']}.zip"
         installer.getExtraFile(f"https://github.com/LBS-UFMG/COCaDA/archive/refs/tags/v{COCADA_DIC['version']}.zip",
                                'COCADA_DOWNLOADED', fileName=zipName)\
