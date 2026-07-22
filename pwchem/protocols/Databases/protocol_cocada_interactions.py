@@ -54,6 +54,8 @@ from pwchem.utils import parseAtomStruct, cifFromASFile, createPocketFile, natur
 
 ALL_LABEL = 'All'
 RUN_MODE_IMPORT, RUN_MODE_COMPUTE = 0, 1
+COND_IMPORT = 'cocadaMode==%d' % RUN_MODE_IMPORT
+COND_COMPUTE = 'cocadaMode==%d' % RUN_MODE_COMPUTE
 
 # COCADA interaction type codes (https://bioinfo.dcc.ufmg.br/cocada-web/public/documentation/),
 # only used for the ROI comment. Fall back to the raw code if one is not present here.
@@ -103,12 +105,12 @@ class ProtCocadaInteractions(EMProtocol):
                             '(https://github.com/LBS-UFMG/COCaDA) on the input AtomStruct to '
                             'generate it.')
         group.addParam('cocadaCsv', params.PathParam, label='COCADA contacts file: ', allowsNull=False,
-                       condition='cocadaMode==%d' % RUN_MODE_IMPORT,
+                       condition=COND_IMPORT,
                        help='CSV file downloaded from the COCADA web server '
                             '(https://bioinfo.dcc.ufmg.br/cocada-web/public/) with the columns: '
                             'Chain1,Res1,ResName1,Atom1,Chain2,Res2,ResName2,Atom2,Distance,Type')
 
-        group = form.addGroup('COCADA parameters', condition='cocadaMode==%d' % RUN_MODE_COMPUTE)
+        group = form.addGroup('COCADA parameters', condition=COND_COMPUTE)
         group.addParam('phValue', params.FloatParam, default=7.4,
                        label='pH value: ',
                        help='pH used to define electrostatic (attractive/repulsive/salt bridge) '
@@ -129,7 +131,7 @@ class ProtCocadaInteractions(EMProtocol):
                             '("10-19") or a list ("10,32,65"). Leave empty to analyze all '
                             "residues. Maps to COCADA's -r flag.")
 
-        distGroup = form.addGroup('Custom contact distances', condition='cocadaMode==%d' % RUN_MODE_COMPUTE,
+        distGroup = form.addGroup('Custom contact distances', condition=COND_COMPUTE,
                                   expertLevel=LEVEL_ADVANCED,
                                   help='Distance ranges (in Angstroms) defining each contact type, '
                                        "prefilled with COCADA's own defaults. Change them if needed. "
@@ -203,7 +205,7 @@ class ProtCocadaInteractions(EMProtocol):
 
         matches = glob.glob(os.path.join(outDir, '*_contacts.csv'))
         if not matches:
-            raise Exception('COCADA did not produce a contacts CSV in {}'.format(outDir))
+            raise RuntimeError('COCADA did not produce a contacts CSV in {}'.format(outDir))
         self.computedCsvPath = matches[0]
 
     def defineOutputStep(self):
