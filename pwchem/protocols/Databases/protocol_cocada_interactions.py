@@ -177,18 +177,13 @@ class ProtCocadaInteractions(EMProtocol):
 
     def convertInputStep(self):
         inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
-        # Absolute: _getExtraPath() is relative to the project root, but the generated .pml
-        # (buildBondsPml) gets launched by PyMolViewer with cwd=<run>/extra, not the project
-        # root, so a relative "load" target there would silently fail to resolve.
-        self.cifFile = os.path.abspath(self._getExtraPath('inputStructure.cif'))
-        cifFromASFile(inFile, self.cifFile)
-        self.structModel = parseAtomStruct(self.cifFile)[0]
+        cifFromASFile(inFile, self.getCifFile())
 
     def runCocadaStep(self):
-        outDir = os.path.abspath(self._getExtraPath('cocada_output'))
+        outDir = self.getCocadaOutDir()
         os.makedirs(outDir, exist_ok=True)
 
-        args = '-f {} -o {}'.format(self.cifFile, outDir)
+        args = '-f {} -o {}'.format(self.getCifFile(), outDir)
         if self.numberOfThreads.get() > 1:
             args += ' -m {}'.format(self.numberOfThreads.get())
         if self.interchainOnly.get():
@@ -203,12 +198,11 @@ class ProtCocadaInteractions(EMProtocol):
 
         Plugin.runCocada(self, args)
 
-        matches = glob.glob(os.path.join(outDir, '*_contacts.csv'))
-        if not matches:
+        if not self.getComputedCsvPath():
             raise RuntimeError('COCADA did not produce a contacts CSV in {}'.format(outDir))
-        self.computedCsvPath = matches[0]
 
     def defineOutputStep(self):
+        self.structModel = parseAtomStruct(self.getCifFile())[0]
         rowsByType = self.parseCocadaCsv()
 
         groups = list(rowsByType.items())
@@ -229,15 +223,9 @@ class ProtCocadaInteractions(EMProtocol):
             rawCsv = self._getExtraPath(os.path.basename(csvPath))
             shutil.copyfile(csvPath, rawCsv)
 
-            # The "Residue interaction view" viewer expects one row per residue pair
-            # (Chain1,Residue1,Chain2,Residue2,Min distance), not the raw per-atom COCADA rows.
             summaryCsv = self.buildResiduePairsCsv(rowsByType)
             outPockets.setInteractingResiduesFile(summaryCsv)
 
-            # Keep the raw per-atom, per-type COCADA csv reachable from the set (used by the
-            # "PyMol (COCADA bonds)" view below) without adding a new field to the shared
-            # StructROI/SetOfStructROIs classes: same ad-hoc attribute pattern already used by
-            # StructROI itself for e.g. _maeFile/_adPoints.
             outPockets._cocadaContactsFile = String(os.path.relpath(rawCsv))
 
             bondsPml = self.buildBondsPml(rowsByType)
@@ -263,6 +251,23 @@ class ProtCocadaInteractions(EMProtocol):
         return errors
 
     # --------------------------- UTILS functions -----------------------------------
+    def getCifFile(self):
+        '''Default path of the cif file converted from the input AtomStruct in convertInputStep.
+        Used instead of storing the path in self between steps, since plain attributes set in one
+        step are not persisted if the protocol is stopped and resumed later.'''
+        return os.path.abspath(self._getExtraPath('inputStructure.cif'))
+
+    def getCocadaOutDir(self):
+        '''Default directory where COCADA writes its output when computing the contacts'''
+        return os.path.abspath(self._getExtraPath('cocada_output'))
+
+    def getComputedCsvPath(self):
+        '''Find the contacts CSV produced by runCocadaStep in its default output directory
+        (glob because COCADA names the file after the input, not with a fixed name). Recomputed
+        on demand instead of cached in self, for the same reason as getCifFile.'''
+        matches = glob.glob(os.path.join(self.getCocadaOutDir(), '*_contacts.csv'))
+        return matches[0] if matches else None
+
     def getChainsArg(self):
         '''Parse the chainsParam value into a comma-separated list of chain ids for COCADA's -c
         flag. Accepts either a plain "A,B" string typed by the user or the JSON dictionary
@@ -297,7 +302,7 @@ class ProtCocadaInteractions(EMProtocol):
         computed by runCocadaStep, depending on the selected cocadaMode'''
         if self.cocadaMode.get() == RUN_MODE_IMPORT:
             return self.cocadaCsv.get()
-        return self.computedCsvPath
+        return self.getComputedCsvPath()
 
     def parseCocadaCsv(self):
         '''Group the rows of the COCADA csv by interaction Type'''
@@ -332,7 +337,7 @@ class ProtCocadaInteractions(EMProtocol):
         # Build with proteinFile=None so the constructor does not auto-recalculate contacts by
         # distance; the exact COCADA contacts are set explicitly right below instead.
         pocket = StructROI(pocketFile, proteinFile=None, pClass='COCADA')
-        pocket.setProteinFile(self.cifFile)
+        pocket.setProteinFile(self.getCifFile())
         pocket.setContactAtoms('-'.join(natural_sort(list(atomIds))))
         pocket.setContactResidues('-'.join(natural_sort(list(resIds))))
         pocket.setVolume(pocket.getPocketVolume())
@@ -437,7 +442,7 @@ class ProtCocadaInteractions(EMProtocol):
         sticksSel = self.getInterfaceStickSelection(rowsByType)
 
         lines = [
-            'load {}'.format(self.cifFile),
+            'load {}'.format(self.getCifFile()),
             'hide everything',
             'show cartoon',
             'color grey80',
