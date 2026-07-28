@@ -305,18 +305,9 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
                             'plip_ppi_{}_{}'.format(chainA, chainB))
       os.makedirs(outDir, exist_ok=True)
 
-      # PLIP's own PDB parser (plip.structure.preparation.PDBParser.fix_pdbline) assumes fixed
-      # PDB column widths and chokes on COCADA's .cif protein file (getProteinFile()), so it
-      # needs converting to .pdb first regardless of the original AtomStruct format.
       structFile = pdbFromASFile(os.path.abspath(molObj.getProteinFile()),
                                  os.path.join(outDir, 'plip_input.pdb'))
 
-      # PLIP protein-protein interactions mode: --chains "[[A],[B]]" (see
-      # https://plip-tool.biotec.tu-dresden.de/plip-web/plip/help#section-interactions). PLIP's
-      # CLI internally still labels the two groups "receptor"/"ligand", but for COCADA's
-      # protein-protein contacts this is a plain pair of chains, not a ligand-receptor pair, so
-      # a single explicit pair is used instead of --inter/--peptides (which would default to
-      # checking one chain against every other chain in the structure).
       chainsArg = "[[{}],[{}]]".format(chainA, chainB)
       args = '-f {} --chains "{}" -y -o {}'.format(structFile, chainsArg, outDir)
       pwchemPlugin.runPLIP(args, cwd=outDir)
