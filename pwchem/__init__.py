@@ -65,6 +65,7 @@ class Plugin(pwem.Plugin):
 
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
+        cls.addCocadaPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -78,6 +79,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
+        cls._defineEmVar(COCADA_DIC['home'], cls.getEnvName(COCADA_DIC))
 
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
@@ -323,6 +325,20 @@ class Plugin(pwem.Plugin):
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
 
+    @classmethod
+    def addCocadaPackage(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(COCADA_DIC['name'], packageHome=cls.getVar(COCADA_DIC['home']),
+                                                            packageVersion=COCADA_DIC['version'])
+
+        # COCADA requires numpy>=2.0.1 and psutil>=6.0.0, so it needs its own conda env
+        zipName = f"COCaDA-{COCADA_DIC['version']}.zip"
+        installer.getExtraFile(f"https://github.com/LBS-UFMG/COCaDA/archive/refs/tags/v{COCADA_DIC['version']}.zip",
+                               'COCADA_DOWNLOADED', fileName=zipName)\
+            .addCommand(f'unzip -o {zipName} && rm {zipName}', 'COCADA_EXTRACTED')\
+            .getCondaEnvCommand(pythonVersion='3.11', requirementList=["'numpy>=2.0.1'", "'psutil>=6.0.0'"])\
+            .addPackage(env, dependencies=['wget', 'conda', 'unzip'], default=default)
+
     ##################### RUN CALLS ######################
     @classmethod
     def runScript(cls, protocol, scriptName, args, env, cwd=None, popen=False, wait=True, scriptDir=None, pyStr='python'):
@@ -375,6 +391,13 @@ class Plugin(pwem.Plugin):
     def runACPYPE(cls, protocol, program='acpype', args=None, cwd=None, popen=False, silent=True):
         """ Run ACPYPE command from a given protocol. """
         cls.runCondaCommand(protocol, args, MDTRAJ_DIC, program, cwd, popen, silent)
+
+    @classmethod
+    def runCocada(cls, protocol, args, cwd=None):
+        """ Run COCADA (cocada.py) from a given protocol. Must be run from the COCADA source
+        directory, since it imports its own src package relative to the working directory. """
+        cocadaDir = cls.getProgramHome(COCADA_DIC, f"COCaDA-{COCADA_DIC['version']}")
+        cls.runCondaCommand(protocol, args, COCADA_DIC, 'python cocada.py', cwd=cwd or cocadaDir)
 
     @classmethod
     def runPLIP(cls, args, cwd=None):
