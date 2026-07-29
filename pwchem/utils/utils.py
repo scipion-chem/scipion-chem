@@ -201,10 +201,13 @@ def organizeThreads(nTasks, nThreads):
       subsets[i % nTasks] += 1
   return subsets
 
-def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime=1, popen=False, **kwargs):
+def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime=1, popen=False, gpuIdx=None, **kwargs):
   fullProgram = programPath
   if envDic:
     fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {programPath} '
+
+  if gpuIdx:
+    fullProgram = f'CUDA_VISIBLE_DEVICES={gpuIdx} {fullProgram}'
 
   i, finished = 1, False
   while not finished and i <= nMax:
@@ -215,7 +218,8 @@ def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime
         subprocess.check_call(f'{fullProgram} {progArgs}', shell=True, **kwargs)
 
       finished = True
-    except Exception:
+    except Exception as e:
+      print('Program run failed with exception: ', e)
       i += 1
       time.sleep(sleepTime)
 
