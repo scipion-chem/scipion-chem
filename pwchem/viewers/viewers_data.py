@@ -190,9 +190,10 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
                   label='Display Atom Struct set in table format: ',
                   help='Display the Atom Struct set in the set in table format with their respective attributes')
     structs = self.getStructSet()
-    data = structs._getData()
-    if data:
-        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+    if hasattr(structs, '_getData'):
+        data = structs._getData()
+        if data:
+            BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
   def _getVisualizeDict(self):
       d = {

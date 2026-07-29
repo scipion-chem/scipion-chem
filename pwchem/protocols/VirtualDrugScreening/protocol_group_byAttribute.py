@@ -31,7 +31,75 @@ from pyworkflow.protocol import params
 
 
 class ProtChemGroupByAtt(EMProtocol):
-    """Group sets by attribute."""
+    """
+    AI Generated:
+
+    This protocol is used to group elements of a Scipion EMSet based on the value
+    of a selected attribute. It splits an input dataset into multiple subsets,
+    where each subset contains items sharing the same value for a given field.
+
+    The protocol is generic and can be applied to different types of EMSets
+    (e.g., small molecules, particles, features), as long as they contain a
+    consistent attribute used for grouping.
+
+    Core Concepts
+    -------------
+    Input Set:
+        Any Scipion EMSet containing objects with accessible attributes.
+
+    Grouping Attribute:
+        A user-defined field (column) of the input objects used to partition the
+        dataset into groups (e.g., pocketId, chainId, score, label).
+
+    Grouped Output Sets:
+        Multiple EMSets generated from the original one, each corresponding to a
+        unique value of the grouping attribute.
+
+    Attribute Access:
+        Attributes may be stored as direct values or wrapped objects (e.g., Scipion
+        attribute containers), requiring flexible extraction.
+
+    Workflow
+    --------
+    1. Input EMSet is provided by the user.
+    2. User selects an attribute to group by (refColumn).
+    3. All unique values of the selected attribute are extracted.
+    4. For each unique value:
+       a. A new output directory is created.
+       b. A new empty EMSet is initialized.
+       c. Input items are iterated and filtered by attribute value.
+       d. Matching items are cloned into the corresponding group set.
+    5. Each grouped EMSet is saved as an independent output.
+    6. Source relationships between input and outputs are recorded.
+
+    Grouping Logic
+    --------------
+    - The grouping is based on exact equality of attribute values.
+    - Values are collected into a sorted unique list before processing.
+    - Each group is independent and preserves original item metadata.
+
+    Attribute Handling
+    ------------------
+    The protocol supports two attribute access patterns:
+    - Direct attribute values (e.g., int, str, float)
+    - Wrapped Scipion objects requiring `.get()` extraction
+
+    Output
+    ------
+    - outputSet0, outputSet1, ...:
+        Multiple EMSet objects, one per unique attribute value.
+
+    Each output set contains:
+        - Cloned items from the input set
+        - Original metadata preserved via copyInfo()
+
+    Use Cases
+    ---------
+    - Grouping ligands by pocket or binding site
+    - Splitting datasets by classification labels
+    - Organizing results by score thresholds or categories
+    - Preparing subsets for downstream analysis or visualization
+    """
     _label = 'group by attribute'
 
     def _defineParams(self, form):

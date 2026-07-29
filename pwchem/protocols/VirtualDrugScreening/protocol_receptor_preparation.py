@@ -34,7 +34,104 @@ from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import OPENBABEL_DIC
 
 class ProtChemPrepareReceptor(EMProtocol):
-    """Prepare receptor by removing HETATM atoms, waters, keeping only specific chains..."""
+    """
+    AI Generated:
+
+This protocol is used to prepare protein receptor structures for molecular
+modeling tasks such as docking, virtual screening, and pharmacophore-based
+analysis.
+
+It performs a systematic cleaning and optional repair of an input macromolecular
+structure to ensure compatibility with downstream computational chemistry tools.
+
+Overview
+--------
+Protein structures obtained from experimental sources (e.g. PDB files) often
+contain artifacts such as:
+
+- Crystallographic water molecules
+- Co-crystallized ligands (HETATM records)
+- Missing atoms or residues
+- Non-standard amino acids
+- Inconsistent chain annotations
+
+This protocol standardizes and cleans the input receptor structure while
+preserving user-defined biological components.
+
+Workflow
+--------
+The receptor preparation pipeline consists of two main stages:
+
+1. Optional structure repair (PDBFixer stage)
+   - Addition of missing atoms (heavy atoms, hydrogens, or all atoms)
+   - Addition of missing residues
+   - Replacement of non-standard amino acids
+   - Optional post-fix cleanup of unwanted HETATM entries
+
+2. Structural cleaning and filtering
+   - Removal of water molecules
+   - Removal of ligands and heteroatoms (HETATM records)
+   - Optional retention of selected heteroatom groups
+   - Optional selection of specific chains or model-chain pairs
+   - Application of custom filtering rules via parsing utilities
+
+Chain and Ligand Selection
+--------------------------
+Users can restrict the receptor to specific structural components:
+
+- Chain filtering:
+  Only selected chains (or model-chain combinations) are retained,
+  enabling focused receptor preparation for specific binding sites.
+
+- Heteroatom control:
+  Users may remove all HETATM records or selectively preserve certain
+  cofactors or ligands by specifying residue identifiers.
+
+PDBFixer Integration
+--------------------
+When enabled, the protocol uses PDBFixer to improve structural completeness:
+
+- Adds missing atoms (all, heavy, hydrogens, or none)
+- Reconstructs missing residues
+- Replaces non-standard residues with canonical amino acids
+- Produces a repaired intermediate structure before cleaning
+
+Optional extra cleaning ensures removal of incorrectly labeled HETATM entries
+after repair.
+
+Output
+------
+- outputStructure:
+    A cleaned and optionally repaired AtomStruct object representing the
+    prepared receptor.
+
+    The output structure is:
+    - Free of unwanted waters and ligands (if selected)
+    - Optionally chain-filtered
+    - Standardized for downstream modeling workflows
+    - Compatible with docking and scoring pipelines
+
+Key Features
+------------
+- Flexible receptor cleaning and filtering
+- Optional structural repair via PDBFixer
+- Chain- and residue-level selection control
+- Support for multiple input structural formats (PDB, MOL2, PDBQT, etc.)
+- Integration with OpenBabel and Scipion workflows
+
+Use Cases
+---------
+- Preparation of protein targets for molecular docking
+- Standardization of experimental PDB structures
+- Cleaning structures for pharmacophore modeling
+- Preprocessing step for virtual screening pipelines
+
+Notes
+-----
+- Over-cleaning may remove biologically relevant cofactors if not carefully configured
+- PDBFixer results depend on the completeness of the input structure
+- Chain selection requires correct model-chain annotation in the input file
+"""
     _label = 'target preparation'
     _program = ""
     def defineCleanParams(self, form, w=True, h=True, hk=True, c=True):

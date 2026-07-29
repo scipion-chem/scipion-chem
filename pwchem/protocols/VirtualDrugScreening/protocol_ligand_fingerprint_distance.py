@@ -53,10 +53,67 @@ def parseResults(outputFile):
 
 class ProtocolFingerprintDistance(ProtocolShapeDistances):
     """
-    Perform 2D molecular descriptors comparison between a set of molecules and a target molecule.
-    Fingerprints are calculated for all compounds (MACCS or Morgan) and
-    compared through a similarity coefficient (Tanimoto or Dice) which ranges from 0 (no similarity) to 1 (top similarity).
-    The output is expressed as distance (1-similarity)
+    AI Generated:
+
+    This protocol computes the 2D fingerprint-based distance between a reference molecule
+    and a set of small molecules.
+
+    It is used to quantify structural similarity in terms of molecular fingerprints,
+    providing a simple numerical measure of how chemically similar compounds are.
+
+    Core Concept
+    ------------
+    Molecular fingerprints:
+        Binary or hashed representations of molecular structure capturing the presence
+        of chemical substructures (e.g. rings, functional groups).
+
+    Similarity metrics:
+        Fingerprints are compared using similarity coefficients (Tanimoto or Dice),
+        which produce values between 0 (completely different) and 1 (identical).
+
+    Distance transformation:
+        Similarity is converted into distance as:
+            distance = 1 - similarity
+
+    Fingerprint Types
+    ------------------
+    Morgan:
+        Circular fingerprints capturing local atomic environments.
+
+    MACCS:
+        Key-based structural fingerprints based on predefined substructures.
+
+    Both:
+        Runs both fingerprint types for comparison.
+
+    Similarity Coefficients
+    -----------------------
+    Tanimoto:
+        Measures overlap between fingerprint sets; widely used in chemoinformatics.
+
+    Dice:
+        Similar to Tanimoto but gives slightly different weighting to shared features.
+
+    Workflow
+    --------
+    1. Input a set of small molecules.
+    2. Select a reference molecule.
+    3. Compute molecular fingerprints for all compounds.
+    4. Compare each molecule to the reference using the selected coefficient.
+    5. Convert similarity values into distances.
+    6. Store results as tab-separated output files.
+
+    Output
+    ------
+    - TSV file containing fingerprint distances for each molecule.
+    - Summary file aggregating all computed distances.
+
+    Use Cases
+    ---------
+    - Ligand-based virtual screening
+    - Chemical library diversity analysis
+    - Lead compound similarity assessment
+    - Clustering of small molecule datasets
     """
     _label = 'Fingerprint distance'
     _fpChoices = ['Morgan', 'MACCS', 'Both']

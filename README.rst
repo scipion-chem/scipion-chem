@@ -33,23 +33,23 @@ OR
 
             git clone https://github.com/scipion-chem/scipion-chem.git
 
-2. **Switch to the desired branch** (master or devel):
+2. **Switch to the desired branch** (main as default):
 
 Scipion-chem is constantly under development.
-If you want a relatively older an more stable version, use master branch (default).
-If you want the latest changes and developments, user devel branch.
+If you want a relatively older an more stable version, use main branch (default).
+If you want the latest changes and developments, use the desired branch.
 
 .. code-block::
 
             cd scipion-chem
-            git checkout devel
+            git checkout main
 
 3. **Install**:
 The following comand will launch the installation of the plugin, together with some third-party programs
 
 .. code-block::
 
-            scipion3 installp -p path_to_scipion-chem --devel
+            scipion3 installp -p . --devel
 
 - **External software**
 

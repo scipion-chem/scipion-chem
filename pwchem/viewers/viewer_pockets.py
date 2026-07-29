@@ -61,7 +61,8 @@ class StructROIPointsViewer(pwviewer.Viewer):
   # _targets = [SetOfPockets]
 
   def _visualize(self, obj, bBox=False, **kwargs):
-    if not hasattr(obj, '_hetatmFile') or not getattr(obj, '_hetatmFile'):
+    objProtId, fileProtId = obj.getProtocolId(), obj.getHetatmFileProtId()
+    if objProtId != fileProtId or not fileProtId:
         obj.buildPDBhetatmFile()
     pmlFile = obj.createPML(bBox=bBox)
 
@@ -130,9 +131,10 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
                       help='Display min distance labels on the connecting lines.')
 
     structs = self.getOutPockets()
-    data = structs._getData()
-    if data:
-        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+    if hasattr(structs, '_getData'):
+        data = structs._getData()
+        if data:
+            BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
   def _getVisualizeDict(self):
     d = {

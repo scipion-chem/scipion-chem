@@ -35,7 +35,78 @@ from pwchem.objects import SequenceVariants
 
 
 class ProtChemImportVariants(EMProtocol):
-    """Extract natural variants from uniprot or associates a mutation list to a sequence """
+    """
+    AI Generated:
+
+    This protocol is used to import a protein sequence together with its natural or user-defined
+    variants, generating a SequenceVariants object for downstream analysis.
+
+    The protocol supports two main workflows:
+    1) Importing natural variants from UniProt (via XML annotations)
+    2) Importing or defining custom mutation lists associated with a sequence
+
+    Overview
+    --------
+    The protocol retrieves a reference protein sequence and associates it with a set of variants
+    (mutations, lineages, or strain-specific changes). These variants are stored in a structured
+    SequenceVariants object that can be used for further comparative or structural analysis.
+
+    Input
+    -----
+    fromID:
+        If True, variants are downloaded and parsed from UniProt using a UniProtKB identifier.
+        If False, variants are loaded from a local sequence and mutation file.
+
+    inputUniProtKB:
+        UniProt accession ID used to retrieve sequence and natural variants.
+
+    inputSequence:
+        Input Sequence object used when importing custom variants.
+
+    inputMutaList:
+        File containing user-defined mutations or variant definitions.
+
+    Workflow
+    --------
+    UniProt mode (fromID = True):
+    1. Download FASTA sequence from UniProt
+    2. Download UniProt XML annotation file
+    3. Parse XML to extract sequence variant annotations
+    4. Convert extracted variants into a structured text file
+    5. Build Sequence and SequenceVariants objects
+    6. Link variants to the reference sequence
+
+    Custom mode (fromID = False):
+    1. Read input sequence
+    2. Read mutation file
+    3. Detect format type (simple or complete mutation definitions)
+    4. Normalize mutation list if necessary
+    5. Build SequenceVariants object from custom definitions
+    6. Link variants to the reference sequence
+
+    Output
+    ------
+    outputVariants:
+        SequenceVariants object containing:
+        - Reference protein sequence
+        - Associated variant definitions (natural or custom)
+        - Parsed mutation/lineage information
+
+    Key Features
+    ------------
+    - Imports natural variants directly from UniProt annotations
+    - Supports user-defined mutation lists (simple or complex formats)
+    - Automatically links variants to a reference sequence
+    - Handles both FASTA and XML UniProt data sources
+    - Converts raw mutation annotations into structured variant representations
+
+    Notes
+    -----
+    - UniProt XML parsing extracts sequence variant features from annotated regions
+    - Custom mutation format supports both single mutations (e.g., L5F)
+      and multi-mutation lineage definitions
+    - Output is compatible with SequenceVariants-based analysis workflows
+    """
     _label = 'Import sequence variants'
 
     def _defineParams(self, form):
