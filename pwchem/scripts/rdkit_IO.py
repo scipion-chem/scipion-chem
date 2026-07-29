@@ -31,6 +31,7 @@ Mainly used for parsinf mae files (which openbabel is not able to read)'''
 import sys, os, argparse, shutil, gzip, threading
 from rdkit import Chem
 from rdkit.Chem import AllChem
+import csv
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from scriptUtils import *
@@ -92,7 +93,15 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
     elif ext == 'smi' or ext == 'smiles':
         with open(inFile) as f:
             for line in f:
-                smi, name = line.strip().split()
+                if not line.strip():
+                    continue
+                  
+                values = line.strip().split('\t')
+                if len(values) >= 2:
+                    smi, name = values[0], values[1]
+                else:
+                    smi, name = values[0], os.path.basename(os.path.splitext(inFile)[0])
+                
                 mol = Chem.MolFromSmiles(smi)
                 if mol:
                     mol.SetProp(nameKey, name)
@@ -141,6 +150,21 @@ def make3DCoords(mols, mols3dLists, it, errBase):
         mols3dLists[it].append(mol2)
     return mols3dLists[it]
 
+def loadInputFiles(inputFile, nameKey):
+    ext = os.path.splitext(inputFile)[1].lower()
+
+    if ext == ".txt":
+        mols = []
+        with open(inputFile) as f:
+            files = [line.strip() for line in f if line.strip()]
+
+        for fpath in files:
+            m, _ = getMolsFromFile(fpath, nameKey=nameKey)
+            mols.extend(m)
+
+        return mols, "_Name"
+    return getMolsFromFile(inputFile, nameKey=nameKey)
+
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputFilename <mol(s)File> -of/--outputFormat <outputFormat> 
     -o/--outputName [<outputName>] [<outputDirectory>] 
@@ -181,20 +205,48 @@ if __name__ == "__main__":
     nameKey = args.nameKey
     nt = args.nthreads
 
-    mols, nameKey = getMolsFromFile(inputFile, nameKey=nameKey)
+    mols, nameKey = loadInputFiles(inputFile, nameKey)
     if len(mols) > 0:
         if make3d:
             mols = performBatchThreading(make3DCoords, mols, nt, cloneItem=False,
                                          errBase=os.path.join(outDir, 'errors3D'))
 
-        if outFormat == 'smi' or outFormat == 'smiles':
-            writter, ext = Chem.SmilesWriter, 'smi'
-        elif outFormat == 'pdb':
-            writter, ext = Chem.PDBWriter, 'pdb'
+        if outFormat in ["smiles_csv", "csv", "smi_csv"]:
+            outFile = os.path.abspath(os.path.join(outDir, '{}.csv'.format(outName or 'molecules')))
+            allRows = []
+            for i, mol in enumerate(mols):
+                if not mol:
+                    continue
+                try:
+                    Chem.SanitizeMol(mol)
+                    mol = Chem.RemoveHs(mol)
+                except:
+                    continue
+                if mol.HasProp(nameKey):
+                    name = mol.GetProp(nameKey)
+                else:
+                    name = '{}_{}'.format(outBase, i + 1)
+                smiles = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+                allRows.append({
+                    "smiles": smiles,
+                    "name": name
+                })
+            with open(outFile, "w", newline="") as f:
+                writer = csv.DictWriter(f,fieldnames=["smiles", "name"])
+                writer.writeheader()
+                writer.writerows(allRows)
+            print("SMILES CSV saved to:", outFile)
+            sys.exit(0)
         else:
-            writter, ext = Chem.SDWriter, 'sdf'
+            if outFormat == 'smi' or outFormat == 'smiles':
+                writter, ext = Chem.SmilesWriter, 'smi'
+            elif outFormat == 'pdb':
+                writter, ext = Chem.PDBWriter, 'pdb'
+            else:
+                writter, ext = Chem.SDWriter, 'sdf'
 
         if singleOutFile:
+            outName = outName.replace(' ', '_')
             outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
             with writter(outFile) as f:
                 for mol in mols:
@@ -209,10 +261,9 @@ if __name__ == "__main__":
                         molName = mol.GetProp(nameKey)
                     else:
                         molName = '{}_{}'.format(outBase, i+1)
-                    molName = molName.replace('/', '-')
+                    molName = molName.replace('/', '-').replace(' ', '_')
                     outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
                     with writter(outFile) as f:
                         f.write(mol)
-
 
 

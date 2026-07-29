@@ -47,9 +47,138 @@ extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles'
 
 class ConvertStructures(EMProtocol):
     """
-    Convert a set of input ligands or a protein structure to a specific file format
-    """
+    AI Generated:
 
+    Protocol to convert molecular and structural data between different file formats.
+
+    This tool supports three major input types:
+    - Small molecules (SetOfSmallMolecules)
+    - Macromolecular structures (AtomStruct)
+    - Molecular dynamics systems (MDSystem)
+
+    It provides format conversion using RDKit, OpenBabel, or MDTraj depending on
+    the input type and user configuration.
+
+    Inputs
+    ------
+    inputObject:
+        The object to be converted. It can be:
+        - SetOfSmallMolecules: ligand collections
+        - AtomStruct: protein or macromolecular structure
+        - MDSystem: molecular dynamics system (structure + topology + trajectory)
+
+    Small molecule conversion
+    -------------------------
+    outputFormatSmall:
+        Target format for ligand conversion:
+        - PDB
+        - Mol2
+        - SDF
+        - Smiles
+
+    usePose:
+        Whether to use docked ligand poses instead of original ligand files.
+
+    useManager:
+        Conversion backend:
+        - RDKit
+        - OpenBabel
+
+    Structure conversion (AtomStruct)
+    ----------------------------------
+    outputFormatTarget:
+        Output format for macromolecular structures:
+        - PDB
+        - CIF
+
+    MD system conversion
+    --------------------
+    convSysFile:
+        Convert system coordinate file.
+
+    outputSysFormat:
+        Output format for system structure (currently PDB only supported).
+
+    convTopFile:
+        Convert topology file.
+
+    outputTopFormat:
+        Target topology format:
+        - PSF
+        - TOP
+        - PRMTOP
+
+    convTrjFile:
+        Convert trajectory file.
+
+    outputTrjFormat:
+        Supported trajectory formats:
+        - DCD, GRO, NETCDF, PDB, TRR, XTC
+
+    Workflow
+    --------
+    1. Input type detection
+       - Determines whether input is small molecules, structure, or MD system.
+
+    2. Small molecules conversion
+       - Iterates over ligand set
+       - Extracts ligand file (pose or original)
+       - Converts using RDKit or OpenBabel scripts
+       - Writes converted file per molecule
+       - Creates new SetOfSmallMolecules with updated file paths
+       - Tracks conversion failures
+
+    3. AtomStruct conversion
+       - Converts between PDB and CIF formats
+       - Uses Scipion utilities (toPdb / toCIF)
+       - Copies file if already in correct format
+
+    4. MDSystem conversion
+       - Optionally converts:
+         a) system coordinates (MDTraj)
+         b) topology file (MDTraj + optional GROMACS support)
+         c) trajectory file (MDTraj)
+       - Reconstructs MDSystem object with updated components
+
+    Output
+    ------
+    outputSmallMolecules:
+        Converted ligand dataset (if input is SetOfSmallMolecules)
+
+    outputStructure:
+        Converted macromolecular structure (if input is AtomStruct)
+
+    outputSystem:
+        Converted molecular dynamics system (if input is MDSystem)
+
+    Error handling
+    --------------
+    - Tracks failed ligand conversions
+    - Prints list of molecules that could not be processed
+    - Skips invalid formats with explicit exception
+
+    Validation
+    ----------
+    - Ensures correct structure type is provided
+    - Ensures compatible file formats for conversion
+    - Requires valid input files for each system component
+
+    Summary
+    -------
+    This protocol provides a unified conversion interface for:
+    - Ligand datasets
+    - Protein structures
+    - Molecular dynamics simulations
+
+    It integrates RDKit, OpenBabel, and MDTraj workflows into a single
+    Scipion-compatible pipeline component.
+
+    Notes
+    -----
+    - Conversion quality depends on backend tool (RDKit/OpenBabel/MDTraj).
+    - Some formats may require external dependencies (e.g., GROMACS topology support).
+    - Designed for interoperability between structural biology and cheminformatics workflows.
+    """
     _label = 'Convert structure format'
     _program = ""
 
@@ -163,49 +292,52 @@ class ConvertStructures(EMProtocol):
         elif isinstance(self.inputObject.get(), MDSystem):
             inSystem = self.inputObject.get()
             sysFile = inSystem.getSystemFile()
-
+            topFile = inSystem.getTopologyFile()
+            convScript = 'mdtraj_IO.py'
+            # Convert system pdb
             if self.convSysFile.get():
                 outDir = os.path.abspath(self._getExtraPath())
                 fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                 outFormat = self.getEnumText('outputSysFormat').lower()
-                fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
+                sysOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                args = ' -s {} -o {}'.format(os.path.abspath(sysFile), fnOut) # no traj so convert system
-                Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
-                sysFile = fnOut
+                args = ' -s {} -os {}'.format(os.path.abspath(sysFile), sysOut)
+                Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
+                sysFile = sysOut
 
-            outSystem = MDSystem(filename=sysFile)
-            outSystem.setSystemFile(sysFile)
-            
+            outSystem = MDSystem(filename=sysFile, topFile=topFile, systemName=sysFile)
+
+            # Convert topology
             if inSystem.hasTopology():
-                topFile = inSystem.getTopologyFile()
-                
+                topOut = inSystem.getTopologyFile()
                 if self.convTopFile.get():
+                    outDir = os.path.abspath(self._getExtraPath())
+                    outFormat = self.getEnumText('outputTopFormat').lower()
+                    topOut = os.path.join(outDir, '{}.{}'.format(getBaseName(topFile), outFormat))
+
+                    args = ' -top {} -otop {}'.format(os.path.abspath(topFile), topOut)
+
                     if topFile.endswith('.top') and importlib.util.find_spec('gromacs'):
                         from gromacs import Plugin as gromacsPlugin
-                        from gromacs.constants import GROMACS_DIC
-                        parmed.gromacs.GROMACS_TOPDIR = gromacsPlugin._getLocation(GROMACS_DIC, marker='GROMACS_INSTALLED') + '/share/top'
+                        gromacsTopDir = os.path.join(gromacsPlugin.getHome(), 'share/top')
+                        args += ' -gtopdir {}'.format(gromacsTopDir)
 
-                    top = parmed.load_file(topFile)
-                    topFile = self._getExtraPath('{}.{}'.format(getBaseName(topFile),
-                                                                self.getEnumText('outputTopFormat').lower()))
-                    top.save(topFile)
-                outSystem.setTopologyFile(topFile)
-            
+                    Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
+                outSystem.setTopologyFile(topOut)
+
+            # Convert trajectory
             if inSystem.hasTrajectory():
-                trjFile = inSystem.getTrajectoryFile()
-
+                trajOut = inSystem.getTrajectoryFile()
                 if self.convTrjFile.get():
+                    trajFile = inSystem.getTrajectoryFile()
                     outDir = os.path.abspath(self._getExtraPath())
                     fnRoot = os.path.splitext(os.path.split(sysFile)[1])[0]
                     outFormat = self.getEnumText('outputTrjFormat').lower()
-                    fnOut = os.path.join(outDir, fnRoot + '.' + outFormat)
+                    trajOut = os.path.join(outDir, fnRoot + '.' + outFormat)
 
-                    args = ' -s {} -o {} -t {}'.format(os.path.abspath(sysFile), fnOut, os.path.abspath(trjFile))
-                    Plugin.runScript(self, 'mdtraj_IO.py', args, env=MDTRAJ_DIC, cwd=outDir)
-                    trjFile = fnOut
-
-                outSystem.setTrajectoryFile(trjFile)
+                    args = ' -s {} -t {} -otj {}'.format(os.path.abspath(sysFile), os.path.abspath(trajFile), trajOut)
+                    Plugin.runScript(self, convScript, args, env=MDTRAJ_DIC, cwd=outDir)
+                outSystem.setTrajectoryFile(trajOut)
 
             self._defineOutputs(outputSystem=outSystem)
             self._defineSourceRelation(self.inputObject, outSystem)

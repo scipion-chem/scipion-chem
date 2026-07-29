@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, json
+import os, json, shutil
 
 from pyworkflow.protocol import params
 from pwem.objects.data import AtomStruct
@@ -31,9 +31,107 @@ from pwem.protocols import EMProtocol
 
 from pwchem.utils import cleanPDB, getBaseName, removeStartWithLines
 from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import OPENBABEL_DIC
 
 class ProtChemPrepareReceptor(EMProtocol):
-    """Prepare receptor by removing HETATM atoms, waters, keeping only specific chains..."""
+    """
+    AI Generated:
+
+This protocol is used to prepare protein receptor structures for molecular
+modeling tasks such as docking, virtual screening, and pharmacophore-based
+analysis.
+
+It performs a systematic cleaning and optional repair of an input macromolecular
+structure to ensure compatibility with downstream computational chemistry tools.
+
+Overview
+--------
+Protein structures obtained from experimental sources (e.g. PDB files) often
+contain artifacts such as:
+
+- Crystallographic water molecules
+- Co-crystallized ligands (HETATM records)
+- Missing atoms or residues
+- Non-standard amino acids
+- Inconsistent chain annotations
+
+This protocol standardizes and cleans the input receptor structure while
+preserving user-defined biological components.
+
+Workflow
+--------
+The receptor preparation pipeline consists of two main stages:
+
+1. Optional structure repair (PDBFixer stage)
+   - Addition of missing atoms (heavy atoms, hydrogens, or all atoms)
+   - Addition of missing residues
+   - Replacement of non-standard amino acids
+   - Optional post-fix cleanup of unwanted HETATM entries
+
+2. Structural cleaning and filtering
+   - Removal of water molecules
+   - Removal of ligands and heteroatoms (HETATM records)
+   - Optional retention of selected heteroatom groups
+   - Optional selection of specific chains or model-chain pairs
+   - Application of custom filtering rules via parsing utilities
+
+Chain and Ligand Selection
+--------------------------
+Users can restrict the receptor to specific structural components:
+
+- Chain filtering:
+  Only selected chains (or model-chain combinations) are retained,
+  enabling focused receptor preparation for specific binding sites.
+
+- Heteroatom control:
+  Users may remove all HETATM records or selectively preserve certain
+  cofactors or ligands by specifying residue identifiers.
+
+PDBFixer Integration
+--------------------
+When enabled, the protocol uses PDBFixer to improve structural completeness:
+
+- Adds missing atoms (all, heavy, hydrogens, or none)
+- Reconstructs missing residues
+- Replaces non-standard residues with canonical amino acids
+- Produces a repaired intermediate structure before cleaning
+
+Optional extra cleaning ensures removal of incorrectly labeled HETATM entries
+after repair.
+
+Output
+------
+- outputStructure:
+    A cleaned and optionally repaired AtomStruct object representing the
+    prepared receptor.
+
+    The output structure is:
+    - Free of unwanted waters and ligands (if selected)
+    - Optionally chain-filtered
+    - Standardized for downstream modeling workflows
+    - Compatible with docking and scoring pipelines
+
+Key Features
+------------
+- Flexible receptor cleaning and filtering
+- Optional structural repair via PDBFixer
+- Chain- and residue-level selection control
+- Support for multiple input structural formats (PDB, MOL2, PDBQT, etc.)
+- Integration with OpenBabel and Scipion workflows
+
+Use Cases
+---------
+- Preparation of protein targets for molecular docking
+- Standardization of experimental PDB structures
+- Cleaning structures for pharmacophore modeling
+- Preprocessing step for virtual screening pipelines
+
+Notes
+-----
+- Over-cleaning may remove biologically relevant cofactors if not carefully configured
+- PDBFixer results depend on the completeness of the input structure
+- Chain selection requires correct model-chain annotation in the input file
+"""
     _label = 'target preparation'
     _program = ""
     def defineCleanParams(self, form, w=True, h=True, hk=True, c=True):
@@ -65,16 +163,15 @@ class ProtChemPrepareReceptor(EMProtocol):
         form.addParam('inputAtomStruct', params.PointerParam, pointerClass="AtomStruct",
                       label='Atomic Structure: ', allowsNull=False,
                       help='It must be in pdb,mol2,pdbq,pdbqs,pdbqt format, you may use Schrodinger convert to change it')
-        self.defineCleanParams(form)
 
         pGroup = form.addGroup('PDBFixer')
         pGroup.addParam("usePDBFixer", params.BooleanParam, label='Use PDBFixer: ', default=False, important=True,
-                        help='Whether to use PDBFixer to further.')
+                        help='Whether to use PDBFixer to replace nonstandard residues or add missing atoms.')
         pGroup.addParam('addAtoms', params.EnumParam, default=0, condition="usePDBFixer",
                         label="Add missing atoms: ", choices=['All', 'Heavy', 'Hydrogen', 'None'],
                         help='Use PDBFixer to add the missing atoms specified in the PDB atomic structure')
         pGroup.addParam('addRes', params.BooleanParam, default=True,
-                        label="Add missing residues: ",  condition="usePDBFixer",
+                        label="Add missing residues: ", condition="usePDBFixer",
                         help='Use PDBFixer to add missing residues')
         pGroup.addParam('repNonStd', params.BooleanParam, default=False,
                         label="Replace non-standard residues: ", condition="usePDBFixer",
@@ -85,11 +182,26 @@ class ProtChemPrepareReceptor(EMProtocol):
                         help='Perform extra cleaning round after PDBFixer has been used. Sometimes, PDBFixer will '
                              'point out some HETATMS that were originally labeled as ATOM.')
 
+        self.defineCleanParams(form)
+
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.preparationStep)
         if self.usePDBFixer.get():
           self._insertFunctionStep(self.pdbFixerStep)
+        self._insertFunctionStep(self.preparationStep)
         self._insertFunctionStep(self.createOutputStep)
+
+    def pdbFixerStep(self):
+        addResStr = ' --add-residues' if self.addRes else ''
+        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
+        addAtomsStr = self.getEnumText("addAtoms").lower()
+
+        inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
+        outFile = self.getPdbfixerFile()
+        args = f'{inFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {outFile}'
+        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
+
+        if self.extraClean.get():
+          removeStartWithLines(outFile, 'HETATM')
 
     def preparationStep(self):
         chainModelIds = None
@@ -101,36 +213,38 @@ class ProtChemPrepareReceptor(EMProtocol):
                 chainModelIds = [mChain.strip() for mChain in chainJson["model-chain"].upper().split(',')]
 
         het2keep = self.het2keep.get().split(', ')
-        inFile = self.inputAtomStruct.get().getFileName()
+
+        if self.usePDBFixer.get():
+            inFile = self.getPdbfixerFile()
+        else:
+            inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         cleanFile = self.getCleanedFile()
         cleanPDB(inFile, cleanFile, self.waters.get(), self.HETATM.get(), chainModelIds, het2keep, singleModel=0)
 
-    def pdbFixerStep(self):
-        addResStr = ' --add-residues' if self.addRes else ''
-        repNStdStr = ' --replace-nonstandard' if self.repNonStd else ''
-        addAtomsStr = self.getEnumText("addAtoms").lower()
-
-        prepFile = self.getPreparedFile()
-        cleanFile = self.getCleanedFile()
-        args = f'{cleanFile} --add-atoms={addAtomsStr}{addResStr}{repNStdStr} --output {prepFile}'
-        pwchemPlugin.runOPENBABEL(self, 'pdbfixer', args=args, cwd=self._getExtraPath())
-
-        if self.extraClean.get():
-          removeStartWithLines(prepFile, 'HETATM')
-
     def createOutputStep(self):
-        fnOut = self.getPreparedFile() if self.usePDBFixer.get() else self.getCleanedFile()
-        fnOut = os.path.relpath(fnOut)
+        fnIn = self.getCleanedFile()
+        fnOut = self.getPreparedFile(fnIn)
+        shutil.copy(fnIn, fnOut)
         if os.path.exists(fnOut):
             target = AtomStruct(filename=fnOut)
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputAtomStruct, target)
 
-    def getPreparedFile(self):
+    def getPdbfixerFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
-        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}.pdb'))
+        return os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}.pdb'))
 
     def getCleanedFile(self):
         inFile = self.inputAtomStruct.get().getFileName()
+        if self.usePDBFixer.get():
+            ext = '.pdb'
+        else:
+            ext = os.path.splitext(inFile)[1]
+        return os.path.abspath(os.path.join(self._getExtraPath(), f'{getBaseName(inFile)}{ext}'))
+
+    def getPreparedFile(self, inFile):
         ext = os.path.splitext(inFile)[1]
-        return os.path.abspath(self._getPath(f'{getBaseName(inFile)}{ext}'))
+        return os.path.abspath(os.path.join(self._getPath(), f'{getBaseName(inFile)}{ext}'))
+
+    def getPymolBin(self):
+        return pwchemPlugin.getEnvPath(OPENBABEL_DIC, 'bin/pymol')

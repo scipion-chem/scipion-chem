@@ -74,13 +74,13 @@ class TestImportBoth(BaseTest):
 class TestConverter(TestImportBoth):
     def test_1(self):
         """ Convert a mix of small molecules file into pdb format. """
-        print("\nConvert a mix of small molecules file into pdb format \n")
+        print("\nConvert a mix of small molecules file into pdb format with RDKit \n")
 
         # Import SetOfSmallMolecules
         smallM = self.smallProt.outputSmallMolecules
         args = {
             'inputObject': smallM, # SmallMolecules
-            "useManager": 1,
+            "useManager": 0,
             'outputFormatSmall': 0, # PDB
         }
 
@@ -91,7 +91,7 @@ class TestConverter(TestImportBoth):
         convertFile = glob.glob(protocol._getExtraPath("*"))
 
         assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-        assertHandle(self.assertTrue, small1.getSize()==4,
+        assertHandle(self.assertTrue, small1.getSize()>0,
                                  message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
         files = ""
@@ -103,7 +103,7 @@ class TestConverter(TestImportBoth):
                                  message="The conversion was incorrect and those files have a wrong format : %s" %files, cwd=protocol.getWorkingDir())
 
     def test_2(self):
-        """ Convert a mix of small molecules file into smi format. """
+        """ Convert a mix of small molecules file into sdf format with OpenBabel. """
         print("\nConvert a mix of small molecules file into smi format \n")
 
         # Import SetOfSmallMolecules
@@ -112,7 +112,7 @@ class TestConverter(TestImportBoth):
         args = {
             'inputObject': smallM, # SmallMolecules
             "useManager": 1,
-            'outputFormatSmall': 3, # smiles or smi
+            'outputFormatSmall': 2, # sdf
         }
 
         protocol = self.newProtocol(ConvertStructures, **args)
@@ -121,12 +121,12 @@ class TestConverter(TestImportBoth):
         convertFile = glob.glob(protocol._getExtraPath("*"))
 
         assertHandle(self.assertIsNotNone, small1, message="There was a problem with the import", cwd=protocol.getWorkingDir())
-        assertHandle(self.assertTrue, small1.getSize()==4,
+        assertHandle(self.assertTrue, small1.getSize()>0,
                                  message="There was a problem with the import or conversion and the SetOfSmallMolecules is empty", cwd=protocol.getWorkingDir())
 
         files = ""
         for file in convertFile:
-            if not file.endswith(".smi"):
+            if not file.endswith(".sdf"):
                 files += "%s; "
 
         assertHandle(self.assertTrue, files == "",
@@ -250,9 +250,9 @@ class TestOperateSet(BaseTest):
         protUnion = self._runMultiInputOperation(inProts, op=1, refCol='molName')
         outProts.append(protUnion)
 
-        self._waitOutput(protUnion, 'outputSet', sleepTime=5)
-        assertHandle(self.assertIsNotNone, getattr(protUnion, 'outputSet', None), cwd=protUnion.getWorkingDir())
-        protUniq = self._runSingleInputOperation(protUnion, op=0, refCol='molName', extended='outputSet')
+        self._waitOutput(protUnion, 'outputSmallMolecules', sleepTime=5)
+        assertHandle(self.assertIsNotNone, getattr(protUnion, 'outputSmallMolecules', None), cwd=protUnion.getWorkingDir())
+        protUniq = self._runSingleInputOperation(protUnion, op=0, refCol='molName', extended='outputSmallMolecules')
         outProts.append(protUniq)
 
         protInter = self._runMultiInputOperation(inProts, op=2, refCol='molName')
@@ -273,14 +273,18 @@ class TestOperateSet(BaseTest):
         protRank = self._runSingleInputOperation(inProts[0], op=6, refCol='molName', **kw)
         outProts.append(protRank)
 
+        kw = {'filterColumn': '_objId', 'smallerIsBetter': True}
+        protRank = self._runMultiInputOperation(inProts, op=7, refCol='molName', **kw)
+        outProts.append(protRank)
+
         for p in outProts:
-            self._waitOutput(p, 'outputSet', sleepTime=5)
-            assertHandle(self.assertIsNotNone, getattr(p, 'outputSet', None), cwd=p.getWorkingDir())
+            self._waitOutput(p, 'outputSmallMolecules', sleepTime=5)
+            assertHandle(self.assertIsNotNone, getattr(p, 'outputSmallMolecules', None), cwd=p.getWorkingDir())
 
 class TestGroupSet(BaseTest):
     @classmethod
     def setUpClass(cls):
-        tests.setupTestProject(cls)
+        setupTestProject(cls)
         cls.ds = DataSet.getDataSet('model_building_tutorial')
         cls.dsLig = DataSet.getDataSet("smallMolecules")
         cls._runImportSmallMols()

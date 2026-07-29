@@ -639,13 +639,23 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
     outDir = os.path.abspath(os.path.dirname(sdfFile))
 
   if not os.path.exists(sdfFile) or overWrite:
-    args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
-           f'--outputName {baseName} --overWrite'
-    pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
-
+    done = False
+    if molFile.endswith('.pdbqt'):
+        try:
+          from autodock import Plugin as autodockPlugin
+          autodockPlugin.convertPDBQT2SDF(protocol, molFile, sdfFile)
+          done = True
+        except:
+          pass
+    if not done:
+      inMol = os.path.abspath(molFile)
+      if molFile.endswith('.cif'):
+        inMol = fixCifElementCase(inMol, outDir)
+      args = f' -i "{inMol}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
+             f'--outputName {baseName} --overWrite'
+      pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
   if addHydrogens:
     addHydrogensToMol(protocol, outDir, sdfFile)
-
 
   return sdfFile
 
@@ -899,7 +909,7 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
       struct = PDBParser().get_structure(structName, structFile)
       if singleModel is not None:
           struct = struct[singleModel]
-      io = PDBIO()
+      io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
       io.set_structure(struct)
       io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
 
@@ -1186,24 +1196,27 @@ def parseRMSDs(rmsdFile):
       rmsds.append(float(line.strip().split()[-1]))
   return rmsds
 
-def runRdkitRMSD(inputFiles):
-    refFile, targetFiles = inputFiles
-    programCall = 'python -m spyrmsd '
-    try:
-      result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                            programCall, retOut=True)
-    except:
-      try:
-        programCall = 'python -m spyrmsd -n '
-        result = pwchemPlugin.runCondaCommand(None, f'{refFile} {" ".join(targetFiles)}', RDKIT_DIC,
-                                              programCall, retOut=True)
-      except Exception as _:
-        result = ' '.join(['1000'] * len(targetFiles))
+def runRdkitRMSD(targetsTuple):
+    molName, targetFiles = targetsTuple
 
-    result = list(map(float, result.split()))
+    scriptName = 'rmsd_molecules.py'
+    programCall = f'python {pwchemPlugin.getScriptsDir(scriptName)}'
+    result = pwchemPlugin.runCondaCommand(None, f'{" ".join(targetFiles)}', RDKIT_DIC,
+                                          programCall, retOut=True)
+
+    result = {molName: list(map(float, eval(result)))}
     return result
 
-def runParallelRdkitRMSD(mols, referenceFile=None, nJobs=1):
+def runParallelRdkitRMSD(mols, nJobs=1):
+  molFileDic, _ = buildMolDic(mols)
+
+  iterInput = [(molName, targetFiles) for molName, targetFiles in molFileDic.items()]
+  rmsdLists = runInParallel(runRdkitRMSD, paramList=iterInput, jobs=nJobs)
+  rmsdDic = {k: v for d in rmsdLists for k, v in d.items()}
+
+  return rmsdDic
+
+def runParallelRdkitRMSDtoReference(mols, referenceFile=None, nJobs=1):
   molFileDic, _ = buildMolDic(mols)
   rmsdDic = {}
   for molName, targetFiles in molFileDic.items():
@@ -1486,15 +1499,7 @@ def createMSJDic(protocol):
 def getFilteredOutput(inSeqs, filtSeqNames, filtMolNames, filtScoreType, scThres):
   '''Filters the setofsequences (inSeqs) to return an array with the interacting molecules scores
   The array is formed only by filt(Seq/Mol)Names and over the scThres score threshold'''
-  data = inSeqs.getInteractScoresDic()
-  #data = {"entries": [ {"sequence": "...", "molecules": {...}}, ... ]}
-
-  intDic = {}
-  for entry in data.get("entries", []):
-      seqName = entry.get("sequence")
-      mols = entry.get("molecules", {})
-      intDic[seqName] = mols
-  #returns dic {seq:mol {...}}
+  intDic = inSeqs.getInteractScoresDic()
 
   seqNames, molNames, scoreTypes = inSeqs.getSequenceNames(), inSeqs.getInteractMolNames(), inSeqs.getScoreTypes()
   seqNames, molNames, scoreType = filterNames(seqNames, molNames, filtSeqNames, filtMolNames, scoreTypes, filtScoreType)
@@ -1540,13 +1545,12 @@ def filterScores(intAr, seqNames, molNames, scThres):
   return intAr, seqNames, molNames
 
 def formatInteractionsArray(intDic, seqNames, molNames, scoreType):
-  scoreKey = f"score_{scoreType}"
   intAr = np.zeros((len(seqNames), len(molNames)))
   for i, seqName in enumerate(seqNames):
     for j, molName in enumerate(molNames):
             try:
                 # get the numeric value for that score type
-                value = intDic[seqName][molName][scoreKey]
+                value = intDic[seqName][molName][scoreType]
             except KeyError:
                 # if missing, assign NaN
                 value = np.nan
@@ -1573,3 +1577,19 @@ def getReplaceCommand(file, inStr, repStr):
 
 def flipDic(dic):
   return {v:k for k, v in dic.items()}
+
+def fixCifElementCase(cifIn, outDir):
+  '''OpenBabel 3.1.1's mmCIF reader mis-parses uppercase two-letter type_symbols
+  (e.g. CL -> dummy atom). Biopython's MMCIFIO writes them uppercase, so
+  normalize _atom_site.type_symbol casing before OpenBabel conversion.'''
+  fixed = os.path.join(os.path.abspath(outDir), getBaseName(cifIn) + '_fixedcase.cif')
+  with open(cifIn) as fi, open(fixed, 'w') as fo:
+    for line in fi:
+      if line.startswith(('ATOM', 'HETATM')):
+        parts = line.split()
+        if len(parts) > 2:
+          parts[2] = parts[2].capitalize()      # type_symbol: CL -> Cl, C -> C
+        fo.write(' '.join(parts) + '\n')
+      else:
+        fo.write(line)
+  return fixed

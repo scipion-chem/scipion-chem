@@ -66,9 +66,94 @@ def normalizeDictValues(d, normRange=[0, 1]):
 
 class ProtocolRankDocking(EMProtocol):
     """
-    Executes the rank scoring to combine different origin docked molecules scores.
-    The rank score will be defined by the ranking from the different docking scores for each set.
-    """
+    AI Generated:
+
+This protocol is used to rank a set of docked molecules coming from different origins.
+These molecules may originate from different docking runs, scoring functions, or protocols.
+
+The goal is to combine heterogeneous docking results into a unified consensus ranking,
+based on the relative performance of each molecule across all input sources.
+
+Overview
+--------
+Docking protocols often produce multiple independent ranked lists of ligand poses.
+Each list may use different scoring functions and may not be directly comparable.
+
+This protocol addresses that problem by:
+
+- Aggregating multiple docking result sets
+- Converting raw scores into normalized rankings
+- Computing a consensus "voting score" per molecule
+- Optionally weighting contributions by docking score magnitude
+- Producing a final ranked list of molecules
+
+Ranking Strategy
+----------------
+For each input docking set:
+
+1. Molecules are sorted according to a selected score attribute
+   (e.g. binding energy or docking score).
+
+2. A rank-based voting score is assigned:
+       best-ranked molecule → highest vote
+       worst-ranked molecule → lowest vote
+
+3. Votes can optionally be weighted by the normalized score value,
+   allowing stronger scoring poses to contribute more.
+
+4. Votes from all docking sets are summed per molecule.
+
+5. Final scores are normalized to a fixed range for interpretability.
+
+Score Customization
+-------------------
+Users may define:
+
+- Which score attribute to use per docking set
+- Whether lower or higher values are better
+- Relative weights for each docking source
+- Manual configuration of input scoring schemes
+
+If no custom definition is provided, the protocol defaults to:
+- `_energy` as scoring attribute
+- Equal weights for all inputs
+- Lower values considered better (energy minimization assumption)
+
+Output
+------
+- outputSmallMolecules:
+    A merged SetOfSmallMolecules containing representative poses
+    enriched with a consensus ranking score.
+
+- results.tsv:
+    Tab-separated file with final normalized ranking scores per molecule.
+
+Each output molecule includes:
+- rankScore attribute representing its final consensus score
+- Preserved docking metadata from the best available source
+
+Key Features
+------------
+- Multi-source docking integration
+- Rank-based consensus scoring
+- Optional score-weighted voting
+- Automatic normalization of heterogeneous scores
+- Preservation of best-scoring molecular representations
+- Support for custom scoring definitions
+
+Use Cases
+---------
+- Consensus ranking of docking results from multiple engines
+- Post-processing of virtual screening campaigns
+- Combining rescoring methods with docking outputs
+- Prioritization of compounds for experimental validation
+
+Notes
+-----
+- Assumes all input sets contain comparable ligand identifiers
+- Score directionality (higher vs lower is better) must be consistent per input
+- Works best when docking sets contain overlapping ligand populations
+"""
     _label = 'Rank docking score'
 
     # -------------------------- DEFINE param functions ----------------------
@@ -98,7 +183,7 @@ class ProtocolRankDocking(EMProtocol):
         group.addParam('defineWeight', params.FloatParam, label="Select weight: ",
                        default=1.0, condition='defineScores',
                        help='Select a weight for the input with respect to the others defined')
-        group.addParam('defineDirection', params.BooleanParam, label="Small is good?: ",
+        group.addParam('defineDirection', params.BooleanParam, label="Smaller is better?: ",
                        default=True, condition='defineScores',
                        help='Define the direction of the score, whether small values are prefered')
 
@@ -110,40 +195,6 @@ class ProtocolRankDocking(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.createOutputStep)
-
-    def rankVoting(self, mols, scoreAttribute, smallIsGood=True):
-        scDic = {mol.clone(): getattr(mol, scoreAttribute).get() for mol in mols}
-        scDic = dict(sorted(scDic.items(), key=lambda x:x[1], reverse=not smallIsGood))
-        if self.useScore.get():
-          normSc = normalizeToRange(scDic.values())
-          for i, mol in enumerate(scDic):
-            scDic[mol] = normSc[i]
-
-        # The better the position in the ranking and the more appereances of a molecule in it will generate a higher
-        # voting score.
-        vote = {mol.clone().getMolName(): 0.0 for mol in mols}
-        nDocks = len(scDic)
-        for i, (mol, score) in enumerate(scDic.items()):
-          curVote = 1.0 - i/nDocks
-          if self.useScore.get():
-            score = 1 - score if smallIsGood else score
-            curVote *= score
-          vote[mol.getMolName()] += curVote
-
-        # Normalize by the total number of dockings
-        for molName, score in vote.items():
-            vote[molName] = score / nDocks
-        return vote
-
-    def getBestMols(self, molSet, attr='_energy', smallIsGood=True, bestDic={}):
-      for mol in molSet:
-        energy = getattr(mol, attr)
-        molName = mol.getMolName()
-        if molName not in bestDic or \
-                (smallIsGood and energy < getattr(bestDic[molName], attr)) or\
-                (not smallIsGood and energy > getattr(bestDic[molName], attr)):
-          bestDic[molName] = mol.clone()
-      return bestDic
 
     def createOutputStep(self):
         self.voteDic, bestMols = {}, {}
@@ -181,6 +232,40 @@ class ProtocolRankDocking(EMProtocol):
         outMols.setDocked(True)
         outMols.saveGroupIndexes()
         self._defineOutputs(outputSmallMolecules=outMols)
+
+    def rankVoting(self, mols, scoreAttribute, smallIsGood=True):
+        scDic = {mol.clone(): getattr(mol, scoreAttribute).get() for mol in mols}
+        scDic = dict(sorted(scDic.items(), key=lambda x:x[1], reverse=not smallIsGood))
+        if self.useScore.get():
+          normSc = normalizeToRange(scDic.values())
+          for i, mol in enumerate(scDic):
+            scDic[mol] = normSc[i]
+
+        # The better the position in the ranking and the more appereances of a molecule in it will generate a higher
+        # voting score.
+        vote = {mol.clone().getMolName(): 0.0 for mol in mols}
+        nDocks = len(scDic)
+        for i, (mol, score) in enumerate(scDic.items()):
+          curVote = 1.0 - i/nDocks
+          if self.useScore.get():
+            score = 1 - score if smallIsGood else score
+            curVote *= score
+          vote[mol.getMolName()] += curVote
+
+        # Normalize by the total number of dockings
+        for molName, score in vote.items():
+            vote[molName] = score / nDocks
+        return vote
+
+    def getBestMols(self, molSet, attr='_energy', smallIsGood=True, bestDic={}):
+      for mol in molSet:
+        energy = getattr(mol, attr)
+        molName = mol.getMolName()
+        if molName not in bestDic or \
+                (smallIsGood and hasattr(bestDic[molName], attr) and energy < getattr(bestDic[molName], attr)) or\
+                (not smallIsGood and hasattr(bestDic[molName], attr) and energy > getattr(bestDic[molName], attr)):
+          bestDic[molName] = mol.clone()
+      return bestDic
 
     def getOriginalReceptorFile(self):
         return self.inputMoleculesSets[0].get().getProteinFile()
@@ -251,7 +336,7 @@ class ProtocolRankDocking(EMProtocol):
           if scoreLine.strip():
             lDic = json.loads(scoreLine)
             inDic[lDic['InputIndex']] = {'Score': lDic['Score'], 'Weight': lDic['Weight'],
-                                         'Small': bool(lDic['Small'])}
+                                         'Small': eval(lDic['Small'])}
 
       for i, inPointer in enumerate(self.inputMoleculesSets):
         if i not in inDic:

@@ -47,10 +47,70 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import Protoco
 
 class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
     """
-    Prepare a set of molecules for use in a docking program.
-    Sets the partial atomic charges, generates low-energy conformers. This is done with OpenBabel.
-    """
+    AI Generated:
 
+    This protocol prepares small molecule libraries for molecular modeling and docking workflows.
+
+    It takes as input either a predefined library (e.g. ZINC or PubChem-derived sets) or a user-provided
+    set of small molecules, and performs a standard preparation pipeline to ensure compatibility with
+    downstream computational chemistry tools.
+
+    The preparation workflow includes:
+
+    Input Handling
+    --------------
+    - Accepts molecules from a library file or an existing set of small molecules.
+    - Splits large libraries into manageable subsets for parallel processing.
+
+    Atom and Structure Standardization
+    -----------------------------------
+    - Reorders atoms to ensure consistent atom indexing.
+    - Generates 3D structures when required.
+    - Converts input formats into MOL2 for downstream compatibility.
+
+    Hydrogen Addition and Protonation
+    ----------------------------------
+    - Adds hydrogens to the ligand structure.
+    - Optionally adjusts protonation states based on a user-defined pH.
+    - Supports chemically relevant protonation adjustments using OpenBabel rules.
+
+    Partial Charge Assignment
+    -------------------------
+    - Assigns partial atomic charges to ligands.
+    - Supports multiple charge models (e.g. Gasteiger, MMFF94, QEq, etc.).
+
+    Conformer Generation
+    --------------------
+    - Optionally generates multiple low-energy conformations per molecule.
+    - Uses OpenBabel-based algorithms (Genetic Algorithm or Confab).
+    - Allows control over the number of conformers and RMSD clustering threshold.
+
+    Error Handling
+    --------------
+    - Tracks molecules that fail during charge assignment or conformer generation.
+    - Produces separate logs for failed steps to support debugging and reproducibility.
+
+    Output
+    ------
+    - Produces a set of prepared small molecules in MOL2 format.
+    - Each molecule may include:
+      - Assigned partial charges
+      - Protonation state adjusted for pH (if enabled)
+      - Multiple conformers (if enabled)
+    - Maintains metadata linking output molecules to their original identifiers.
+
+    Use Cases
+    ---------
+    - Ligand preparation prior to molecular docking
+    - Virtual screening pipelines
+    - Conformer ensemble generation for flexible docking
+    - Standardization of heterogeneous chemical libraries
+
+    Dependencies
+    ------------
+    - OpenBabel for structure conversion, protonation, and charge assignment
+    - Internal Scipion / pwchem infrastructure for molecule handling and pipeline execution
+    """
     _label = 'OBabel Ligand preparation'
     _dic_method = {0: "gasteiger", 1: "mmff94", 2: "qeq", 3: "qtpie", 4: "eqeq", 5: "eem", 6: "none"}
     stepsExecutionMode = params.STEPS_PARALLEL
@@ -116,6 +176,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
 
         failedCharges, failedConfs = [], []
         for fnSmall in self.getInputMolFiles(it):
+            fnSmall = fnSmall.replace(' ', '_')
             oFile, fail = self.performAddCharges(fnSmall, it)
             if fail is not None:
               failedCharges.append(fail)
@@ -163,12 +224,16 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
                         newSmallMol._ConformersFile = pwobj.String(confFile)
                         outputSmallMolecules.append(newSmallMol)
                 else:
-                    newSmallMol = SmallMolecule(smallMolFilename=fnSmall, molName='guess')
+                    newSmallMol = SmallMolecule()
                     if not self.useLibrary.get():
                       newSmallMol.copy(mol, copyId=False)
                       newSmallMol.setMappingFile(pwobj.String(mapFile))
                     else:
                       newSmallMol = self.addLibAttributes(newSmallMol, mol)
+
+                    newSmallMol.setFileName(os.path.relpath(fnSmall))
+                    newSmallMol.setConfId(1)
+
                     outputSmallMolecules.append(newSmallMol)
 
         if outputSmallMolecules is not None:
@@ -199,12 +264,14 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
         cmethod = self._dic_method[index_method]
 
         # With a given pH
+        fnSmall = os.path.abspath(fnSmall)
+        tFile = os.path.abspath(self._getTmpPath(f"{fnRoot}.mol2"))
+        args = f' -i{fnFormat[1:]} {fnSmall} -d -O "{os.path.abspath(tFile)}" && '
         oFile = self.getPrepDir(f"{fnRoot}.mol2")
         if self.ph.get():
-          args = " -i%s '%s' -p %s --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall),
-                                                                   str(self.phvalue.get()), cmethod, oFile)
+          args += f" obabel -imol2 '{tFile}' -p {str(self.phvalue.get())} --partialcharge {cmethod} -O '{oFile}' "
         else:
-          args = " -i%s '%s' -h --partialcharge %s -O '%s' " % (fnFormat[1:], os.path.abspath(fnSmall), cmethod, oFile)
+          args += f" obabel -imol2 '{tFile}' -h --partialcharge {cmethod} -O '{oFile}' "
 
         if fnFormat == '.smi':
           args += '--gen3D '
@@ -222,11 +289,11 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
       fnRoot = getBaseName(fnSmall)
 
       if self.method_conf.get() == 0:  # Genetic algorithm
-        args = " '%s' --conformer --nconf %s --score rmsd --writeconformers -O '%s_conformers.mol2'" % \
-               (os.path.abspath(fnSmall), self.number_conf.get(), fnRoot)
+        args = (f" '{os.path.abspath(fnSmall)}' --conformer --nconf {self.number_conf.get()} --score rmsd "
+                f"--writeconformers -O '{fnRoot}_conformers.mol2'")
       else:  # confab
-        args = " '%s' --confab --original --verbose --conf %s --rcutoff %s -O '%s_conformers.mol2'" % \
-               (os.path.abspath(fnSmall), self.number_conf.get(), str(self.rmsd_cutoff.get()), fnRoot)
+        args = (f" '{os.path.abspath(fnSmall)}' --confab --original --verbose --conf {self.number_conf.get()} "
+                f"--rcutoff {str(self.rmsd_cutoff.get())} -O '{fnRoot}_conformers.mol2'")
       try:
         runOpenBabel(protocol=self, args=args, cwd=self.getPrepDir())
         fail = None
@@ -326,7 +393,7 @@ class ProtChemOBabelPrepareLigands(ProtocolBaseLibraryToSetOfMols):
             baseNames[line.split()[1]] = line
       else:
         for mol in self.inputSmallMolecules.get():
-            fnSmall = mol.getFileName()
+            fnSmall = mol.getFileName().replace(' ', '_')
             baseNames[getBaseName(fnSmall)] = mol.clone()
       return baseNames
 

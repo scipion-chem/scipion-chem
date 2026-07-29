@@ -28,6 +28,7 @@
 import argparse
 import mdtraj
 import matplotlib.pyplot as plt
+import numpy as np
 
 def getAtomSelection(selStr, ligName='LIG'):
     if selStr == 'CA':
@@ -38,12 +39,12 @@ def getAtomSelection(selStr, ligName='LIG'):
         aSel = selStr.lower()
     return aSel
 
-def getSelectionIndex(topo, selStr):
+def getSelectionIndex(topology, selStr):
     aSel = getAtomSelection(selStr)
-    index = set(topo.topology.select(aSel))
+    index = set(topology.select(aSel))
     if not index and selStr == 'Ligand':
         aSel = getAtomSelection(selStr, ligName='UNK')
-        index = set(topo.topology.select(aSel))
+        index = set(topology.select(aSel))
     return index
 
 
@@ -65,37 +66,92 @@ if __name__ == "__main__":
 
     parser.add_argument('-sa', '--selectAtoms', type=str, help='Atoms to select for the analysis')
     parser.add_argument('-ha', '--heavyAtoms', default=False, action='store_true', help='Analysis only on heavy atoms')
+    parser.add_argument('-ref', '--reference', type=str, default=None,
+                        help='Reference structure file for RMSD/RMSF. If not provided, the first '
+                             'frame of the trajectory is used as reference.')
+    parser.add_argument('-rg', default=False, action='store_true', help='Plots the Radius of gyration of the system through the trajectory')
+    parser.add_argument('-sasa', default=False, action='store_true',
+                        help='Plots the Solvent Accessible Surface Area (SASA) of the selected atoms')
 
+    parser.add_argument('-distance', default=False, action='store_true',
+                        help='Plots the distance between two specific atoms through the trajectory')
+    parser.add_argument('-a1', '--atom1', type=str, help='First atom selection for distance calculation')
+    parser.add_argument('-a2', '--atom2', type=str, help='Second atom selection for distance calculation')
 
     args = parser.parse_args()
-    inpFile, outFile, trjFile = args.inputFilename, args.outputName, args.inputTraj
+    inpFile, outFile, trjFile, refFile = args.inputFilename, args.outputName, args.inputTraj, args.reference
 
-    topo = mdtraj.load(inpFile)
-    trajectory = mdtraj.load(trjFile, top=topo)
+    topology = mdtraj.load_topology(inpFile)
+    trajectory = mdtraj.load(trjFile, top=topology)
+
+    reference = mdtraj.load(refFile) if refFile else trajectory
+
+    def selectIndices(topology, selStr, heavy):
+        '''Selected atom indices, heavy-atom-filtered, sorted so the same selection on two
+        structures (trajectory and reference) is matched in the same order.'''
+        idx = getSelectionIndex(topology, selStr)
+        if heavy:
+            idx = idx.intersection({atom.index for atom in topology.atoms if atom.element.symbol != 'H'})
+        return sorted(idx)
 
     # Atom selection
-    index = getSelectionIndex(topo, args.selectAtoms)
-    if index:
-        if args.heavyAtoms:
-            index = index.intersection(set([atom.index for atom in topo.topology.atoms if atom.element.symbol != 'H']))
+    psXlabel = 'Simulation time (ps)'
+    if args.selectAtoms:
+        index = selectIndices(topology, args.selectAtoms, args.heavyAtoms)
+        refIndex = selectIndices(reference.topology, args.selectAtoms, args.heavyAtoms) if refFile else index
 
         plt.figure()
         if args.rmsd:
-            rmsd = mdtraj.rmsd(trajectory, topo, 0, atom_indices=list(index))
-            plt.plot(trajectory.time, rmsd, 'r', label='RMSD')
+            rmsd = mdtraj.rmsd(trajectory, reference, 0, atom_indices=index, ref_atom_indices=refIndex)
+            plt.plot(trajectory.time, rmsd * 10,  'r', label='RMSD')
             plt.title('RMSD')
-            plt.xlabel('Simulation time (ps)')
-            plt.ylabel('RMSD (nm)')
+            plt.xlabel(psXlabel)
+            plt.ylabel('RMSD (Å)')
 
         elif args.rmsf:
-            rmsf = mdtraj.rmsf(trajectory, topo, 0, atom_indices=list(index))
-            plt.plot(rmsf, 'r', label='RMSF')
+            trajectory.superpose(trajectory, 0, atom_indices=index)
+            rmsf = mdtraj.rmsf(trajectory, None, atom_indices=index)
+            plt.plot(rmsf * 10, 'r', label='RMSF')
             plt.title('RMSF')
-            plt.xlabel('Protein sequence')
-            plt.ylabel('RMSF (nm)')
+            plt.xlabel('Selected atom numbers')
+            plt.ylabel('RMSF (Å)')
 
-        plt.legend()
-        plt.show()
+        elif args.sasa:
+            sasa_all = mdtraj.shrake_rupley(trajectory, mode='atom')
 
-    else:
-        print('No atoms found for the atom selection')
+            if args.selectAtoms == 'All':
+                sasa_over_time = sasa_all.sum(axis=1)
+            elif args.selectAtoms == 'Ligand':
+                sasa_over_time = sasa_all[:, list(index)].sum(axis=1)
+
+            # Conversion: 1 nm^2 = 100 Å^2
+            plt.plot(trajectory.time, sasa_over_time, 'g', label=f'SASA ({args.selectAtoms})')
+
+            plt.title(f'Solvent Accessible Surface Area: {args.selectAtoms} atoms')
+            plt.xlabel(psXlabel)
+            plt.ylabel(r'SASA ($nm^2$)')
+
+    if args.rg:
+        rg = mdtraj.compute_rg(trajectory)
+        plt.plot(trajectory.time, rg * 10, 'b', label='Rg')
+        plt.title('Radius of Gyration')
+        plt.xlabel(psXlabel)
+        plt.ylabel('Rg (Å)')
+
+    elif args.distance:
+        if not args.atom1 or not args.atom2:
+            print('Error: Distance calculation requires both -a1 and -a2 arguments')
+        else:
+            atom_pairs = np.array([[int(args.atom1)-1, int(args.atom2)-1]])
+            atom1 = topology.atom(int(args.atom1)-1)
+            atom2 = topology.atom(int(args.atom2)-1)
+            distances = mdtraj.compute_distances(trajectory, atom_pairs)
+
+            plt.plot(trajectory.time, distances[:, 0] * 10, 'purple', label='Distance')
+            plt.title(
+                f'Distance: {atom1.residue.name}{atom1.residue.resSeq}:{atom1.name} - {atom2.residue.name}{atom2.residue.resSeq}:{atom2.name}')
+            plt.xlabel('%s' % psXlabel)
+            plt.ylabel('Distance (Å)')
+            plt.legend()
+
+    plt.show()

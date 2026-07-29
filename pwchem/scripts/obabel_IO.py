@@ -87,7 +87,7 @@ def oBabelConversion(inputFile, outFormat, singleOutFile, outDir, outName=None, 
             if nameKey and nameKey in mol.data:
                 molName = mol.data[nameKey]
             elif mol.title and not mol.title in names and not outBase:
-                molName = os.path.splitext(os.path.basename(mol.title))[0]
+                molName = os.path.splitext(os.path.basename(mol.title))[0].split()[0]
             else:
                 if not outBase:
                     outBase = 'molecule'

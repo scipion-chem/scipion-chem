@@ -37,7 +37,6 @@ from pathlib import Path
 
 from scipy.spatial import distance
 from scipy.cluster.hierarchy import linkage, fcluster
-from Bio.PDB.ResidueDepth import get_surface
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
@@ -54,7 +53,160 @@ INTERACTIONSFILENAME = "interacting_residues.csv"
 
 class ProtDefineStructROIs(EMProtocol):
     """
-    Defines a set of structural ROIs from a set of coordinates / residues / predocked ligands
+    AI Generated:
+
+    This protocol is used to manually define structural regions from coordinates,
+    residues, or docked small molecules.
+
+    It provides a flexible framework to construct structural regions of interest (ROIs)
+    based on user-defined geometric or biochemical criteria, including:
+
+    - Cartesian coordinates in 3D space
+    - Specific residues or residue ranges
+    - Ligand-defined binding regions (internal or external docking sets)
+    - Protein–protein interaction interfaces (PPI)
+    - Proximity-based residue patterns ("near residues")
+
+    The protocol supports clustering of ROI points based on spatial proximity,
+    optionally mapping coordinates to solvent-accessible surface points, and
+    generating consistent structural regions across heterogeneous inputs.
+
+    Core Concepts
+    -------------
+    Origin Types:
+        ROIs can be defined from multiple sources:
+
+        Coordinates:
+            Single or multiple 3D points (X, Y, Z) used as seeds for region creation.
+
+        Residues:
+            Specific residues or residue ranges within a chain used to define regions.
+
+        Ligands:
+            Residues in proximity to ligand atoms, either from external docking sets
+            or ligands embedded in the receptor structure.
+
+        Protein–Protein Interfaces (PPI):
+            Residues at contact distance between two protein chains.
+
+        Near Residues:
+            Residue patterns defined by residue types and spatial proximity constraints.
+
+    Contact Mapping:
+        Ligand–receptor or chain–chain contacts are identified using distance thresholds,
+        and converted into residue/atom-level representations.
+
+    Surface Mapping:
+        Optionally projects input coordinates onto solvent-accessible surface points
+        using MSMS-derived surface models and a maximum depth constraint.
+
+    Clustering:
+        Spatial clustering groups ROI points into coherent regions using hierarchical
+        clustering (SciPy linkage + fcluster) or density-based aggregation depending
+        on configuration.
+
+    Workflow
+    --------
+    1. Input selection:
+       - AtomStruct (protein structure) and/or SetOfSmallMolecules (docked ligands)
+
+    2. ROI definition:
+       - User defines ROIs via coordinates, residues, ligands, PPI, or patterns
+       - Each ROI is serialized into structured descriptors
+
+    3. Structure preparation:
+       - Optional ligand removal or PDB cleaning
+       - Conversion of input structures to CIF format if required
+
+    4. Surface computation:
+       - Protein surface is computed using MSMS (if enabled)
+       - Coordinates may be mapped to nearest surface points
+
+    5. Contact extraction (ligand mode):
+       - Compute atom–atom distances between ligand and receptor
+       - Identify interacting pairs within a distance threshold
+
+    6. Coordinate aggregation:
+       - Convert residues/contacts into 3D coordinate sets
+
+    7. Clustering:
+       - Cluster coordinates using distance-based linkage
+       - Optionally merge clusters across ROI definitions
+
+    8. ROI construction:
+       - Each cluster is converted into a StructROI object
+       - Coordinates are written to CIF files
+       - Contacts and volumes are computed
+
+    9. Output generation:
+       - SetOfStructROIs is created and populated
+       - Optional interaction tables and pattern files are generated
+
+    Clustering Criteria
+    -------------------
+    - maxIntraDistance:
+        Maximum distance between points to belong to the same ROI cluster.
+
+    - surfaceCoords:
+        If enabled, coordinates are mapped to solvent-accessible surface points.
+
+    - maxDepth:
+        Maximum allowed distance from surface when mapping coordinates.
+
+    - clusterDiff:
+        If enabled, ROIs defined from different origins are clustered together.
+
+    ROI Definition Modes
+    --------------------
+    Coordinates:
+        Direct 3D point input defining region centers.
+
+    Residues:
+        Residue ranges or selections expanded to atomic coordinates.
+
+    Ligands:
+        Contacts derived from ligand–receptor proximity analysis.
+
+    PPI:
+        Residues at chain–chain interface defined by distance cutoff.
+
+    Near Residues:
+        Residue-type patterns clustered based on center-of-mass proximity
+        and hierarchical clustering linkage methods (single, complete, average, etc.).
+
+    Ligand Contact Analysis
+    -----------------------
+    - Computes pairwise distances between ligand and receptor atoms.
+    - Contact threshold defines interaction cutoff.
+    - Generates ligand–receptor contact maps stored in text files.
+    - Supports residue- or atom-level contact representation.
+
+    Surface Mapping
+    ---------------
+    - Uses MSMS-generated solvent-accessible surface.
+    - Maps input coordinates to nearest surface points.
+    - Filters surface points based on maxDepth threshold.
+
+    Output
+    ------
+    - outputStructROIs:
+        Set of structurally defined regions of interest.
+
+    - StructROI files (.cif):
+        Coordinates representing clustered structural regions.
+
+    - Optional outputs:
+        - Interaction residue tables (CSV + Markdown summary)
+        - Pattern files for near-residue definitions
+        - Cleaned receptor structures if ligands are removed
+
+    Use Cases
+    ---------
+    - Definition of ligand binding pockets
+    - Identification of protein–protein interfaces
+    - Construction of pharmacophore-like regions
+    - Structural analysis of contact hotspots
+    - Preparation of input regions for downstream modeling or docking
     """
     _label = 'Define structural ROIs'
     typeChoices = ['Coordinates', 'Residues', 'Ligand', 'Protein-Protein Interface', 'Near Residues']
@@ -195,9 +347,8 @@ class ProtDefineStructROIs(EMProtocol):
 
         structure = parser.get_structure(self.getProteinName(), inFile)
         self.structModel = structure[0]
-        self.structSurface = get_surface(self.structModel,
-                                         MSMS=Plugin.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms'))
 
+        self.structSurface = Plugin.runMSMS(self.structModel)
     def definePocketsStep(self):
         coordsDefined = []
         for roiStr in self.inROIs.get().split('\n'):
@@ -511,7 +662,7 @@ class ProtDefineStructROIs(EMProtocol):
     def _getInputName(self):
         return os.path.splitext(os.path.basename(self.inputAtomStruct.get().getFileName()))[0]
 
-    def build_contiguous_regions(self, interactions_csv):
+    def build_contiguous_regions(self, interactionsCsv):
         """
         Build a Markdown table of interacting residues per chain,
         listing for each residue the residues it interacts with,
@@ -520,7 +671,7 @@ class ProtDefineStructROIs(EMProtocol):
         # Diccionario: key = (Chain1, Residue1), value = list of tuples (Chain2, Residue2, min_distance)
         interactions = defaultdict(list)
 
-        with open(interactions_csv, newline="") as f:
+        with open(interactionsCsv, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 chain1 = row['Chain1']
@@ -534,14 +685,14 @@ class ProtDefineStructROIs(EMProtocol):
             return None
 
         # Construir el Markdown
-        summary_blocks = []
+        summaryBlocks = []
 
         # Agrupamos por chain de origen (Chain1)
         chains = sorted(set(ch1 for ch1, _ in interactions.keys()))
         for chain in chains:
-            summary_blocks.append(f"Regions of interaction - Chain {chain}")
-            summary_blocks.append("| Residue | Interacting residues |")
-            summary_blocks.append("|--------|-------------------|")
+            summaryBlocks.append(f"Regions of interaction - Chain {chain}")
+            summaryBlocks.append("| Residue | Interacting residues |")
+            summaryBlocks.append("|--------|-------------------|")
 
             # Filtramos las claves de esta chain
             residues_chain = [(res1, interactions[(chain, res1)]) for ch1, res1 in interactions if ch1 == chain]
@@ -553,8 +704,8 @@ class ProtDefineStructROIs(EMProtocol):
                 # Ordenar partners por distancia mínima
                 partners_sorted = sorted(partners, key=lambda x: x[2])
                 partners_str = ", ".join([f"{ch2}:{res2} ({dist:.2f} Å)" for ch2, res2, dist in partners_sorted])
-                summary_blocks.append(f"| {res1} | {partners_str} |")
+                summaryBlocks.append(f"| {res1} | {partners_str} |")
 
-            summary_blocks.append("")  # línea en blanco entre cadenas
+            summaryBlocks.append("")  # línea en blanco entre cadenas
 
-        return "\n".join(summary_blocks)
+        return "\n".join(summaryBlocks)

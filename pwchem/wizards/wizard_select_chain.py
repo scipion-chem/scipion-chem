@@ -50,6 +50,8 @@ from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 
+from pwchem.viewers.viewers_MD import MDSystemPViewer
+from pwchem.objects import SetOfStructROIs
 
 class SelectLigandAtom(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
@@ -165,6 +167,7 @@ SelectLigandWizard().addTarget(protocol=ProtocolRMSDDocking,
                                inputs=['refAtomStruct'],
                                outputs=['refLigName'])
 
+
 class SelectMultiLigandWizard(SelectLigandWizard):
   def show(self, form, *params):
       protocol = form.protocol
@@ -248,6 +251,9 @@ class SelectChainWizardQT(SelectChainWizard):
     elif str(type(inputObj).__name__) == 'SetOfStructROIs' or str(type(inputObj).__name__) == 'SetOfSmallMolecules':
         fileName = inputObj.getProteinFile()
 
+    elif str(type(inputObj).__name__) == 'MDSystem':
+        fileName = inputObj.getSystemFile()
+
     else:
         fileName = os.path.abspath(inputObj.getFileName())
 
@@ -287,6 +293,9 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
       return fileName
 
   def getResidues(self, form, inputObj, chainStr):
+    if isinstance(inputObj, str): #handles the seq from a setOfSeqs
+      inputObj = self.getSeqFromStr(form, inputObj)
+
     if issubclass(type(inputObj), Sequence) or str(type(inputObj).__name__) == 'SequenceVariants':
       finalResiduesList = []
       for i, res in enumerate(inputObj.getSequence()):
@@ -296,7 +305,6 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
           res3 = res
         stri = '{"index": %s, "residue": "%s"}' % (i + 1, res3)
         finalResiduesList.append(String(stri))
-
     else:
       structureHandler = AtomicStructHandler()
       fileName = self.getInputFilename(form.protocol, inputObj, structureHandler)
@@ -314,6 +322,18 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
         finalResiduesList.append(String(i))
 
     return finalResiduesList
+
+  def getSeqFromStr(self, form, inputObj):
+      seqName = inputObj.split('name = ')[1].split(')')[0]
+
+      seqSet = form.protocol.inputSetOfSequences.get()
+      realSeq = None
+
+      for seq in seqSet:
+          if seq.getName() == seqName or seqName in str(seq):
+              realSeq = seq
+              break
+      return realSeq
 
 
 class SelectAtomWizardQT(SelectResidueWizardQT):
@@ -366,8 +386,6 @@ class SelectAtomWizardQT(SelectResidueWizardQT):
 
     intervalStr = '{"index": "%s", "atom": "%s"}' % (idx, atomID)
     form.setVar(outputParam[0], intervalStr)
-
-
 
 SelectChainWizardQT().addTarget(protocol=ProtDefineStructROIs,
                               targets=['chain_name'],
@@ -607,6 +625,16 @@ SelectElementWizard().addTarget(protocol=ProtocolLigandParametrization,
                                inputs=['inputSmallMolecules'],
                                outputs=['inputLigand'])
 
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['molPred'],
+                               inputs=['inputMoleculesSets'],
+                               outputs=['molPred'])
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['molTrue'],
+                               inputs=['inputMoleculesRefSet'],
+                               outputs=['molTrue'])
+
+
 SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayMoleculeDock'],
                                inputs=['moleculeLabels'],
@@ -621,6 +649,11 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayPymolPLIP'],
                                inputs=['singleLabels'],
                                outputs=['displayPymolPLIP'])
+
+SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
+                               targets=['filterCol'],
+                               inputs=['getColumns'],
+                               outputs=['filterCol'])
 
 
 class SelectElementMultiPointWizard(SelectElementWizard):

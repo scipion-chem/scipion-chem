@@ -40,7 +40,68 @@ import os
 
 class ProtDrawMolecules(EMProtocol):
     """
-    Defines a set of small molecules drawing them using JChemPaint
+    AI Generated:
+
+    This protocol is used to create and manage small molecule structures by drawing
+    them interactively using JChemPaint and integrating the resulting molecules
+    into a Scipion-compatible workflow.
+
+    It provides a simple graphical entry point for users to manually design or
+    sketch chemical compounds, which are then automatically converted into
+    standard molecular formats and stored as a SetOfSmallMolecules object.
+
+    Core Concepts
+    -------------
+    JChemPaint Integration:
+        External molecular editor used to draw and edit 2D chemical structures.
+        The protocol launches JChemPaint as an external application.
+
+    Molecular Conversion:
+        Drawn structures are exported from JChemPaint and converted into
+        standard chemical formats (e.g., MOL2) using OpenBabel.
+
+    SetOfSmallMolecules:
+        Scipion data structure used to store and manage collections of small
+        molecules, each represented as a SmallMolecule object.
+
+    Workflow
+    --------
+    1. Launch JChemPaint GUI for user-driven molecular drawing.
+    2. User creates and saves one or more molecules in the protocol directory.
+    3. The protocol scans the output directory for generated files.
+    4. Each file is converted into MOL2 format using OpenBabel.
+    5. Converted molecules are wrapped into SmallMolecule objects.
+    6. A SetOfSmallMolecules is created and populated.
+    7. The resulting dataset is exported for downstream use in workflows.
+
+    File Handling
+    -------------
+    - Input:
+        No structured input is required beyond launching the drawing interface.
+
+    - Output Directory:
+        All generated files are stored in the protocol working directory
+        (including temporary and extra folders).
+
+    - Conversion:
+        Non-MOL2 files are converted using OpenBabel before inclusion.
+
+    Output
+    ------
+    - outputStructROIs:
+        A SetOfSmallMolecules containing all molecules drawn in JChemPaint
+        and successfully converted.
+
+    Each SmallMolecule includes:
+        - Molecular structure file (MOL2)
+        - Assigned molecule name derived from filename
+
+    Use Cases
+    ---------
+    - Manual design of ligands for docking experiments
+    - Rapid prototyping of chemical structures
+    - Preparation of custom compound libraries
+    - Integration of user-designed molecules into computational workflows
     """
     _label = 'Draw small molecules'
     molNumber = 1

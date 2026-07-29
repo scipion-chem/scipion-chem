@@ -47,8 +47,70 @@ URL="https://api.esmatlas.com/foldSequence/v1/pdb/"
 
 class ProtESMatlas(EMProtocol):
     """
-    Generates a pdb peptide file from a sequence with ESM Metagenomics Atlas (https://github.com/facebookresearch/esm).
-    """
+    AI Generated:
+
+This protocol is used to generate peptide 3D structures (PDB files) from amino acid sequences
+using the ESM Metagenomics Atlas API.
+
+Each input sequence is sent to a remote prediction service that returns a predicted
+protein/peptide structure in PDB format. The protocol supports both single sequences
+and sets of sequences, allowing batch generation of structures.
+
+The main goal is to convert linear peptide sequences into structural models that
+can be used for downstream structural biology and immunoinformatics analyses.
+
+Workflow
+--------
+1. Input handling:
+   - Sequences can be provided as raw strings or as Scipion Sequence objects.
+   - Input can be a single sequence or a set of sequences.
+   - Each sequence must have an associated name for output file generation.
+
+2. Structure prediction:
+   - Each sequence is sent to the ESM Atlas API (https://api.esmatlas.com/foldSequence/v1/pdb/).
+   - The API returns a predicted PDB structure for the peptide.
+   - The response is saved locally as a .pdb file.
+
+3. Output collection:
+   - All generated PDB files are collected from the output directory.
+   - If multiple structures are generated, they are grouped into a SetOfAtomStructs.
+   - If only one structure is generated, a single AtomStruct object is created.
+
+4. Output generation:
+   - Structures are stored as AtomStruct objects compatible with Scipion workflows.
+   - Each structure is linked to its corresponding input sequence name.
+
+Key Concepts
+------------
+Sequence Input:
+    Amino acid sequence provided either as raw text or Scipion Sequence objects.
+
+ESM Atlas API:
+    External web service that predicts protein/peptide structures from sequences.
+
+AtomStruct:
+    Representation of a 3D molecular structure (PDB format) within Scipion.
+
+Batch Processing:
+    Multiple sequences can be processed in a single run, generating multiple PDB files.
+
+Output
+------
+outputAtomStruct:
+    A single predicted structure when only one sequence is provided.
+
+outputAtomStructs:
+    A SetOfAtomStructs containing multiple predicted peptide structures.
+
+Each output structure corresponds to one input sequence and is stored in PDB format.
+
+Use Cases
+---------
+- Peptide structure prediction
+- Vaccine design and epitope modeling
+- Structural annotation of short sequences
+- Input generation for docking or molecular modeling workflows
+"""
     _label = 'Get peptide from sequence'
 
     # -------------------------- DEFINE param functions ----------------------

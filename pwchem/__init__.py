@@ -52,6 +52,7 @@ __version__ = version.__version__
 class Plugin(pwem.Plugin):
     @classmethod
     def defineBinaries(cls, env):
+        cls.addNetworkX(env)
         cls.addRDKitPackage(env)
         cls.addOpenbabelPackage(env)
         cls.addMGLToolsPackage(env)
@@ -61,7 +62,9 @@ class Plugin(pwem.Plugin):
         cls.addMDTrajPackage(env)
         cls.addDEAPPackage(env)
         cls.addRanxPackage(env)
+
         cls.addSCORCHenv(env)
+        cls.addPoseBustersPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -73,6 +76,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(VMD_DIC['home'], cls.getEnvName(VMD_DIC))
         cls._defineEmVar(OPENBABEL_DIC['home'], cls.getEnvName(OPENBABEL_DIC))
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
+        cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
 
         # Common enviroments
@@ -86,7 +90,7 @@ class Plugin(pwem.Plugin):
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
     def getEnvName(cls, packageDictionary):
-        """ This function returns the name of the conda enviroment for a given package. """
+        """ This function returns the name of the conda environment for a given package. """
         return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
 
     @classmethod
@@ -112,6 +116,17 @@ class Plugin(pwem.Plugin):
 
 ######################## PACKAGES #########################
     @classmethod
+    def addNetworkX(cls, env, default=True):
+        # Instantiating install helper
+        installer = InstallHelper(NETWORKX_DIC['name'], packageHome=cls.getVar(NETWORKX_DIC['home']),
+                                  packageVersion=NETWORKX_DIC['version'])
+
+        # Installing package
+        installer.addCommand(f'conda install -y conda-forge::networkx={NETWORKX_DIC["version"]} '
+                             f'conda-forge::python-louvain=0.16') \
+            .addPackage(env, dependencies=['conda'], default=default)
+
+    @classmethod
     def addRDKitPackage(cls, env, default=True):
         # Instantiating install helper
         installer = InstallHelper(RDKIT_DIC['name'], packageHome=cls.getVar(RDKIT_DIC['home']), packageVersion=RDKIT_DIC['version'])
@@ -123,7 +138,8 @@ class Plugin(pwem.Plugin):
         rdkitEnvName = cls.getEnvName(RDKIT_DIC)
         installer.addCommand(f'conda create -c conda-forge --name {rdkitEnvName} '
                              f'{RDKIT_DIC["name"]}={RDKIT_DIC["version"]} oddt=0.7 python=3.10 spyrmsd -y', 'RDKIT_ENV_CREATED')\
-            .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra -y', 'SKLEARN_INSTALLED')\
+            .addCommand(f'{cls.getEnvActivationCommand(RDKIT_DIC) } && conda install conda-forge::scikit-learn-extra '
+                        f'"setuptools<70" -y', 'SKLEARN_INSTALLED')\
             .addCommand('mkdir -p oddtModels', 'ODTMODELS_CREATED')\
             .addPackage(env, dependencies=['conda'], default=default, vars={'PATH': env_path} if env_path else None)
 
@@ -133,14 +149,17 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-        # Defining file names
-        tar_file = cls.getDefTar(MGL_DIC)
+        mglEnvName = cls.getEnvName(MGL_DIC)
 
-        # Installing package
-        installer.getExtraFile('https://ccsb.scripps.edu/download/532/', 'MGLTOOLS_DOWNLOADED', fileName=tar_file)\
-            .addCommand(f'tar -xf {tar_file} --strip-components 1 && rm {tar_file}', 'MGLTOOLS_EXTRACTED')\
-            .addCommand('export DISPLAY= && {}'.format(cls.getDefPath(MGL_DIC, 'install.sh')), 'MGLTOOLS_INSTALLED')\
-            .addPackage(env, dependencies=['wget', 'tar'], default=default)
+        installer.addCommand(
+            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]}',
+            'MGLTOOLS_ENV_CREATED'
+        ).addCommand(
+            f'{cls.getEnvActivationCommand(MGL_DIC)} && '
+            f'rm -rf {cls.getVar(MGL_DIC["home"])} && '
+            f'ln -s $CONDA_PREFIX {cls.getVar(MGL_DIC["home"])}',
+            'MGLTOOLS_SYMLINK_CREATED'
+        ).addPackage(env,dependencies=['conda'],default=default)
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=True):
@@ -170,6 +189,7 @@ class Plugin(pwem.Plugin):
                         f'git clone https://github.com/mqcomplab/bitbirch.git && cd bitbirch && pip install -e .',
                         'BITBIRCH_INSTALLED')\
             .addPackage(env, dependencies=['git', 'conda', 'cmake', 'make', 'pip'], default=default)
+
 
         # # Instantiating shape it install helper
         binariesDirectory = SHAPEIT_DIC['name']
@@ -214,7 +234,10 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MDTRAJ_DIC['name'], packageHome=cls.getVar(MDTRAJ_DIC['home']), packageVersion=MDTRAJ_DIC['version'])
 
-        installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge')\
+        installer.getCondaEnvCommand().addCondaPackages(['mdtraj', 'matplotlib', 'acpype'], channel='conda-forge') \
+            .addCondaPackages(['prolif', 'ipython'], channel='conda-forge', targetName='PROLIF_INSTALLED') \
+            .addCondaPackages(['scipy', 'scikit-learn', 'numba', 'progressbar2', 'prettytable'],
+                              channel='conda-forge', targetName='TTCLUST_INSTALLED') \
             .addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
@@ -238,6 +261,23 @@ class Plugin(pwem.Plugin):
         installer.getCondaEnvCommand(RANX_DIC['name'], binaryVersion=RANX_DIC['version'], pythonVersion='3.10').\
             addCommand(f'{cls.getEnvActivationCommand(RANX_DIC)} && pip install ranx', 'RANKX_INSTALLED') \
             .addPackage(env, dependencies=['conda', 'pip'], default=default)
+
+    @classmethod
+    def addPoseBustersPackage(cls, env, default=True):
+        installer = InstallHelper(
+            POSEB_DIC['name'],
+            packageHome=cls.getVar(POSEB_DIC['home']),
+            packageVersion=POSEB_DIC['version']
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "git clone --branch v0.6.3 --depth 1 https://github.com/maabuu/posebusters.git && "
+            "pip install --editable ./posebusters ",
+            "POSEBUSTERS_INSTALLED"
+        )
+
+        installer.addPackage(env, dependencies=['pip', 'git'], default=default)
 
     @classmethod
     def addSCORCHenv(cls, env, default=True):
@@ -283,7 +323,6 @@ class Plugin(pwem.Plugin):
         )
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
-
 
     ##################### RUN CALLS ######################
     @classmethod
@@ -344,6 +383,19 @@ class Plugin(pwem.Plugin):
         fullProgram = '%s && %s ' % (cls.getEnvActivationCommand(OPENBABEL_DIC), 'plip')
         run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True)
 
+    @classmethod
+    def runMSMS(cls, structModel):
+        """ Run MSMS command from a given protocol. """
+        from Bio.PDB.ResidueDepth import get_surface
+        envName = Plugin.getEnvName(MGL_DIC)
+        prefix = Plugin.getMGLToolsPrefix(envName=envName)
+        msmsPath = os.path.join(
+            prefix,
+            "MGLToolsPckgs/binaries/msms"
+        )
+        structSurface = get_surface(structModel, MSMS=msmsPath)
+        return structSurface
+
 ##################### UTILS ###########################
     @classmethod
     def getPluginHome(cls, path=""):
@@ -379,6 +431,18 @@ class Plugin(pwem.Plugin):
             'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
         }, position=pos)
         return environ
+
+    @classmethod
+    def getMGLToolsPrefix(cls,envName):
+        result = subprocess.run(
+            ["conda", "env", "list"],
+            capture_output=True,
+            text=True
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith(envName):
+                return line.split()[-1]
+        raise RuntimeError(f"Cannot find conda env {envName}")
 
     @classmethod
     def getODDTModelsPath(cls, path=''):

@@ -39,9 +39,93 @@ ADD, REM, MOD = 'ADD', 'REMOVE', 'MODIFY'
 
 class ProtocolPharmacophoreModification(EMProtocol):
     """
-    Perform the modification of a pharmacophore.
-    Allows to add, remove or modify its chemical features
-    """
+    AI Generated:
+
+This protocol allows manual modification of an existing pharmacophore model or the creation
+of a new pharmacophore from scratch by applying a sequence of user-defined operations.
+
+It supports adding, removing, and modifying pharmacophoric features such as hydrogen bond
+donors/acceptors, hydrophobic regions, aromatic centers, and other interaction points.
+
+Overview
+--------
+A pharmacophore is represented as a set of 3D chemical features, each defined by:
+- Feature type (chemical interaction class)
+- 3D coordinates (x, y, z)
+- Radius (spatial tolerance of the feature)
+
+This protocol provides an interactive way to edit these features, enabling fine-grained
+control over pharmacophore construction and refinement.
+
+Supported Operations
+--------------------
+1. ADD
+   - Introduces a new pharmacophoric feature.
+   - Requires feature type, coordinates, and radius.
+
+2. REMOVE
+   - Deletes an existing feature from a selected pharmacophore.
+
+3. MODIFY
+   - Replaces an existing feature with updated attributes.
+   - Allows changing type, position, or radius.
+
+Operation Format
+----------------
+Operations are stored as structured strings in a list and processed sequentially.
+Each operation encodes:
+- The operation type (ADD / REMOVE / MODIFY)
+- Target pharmacophore index
+- Feature identifier
+- Feature definition (for ADD/MODIFY) in JSON format
+
+Workflow
+--------
+1. Input one or more pharmacophore models (optional).
+2. Optionally provide an associated protein structure.
+3. Define a list of operations:
+   - Add new features
+   - Remove existing features
+   - Modify existing features
+4. Parse operation list into actionable instructions.
+5. Apply modifications to a copy of the input pharmacophore (or create a new one if none provided).
+6. Output a modified pharmacophore model.
+
+Feature Representation
+----------------------
+Each feature is represented by a PharmFeature object containing:
+- Type: chemical feature category
+- Radius: spatial tolerance
+- Coordinates: (x, y, z)
+- Object ID: internal identifier used for mapping operations
+
+Key Behavior
+------------
+- If no input pharmacophore is provided, only ADD operations are allowed.
+- REMOVE and MODIFY operations require an existing pharmacophore.
+- If multiple operations target the same feature, only the last operation is applied.
+- Input pharmacophore is copied before modification to preserve original data.
+
+Output
+------
+- outputPharmacophore:
+    A modified PharmacophoreChem object containing:
+    - Updated feature set after applying all operations
+    - Optional updated protein structure reference
+
+Use Cases
+---------
+- Manual refinement of automatically generated pharmacophores
+- Interactive correction of feature placement
+- Hypothesis-driven pharmacophore editing
+- Structure-activity relationship exploration
+
+Notes
+-----
+- Operations are parsed from a structured text field; manual editing should be done carefully.
+- Feature identifiers must match those in the input pharmacophore.
+- JSON feature definitions must contain valid coordinates, type, and radius.
+"""
     _label = 'Pharmacophore modification'
 
     ##### -------------------------- DEFINE param functions ----------------------

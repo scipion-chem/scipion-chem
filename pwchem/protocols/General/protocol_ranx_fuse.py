@@ -46,8 +46,151 @@ from pwchem import Plugin as pwchemPlugin
 
 class ProtocolRANXFuse(EMProtocol):
   """
-  This protocol will fuse several result lists into a single list and will
-  also generate a ranking.
+  AI Generated:
+
+    Protocol to fuse multiple Sets of Statistics into a single combined ranking using Ranx-based
+    score fusion and rank aggregation methods.
+
+    This protocol integrates multiple independent scoring sources (e.g. ΔΔG predictions,
+    mutation scores, docking scores, or other SetOfStats outputs) into a unified consensus
+    score and ranking.
+
+    It supports both score-based and rank-based fusion strategies using the Ranx framework.
+
+    Overview
+    --------
+    The protocol performs three main operations:
+
+    1. Input parsing and alignment
+       - Reads multiple input SetOfStats
+       - Extracts ID attributes and score attributes
+       - Builds per-set dictionaries of scores
+
+    2. Score fusion (external execution)
+       - Prepares a configuration file describing:
+         * normalization method
+         * fusion algorithm
+         * input score dictionaries
+       - Executes external script (ranx_fusion.py) using Ranx library
+
+    3. Output reconstruction
+       - Reads fused results file
+       - Computes final ranking
+       - Rebuilds Scipion SetOfStats with:
+         * fused score
+         * rank
+         * optionally expanded per-set attributes
+
+    Input
+    -----
+    inputSets:
+        List of EMSet objects (typically SetOfStats) containing scored items.
+
+    inSetID:
+        Name/identifier of each input set used in configuration of fusion.
+
+    inAttrName:
+        Attribute used as unique identifier for each item (e.g. mutation ID).
+
+    inAttrVal:
+        Attribute containing the score values to be fused across sets.
+
+    high:
+        Boolean flag indicating whether higher scores are better.
+        If False, scores are inverted internally for correct ranking.
+
+    outName:
+        Name of the output fused score attribute.
+
+    inAttrs:
+        Text configuration defining:
+        - which sets contribute
+        - which attributes are used
+        - mapping between IDs and values
+
+    Fusion configuration
+    --------------------
+    typeAlgorithm:
+        Select fusion family:
+        - Score-based methods
+        - Rank-based methods
+
+    scoreAlgorithm:
+        Score-based fusion methods (e.g. median, average).
+
+    rankAlgorithm:
+        Rank-based fusion methods:
+        - ISR
+        - Log_ISR
+        - LogN_ISR
+        - RRF
+        - RBC
+
+    normStrategy:
+        Normalization strategy applied before fusion (Ranx normalization options).
+
+    sigma:
+        Parameter for LogN_ISR method (controls frequency smoothing).
+
+    kparameter:
+        Parameter for RRF method (controls rank damping).
+
+    phi:
+        Parameter for RBC method (controls rank persistence).
+
+    Workflow
+    --------
+    1. Parse input sets and build per-set ID → score mappings.
+    2. Apply direction normalization (higher/lower is better).
+    3. Generate run dictionaries for each dataset.
+    4. Write parameter file for external Ranx execution.
+    5. Execute ranx_fusion.py via plugin environment.
+    6. Read fused output file (ranked scores).
+    7. Build final ranked dictionary:
+       - score
+       - rank
+    8. Clone original items and attach fused attributes.
+    9. Produce final output SetOfStats.
+
+    Output
+    ------
+    outputSet:
+        EMSet containing original items enriched with:
+        - fused score (outName)
+        - fused rank (RanxRank)
+        - optionally expanded per-set attributes
+
+    Internal data structures
+    -------------------------
+    runDics:
+        Dictionary mapping input set indices and attributes to score dictionaries.
+
+    perSetAttrs:
+        Expanded representation of all attributes per item across sets.
+
+    ranked:
+        Final mapping:
+        ID → {score, rank}
+
+    Validation
+    ----------
+    - Ensures sigma ∈ [0,1] for LogN_ISR
+    - Ensures k ∈ [10,100] for RRF
+    - Ensures phi ∈ [0,1] for RBC
+
+    Summary
+    -------
+    This protocol enables meta-analysis of multiple scoring systems by:
+    - normalizing heterogeneous score sources
+    - applying state-of-the-art fusion algorithms (Ranx)
+    - producing a unified ranking of biological entities
+
+    Notes
+    -----
+    - Relies on external script (ranx_fusion.py) for fusion computation.
+    - Designed for large-scale comparative scoring datasets.
+    - Particularly useful for integrating multiple prediction models.
+    - Final ranking is deterministic based on selected fusion method.
   """
   _label = 'Ranx Score Fusion'
   _devStatus = BETA
@@ -171,14 +314,39 @@ class ProtocolRANXFuse(EMProtocol):
   def createOutputStep(self):
     inSet = self.inputSets[0].get()
     outAttrName = self.getOutAttrName()
-    outScores = self.parseOutputFile()
-
+    outData = self.parseOutputFile()
+    inAttrDic = self.getInputAttrsDic()
+    originalAttrs = self.getOriginalAttrs(inAttrDic)
+    perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
-      scoreComb = outScores[inID]
-      setattr(item, self.outName.get(), Float(scoreComb))
-      outSet.append(item)
+      # Clone item to avoid modifying original object
+      newItem = item.clone()
+
+      # Remove original attributes dynamically
+      for attrName in originalAttrs:
+        if hasattr(newItem, attrName):
+          delattr(newItem, attrName)
+
+      # Add renamed attributes in deterministic order
+      if inID in perSetAttrs:
+
+        orderedAttrs = perSetAttrs[inID]
+
+        for attrName, value in orderedAttrs.items():
+          try:
+            setattr(newItem, attrName, Float(float(value)))
+          except:
+            setattr(newItem, attrName, String(str(value)))
+
+      # Add fusion outputs at the end
+      scoreComb = outData[inID]["score"]
+      rankComb = outData[inID]["rank"]
+
+      setattr(newItem, self.outName.get(), Float(scoreComb))
+      setattr(newItem, "RanxRank", Integer(rankComb))
+      outSet.append(newItem)
 
     self._defineOutputs(outputSet=outSet)
 
@@ -246,6 +414,47 @@ class ProtocolRANXFuse(EMProtocol):
 
     return mutations
 
+  def buildPerSetAttributeDictionary(self, inAttrDic):
+    """ Builds a dictionary where the values for each attribute of each input set are stored.
+    Returns:
+      {
+        itemID: {
+          "attr1_setIdx_0": value,
+          "attr2_setIdx_0": value,
+          "attr1_setIdx_1": value,
+          ...
+        }
+      }
+    """
+    inSets = self.getInputSets()
+    data = {}
+
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, attrID = key.split('-')
+      inSet = inSets[int(inPointIdx)]
+      for obj in inSet:
+        itemID = str(obj.getAttributeValue(attrID))
+        if itemID not in data:
+          data[itemID] = {}
+        for attrVal in attrVals:
+          attrName = attrVal[0]
+          newAttrName = f"{attrName}_setIdx_{inPointIdx}"
+          value = obj.getAttributeValue(attrName)
+          data[itemID][newAttrName] = value
+        
+    orderedData = {}
+    for itemID, attrs in data.items():
+      orderedAttrs = dict(sorted(attrs.items(), key=lambda x: (int(x[0].split('_setIdx_')[-1]), x[0].split('_setIdx_')[0])))
+      orderedData[itemID] = orderedAttrs
+    return orderedData
+
+  def getOriginalAttrs(self, inAttrDic):
+    originalAttrs = set()
+    for _, attrVals in inAttrDic.items():
+      for attrVal in attrVals:
+        originalAttrs.add(attrVal[0])
+    return originalAttrs
+
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
 
@@ -263,13 +472,26 @@ class ProtocolRANXFuse(EMProtocol):
     return paramsFile
 
   def parseOutputFile(self):
-    outDic = {}
+    scores = {}
     with open(self.getOutFile()) as f:
       f.readline()
       for line in f:
         _, mutName, scoreComb = line.strip().split('\t')
-        outDic[mutName] = scoreComb
-    return outDic
+        scores[mutName] = float(scoreComb)
+
+    sortedItems = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+    ranked = {}
+    currentRank = 1
+    for idx, (mut, score) in enumerate(sortedItems):
+      currentRank = idx + 1
+      ranked[mut] = {"score": score, "rank": currentRank}
+
+    with open(self.getOutFile(), 'w') as f:
+      f.write("Rank\tMut\tScore\n")
+      for mut, data in ranked.items():
+        f.write(f"{data['rank']}\t{mut}\t{data['score']}\n")
+    return ranked
 
   # --------------------------- INFO functions -----------------------------------
   def _validate(self):

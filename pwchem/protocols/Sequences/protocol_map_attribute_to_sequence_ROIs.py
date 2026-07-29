@@ -50,7 +50,84 @@ fastaName = "pairWise.fasta"
 
 class ProtMapAttributeToSeqROIs(EMProtocol):
     """
-    Maps a set of SequenceROIs to their respective structure ROIs in an AtomStruct
+    AI Generated:
+    
+    This protocol maps residue-level attributes from a structural or sequence source
+    onto predefined SequenceROI regions and computes the average attribute value per ROI.
+
+    It is designed to transfer quantitative annotations (e.g., conservation, energy,
+    accessibility, or any residue-level score) from an AtomStruct or Sequence object
+    onto biologically defined regions of interest (ROIs) in a reference sequence.
+
+    Overview
+    --------
+    The protocol performs a sequence alignment between:
+    - A reference sequence containing ROIs (SequenceROIs)
+    - A second sequence carrying residue-level attributes
+
+    It then maps attribute values through the alignment and computes per-ROI averages.
+
+    Input
+    -----
+    inputSequenceROIs:
+        SetOfSequenceROIs defining regions on a reference sequence.
+
+    inputFrom:
+        Source of attribute data:
+        - AtomStruct: extract attributes from structural model
+        - Sequence: extract attributes from annotated sequence
+
+    inputAtomStruct:
+        Structural object containing residue-level attributes.
+
+    chain_name:
+        Chain identifier (and model information) for structure parsing.
+
+    inputSequence:
+        Sequence object containing attributes (used when inputFrom = Sequence).
+
+    attrName:
+        Name of the residue-level attribute to map onto ROIs.
+
+    Workflow
+    --------
+    1. Extract reference sequence and attribute sequence
+    2. Perform pairwise sequence alignment
+    3. Build residue index mapping between sequences
+    4. Extract attribute values for aligned residues
+    5. Iterate over each ROI:
+       - Identify aligned residue positions
+       - Collect corresponding attribute values
+       - Compute mean attribute value per ROI
+    6. Assign computed value as a new attribute on each ROI
+    7. Generate updated SetOfSequenceROIs
+
+    Output
+    ------
+    outputROIs:
+        SetOfSequenceROIs where each ROI includes a new attribute:
+        - attrName → Float(mean value over ROI residues)
+
+    Key Features
+    ------------
+    - Maps structural or sequence-derived attributes onto ROIs
+    - Supports both AtomStruct and Sequence-based annotations
+    - Uses pairwise alignment to ensure correct residue correspondence
+    - Computes per-ROI averaged quantitative scores
+    - Handles gaps and alignment inconsistencies robustly
+
+    Alignment Strategy
+    ------------------
+    - Pairwise sequence alignment is performed prior to mapping
+    - Gaps are explicitly tracked in both sequences
+    - Residue indices are translated through alignment coordinates
+
+    Notes
+    -----
+    - If no mapped residues exist in an ROI, value defaults to 0
+    - Structure-derived attributes are extracted at residue or atom level
+    - Chain and model selection are required for structural inputs
+    - Alignment file is stored internally for debugging and reproducibility
     """
     _label = 'Map attribute to sequence ROIs'
 

@@ -29,33 +29,188 @@ from pyworkflow.protocol import params
 
 from pwchem.utils import fillEmptyAttributes
 
-UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK = list(range(7))
+UNIQUE, UNION, INTERSECTION, DIFFERENCE, FILTER, REMCOl, RANK, BEST = list(range(8))
 
 class ProtChemOperateSet(EMProtocol):
-    """Filter a set by a column value or keep just a few columns"""
+    """
+    AI Generated:
+
+    Protocol to perform operations over generic EMSet objects.
+
+    This protocol provides a flexible framework to manipulate sets by applying
+    classical set operations as well as attribute-based filtering, ranking,
+    and column manipulation.
+
+    Supported operations
+    --------------------
+    Set operations:
+        - Unique:
+            Removes duplicated elements based on a reference column.
+        - Union:
+            Combines multiple sets into one.
+        - Intersection:
+            Keeps only elements present in all input sets.
+        - Difference:
+            Removes elements from the main set that are present in a second set.
+
+    Modification operations:
+        - Filter:
+            Keeps elements that satisfy a condition on a given attribute.
+        - Remove columns:
+            Removes specified attributes from each element.
+        - Ranking:
+            Selects top/bottom elements based on a numeric attribute.
+        - Best:
+            Selects the best element (min/max) per unique reference value.
+
+    Inputs
+    ------
+    operation:
+        Operation to perform. Options include:
+        Unique, Union, Intersection, Difference, Filter,
+        Remove columns, Ranking, Best.
+
+    removeDuplicates:
+        If enabled, duplicated elements (based on reference column)
+        will be removed.
+
+    refColumn:
+        Attribute used as identifier for set operations and duplicate handling.
+        If empty, '_objId' is used by default.
+
+    filterColumn:
+        Attribute used for filtering, ranking, or selecting best elements.
+
+    filterOp:
+        Operation used in filtering:
+        - Numeric: ==, >, >=, <, <=, !=
+        - Range: between
+        - String: startswith, endswith, contains
+        - Negative string: does not startwith, does not end with, does not contain
+
+    filterValue:
+        Reference value used in filtering or ranking.
+
+    filterValue2:
+        Secondary value used for "between" filtering.
+
+    smallerIsBetter:
+        Defines ranking direction for "Best" operation.
+        - True: smaller values are preferred
+        - False: larger values are preferred
+
+    remColumns:
+        List of attributes to remove (semicolon-separated).
+
+    threshold:
+        Used in ranking:
+        - Integer: number of elements to keep
+        - Float (0-1): proportion of dataset
+        - Percentage (e.g., "10%")
+        - Negative values: select lowest values instead of highest
+
+    inputSet:
+        Primary input set (used in most operations).
+
+    inputMultiSet:
+        Multiple input sets (used for Union, Intersection, Best).
+
+    secondSet:
+        Secondary set used in Difference operation.
+
+    Workflow
+    --------
+    1. Operation selection
+       - Determines which logic branch is executed.
+
+    2. Element processing
+       - Iterates through input sets
+       - Extracts reference attribute values
+       - Applies operation-specific logic:
+         * grouping (Union/Intersection)
+         * filtering (Filter)
+         * comparison (Best/Ranking)
+
+    3. Attribute evaluation
+       - Numeric comparisons via operators
+       - String operations (startswith, contains, etc.)
+       - Range filtering (between)
+
+    4. Output construction
+       - Creates a new set based on input type
+       - Clones selected elements
+       - Optionally reassigns object IDs (Union/Intersection/Best)
+
+    Output
+    ------
+    outputSet:
+        A new EMSet containing the processed elements.
+
+    Behavior details
+    ----------------
+    - Duplicate handling:
+        Controlled via `removeDuplicates` and reference column.
+
+    - Attribute handling:
+        Attributes are accessed dynamically using getAttributeValue.
+
+    - Cloning:
+        Items are cloned before insertion to avoid modifying originals.
+
+    - ID reassignment:
+        In some operations (Union, Intersection, Best),
+        object IDs are reassigned sequentially.
+
+    Validation
+    ----------
+    - Ensures required attributes exist in input elements.
+    - Converts filter values to correct data types (int/float) when needed.
+    - Handles missing or None values in comparisons.
+
+    Notes
+    -----
+    - Filtering relies on Python evaluation (`eval`) for numeric operators.
+    - Ranking supports flexible threshold definitions (absolute, relative, percentage).
+    - Best operation groups elements by reference column and selects optimal values.
+    - Designed to work with any EMSet-compatible object in Scipion.
+
+    Summary
+    -------
+    This protocol is a general-purpose tool for:
+    - Set algebra operations
+    - Attribute-based filtering
+    - Data reduction and ranking
+    - Dataset restructuring
+
+    It enables flexible and reusable manipulation of structured datasets
+    within Scipion workflows.
+    """
     _label = 'operate set'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
         group = form.addGroup('Operation')
         group.addParam('operation', params.EnumParam, label='Operation: ', default=0,
-                      choices=['Unique', 'Union', 'Intersection', 'Difference', 'Filter', 'Remove columns',  'Ranking'],
+                      choices=['Unique', 'Union', 'Intersection', 'Difference', 'Filter', 'Remove columns',  'Ranking', 'Best'],
                       help='-Sets operations: Duplicates share the same reference column value\n'
                            '\tUnique: keep just one item with the same reference column value. Similar to remove '
                            'duplicates.\n\tUnion: merges two or more sets.\n\tIntersection: keep only the items '
                            'repeated in all the input sets.\n\tDifference: keep only the items in the first set that '
                            'are not present in the second.\n\n-Modification operations:\n\tFilter: outputs only '
                            'those items passing the filter\n\tRemove columns: remove the specified columns\n\t'
-                           'Ranking: outputs only the top/bottom elements for the specified column.')
+                           'Ranking: outputs only the top/bottom elements for the specified column.\n\t'
+                           'Best: return the best element (defined as the one with the higher/lower values of the '
+                           'filter column) for each unique element of the reference column.')
 
         group.addParam('removeDuplicates', params.BooleanParam, default=False,
-                       label='Remove duplicates: ', condition='not operation in [0]',
+                       label='Remove duplicates: ', condition='not operation in [0, 7]',
                        help='Remove elements with the reference column value repeated')
         group.addParam('refColumn', params.StringParam, label='Reference column: ', default='',
-                       condition='removeDuplicates or operation in [0, 1, 2, 3]',
+                       condition='removeDuplicates or operation in [0, 1, 2, 3, 7]',
                        help='Reference attribute for the set operation.')
 
-        group.addParam('filterColumn', params.StringParam, label='Filter column: ', condition='(operation in [4, 6])',
+        group.addParam('filterColumn', params.StringParam, label='Filter column: ',
+                       condition='(operation in [4, 6, 7])',
                        help='Attribute for the set filtering.')
         group.addParam('filterOp', params.EnumParam, label='Filter operation: ',
                       condition='(operation==4)', default=0,
@@ -67,6 +222,9 @@ class ProtChemOperateSet(EMProtocol):
         group.addParam('filterValue2', params.StringParam,
                        label='Lower Value: ', condition='(operation==4 and filterOp==6)',
                        help='Value to use in the filter')
+        group.addParam('smallerIsBetter', params.BooleanParam, label="Smaller is better?: ",
+                       default=True, condition='operation==7',
+                       help='Define the direction of the score, whether small values are prefered')
         
         group.addParam('remColumns', params.StringParam, label='Remove columns: ', condition='operation==5',
                        help='They must exist in the input database list. Separated by semicolons '
@@ -79,9 +237,9 @@ class ProtChemOperateSet(EMProtocol):
 
         group = form.addGroup('Input')
         group.addParam('inputSet', params.PointerParam, pointerClass="EMSet", label='Set to filter: ',
-                       condition='not operation in [1, 2]', help='Principal set to operate')
+                       condition='not operation in [1, 2, 7]', help='Principal set to operate')
         group.addParam('inputMultiSet', params.MultiPointerParam, pointerClass="EMSet", allowsNull=True,
-                      label='Input sets: ', condition='operation in [1, 2]')
+                      label='Input sets: ', condition='operation in [1, 2, 7]')
         group.addParam('secondSet', params.PointerParam, pointerClass="EMSet", condition="operation==3",
                       label='Set with items to remove: ',
                       help='Secondary set to operate')
@@ -202,28 +360,53 @@ class ProtChemOperateSet(EMProtocol):
                 elif not descending and value<threshold:
                     self.addItem(outputDict, opId, item)
 
+        elif self.operation.get() == BEST:
+
+            inputSets = fillEmptyAttributes(self.inputMultiSet)
+            for inSet in inputSets:
+                for item in inSet.get():
+                    opId = self.getAttrValue(item, opAttr)
+                    value = item.getAttributeValue(self.filterColumn.get())
+                    if value is None:
+                        continue
+
+                    isBetter = False
+                    if opId not in outputDict:
+                        isBetter = True
+                    else:
+                        prevValue = outputDict[opId][0].getAttributeValue(self.filterColumn.get())
+                        if (self.smallerIsBetter.get() and value < prevValue) or \
+                                (not self.smallerIsBetter.get() and value > prevValue):
+                            isBetter = True
+
+                    if isBetter:
+                        outputDict[opId] = [item.clone()]
+
+
         if len(outputDict)>0:
-            outputSet = self.getRepInputSet().createCopy(self._getPath(), copyInfo=True)
+            outputSet = self.getRepInputSet().get().createCopy(self._getPath(), copyInfo=True)
             i = 1
-            for itemId in outputDict:
-                for item in outputDict[itemId]:
-                    if self.operation.get() in [UNION, INTERSECTION]:
+            for itemId, itemList in outputDict.items():
+                for item in itemList:
+                    if self.operation.get() in [UNION, INTERSECTION, BEST]:
                         item.setObjId(i)
                         i += 1
                     outputSet.append(item)
-            self._defineOutputs(outputSet=outputSet)
+
+            outputArgs = {self.getRepInputSet().getExtended(): outputSet}
+            self._defineOutputs(**outputArgs)
 
 
     ######################## UTILS functions #################
 
     def getRepInputSet(self):
-        if self.operation.get() in [1,2]:
-            return self.inputMultiSet[0].get()
+        if self.operation.get() in [1, 2, 7]:
+            return self.inputMultiSet[0]
         else:
-            return self.inputSet.get()
+            return self.inputSet
 
     def addItem(self, dic, itemId, item, allowDup=None):
-        allowDup = not self.removeDuplicates.get() if allowDup == None else allowDup
+        allowDup = not self.removeDuplicates.get() if allowDup is None else allowDup
 
         if itemId in dic and allowDup:
             dic[itemId] += [item.clone()]
