@@ -335,49 +335,60 @@ class ProtocolRANXFuse(EMProtocol):
     originalAttrs = self.getOriginalAttrs(inAttrDic)
     perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
+
     nativePosMatches = 0
     for item in inSet:
       inID = str(item.getAttributeValue(outAttrName))
-      # Clone item to avoid modifying original object
-      newItem = item.clone()
+      newItem = self.buildOutputItem(item, inID, originalAttrs, perSetAttrs, outData)
 
-      # Remove original attributes dynamically
-      for attrName in originalAttrs:
-        if hasattr(newItem, attrName):
-          delattr(newItem, attrName)
-
-      # Add renamed attributes in deterministic order
-      if inID in perSetAttrs:
-
-        orderedAttrs = perSetAttrs[inID]
-
-        for attrName, value in orderedAttrs.items():
-          try:
-            setattr(newItem, attrName, Float(float(value)))
-          except:
-            setattr(newItem, attrName, String(str(value)))
-
-      # Add fusion outputs at the end
-      scoreComb = outData[inID]["score"]
-      rankComb = outData[inID]["rank"]
-
-      setattr(newItem, self.outName.get(), Float(scoreComb))
-      setattr(newItem, "RanxRank", Integer(rankComb))
-
-      if self.extractNativePosition.get():
-        nativePosition = self.parseNativePosition(inID)
-        if nativePosition is not None:
-          setattr(newItem, "NativePosition", String(nativePosition))
-          nativePosMatches += 1
+      if self.extractNativePosition.get() and self.setNativePosition(newItem, inID):
+        nativePosMatches += 1
 
       outSet.append(newItem)
 
+    self.warnIfNoNativePositionMatch(len(inSet), nativePosMatches)
+    self._defineOutputs(outputSet=outSet)
+
+  def buildOutputItem(self, item, inID, originalAttrs, perSetAttrs, outData):
+    '''Clones "item", drops its original per-set attributes and fills in the per-set attributes
+    (renamed by set index) plus the fusion outputs (score/rank) for the mutation "inID".
+    '''
+    newItem = item.clone()
+
+    for attrName in originalAttrs:
+      if hasattr(newItem, attrName):
+        delattr(newItem, attrName)
+
+    for attrName, value in perSetAttrs.get(inID, {}).items():
+      self.setNumericOrStringAttr(newItem, attrName, value)
+
+    scoreComb = outData[inID]["score"]
+    rankComb = outData[inID]["rank"]
+    setattr(newItem, self.outName.get(), Float(scoreComb))
+    setattr(newItem, "RanxRank", Integer(rankComb))
+    return newItem
+
+  def setNumericOrStringAttr(self, obj, attrName, value):
+    try:
+      setattr(obj, attrName, Float(float(value)))
+    except:
+      setattr(obj, attrName, String(str(value)))
+
+  def setNativePosition(self, newItem, inID):
+    '''Adds the "NativePosition" attribute to newItem if "inID" matches the mutation ID format.
+    Returns whether it matched.
+    '''
+    nativePosition = self.parseNativePosition(inID)
+    if nativePosition is None:
+      return False
+    setattr(newItem, "NativePosition", String(nativePosition))
+    return True
+
+  def warnIfNoNativePositionMatch(self, nItems, nativePosMatches):
     if self.extractNativePosition.get() and nativePosMatches == 0:
       print('WARNING: "Extract native position from mutation ID" is enabled, but none of the %d IDs matched '
             'the expected mutation format "[aaFrom][Chain][Position][aaTo]". "NativePosition" was not '
-            'added to any item.' % len(inSet))
-
-    self._defineOutputs(outputSet=outSet)
+            'added to any item.' % nItems)
 
   #  -------------------------- MAIN FUNCTIONS -----------------------------------
 
@@ -484,7 +495,7 @@ class ProtocolRANXFuse(EMProtocol):
     '''
     match = MUTATION_ID_PATTERN.match(mutID)
     if match:
-      aaFrom, chain, position, aaTo = match.groups()
+      aaFrom, chain, position, _ = match.groups()
       return f'{aaFrom}{chain}{position}'
     return None
 
