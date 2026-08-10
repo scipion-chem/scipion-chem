@@ -66,9 +66,94 @@ def normalizeDictValues(d, normRange=[0, 1]):
 
 class ProtocolRankDocking(EMProtocol):
     """
-    Executes the rank scoring to combine different origin docked molecules scores.
-    The rank score will be defined by the ranking from the different docking scores for each set.
-    """
+    AI Generated:
+
+This protocol is used to rank a set of docked molecules coming from different origins.
+These molecules may originate from different docking runs, scoring functions, or protocols.
+
+The goal is to combine heterogeneous docking results into a unified consensus ranking,
+based on the relative performance of each molecule across all input sources.
+
+Overview
+--------
+Docking protocols often produce multiple independent ranked lists of ligand poses.
+Each list may use different scoring functions and may not be directly comparable.
+
+This protocol addresses that problem by:
+
+- Aggregating multiple docking result sets
+- Converting raw scores into normalized rankings
+- Computing a consensus "voting score" per molecule
+- Optionally weighting contributions by docking score magnitude
+- Producing a final ranked list of molecules
+
+Ranking Strategy
+----------------
+For each input docking set:
+
+1. Molecules are sorted according to a selected score attribute
+   (e.g. binding energy or docking score).
+
+2. A rank-based voting score is assigned:
+       best-ranked molecule → highest vote
+       worst-ranked molecule → lowest vote
+
+3. Votes can optionally be weighted by the normalized score value,
+   allowing stronger scoring poses to contribute more.
+
+4. Votes from all docking sets are summed per molecule.
+
+5. Final scores are normalized to a fixed range for interpretability.
+
+Score Customization
+-------------------
+Users may define:
+
+- Which score attribute to use per docking set
+- Whether lower or higher values are better
+- Relative weights for each docking source
+- Manual configuration of input scoring schemes
+
+If no custom definition is provided, the protocol defaults to:
+- `_energy` as scoring attribute
+- Equal weights for all inputs
+- Lower values considered better (energy minimization assumption)
+
+Output
+------
+- outputSmallMolecules:
+    A merged SetOfSmallMolecules containing representative poses
+    enriched with a consensus ranking score.
+
+- results.tsv:
+    Tab-separated file with final normalized ranking scores per molecule.
+
+Each output molecule includes:
+- rankScore attribute representing its final consensus score
+- Preserved docking metadata from the best available source
+
+Key Features
+------------
+- Multi-source docking integration
+- Rank-based consensus scoring
+- Optional score-weighted voting
+- Automatic normalization of heterogeneous scores
+- Preservation of best-scoring molecular representations
+- Support for custom scoring definitions
+
+Use Cases
+---------
+- Consensus ranking of docking results from multiple engines
+- Post-processing of virtual screening campaigns
+- Combining rescoring methods with docking outputs
+- Prioritization of compounds for experimental validation
+
+Notes
+-----
+- Assumes all input sets contain comparable ligand identifiers
+- Score directionality (higher vs lower is better) must be consistent per input
+- Works best when docking sets contain overlapping ligand populations
+"""
     _label = 'Rank docking score'
 
     # -------------------------- DEFINE param functions ----------------------

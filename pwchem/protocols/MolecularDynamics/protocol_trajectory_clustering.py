@@ -87,7 +87,136 @@ def selectionToMdtraj(selIdx, firstRes=None, lastRes=None, ligandId=None):
 # ── Protocol ──────────────────────────────────────────────────────────────────
 
 class ProtocolTrajectoryClustering(EMProtocol):
-    """Clusterize molecular dynamics simulation trajectories or a setOfAtomStruct using TTClust."""
+    """
+    AI Generated:
+
+    Protocol for clustering molecular dynamics trajectories (TTClust-based analysis).
+
+    This protocol performs clustering of MD simulation trajectories or ensembles
+    of atomic structures in order to identify representative conformations and
+    characterize conformational variability over time.
+
+    It is based on TTClust (Time-series Trajectory Clustering):
+    https://github.com/tubiana/TTClust
+    DOI: https://pubs.acs.org/doi/10.1021/acs.jcim.8b00512
+
+    Overview
+    --------
+    The protocol clusters structural snapshots from:
+
+    - Molecular Dynamics trajectories (MDSystem)
+    - Pre-aligned ensembles (SetOfAtomStructs)
+
+    It computes RMSD-based similarity matrices and applies hierarchical clustering
+    to group conformations into structurally similar clusters.
+
+    Input
+    -----
+    inputFrom:
+        Select input type:
+        - MDSystem (trajectory-based clustering)
+        - SetOfAtomStructs (ensemble clustering)
+
+    inputMDSystem:
+        Molecular Dynamics system containing:
+        - topology
+        - trajectory
+        Required when inputFrom = MDSystem
+
+    inputSetOfStructs:
+        Set of atomic structures to cluster
+        Required when inputFrom = SetOfAtomStructs
+
+    stride:
+        Frame sampling step for trajectory loading.
+        Example: 10 → use every 10th frame.
+
+    refStructId:
+        Reference structure ID used for alignment (ensemble mode).
+
+    Atom selection
+    --------------
+    selectAlign:
+        Defines atoms used for structural superposition:
+        - Backbone
+        - Alpha carbons (CA)
+        - Protein
+        - Ligand
+        - Residue range
+        - None (skip alignment)
+
+    selectRmsd:
+        Defines atoms used for RMSD distance calculation.
+
+    Residue ranges can be defined using:
+        firstResAlign / lastResAlign
+        firstResRmsd / lastResRmsd
+
+    Clustering parameters
+    ---------------------
+    clusterMethod:
+        Hierarchical linkage method:
+        - ward, single, complete, average, weighted, centroid, median
+
+    clusterMode:
+        Defines how clusters are determined:
+        - Auto (elbow method)
+        - Number of groups (fixed k)
+        - Cutoff (distance threshold)
+
+    nGroup:
+        Number of clusters (if fixed-k mode is selected).
+
+    cutoff:
+        RMSD cutoff threshold (if cutoff mode is selected).
+
+    randomSeed:
+        Seed used for reproducibility in automatic cluster selection.
+
+    Workflow
+    --------
+    1. Load input trajectory or structure ensemble.
+    2. Select atom subsets for alignment and RMSD calculation.
+    3. Compute pairwise RMSD distance matrix.
+    4. Apply hierarchical clustering (TTClust backend).
+    5. Determine clusters using selected mode.
+    6. Extract representative structures per cluster.
+    7. Export representative PDB files.
+
+    Output
+    ------
+    outputAtomStructs:
+        Set of representative atomic structures, one per cluster.
+
+    Each structure corresponds to:
+        - Cluster centroid or representative frame
+        - Stored as PDB files in extra/clustering/
+
+    Additional outputs:
+        - clustering.log (TTClust log file)
+        - cluster visualization files (inside extra/clustering)
+
+    Key Features
+    ------------
+    - Supports MD trajectories and structural ensembles
+    - Flexible atom selection for alignment and RMSD
+    - Multiple hierarchical clustering strategies
+    - Automatic or user-defined cluster selection
+    - Extraction of representative conformations
+
+    Internal Notes
+    --------------
+    - Uses MDTraj-compatible selection syntax
+    - Requires pre-aligned or alignment-enabled input
+    - Output structures are sorted by cluster ID
+
+    Typical Use Cases
+    ------------------
+    - Identify dominant conformations in MD simulations
+    - Reduce trajectory complexity
+    - Extract representative structures for docking or analysis
+    - Study conformational transitions
+    """
     _label = 'Traj Clustering'
 
     # ── Form ──────────────────────────────────────────────────────────────────

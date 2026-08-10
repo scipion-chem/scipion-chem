@@ -50,9 +50,103 @@ from pwchem import Plugin, POSEB_DIC, SCORCH2_DIC, OPENBABEL_DIC
 
 class ProtocolPoseBusters(EMProtocol):
     """
-        Performs plausibility checks for generated molecule poses.
-        More info about the tests: https://posebusters.readthedocs.io/en/latest/cli.html
-        """
+    AI Generated:
+
+This protocol evaluates the quality and chemical plausibility of docked ligand poses
+using the PoseBusters framework (https://posebusters.readthedocs.io/).
+
+PoseBusters applies a series of geometric, chemical, and steric validation tests to
+predict whether a docked ligand pose is physically realistic and chemically valid.
+
+Overview
+--------
+Docking pose validation is a critical step in structure-based drug discovery to ensure
+that predicted ligand binding modes are not only energetically favorable but also
+chemically and sterically plausible.
+
+This protocol automates the execution of PoseBusters tests on a set of docked ligands
+and filters results based on the number of passed validation criteria.
+
+Test Categories
+---------------
+PoseBusters evaluates ligand poses using multiple types of checks, including:
+
+- Chemical validity:
+  * Sanity checks of molecular structure
+  * Atom connectivity and valence correctness
+  * Radical and charge consistency
+
+- Geometric consistency:
+  * Bond lengths and angles
+  * Ring planarity
+  * Stereochemistry correctness
+
+- Steric and spatial feasibility:
+  * Clashes within ligand
+  * Protein-ligand steric clashes
+  * Distance to receptor atoms or cofactors
+  * Volume overlap with protein or water molecules
+
+- Reference-based metrics (optional):
+  * RMSD to true (crystal) ligand
+  * Centroid displacement
+
+Workflow
+--------
+1. Input a set of docked small molecules (poses).
+2. Optionally provide:
+   - A reference (true) ligand structure
+   - A receptor (protein structure)
+3. Organize and split input ligands into processing batches.
+4. Convert ligand structures to a PoseBusters-compatible format (PDB).
+5. Run PoseBusters CLI on each batch of poses.
+6. Collect and merge CSV results from all batches.
+7. Parse per-pose test outcomes.
+8. Filter poses based on a minimum number of passed tests.
+9. Annotate surviving poses with individual test results.
+
+Filtering Strategy
+------------------
+Each pose is evaluated against a set of binary pass/fail tests.
+A pose is retained if it passes at least:
+
+    testsPassed ≥ N
+
+where N is configurable and depends on whether protein and/or true ligand information
+is used.
+
+Output
+------
+- outputSmallMolecules:
+    A filtered SetOfSmallMolecules containing only poses that pass the minimum
+    number of PoseBusters validation tests.
+
+    Each retained molecule includes:
+    - Boolean flags for each evaluated test (TRUE/FALSE)
+    - Link to the PoseBusters result file
+    - Optional reference-based metrics if enabled
+
+Key Features
+------------
+- Parallel execution over ligand batches
+- Optional receptor-based validation
+- Optional ground-truth ligand comparison
+- Automatic conversion of input formats (PDBQT → PDB, CIF → PDB)
+- Flexible filtering based on test subsets
+
+Use Cases
+---------
+- Post-docking validation in virtual screening pipelines
+- Filtering false-positive docking poses
+- Quality control of large-scale docking campaigns
+- Benchmarking docking protocols against structural criteria
+
+Notes
+-----
+- Requires PoseBusters CLI installed and available in the execution environment.
+- Results depend strongly on input pose quality and receptor accuracy.
+- Protein-based tests are only meaningful if receptor structure is provided.
+"""
     _label = 'PoseBusters docking tests'
 
     NTESTS = {'simple': 12, 'receptor': 22, 'trueMol': 18, 'trueMolAndReceptor': 28}

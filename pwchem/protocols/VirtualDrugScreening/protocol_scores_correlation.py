@@ -39,8 +39,116 @@ DIFF, RATIO = 1, 2
 
 class ProtScoreCorrelation(EMProtocol):
     """
-    Protocol to analyze the correlation between the scores of two sets of objects
-    """
+    AI Generated:
+
+This protocol analyzes the correlation between two sets of numerical scores
+associated with molecular or structural datasets.
+
+It is designed to compare scoring functions, docking outputs, or any other
+quantitative descriptors computed over matching entities (e.g., ligands,
+poses, or structures), enabling statistical evaluation of agreement or
+disagreement between scoring methods.
+
+Overview
+--------
+The protocol takes two input score sets and computes a statistical correlation
+between them. Scores can be extracted either from Scipion EM sets or from
+external CSV files.
+
+Each score set is mapped by a common identifier (e.g., molecule ID), allowing
+pairwise comparison between corresponding elements.
+
+Supported Correlation Metrics
+-----------------------------
+The protocol supports the following statistical correlation analyses:
+
+- Pearson correlation:
+  Measures linear correlation between two continuous variables.
+
+- Spearman correlation:
+  Measures rank-based correlation, capturing monotonic relationships.
+
+Optional Transformations
+------------------------
+Before correlation, scores can optionally be transformed or combined:
+
+- Log transformation:
+  Applies a logarithmic transformation to score values to reduce scale
+  variability and skewness.
+
+- Difference comparison:
+  Computes element-wise differences between two score sets:
+      score = score1 - score2
+
+- Ratio comparison:
+  Computes element-wise ratios between two score sets:
+      score = score1 / score2
+
+These transformations allow customized comparative analysis depending on the
+nature of the scoring functions.
+
+Input Handling
+--------------
+Each input dataset can be provided in one of two ways:
+
+1. Scipion EMSet input:
+   - Scores are extracted directly from object attributes
+   - Requires specification of ID and score field names
+
+2. External file input:
+   - CSV format with two columns: ID, Score
+   - Each line represents a scored entity
+
+Matching Strategy
+-----------------
+- Scores are matched by identifier across both input sets
+- Only common identifiers are considered in the final analysis
+- Missing entries are automatically ignored
+
+Workflow
+--------
+1. Load first score set (Set 1)
+2. Load second score set (Set 2)
+3. Optionally apply transformations (log, difference, ratio)
+4. Align both score dictionaries by common identifiers
+5. Compute correlation (Pearson or Spearman)
+6. Generate scatter plot with regression line
+7. Annotate individual points if dataset size is small
+8. Save numerical results and graphical output
+
+Output
+------
+- correlation.txt:
+    Text file containing the computed correlation coefficient and p-value.
+
+- scoreDistribution.png:
+    Scatter plot showing relationship between the two score sets,
+    including regression line and optional point annotations.
+
+Key Features
+------------
+- Flexible input from EM sets or CSV files
+- Multiple correlation methods (Pearson, Spearman)
+- Optional score transformations (log, difference, ratio)
+- Automatic alignment of datasets by ID
+- Visualization of score relationships
+- Lightweight statistical analysis tool for scoring comparison
+
+Use Cases
+---------
+- Comparison of docking scoring functions
+- Evaluation of rescoring methods
+- Benchmarking machine learning scoring models
+- Analysis of consistency between scoring pipelines
+- Quality assessment of virtual screening results
+
+Notes
+-----
+- Only common identifiers between both datasets are used
+- Log transformation assumes strictly positive values
+- Ratio operation requires non-zero denominators
+- Plot annotations are enabled only for small datasets for clarity
+"""
 
     _label = 'Score correlation'
     _inLabels = ['1', '2']

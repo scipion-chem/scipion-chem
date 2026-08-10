@@ -189,10 +189,11 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
     form.addParam('displayTable', params.LabelParam,
                   label='Display Atom Struct set in table format: ',
                   help='Display the Atom Struct set in the set in table format with their respective attributes')
-
-    data = self._getData()
-    if data:
-        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+    structs = self.getStructSet()
+    if hasattr(structs, '_getData'):
+        data = structs._getData()
+        if data:
+            BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
 
   def _getVisualizeDict(self):
       d = {
@@ -265,15 +266,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
       f.write(oStr)
     return oFile
 
-  def _getData(self):
-      structSet = self.getStructSet()
-      if hasattr(structSet, '_interactScoresFile'):
-          with open(structSet._interactScoresFile.get(), 'r') as f:
-              data = json.load(f)
-      else:
-          data = None
-      return data
-
   def _getEntityNames(self, data):
       protNames = sorted(data.keys())
       molNames = sorted(next(iter(data.values())).keys())
@@ -333,6 +325,9 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
           molecules.update(modelData.keys())
 
       return sorted(molecules)
+
+  def getInteractionSet(self):
+      return self.getStructSet()
 
 
 class SetOfDatabaseIDView(pwemViews.ObjectView):

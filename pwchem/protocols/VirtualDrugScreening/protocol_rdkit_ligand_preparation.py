@@ -52,9 +52,100 @@ CONF_METHODS = ['KDG', 'ETDG', 'ETKDG', 'ETKDGv2', 'ETKDGv3', 'srETKDGv3']
 
 class ProtChemRDKitPrepareLigands(ProtocolBaseLibraryToSetOfMols):
     """
-    Prepare a set of molecules for use in a docking program (for example, Rosetta DARC).
-    Sets the partial atomic charges, generates low-energy conformers. This is done with OpenBabel.
-    """
+    AI Generated:
+
+This protocol is used to prepare a set of small molecules for downstream
+computational chemistry tasks such as molecular docking, virtual screening,
+or conformer-based modeling.
+
+It performs a standardized ligand preprocessing workflow that ensures all
+input molecules are chemically consistent, properly protonated, and optionally
+expanded into multiple low-energy conformations using RDKit.
+
+Overview
+--------
+Input ligands can originate from libraries, databases, or previous Scipion
+protocols. The protocol applies a sequence of structure standardization and
+optimization steps before exporting ready-to-dock molecules.
+
+Main preprocessing steps include:
+
+1. Input handling
+   - Accepts a SetOfSmallMolecules or ligand library file
+   - Extracts and standardizes molecule identifiers
+
+2. Structure standardization
+   - Optional removal and re-addition of hydrogens
+   - Removal of unwanted fragments (e.g., salts, water)
+   - Fragment filtering based on minimum atom count
+
+3. Charge assignment
+   - Recalculation of partial charges using the Gasteiger method
+   - Ensures compatibility with docking/scoring tools
+
+4. Force-field assignment and optimization
+   - Selection of RDKit force field (MMFF94 or MMFFp4s)
+   - Optional energy-based optimization of ligand geometry
+
+5. Conformer generation (optional)
+   - Generation of multiple low-energy conformations per ligand
+   - Supports multiple RDKit methods (e.g., ETKDG variants)
+   - RMSD-based filtering to remove redundant conformers
+
+6. Output generation
+   - Writes processed ligands in SDF format
+   - Optionally produces multiple conformers per ligand
+   - Preserves mapping between input and output molecules
+
+Fragment Handling
+------------------
+The protocol can optionally split disconnected molecular fragments and:
+- Keep only fragments above a minimum atom threshold
+- Remove salts or predefined ion species
+- Process fragments independently when required
+
+Conformer Generation
+--------------------
+When enabled, conformers are generated using RDKit embedding methods:
+
+- ETKDG and its variants for distance geometry-based conformer sampling
+- RMSD filtering to ensure structural diversity
+- Configurable number of conformers per ligand
+
+Output
+------
+- outputSmallMolecules:
+    A SetOfSmallMolecules containing preprocessed ligands, optionally
+    enriched with multiple conformers.
+
+- Mapping files:
+    Optional association between original ligands and generated structures
+
+- Failure report:
+    A log file listing molecules that could not be processed successfully
+
+Key Features
+------------
+- Full ligand standardization pipeline
+- RDKit-based charge and conformer generation
+- Flexible fragment and salt handling
+- Parallel execution support
+- Compatible with docking workflows
+
+Use Cases
+---------
+- Preparation of ligand libraries for molecular docking
+- Standardization of public chemical databases (e.g., ZINC subsets)
+- Generation of conformer ensembles for flexible docking
+- Preprocessing step for virtual screening pipelines
+
+Notes
+-----
+- Requires RDKit and OpenBabel integration via Scipion plugin environment
+- Output quality depends on input structural correctness
+- Conformer generation may significantly increase computational cost
+  for large ligand libraries
+"""
 
     _label = 'RDKit Ligand preparation'
     stepsExecutionMode = params.STEPS_PARALLEL

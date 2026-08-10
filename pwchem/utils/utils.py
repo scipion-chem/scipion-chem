@@ -201,10 +201,13 @@ def organizeThreads(nTasks, nThreads):
       subsets[i % nTasks] += 1
   return subsets
 
-def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime=1, popen=False, **kwargs):
+def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime=1, popen=False, gpuIdx=None, **kwargs):
   fullProgram = programPath
   if envDic:
     fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {programPath} '
+
+  if gpuIdx:
+    fullProgram = f'CUDA_VISIBLE_DEVICES={gpuIdx} {fullProgram}'
 
   i, finished = 1, False
   while not finished and i <= nMax:
@@ -215,7 +218,8 @@ def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime
         subprocess.check_call(f'{fullProgram} {progArgs}', shell=True, **kwargs)
 
       finished = True
-    except Exception:
+    except Exception as e:
+      print('Program run failed with exception: ', e)
       i += 1
       time.sleep(sleepTime)
 
@@ -639,13 +643,23 @@ def convertToSdf(protocol, molFile, sdfFile=None, overWrite=False, addHydrogens=
     outDir = os.path.abspath(os.path.dirname(sdfFile))
 
   if not os.path.exists(sdfFile) or overWrite:
-    args = f' -i "{os.path.abspath(molFile)}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
-           f'--outputName {baseName} --overWrite'
-    pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
-
+    done = False
+    if molFile.endswith('.pdbqt'):
+        try:
+          from autodock import Plugin as autodockPlugin
+          autodockPlugin.convertPDBQT2SDF(protocol, molFile, sdfFile)
+          done = True
+        except:
+          pass
+    if not done:
+      inMol = os.path.abspath(molFile)
+      if molFile.endswith('.cif'):
+        inMol = fixCifElementCase(inMol, outDir)
+      args = f' -i "{inMol}" -of sdf --outputDir "{os.path.abspath(outDir)}" ' \
+             f'--outputName {baseName} --overWrite'
+      pwchemPlugin.runScript(protocol, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir, popen=True)
   if addHydrogens:
     addHydrogensToMol(protocol, outDir, sdfFile)
-
 
   return sdfFile
 
@@ -1567,3 +1581,19 @@ def getReplaceCommand(file, inStr, repStr):
 
 def flipDic(dic):
   return {v:k for k, v in dic.items()}
+
+def fixCifElementCase(cifIn, outDir):
+  '''OpenBabel 3.1.1's mmCIF reader mis-parses uppercase two-letter type_symbols
+  (e.g. CL -> dummy atom). Biopython's MMCIFIO writes them uppercase, so
+  normalize _atom_site.type_symbol casing before OpenBabel conversion.'''
+  fixed = os.path.join(os.path.abspath(outDir), getBaseName(cifIn) + '_fixedcase.cif')
+  with open(cifIn) as fi, open(fixed, 'w') as fo:
+    for line in fi:
+      if line.startswith(('ATOM', 'HETATM')):
+        parts = line.split()
+        if len(parts) > 2:
+          parts[2] = parts[2].capitalize()      # type_symbol: CL -> Cl, C -> C
+        fo.write(' '.join(parts) + '\n')
+      else:
+        fo.write(line)
+  return fixed

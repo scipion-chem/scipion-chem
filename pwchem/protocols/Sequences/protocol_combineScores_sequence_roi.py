@@ -41,8 +41,86 @@ from pwchem.utils import Float
 
 class ProtCombineScoresSeqROI(EMProtocol):
     """
-    Score a set of sequence ROIs based on the values of their selected attributes and combining with information from
-    other set of ROIs of the same sequence
+    AI Generated:
+
+    Protocol for combining and scoring Sequence ROIs based on user-defined attributes
+    and optional conditional information from other ROI sets.
+
+    This protocol allows filtering and rescoring of Sequence ROIs by combining:
+
+    - A weighted linear combination of ROI attributes (input filters)
+    - Optional conditional scoring based on overlap with other ROI sets
+    - Flexible overlap definitions (containment or partial overlap rules)
+
+    Overview
+    --------
+    The protocol processes a SetOfSequenceROIs and assigns two types of scores:
+
+    1. Input Score:
+       - Computed from selected ROI attributes
+       - Each attribute is weighted by a user-defined factor
+       - Produces a combined score per ROI
+
+    2. Conditional Score:
+       - Computed using additional ROI sets
+       - Only applied when ROIs overlap according to user-defined rules
+       - Allows incorporation of external biological context (e.g. structure, secondary structure, functional regions)
+
+    Input
+    -----
+    inputSequenceROIs:
+        Set of Sequence ROIs to be scored.
+
+    scoreName:
+        Name assigned to the computed input score.
+
+    selectAttribute / attrWeight:
+        Attribute and weight used to build the scoring function.
+
+    conditionalROIs:
+        Optional set(s) of Sequence ROIs used for conditional scoring.
+
+    condAttribute / condWeight:
+        Attribute and weight used for conditional scoring.
+
+    overlapDef:
+        Defines how ROIs are considered overlapping:
+        - Containment (input contains conditional or vice versa)
+        - Any overlap
+        - Partial overlap based on threshold
+
+    overlapSize:
+        Minimum overlap fraction required for partial overlap modes.
+
+    Output
+    ------
+    outputROIs:
+        SetOfSequenceROIs containing:
+        - Original ROIs
+        - Added input score attribute
+        - Added conditional score attribute
+
+    Workflow
+    --------
+    1. Parse user-defined scoring filters
+    2. Compute weighted score for each ROI (input score)
+    3. Evaluate overlaps with conditional ROI sets
+    4. Compute conditional scores when overlap criteria are met
+    5. Store both scores in output ROI objects
+
+    Key Features
+    ------------
+    - Weighted attribute-based scoring
+    - Multi-set conditional scoring
+    - Flexible overlap definitions
+    - Supports biological context integration (structure/annotation ROIs)
+    - Fully traceable score construction via summaries
+
+    Notes
+    -----
+    - All scores are stored as float attributes in ROI objects
+    - Conditional scoring depends strictly on overlap rules
+    - Designed for post-processing and refinement of ROI-based annotations
     """
     _label = 'Combine sequence ROIs scores'
     _overlapOptions = ['Input ROI contains conditional ROI', 'Conditional ROI contains input ROI', 'Any contains any',

@@ -48,7 +48,116 @@ from pwchem.protocols import ProtDefineStructROIs
 
 class ProtMapSequenceROI(ProtDefineStructROIs):
     """
-    Maps a set of SequenceROIs to their respective structure ROIs in an AtomStruct
+    AI Generated:
+
+    This protocol maps SequenceROIs (sequence-defined regions of interest)
+    onto 3D structural coordinates in an AtomStruct, generating structural
+    ROIs (StructROIs).
+
+    It converts linear sequence regions into spatial clusters of atoms or
+    surface points in a protein structure, optionally clustering nearby
+    coordinates into coherent structural pockets.
+
+    Overview
+    --------
+    The protocol bridges sequence-based annotations with structural biology
+    by projecting ROI definitions from sequence space into 3D space.
+
+    It performs:
+    - Sequence ↔ structure alignment
+    - Residue index mapping
+    - Extraction of atomic coordinates for ROI residues
+    - Optional projection onto molecular surface
+    - Optional clustering of spatial coordinates
+    - Generation of StructROI objects
+
+    Input
+    -----
+    inputSequenceROIs:
+        SetOfSequenceROIs defining regions on a reference sequence.
+
+    inputAtomStruct:
+        Structural model (PDB/mmCIF/compatible formats).
+
+    chain_name:
+        JSON-like string specifying model and chain selection:
+        {
+            "chain": "A",
+            "model": 0
+        }
+
+    Options
+    -------
+    doCluster:
+        Whether to cluster spatial coordinates into discrete structural ROIs.
+
+    maxIntraDistance / maxDepth:
+        Parameters controlling spatial clustering and surface projection.
+
+    Workflow
+    --------
+    1. Extract reference sequence and structure-derived sequence
+    2. Perform pairwise alignment (sequence ↔ structure sequence)
+    3. Build residue index mapping (sequence → structure residues)
+    4. For each ROI:
+       - Map sequence indices to structure residues
+       - Extract all atomic coordinates for those residues
+    5. Optional:
+       - Project coordinates to molecular surface (MSMS)
+       - Filter by surface proximity threshold
+       - Cluster coordinates into spatial groups
+    6. Generate pocket files (CIF format)
+    7. Create StructROI objects and compute structural contacts
+
+    Output
+    ------
+    outputStructROIs:
+        SetOfStructROIs containing:
+        - Structural ROI coordinates (clusters or per-ROI mapping)
+        - Pocket files in CIF format
+        - Contact analysis metadata
+
+    Key Features
+    ------------
+    - Sequence-to-structure ROI mapping
+    - Support for multi-residue ROIs
+    - Atom-level coordinate extraction
+    - Optional surface projection using MSMS
+    - Distance-based clustering of spatial regions
+    - Compatible with multiple structure formats (PDB/mmCIF/Schrodinger)
+
+    Spatial Processing
+    ------------------
+    1. Residue mapping:
+       Sequence indices → structure residue IDs via alignment
+
+    2. Coordinate extraction:
+       All atom coordinates from mapped residues
+
+    3. Surface mapping (optional):
+       - Compute molecular surface using MSMS
+       - Project ROI coordinates to nearest surface points
+       - Filter by maximum depth threshold
+
+    4. Clustering (optional):
+       - Merge ROI coordinates
+       - Group spatially close points into clusters
+       - Each cluster becomes a structural ROI
+
+    Outputs per ROI
+    ---------------
+    Each ROI is converted into:
+    - A CIF pocket file
+    - A StructROI object
+    - Number of spatial points
+    - Contact information with structure
+
+    Notes
+    -----
+    - Requires accurate sequence alignment for correct mapping
+    - Missing alignment positions are skipped
+    - Chain and model selection must be correctly specified
+    - Surface-based projection improves biological interpretability
     """
     _label = 'Map sequence ROIs'
 
