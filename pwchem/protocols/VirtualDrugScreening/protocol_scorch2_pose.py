@@ -32,7 +32,6 @@ SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-bas
 """
 import csv
 import logging
-# from ctypes.wintypes import SMALL_RECT
 from pathlib import Path
 from pwem.convert import cifToPdb
 
