@@ -31,7 +31,7 @@
 This protocol is used to merge different lists scores generating a combined ranking.
 """
 
-import os, json, re
+import os, json, re, csv
 
 from pyworkflow.constants import BETA
 import pyworkflow.protocol.params as params
@@ -334,6 +334,7 @@ class ProtocolRANXFuse(EMProtocol):
     inAttrDic = self.getInputAttrsDic()
     originalAttrs = self.getOriginalAttrs(inAttrDic)
     perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
+    perSetAttrNames = self.getPerSetAttrNames(inAttrDic)
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
 
     nativePosMatches = 0
@@ -347,6 +348,7 @@ class ProtocolRANXFuse(EMProtocol):
       outSet.append(newItem)
 
     self.warnIfNoNativePositionMatch(len(inSet), nativePosMatches)
+    self.writeOutputCSV(outSet, outAttrName, perSetAttrNames)
     self._defineOutputs(outputSet=outSet)
 
   def buildOutputItem(self, item, inID, originalAttrs, perSetAttrs, outData):
@@ -509,6 +511,37 @@ class ProtocolRANXFuse(EMProtocol):
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
 
+  def getCSVFile(self):
+    return self._getExtraPath("fusionResults.csv")
+
+  def getPerSetAttrNames(self, inAttrDic):
+    '''Returns the ordered list of per-set attribute names (e.g. "ddg_setIdx_0") that
+    buildPerSetAttributeDictionary would generate, derived directly from the input attributes
+    definition. This keeps the column set stable even if some IDs are missing from some
+    input sets.
+    '''
+    names = set()
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, _ = key.split('-')
+      for attrVal in attrVals:
+        names.add(f"{attrVal[0]}_setIdx_{inPointIdx}")
+    return sorted(names, key=lambda x: (int(x.split('_setIdx_')[-1]), x.split('_setIdx_')[0]))
+
+  def writeOutputCSV(self, outSet, outAttrName, perSetAttrNames):
+    '''Writes a flat CSV table (mutation ID, per-set score attributes, fused score/rank and,
+    optionally, native position) so the results can be searched/filtered outside the Scipion
+    GUI, which only exposes the output set as a "Metadata:stats.sqlite".
+    '''
+    fieldNames = [outAttrName] + perSetAttrNames + [self.outName.get(), 'RanxRank']
+    if self.extractNativePosition.get():
+      fieldNames.append('NativePosition')
+
+    with open(self.getCSVFile(), 'w', newline='') as f:
+      writer = csv.DictWriter(f, fieldnames=fieldNames)
+      writer.writeheader()
+      for item in outSet:
+        writer.writerow({fieldName: item.getAttributeValue(fieldName) for fieldName in fieldNames})
+
   def writeParamsFile(self, runDics, norm, fus, kwargs):
     paramsFile = self._getExtraPath('inputParams.txt')
     with open(paramsFile, 'w') as f:
@@ -563,10 +596,12 @@ class ProtocolRANXFuse(EMProtocol):
 
   def _summary(self):
     summary = []
-    outputFile = self._getExtraPath('RankAggregation.tsv')
-    if os.path.exists(outputFile):
-      with open(outputFile) as f:
+    if os.path.exists(self.getOutFile()):
+      with open(self.getOutFile()) as f:
         summary.append(f.read())
+    if os.path.exists(self.getCSVFile()):
+      summary.append('A CSV table with all the per-set attributes, the fused score/rank and the '
+                      'native position (if extracted) is available at: %s' % self.getCSVFile())
     return summary
 
   def _methods(self):
