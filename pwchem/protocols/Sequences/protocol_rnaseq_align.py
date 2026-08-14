@@ -1471,7 +1471,14 @@ class ProtRNASeqAlignment(EMProtocol):
 
     @staticmethod
     def _quote(value):
-        return shlex.quote(str(value))
+        value = str(value)
+
+        if not re.fullmatch(r'[A-Za-z0-9_./+\- ]+', value):
+            raise ValueError(
+                'Invalid character in command path: {}'.format(value)
+            )
+
+        return shlex.quote(value)
 
     # -------------------------------------------------------
     # Validation

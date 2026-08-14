@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import json
+import gzip
 import os
 import re
 import shlex
@@ -1377,6 +1378,13 @@ class ProtReferenceGenomes(EMProtocol):
         if os.path.exists(zipFile):
             os.remove(zipFile)
 
+    @staticmethod
+    def _getNcbiQueryName(genomeInfo):
+        return (
+                genomeInfo.get('accession')
+                or genomeInfo['ncbiTaxon']
+        )
+
     def _downloadNcbiGenomes(self, genomes):
 
         for genomeInfo in genomes:
@@ -1384,9 +1392,8 @@ class ProtReferenceGenomes(EMProtocol):
             if self._canReuseNcbiDownload(genomeInfo):
                 continue
 
-            queryName = (
-                    genomeInfo.get('accession')
-                    or genomeInfo['ncbiTaxon']
+            queryName = self._getNcbiQueryName(
+                genomeInfo
             )
 
             outputDir = self._getExtraPath(
@@ -1751,15 +1758,33 @@ class ProtReferenceGenomes(EMProtocol):
 
         url = self._validateEnsemblDownloadUrl(url)
 
-        Plugin.runCondaCommand(
-            self,
-            '-fL --retry 3 -o {} {}'.format(
-                shlex.quote(compressedFile),
-                shlex.quote(url)
-            ),
-            RNASEQ_DIC,
-            'curl'
+        request = urllib.request.Request(
+            url,
+            headers={
+                'User-Agent': 'Scipion-Chem'
+            }
         )
+
+        try:
+            with urllib.request.urlopen(
+                    request,
+                    timeout=30) as response:
+                with open(
+                        compressedFile,
+                        'wb') as output:
+                    shutil.copyfileobj(
+                        response,
+                        output
+                    )
+
+        except (
+                urllib.error.URLError,
+                TimeoutError
+        ) as error:
+            raise RuntimeError(
+                'Could not download Ensembl file: {}'
+                .format(error)
+            )
 
         if not os.path.exists(compressedFile):
             raise RuntimeError(
@@ -1767,14 +1792,20 @@ class ProtReferenceGenomes(EMProtocol):
                 .format(compressedFile)
             )
 
-        Plugin.runCondaCommand(
-            self,
-            '-f {}'.format(
-                shlex.quote(compressedFile)
-            ),
-            RNASEQ_DIC,
-            'gunzip'
-        )
+        with gzip.open(
+                compressedFile,
+                'rb'
+        ) as inputFile:
+            with open(
+                    outputFile,
+                    'wb'
+            ) as output:
+                shutil.copyfileobj(
+                    inputFile,
+                    output
+                )
+
+        os.remove(compressedFile)
 
         if not os.path.exists(outputFile):
             raise RuntimeError(

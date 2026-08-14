@@ -47,10 +47,10 @@ CONDA_ACTIVATION = '%s && '
 def convertEMBOSSformat(inputAlignmentFile, embossFormat, outputAligmentFile):
   '''Connvert alignment files. Options in EMBOSS_FORMATS dictionary
   Returns a command line which must be executed into the scipion environment'''
-  cl_run = CONDA_ACTIVATION % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
-  cl_run += 'seqret -sequence {} -osformat2 {} {}'. \
-    format(inputAlignmentFile, embossFormat, outputAligmentFile)
-  return cl_run
+  clRun = CONDA_ACTIVATION % Plugin.getEnvActivationCommand(BIOCONDA_DIC)
+  clRun += 'seqret -sequence {} -osformat2 {} {}'. \
+      format(inputAlignmentFile, embossFormat, outputAligmentFile)
+  return clRun
 
 def copyFastaSequenceAndRead(protocol):
   outFileName = protocol._getExtraPath("sequence.fasta")
@@ -116,8 +116,12 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False
         fmt = 'clu'
 
     # Alignment
-    activate_env_line = CONDA_ACTIVATION % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
-    cline = '{} {} --outfmt={}'.format(activate_env_line, alignClustalSequences(oriFasta, outPath), fmt)
+    activateEnvLine = CONDA_ACTIVATION % Plugin.getEnvActivationCommand(BIOCONDA_DIC)
+    cline = '{} {} --outfmt={}'.format(
+        activateEnvLine,
+        alignClustalSequences(oriFasta, outPath),
+        fmt
+    )
     if force:
         cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)
@@ -139,11 +143,12 @@ def parseAlnFile(alnFile):
         f.readline()
         for line in f:
             if line.strip() and not line.startswith(' '):
-                id, seq = line.strip().split()[:2]
-                if id in seqDic:
-                    seqDic[id] += seq
+                seqId, seq = line.strip().split()[:2]
+
+                if seqId in seqDic:
+                    seqDic[seqId] += seq
                 else:
-                    seqDic[id] = seq
+                    seqDic[seqId] = seq
     return seqDic
 
 
