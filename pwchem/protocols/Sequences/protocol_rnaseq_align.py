@@ -965,16 +965,18 @@ class ProtRNASeqAlignment(EMProtocol):
         )
 
         if alignmentInfo['aligner'] == 'STAR':
-            statistics = self._parseStarStatistics(
-                alignmentInfo['logFile']
+            statistics = self._parseStarStatistics()
+            bamFile = self._getExtraPath(
+                'star_Aligned.sortedByCoord.out.bam'
             )
         else:
-            statistics = self._parseHisat2Statistics(
-                alignmentInfo['logFile']
+            statistics = self._parseHisat2Statistics()
+            bamFile = self._getExtraPath(
+                'hisat2_alignment.sorted.bam'
             )
 
         statistics = self._completeStatisticsWithSamtools(
-            alignmentInfo['alignmentFile'],
+            bamFile,
             statistics
         )
 
@@ -985,9 +987,8 @@ class ProtRNASeqAlignment(EMProtocol):
             alignmentInfo
         )
 
-    def _parseStarStatistics(self, logFile):
+    def _parseStarStatistics(self):
         values = self._parseKeyValueLog(
-            logFile,
             separator='|'
         )
 
@@ -1040,8 +1041,12 @@ class ProtRNASeqAlignment(EMProtocol):
             'unmappedRate': unmappedRate
         }
 
-    def _parseHisat2Statistics(self, logFile):
-        if not logFile or not os.path.exists(logFile):
+    def _parseHisat2Statistics(self):
+        logFile = self._getExtraPath(
+            'hisat2_alignment.log'
+        )
+
+        if not os.path.exists(logFile):
             return self._emptyStatistics()
 
         with open(logFile) as inputFile:
@@ -1193,11 +1198,14 @@ class ProtRNASeqAlignment(EMProtocol):
 
         return statistics
 
-    @staticmethod
-    def _parseKeyValueLog(logFile, separator='|'):
+    def _parseKeyValueLog(self, separator='|'):
         values = {}
 
-        if not logFile or not os.path.exists(logFile):
+        logFile = self._getExtraPath(
+            'star_Log.final.out'
+        )
+
+        if not os.path.exists(logFile):
             return values
 
         with open(logFile) as inputFile:

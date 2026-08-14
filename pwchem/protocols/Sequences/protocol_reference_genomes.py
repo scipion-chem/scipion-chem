@@ -1699,17 +1699,29 @@ class ProtReferenceGenomes(EMProtocol):
             compressedFile,
             outputFile):
 
+        outputFile = os.path.abspath(outputFile)
+        compressedFile = os.path.abspath(compressedFile)
+        extraPath = os.path.abspath(self._getExtraPath())
+
         if (
-            os.path.exists(outputFile)
-            and not self.overwrite.get()
+                os.path.commonpath([outputFile, extraPath]) != extraPath
+                or os.path.commonpath([compressedFile, extraPath]) != extraPath
+        ):
+            raise RuntimeError(
+                'Invalid download path.'
+            )
+
+        if (
+                os.path.exists(outputFile)
+                and not self.overwrite.get()
         ):
             return
 
         if self.overwrite.get():
 
             for path in (
-                compressedFile,
-                outputFile
+                    compressedFile,
+                    outputFile
             ):
                 if os.path.exists(path):
                     os.remove(path)
