@@ -1109,14 +1109,26 @@ class ProtReferenceGenomes(EMProtocol):
 
     def _buildEnsemblDownloadUrls(self, genomeInfo):
 
-        release = genomeInfo['release']
-        species = genomeInfo['ensemblName']
+        release = self._validateEnsemblUrlComponent(
+            genomeInfo['release'],
+            'release'
+        )
+
+        species = self._validateEnsemblUrlComponent(
+            genomeInfo['ensemblName'],
+            'species'
+        )
 
         fastaName = self._findEnsemblFile(
             release,
             species,
             'fasta',
             '.dna.toplevel.fa.gz'
+        )
+
+        fastaName = self._validateEnsemblUrlComponent(
+            fastaName,
+            'FASTA filename'
         )
 
         base = (
@@ -1136,12 +1148,16 @@ class ProtReferenceGenomes(EMProtocol):
         gtfUrl = None
 
         if self.downloadAnnotation.get():
-
             gtfName = self._findEnsemblFile(
                 release,
                 species,
                 'gtf',
                 '.gtf.gz'
+            )
+
+            gtfName = self._validateEnsemblUrlComponent(
+                gtfName,
+                'GTF filename'
             )
 
             gtfUrl = (
@@ -1726,32 +1742,18 @@ class ProtReferenceGenomes(EMProtocol):
     # Common download utilities
     # =====================================================================
     @staticmethod
-    def _validateEnsemblDownloadUrl(url):
-        parsedUrl = urlparse(url)
-        decodedPath = unquote(parsedUrl.path)
+    def _validateEnsemblUrlComponent(value, name):
+        value = str(value)
 
-        pathParts = [
-            part
-            for part in decodedPath.split('/')
-            if part
-        ]
-
-        hasTraversal = any(
-            part in ('.', '..')
-            for part in pathParts
-        )
-
-        if (
-                parsedUrl.scheme != 'https'
-                or parsedUrl.netloc != 'ftp.ensembl.org'
-                or not decodedPath.startswith('/pub/release-')
-                or hasTraversal
-        ):
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+', value):
             raise RuntimeError(
-                'Invalid Ensembl download URL: {}'.format(url)
+                'Invalid Ensembl {}: {}'.format(
+                    name,
+                    value
+                )
             )
 
-        return url
+        return value
 
     def _downloadAndUncompress(
             self,
@@ -1773,8 +1775,6 @@ class ProtReferenceGenomes(EMProtocol):
             ):
                 if os.path.exists(path):
                     os.remove(path)
-
-        url = self._validateEnsemblDownloadUrl(url)
 
         request = urllib.request.Request(
             url,
