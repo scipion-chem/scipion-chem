@@ -32,7 +32,7 @@ import shutil
 import urllib.error
 import urllib.request
 import zipfile
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam,EnumParam,StringParam
@@ -1385,12 +1385,17 @@ class ProtReferenceGenomes(EMProtocol):
                 or genomeInfo['ncbiTaxon']
         )
 
+    def _getNcbiGenomesToDownload(self, genomes):
+        return [
+            genomeInfo
+            for genomeInfo in genomes
+            if not self._canReuseNcbiDownload(genomeInfo)
+        ]
+
+
     def _downloadNcbiGenomes(self, genomes):
 
-        for genomeInfo in genomes:
-
-            if self._canReuseNcbiDownload(genomeInfo):
-                continue
+        for genomeInfo in self._getNcbiGenomesToDownload(genomes):
 
             queryName = self._getNcbiQueryName(
                 genomeInfo
@@ -1723,11 +1728,24 @@ class ProtReferenceGenomes(EMProtocol):
     @staticmethod
     def _validateEnsemblDownloadUrl(url):
         parsedUrl = urlparse(url)
+        decodedPath = unquote(parsedUrl.path)
+
+        pathParts = [
+            part
+            for part in decodedPath.split('/')
+            if part
+        ]
+
+        hasTraversal = any(
+            part in ('.', '..')
+            for part in pathParts
+        )
 
         if (
                 parsedUrl.scheme != 'https'
                 or parsedUrl.netloc != 'ftp.ensembl.org'
-                or not parsedUrl.path.startswith('/pub/release-')
+                or not decodedPath.startswith('/pub/release-')
+                or hasTraversal
         ):
             raise RuntimeError(
                 'Invalid Ensembl download URL: {}'.format(url)
