@@ -1288,11 +1288,12 @@ class ProtReferenceGenomes(EMProtocol):
 
             fastaGz = os.path.join(
                 outputDir,
-                os.path.basename(fastaUrl)
+                'genome.fa.gz'
             )
 
-            fastaFile = self._removeGzipExtension(
-                fastaGz
+            fastaFile = os.path.join(
+                outputDir,
+                'genome.fa'
             )
 
             self._downloadAndUncompress(
@@ -1311,11 +1312,12 @@ class ProtReferenceGenomes(EMProtocol):
 
                 gtfGz = os.path.join(
                     outputDir,
-                    os.path.basename(gtfUrl)
+                    'annotation.gtf.gz'
                 )
 
-                gtfFile = self._removeGzipExtension(
-                    gtfGz
+                gtfFile = os.path.join(
+                    outputDir,
+                    'annotation.gtf'
                 )
 
                 self._downloadAndUncompress(
@@ -1698,18 +1700,6 @@ class ProtReferenceGenomes(EMProtocol):
             url,
             compressedFile,
             outputFile):
-
-        outputFile = os.path.abspath(outputFile)
-        compressedFile = os.path.abspath(compressedFile)
-        extraPath = os.path.abspath(self._getExtraPath())
-
-        if (
-                os.path.commonpath([outputFile, extraPath]) != extraPath
-                or os.path.commonpath([compressedFile, extraPath]) != extraPath
-        ):
-            raise RuntimeError(
-                'Invalid download path.'
-            )
 
         if (
                 os.path.exists(outputFile)
