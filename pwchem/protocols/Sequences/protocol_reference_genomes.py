@@ -26,6 +26,7 @@
 import json
 import os
 import re
+import shlex
 import shutil
 import urllib.error
 import urllib.request
@@ -1718,9 +1719,9 @@ class ProtReferenceGenomes(EMProtocol):
 
         Plugin.runCondaCommand(
             self,
-            '-fL --retry 3 -o "{}" "{}"'.format(
-                compressedFile,
-                url
+            '-fL --retry 3 -o {} {}'.format(
+                shlex.quote(compressedFile),
+                shlex.quote(url)
             ),
             RNASEQ_DIC,
             'curl'
@@ -1734,8 +1735,8 @@ class ProtReferenceGenomes(EMProtocol):
 
         Plugin.runCondaCommand(
             self,
-            '-f "{}"'.format(
-                compressedFile
+            '-f {}'.format(
+                shlex.quote(compressedFile)
             ),
             RNASEQ_DIC,
             'gunzip'
