@@ -66,6 +66,8 @@ class Plugin(pwem.Plugin):
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
 
+        cls.addRNASeqPackage(env)
+
     @classmethod
     def _defineVariables(cls):
         # Package home directories
@@ -338,9 +340,14 @@ class Plugin(pwem.Plugin):
         installer.addCommand(
             f'conda create -y -n {rnaseqEnvName} '
             f'-c conda-forge -c bioconda '
+            f'fastqc={FASTQC_DIC["version"]} '
+            f'fastp={FASTP_DIC["version"]} '
             f'star={STAR_DIC["version"]} '
             f'hisat2={HISAT2_DIC["version"]} '
-            f'samtools={SAMTOOLS_DIC["version"]}',
+            f'samtools={SAMTOOLS_DIC["version"]} '
+            f'igv={IGV_DIC["version"]} '
+            f'igvtools={IGVTOOLS_DIC["version"]} '
+            f'ncbi-datasets-cli={NCBI_DATASETS_DIC["version"]}',
             'RNASEQ_ENV_CREATED'
         ).addPackage(
             env,

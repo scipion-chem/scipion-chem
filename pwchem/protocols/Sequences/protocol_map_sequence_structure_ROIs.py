@@ -40,7 +40,7 @@ from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, StructROI
 from pwchem.utils import *
-from pwchem.utils.utilsFasta import pairwiseAlign
+from pwchem.utils.sequence_utils import pairwiseAlign
 from pwchem import Plugin
 from pwchem.constants import MGL_DIC
 from pwchem.protocols import ProtDefineStructROIs

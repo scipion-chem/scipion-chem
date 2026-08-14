@@ -24,14 +24,14 @@
 # *
 # **************************************************************************
 
-import os, subprocess
+import os, subprocess, gzip
 from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
 
 from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
-from pwchem.constants import BIOCONDA_DIC
+from pwchem.constants import BIOCONDA_DIC, RNASEQ_DIC
 from pwchem import Plugin
 
 EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
@@ -198,3 +198,87 @@ def getMultipleAlignmentCline(programName, inputFasta, outputFile, extraArgs=Non
 
   return cline
 
+def openFastq(fn):
+  """Open plain or gzip-compressed FASTQ files."""
+
+  if fn.endswith('.gz'):
+    return gzip.open(fn, 'rt')
+
+  return open(fn, 'r')
+
+
+def getFastqStats(fn):
+  """Calculate number of reads and mean read length from a FASTQ file."""
+
+  numReads = 0
+  totalLength = 0
+
+  with openFastq(fn) as f:
+    while True:
+      header = f.readline()
+
+      if not header:
+        break
+
+      seq = f.readline().strip()
+      f.readline()
+      f.readline()
+
+      numReads += 1
+      totalLength += len(seq)
+
+  readLength = int(round(totalLength / numReads)) if numReads else 0
+
+  return numReads, readLength
+
+def runFastqc(protocol, fastqFiles):
+    """Run FastQC and return the generated HTML reports.
+
+    Parameters
+    ----------
+    protocol
+        Scipion protocol executing FastQC.
+    fastqFiles : list
+        FASTQ file paths to analyze.
+
+    Returns
+    -------
+    list
+        FastQC HTML report paths in the same order as fastqFiles.
+    """
+    outDir = protocol._getExtraPath('fastqc')
+    os.makedirs(outDir, exist_ok=True)
+
+    arguments = f'-o "{outDir}"'
+    arguments += ''.join(f' "{fn}"' for fn in fastqFiles)
+
+    Plugin.runCondaCommand(
+        protocol,
+        arguments,
+        RNASEQ_DIC,
+        'fastqc'
+    )
+
+    htmlFiles = []
+
+    for fn in fastqFiles:
+        baseName = os.path.basename(fn)
+
+        for ext in ['.fastq.gz', '.fq.gz', '.fastq', '.fq']:
+            if baseName.endswith(ext):
+                baseName = baseName[:-len(ext)]
+                break
+
+        htmlFile = os.path.join(
+            outDir,
+            f'{baseName}_fastqc.html'
+        )
+
+        if not os.path.exists(htmlFile):
+            raise RuntimeError(
+                f'FastQC report was not generated for: {fn}'
+            )
+
+        htmlFiles.append(htmlFile)
+
+    return htmlFiles

@@ -25,14 +25,11 @@
 # **************************************************************************
 
 import os
-import gzip
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, FileParam, StringParam
-
-from pwchem import Plugin
-from pwchem.constants import OPENBABEL_DIC
 from pwchem.objects import FastqFile
+from pwchem.utils.sequence_utils import getFastqStats, runFastqc
 
 
 class ProtImportFastq(EMProtocol):
@@ -136,7 +133,7 @@ class ProtImportFastq(EMProtocol):
 
     def importStep(self):
         fn1 = self.inputFastq1.get()
-        numReads, readLength = self._getFastqStats(fn1)
+        numReads, readLength = getFastqStats(fn1)
 
         fastq = FastqFile()
         fastq.setFileName(fn1)
@@ -154,7 +151,7 @@ class ProtImportFastq(EMProtocol):
 
         if self.isPaired.get():
             fn2 = self.inputFastq2.get()
-            numReads2, readLength2 = self._getFastqStats(fn2)
+            numReads2, readLength2 = getFastqStats(fn2)
 
             if numReads != numReads2:
                 raise RuntimeError(
@@ -163,7 +160,9 @@ class ProtImportFastq(EMProtocol):
                 )
 
             fastq.setFileName2(fn2)
-            fastq.setIsCompressed(fn1.endswith('.gz') and fn2.endswith('.gz'))
+            fastq.setIsCompressed(
+                fn1.endswith('.gz') and fn2.endswith('.gz')
+            )
 
             readLength = int(round((readLength + readLength2) / 2))
             fastq.setReadLength(readLength)
@@ -172,11 +171,6 @@ class ProtImportFastq(EMProtocol):
             htmlFiles = self._runFastqc()
 
             if self.isPaired.get():
-                if len(htmlFiles) < 2:
-                    raise RuntimeError(
-                        'Expected two FastQC HTML reports for paired-end data.'
-                    )
-
                 fastq.setFastqcHtmlR1(htmlFiles[0])
                 fastq.setFastqcHtmlR2(htmlFiles[1])
             else:
@@ -184,58 +178,13 @@ class ProtImportFastq(EMProtocol):
 
         self._defineOutputs(outputFastq=fastq)
 
-    def _openFastq(self, fn):
-        if fn.endswith('.gz'):
-            return gzip.open(fn, 'rt')
-
-        return open(fn, 'r')
-
-    def _getFastqStats(self, fn):
-        """
-        Calculate number of reads and mean read length from a FASTQ file.
-        """
-        numReads = 0
-        totalLength = 0
-
-        with self._openFastq(fn) as f:
-            while True:
-                header = f.readline()
-
-                if not header:
-                    break
-
-                seq = f.readline().strip()
-                f.readline()
-                f.readline()
-
-                numReads += 1
-                totalLength += len(seq)
-
-        readLength = int(round(totalLength / numReads)) if numReads else 0
-
-        return numReads, readLength
-
     def _runFastqc(self):
-        fn1 = self.inputFastq1.get()
-        outDir = self._getExtraPath('fastqc')
-        os.makedirs(outDir, exist_ok=True)
-
-        arguments = f'-o "{outDir}" "{fn1}"'
+        fastqFiles = [self.inputFastq1.get()]
 
         if self.isPaired.get():
-            fn2 = self.inputFastq2.get()
-            arguments += f' "{fn2}"'
+            fastqFiles.append(self.inputFastq2.get())
 
-        Plugin.runCondaCommand(self, arguments, OPENBABEL_DIC, 'fastqc')
-
-        htmlFiles = self._getFastqcHtmlFiles(outDir)
-
-        if not htmlFiles:
-            raise RuntimeError(
-                'FastQC finished but no HTML report was generated.'
-            )
-
-        return htmlFiles
+        return runFastqc(self, fastqFiles)
 
     def _getDefaultSampleName(self, fn):
         sampleName = os.path.basename(fn)
@@ -252,20 +201,15 @@ class ProtImportFastq(EMProtocol):
 
         return sampleName
 
-    def _getFastqcHtmlFiles(self, outDir):
-        return sorted([
-            os.path.join(outDir, f)
-            for f in os.listdir(outDir)
-            if f.endswith('.html')
-        ])
-
     def _validate(self):
         errors = []
         validExt = ('.fastq', '.fq', '.fastq.gz', '.fq.gz')
 
         fn1 = self.inputFastq1.get()
 
-        if fn1 and not fn1.endswith(validExt):
+        if not fn1:
+            errors.append('Read 1 is required.')
+        elif not fn1.endswith(validExt):
             errors.append('Read 1 must be a FASTQ file.')
 
         if self.isPaired.get():
@@ -283,32 +227,24 @@ class ProtImportFastq(EMProtocol):
     def _summary(self):
         summary = []
 
-        sample = self.sampleName.get()
-        fn1 = self.inputFastq1.get()
-        sampleName = sample.strip() if sample and sample.strip() else \
-            self._getDefaultSampleName(fn1)
+        if not hasattr(self, 'outputFastq'):
+            return ['Output FASTQ not available yet.']
 
-        numReads, readLength = self._getFastqStats(fn1)
+        fastq = self.outputFastq
 
         summary.append('Format: FASTQ')
         summary.append('Quality scores: yes')
-        summary.append(f'Sample name: {sampleName}')
-        summary.append(f'Read 1: {fn1}')
-        summary.append(f'Number of reads: {numReads}')
+        summary.append(f'Sample name: {fastq.getSampleName()}')
+        summary.append(f'Read 1: {fastq.getFileName()}')
+        summary.append(f'Number of reads: {fastq.getNumReads()}')
 
-        if readLength > 0:
-            summary.append(f'Mean read length: {readLength} bp')
+        if fastq.getReadLength() > 0:
+            summary.append(
+                f'Mean read length: {fastq.getReadLength()} bp'
+            )
 
-        if self.isPaired.get():
-            fn2 = self.inputFastq2.get()
-            numReads2, readLength2 = self._getFastqStats(fn2)
-
-            summary.append(f'Read 2: {fn2}')
-            summary.append(f'Number of reads R2: {numReads2}')
-
-            if readLength2 > 0:
-                summary.append(f'Mean read length R2: {readLength2} bp')
-
+        if fastq.isPaired():
+            summary.append(f'Read 2: {fastq.getFileName2()}')
             summary.append('Sequencing type: paired-end')
         else:
             summary.append('Sequencing type: single-end')

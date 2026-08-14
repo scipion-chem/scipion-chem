@@ -41,9 +41,14 @@ RANX_DIC =     {'name': 'ranx',      'version': '0.3.20',           'home': 'RAN
 POSEB_DIC =     {'name': 'posebusters',      'version': '0.6.3',           'home': 'POSEB_HOME'}
 SCORCH2_DIC = {'name': 'scorch2', 'version': '1.0', 'home': 'SCORCH2_HOME'}
 RNASEQ_DIC = {'name': 'rnaseq', 'version': '1.0', 'home': 'RNASEQ_HOME'}
+FASTQC_DIC = {'name': 'fastqc','version': '0.12.1'}
+FASTP_DIC = {'name': 'fastp','version': '0.24.0'}
 STAR_DIC = {'name': 'star', 'version': '2.7.11b'}
 HISAT2_DIC = {'name': 'hisat2', 'version': '2.2.1'}
 SAMTOOLS_DIC = {'name': 'samtools','version': '1.20'}
+IGV_DIC = {'name': 'igv','version': '2.19.8'}
+IGVTOOLS_DIC = {'name': 'igvtools', 'version': '2.17.3'}
+NCBI_DATASETS_DIC = {'name': 'ncbi-datasets-cli', 'version': '18.33.1'}
 
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',

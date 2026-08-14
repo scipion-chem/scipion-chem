@@ -2057,207 +2057,37 @@ class PharmacophoreChem(data.EMSet):
       feat.setObjId(featId)
       self.append(feat)
 
-class AlignmentFile(data.EMFile):
-    """Object representing an aligned sequencing dataset."""
-
-    def __init__(self, filename=None, **kwargs):
-      super().__init__(filename=filename, **kwargs)
-
-      self._format = pwobj.String(kwargs.get('format', 'BAM'))
-
-      self._sampleName = pwobj.String(kwargs.get('sampleName', None))
-
-      self._aligner = pwobj.String(kwargs.get('aligner', None))
-      self._referenceGenome = pwobj.String(
-        kwargs.get('referenceGenome', None)
-      )
-
-      self._isSorted = pwobj.Boolean(kwargs.get('isSorted', False))
-      self._isIndexed = pwobj.Boolean(kwargs.get('isIndexed', False))
-
-      self._indexFile = pwobj.String(kwargs.get('indexFile', None))
-      self._logFile = pwobj.String(kwargs.get('logFile', None))
-
-    # -------------------------------------------------------
-    # Format
-    # -------------------------------------------------------
-
-    def getFormat(self):
-      return self._format.get()
-
-    def setFormat(self, value):
-      self._format.set(value)
-
-    # -------------------------------------------------------
-    # Sample information
-    # -------------------------------------------------------
-
-    def getSampleName(self):
-      return self._sampleName.get()
-
-    def setSampleName(self, value):
-      self._sampleName.set(value)
-
-    # -------------------------------------------------------
-    # Alignment information
-    # -------------------------------------------------------
-
-    def getAligner(self):
-      return self._aligner.get()
-
-    def setAligner(self, value):
-      self._aligner.set(value)
-
-    def getReferenceGenome(self):
-      return self._referenceGenome.get()
-
-    def setReferenceGenome(self, value):
-      self._referenceGenome.set(value)
-
-    # -------------------------------------------------------
-    # Sorting / indexing
-    # -------------------------------------------------------
-
-    def isSorted(self):
-      return self._isSorted.get()
-
-    def setIsSorted(self, value):
-      self._isSorted.set(value)
-
-    def isIndexed(self):
-      return self._isIndexed.get()
-
-    def setIsIndexed(self, value):
-      self._isIndexed.set(value)
-
-    # -------------------------------------------------------
-    # Associated files
-    # -------------------------------------------------------
-
-    def getIndexFile(self):
-      return self._indexFile.get()
-
-    def setIndexFile(self, value):
-      self._indexFile.set(value)
-
-    def hasIndexFile(self):
-      return bool(self.getIndexFile())
-
-    def getLogFile(self):
-      return self._logFile.get()
-
-    def setLogFile(self, value):
-      self._logFile.set(value)
-
-    def hasLogFile(self):
-      return bool(self.getLogFile())
-
-    # -------------------------------------------------------
-    # Files
-    # -------------------------------------------------------
-
-    def getFiles(self):
-      files = [self.getFileName()]
-
-      if self.hasIndexFile():
-        files.append(self.getIndexFile())
-
-      if self.hasLogFile():
-        files.append(self.getLogFile())
-
-      return files
-
-    # -------------------------------------------------------
-    # Representation
-    # -------------------------------------------------------
-
-    def __str__(self):
-      sample = self.getSampleName() or 'unnamed'
-
-      return '{} ({}, {}, sorted={}, indexed={})'.format(
-        self.getClassName(),
-        sample,
-        self.getFormat(),
-        self.isSorted(),
-        self.isIndexed()
-      )
-
-    def getObjLabel(self):
-      sample = self.getSampleName()
-
-      if sample:
-        return sample
-
-      fn = self.getFileName()
-      return os.path.basename(fn) if fn else 'alignment'
-
-class GenomeIndex(data.EMFile):
-    """Object representing a genome reference index for RNA-seq alignment."""
-
-    def __init__(self, filename=None, **kwargs):
-      super().__init__(filename=filename, **kwargs)
-
-      self._species = pwobj.String(kwargs.get('species', None))
-      self._source = pwobj.String(kwargs.get('source', None))
-      self._fastaFile = pwobj.String(kwargs.get('fastaFile', None))
-      self._gtfFile = pwobj.String(kwargs.get('gtfFile', None))
-      self._indexDir = pwobj.String(kwargs.get('indexDir', None))
-      self._aligner = pwobj.String(kwargs.get('aligner', None))
-
-    def getSpecies(self):
-      return self._species.get()
-
-    def setSpecies(self, value):
-      self._species.set(value)
-
-    def getSource(self):
-      return self._source.get()
-
-    def setSource(self, value):
-      self._source.set(value)
-
-    def getFastaFile(self):
-      return self._fastaFile.get()
-
-    def setFastaFile(self, value):
-      self._fastaFile.set(value)
-
-    def getGtfFile(self):
-      return self._gtfFile.get()
-
-    def setGtfFile(self, value):
-      self._gtfFile.set(value)
-
-    def getIndexDir(self):
-      return self._indexDir.get()
-
-    def setIndexDir(self, value):
-      self._indexDir.set(value)
-
-    def getAligner(self):
-      return self._aligner.get()
-
-    def setAligner(self, value):
-      self._aligner.set(value)
-
-    def getObjLabel(self):
-      species = self.getSpecies()
-      aligner = self.getAligner()
-
-      if species and aligner:
-        return '{} ({})'.format(species, aligner)
-
-      return 'genome index'
-
-class SequencingFile(data.EMFile):
-  """Base object representing a bioinformatics data file."""
+class FastqFile(data.EMFile):
+  """Object representing a FASTQ dataset."""
 
   def __init__(self, filename=None, **kwargs):
+    kwargs.setdefault('format', 'FASTQ')
+    kwargs.setdefault('hasQuality', True)
+    kwargs.setdefault('isCompressed', False)
+
     super().__init__(filename=filename, **kwargs)
 
-    self._format = pwobj.String(kwargs.get('format', None))
-    self._hasQuality = pwobj.Boolean(kwargs.get('hasQuality', False))
+    self._format = pwobj.String(kwargs.get('format', 'FASTQ'))
+    self._hasQuality = pwobj.Boolean(kwargs.get('hasQuality', True))
     self._isCompressed = pwobj.Boolean(kwargs.get('isCompressed', False))
+
+    self._filename2 = pwobj.String(kwargs.get('filename2', None))
+    self._sampleName = pwobj.String(kwargs.get('sampleName', None))
+    self._isPaired = pwobj.Boolean(kwargs.get('isPaired', False))
+
+    self._readLength = pwobj.Integer(kwargs.get('readLength', 0))
+    self._numReads = pwobj.Integer(kwargs.get('numReads', 0))
+
+    self._fastqcHtml = pwobj.String(kwargs.get('fastqcHtml', None))
+    self._fastqcHtmlR1 = pwobj.String(kwargs.get('fastqcHtmlR1', None))
+    self._fastqcHtmlR2 = pwobj.String(kwargs.get('fastqcHtmlR2', None))
+
+    self._fastpHtml = pwobj.String(kwargs.get('fastpHtml', None))
+    self._fastpJson = pwobj.String(kwargs.get('fastpJson', None))
+
+  # -------------------------------------------------------
+  # Format / quality / compression
+  # -------------------------------------------------------
 
   def getFormat(self):
     return self._format.get()
@@ -2276,43 +2106,6 @@ class SequencingFile(data.EMFile):
 
   def setIsCompressed(self, value):
     self._isCompressed.set(value)
-
-  def supportsFastQC(self):
-    return self.hasQuality()
-
-  def getFiles(self):
-    return [self.getFileName()]
-
-  def getObjLabel(self):
-    fn = self.getFileName()
-    return os.path.basename(fn) if fn else 'BioFile'
-
-
-class FastqFile(SequencingFile):
-  """Object representing a FASTQ dataset."""
-
-  def __init__(self, filename=None, **kwargs):
-    kwargs.setdefault('format', 'FASTQ')
-    kwargs.setdefault('hasQuality', True)
-
-    super().__init__(filename=filename, **kwargs)
-
-    self._filename2 = pwobj.String(kwargs.get('filename2', None))
-    self._sampleName = pwobj.String(kwargs.get('sampleName', None))
-    self._isPaired = pwobj.Boolean(kwargs.get('isPaired', False))
-
-    # FASTQ statistics
-    self._readLength = pwobj.Integer(kwargs.get('readLength', 0))
-    self._numReads = pwobj.Integer(kwargs.get('numReads', 0))
-
-    # FastQC reports
-    self._fastqcHtml = pwobj.String(kwargs.get('fastqcHtml', None))
-    self._fastqcHtmlR1 = pwobj.String(kwargs.get('fastqcHtmlR1', None))
-    self._fastqcHtmlR2 = pwobj.String(kwargs.get('fastqcHtmlR2', None))
-
-    # fastp reports
-    self._fastpHtml = pwobj.String(kwargs.get('fastpHtml', None))
-    self._fastpJson = pwobj.String(kwargs.get('fastpJson', None))
 
   # -------------------------------------------------------
   # Input files
@@ -2371,10 +2164,12 @@ class FastqFile(SequencingFile):
   # -------------------------------------------------------
 
   def getFiles(self):
-    if self.isPaired() and self.hasFileName2():
-      return [self.getFileName(), self.getFileName2()]
+    files = [self.getFileName()]
 
-    return [self.getFileName()]
+    if self.isPaired() and self.hasFileName2():
+      files.append(self.getFileName2())
+
+    return [fn for fn in files if fn]
 
   # -------------------------------------------------------
   # FastQC
@@ -2457,10 +2252,11 @@ class FastqFile(SequencingFile):
   def __str__(self):
     sample = self.getSampleName() or 'unnamed'
 
-    return '{} ({}, paired={}, reads={}, readLength={})'.format(
+    return '{} ({}, paired={}, compressed={}, reads={}, readLength={})'.format(
       self.getClassName(),
       sample,
       self.isPaired(),
+      self.isCompressed(),
       self.getNumReads(),
       self.getReadLength()
     )
@@ -2473,6 +2269,458 @@ class FastqFile(SequencingFile):
 
     fn = self.getFileName()
     return os.path.basename(fn) if fn else 'fastq'
+
+
+class AlignmentFile(data.EMFile):
+  """Object representing a SAM/BAM/CRAM alignment file."""
+
+  def __init__(self, filename=None, **kwargs):
+    super().__init__(filename=filename, **kwargs)
+
+    self._format = pwobj.String(kwargs.get('format', 'BAM'))
+    self._sampleName = pwobj.String(kwargs.get('sampleName', None))
+    self._aligner = pwobj.String(kwargs.get('aligner', None))
+
+    self._referenceFasta = pwobj.String(kwargs.get('referenceFasta', None))
+    self._referenceGtf = pwobj.String(kwargs.get('referenceGtf', None))
+    self._referenceName = pwobj.String(kwargs.get('referenceName', None))
+    self._referenceSource = pwobj.String(kwargs.get('referenceSource', None))
+
+    self._isSorted = pwobj.Boolean(kwargs.get('isSorted', False))
+    self._isIndexed = pwobj.Boolean(kwargs.get('isIndexed', False))
+
+    self._totalReads = pwobj.Integer(kwargs.get('totalReads', 0))
+    self._mappedReads = pwobj.Integer(kwargs.get('mappedReads', 0))
+    self._uniquelyMappedReads = pwobj.Integer(kwargs.get('uniquelyMappedReads', 0))
+    self._multiMappedReads = pwobj.Integer(kwargs.get('multiMappedReads', 0))
+    self._unmappedReads = pwobj.Integer(kwargs.get('unmappedReads', 0))
+
+    self._mappingRate = pwobj.Float(kwargs.get('mappingRate', 0.0))
+    self._uniqueMappingRate = pwobj.Float(kwargs.get('uniqueMappingRate', 0.0))
+    self._multiMappingRate = pwobj.Float(kwargs.get('multiMappingRate', 0.0))
+    self._unmappedRate = pwobj.Float(kwargs.get('unmappedRate', 0.0))
+
+    self._indexFile = pwobj.String(kwargs.get('indexFile', None))
+    self._logFile = pwobj.String(kwargs.get('logFile', None))
+    self._command = pwobj.String(kwargs.get('command', None))
+
+  # Format
+  def getFormat(self):
+    return self._format.get()
+
+  def setFormat(self, value):
+    self._format.set(value)
+
+  def hasFormat(self):
+    return bool(self.getFormat())
+
+  # Sample
+  def getSampleName(self):
+    return self._sampleName.get()
+
+  def setSampleName(self, value):
+    self._sampleName.set(value)
+
+  def hasSampleName(self):
+    return bool(self.getSampleName())
+
+  # Aligner
+  def getAligner(self):
+    return self._aligner.get()
+
+  def setAligner(self, value):
+    self._aligner.set(value)
+
+  def hasAligner(self):
+    return bool(self.getAligner())
+
+  # Reference
+  def getReferenceFasta(self):
+    return self._referenceFasta.get()
+
+  def setReferenceFasta(self, value):
+    self._referenceFasta.set(value)
+
+  def hasReferenceFasta(self):
+    return bool(self.getReferenceFasta())
+
+  def getReferenceGtf(self):
+    return self._referenceGtf.get()
+
+  def setReferenceGtf(self, value):
+    self._referenceGtf.set(value)
+
+  def hasReferenceGtf(self):
+    return bool(self.getReferenceGtf())
+
+  def getReferenceName(self):
+    return self._referenceName.get()
+
+  def setReferenceName(self, value):
+    self._referenceName.set(value)
+
+  def hasReferenceName(self):
+    return bool(self.getReferenceName())
+
+  def getReferenceSource(self):
+    return self._referenceSource.get()
+
+  def setReferenceSource(self, value):
+    self._referenceSource.set(value)
+
+  def hasReferenceSource(self):
+    return bool(self.getReferenceSource())
+
+  # Status
+  def isSorted(self):
+    return self._isSorted.get()
+
+  def setIsSorted(self, value):
+    self._isSorted.set(value)
+
+  def isIndexed(self):
+    return self._isIndexed.get()
+
+  def setIsIndexed(self, value):
+    self._isIndexed.set(value)
+
+  # Statistics
+  def getTotalReads(self):
+    return self._totalReads.get()
+
+  def setTotalReads(self, value):
+    self._totalReads.set(value)
+
+  def hasTotalReads(self):
+    return self.getTotalReads() > 0
+
+  def getMappedReads(self):
+    return self._mappedReads.get()
+
+  def setMappedReads(self, value):
+    self._mappedReads.set(value)
+
+  def hasMappedReads(self):
+    return self.getMappedReads() > 0
+
+  def getUniquelyMappedReads(self):
+    return self._uniquelyMappedReads.get()
+
+  def setUniquelyMappedReads(self, value):
+    self._uniquelyMappedReads.set(value)
+
+  def hasUniquelyMappedReads(self):
+    return self.getUniquelyMappedReads() > 0
+
+  def getMultiMappedReads(self):
+    return self._multiMappedReads.get()
+
+  def setMultiMappedReads(self, value):
+    self._multiMappedReads.set(value)
+
+  def hasMultiMappedReads(self):
+    return self.getMultiMappedReads() > 0
+
+  def getUnmappedReads(self):
+    return self._unmappedReads.get()
+
+  def setUnmappedReads(self, value):
+    self._unmappedReads.set(value)
+
+  def hasUnmappedReads(self):
+    return self.getUnmappedReads() > 0
+
+  def getMappingRate(self):
+    return self._mappingRate.get()
+
+  def setMappingRate(self, value):
+    self._mappingRate.set(value)
+
+  def hasMappingRate(self):
+    return self.getMappingRate() > 0
+
+  def getUniqueMappingRate(self):
+    return self._uniqueMappingRate.get()
+
+  def setUniqueMappingRate(self, value):
+    self._uniqueMappingRate.set(value)
+
+  def hasUniqueMappingRate(self):
+    return self.getUniqueMappingRate() > 0
+
+  def getMultiMappingRate(self):
+    return self._multiMappingRate.get()
+
+  def setMultiMappingRate(self, value):
+    self._multiMappingRate.set(value)
+
+  def hasMultiMappingRate(self):
+    return self.getMultiMappingRate() > 0
+
+  def getUnmappedRate(self):
+    return self._unmappedRate.get()
+
+  def setUnmappedRate(self, value):
+    self._unmappedRate.set(value)
+
+  def hasUnmappedRate(self):
+    return self.getUnmappedRate() > 0
+
+  # Files
+  def getIndexFile(self):
+    return self._indexFile.get()
+
+  def setIndexFile(self, value):
+    self._indexFile.set(value)
+
+  def hasIndexFile(self):
+    return bool(self.getIndexFile())
+
+  def getLogFile(self):
+    return self._logFile.get()
+
+  def setLogFile(self, value):
+    self._logFile.set(value)
+
+  def hasLogFile(self):
+    return bool(self.getLogFile())
+
+  def getIndexName(self):
+    return os.path.basename(self.getIndexFile()) if self.hasIndexFile() else None
+
+  def getLogName(self):
+    return os.path.basename(self.getLogFile()) if self.hasLogFile() else None
+
+  # Command
+  def getCommand(self):
+    return self._command.get()
+
+  def setCommand(self, value):
+    self._command.set(value)
+
+  def hasCommand(self):
+    return bool(self.getCommand())
+
+  def isComplete(self):
+    if not os.path.exists(self.getFileName()):
+      return False
+
+    if self.getFormat().upper() in ('BAM', 'CRAM'):
+      return (
+              self.hasIndexFile() and
+              os.path.exists(self.getIndexFile())
+      )
+
+    return True
+
+  def getStatistics(self):
+    return {
+      'totalReads': self.getTotalReads(),
+      'mappedReads': self.getMappedReads(),
+      'uniquelyMappedReads': self.getUniquelyMappedReads(),
+      'multiMappedReads': self.getMultiMappedReads(),
+      'unmappedReads': self.getUnmappedReads(),
+      'mappingRate': self.getMappingRate(),
+      'uniqueMappingRate': self.getUniqueMappingRate(),
+      'multiMappingRate': self.getMultiMappingRate(),
+      'unmappedRate': self.getUnmappedRate()
+    }
+
+  def getFiles(self):
+    files = []
+
+    if self.getFileName():
+      files.append(self.getFileName())
+
+    if self.hasIndexFile():
+      files.append(self.getIndexFile())
+
+    if self.hasLogFile():
+      files.append(self.getLogFile())
+
+    return files
+
+  def getSummary(self):
+    return {
+      'Total reads': self.getTotalReads(),
+      'Mapped reads': self.getMappedReads(),
+      'Mapping rate (%)': self.getMappingRate(),
+      'Uniquely mapped reads': self.getUniquelyMappedReads(),
+      'Unique mapping rate (%)': self.getUniqueMappingRate(),
+      'Multi-mapped reads': self.getMultiMappedReads(),
+      'Multi-mapping rate (%)': self.getMultiMappingRate(),
+      'Unmapped reads': self.getUnmappedReads(),
+      'Unmapped rate (%)': self.getUnmappedRate()
+    }
+
+  def __str__(self):
+    sample = self.getSampleName() or 'unnamed'
+    return '{} ({}, {}, {:.2f}% mapped)'.format(
+      self.getClassName(),
+      sample,
+      self.getFormat(),
+      self.getMappingRate()
+    )
+
+  def getObjLabel(self):
+    if self.hasSampleName():
+      return self.getSampleName()
+    fn = self.getFileName()
+    if fn:
+      return os.path.basename(fn)
+    return '{} alignment'.format(self.getFormat().lower())
+
+
+class Genome(data.EMObject):
+  """Object representing a reference genome."""
+
+  def __init__(self, **kwargs):
+    super().__init__(**kwargs)
+
+    self._scientificName = pwobj.String(kwargs.get('scientificName', None))
+    self._assembly = pwobj.String(kwargs.get('assembly', None))
+    self._source = pwobj.String(kwargs.get('source', None))
+    self._release = pwobj.String(kwargs.get('release', None))
+    self._ensemblSpecies = pwobj.String(kwargs.get('ensemblSpecies', None))
+
+    self._fastaFile = pwobj.String(kwargs.get('fastaFile', None))
+    self._gtfFile = pwobj.String(kwargs.get('gtfFile', None))
+
+
+  # -------------------------------------------------------
+  # Genome information
+  # -------------------------------------------------------
+
+  def getScientificName(self):
+    return self._scientificName.get()
+
+  def setScientificName(self, value):
+    self._scientificName.set(value)
+
+  def hasScientificName(self):
+    return bool(self.getScientificName())
+
+  def getAssembly(self):
+    return self._assembly.get()
+
+  def setAssembly(self, value):
+    self._assembly.set(value)
+
+  def hasAssembly(self):
+    return bool(self.getAssembly())
+
+  def getSource(self):
+    return self._source.get()
+
+  def setSource(self, value):
+    self._source.set(value)
+
+  def hasSource(self):
+    return bool(self.getSource())
+
+  def getRelease(self):
+    return self._release.get()
+
+  def setRelease(self, value):
+    self._release.set(value)
+
+  def hasRelease(self):
+    return bool(self.getRelease())
+
+  def getEnsemblSpecies(self):
+    return self._ensemblSpecies.get()
+
+  def setEnsemblSpecies(self, value):
+    self._ensemblSpecies.set(value)
+
+  def hasEnsemblSpecies(self):
+    return bool(self.getEnsemblSpecies())
+
+  # -------------------------------------------------------
+  # Reference files
+  # -------------------------------------------------------
+
+  def getFastaFile(self):
+    return self._fastaFile.get()
+
+  def setFastaFile(self, value):
+    self._fastaFile.set(value)
+
+  def hasFastaFile(self):
+    return bool(self.getFastaFile())
+
+  def getFastaName(self):
+    if self.hasFastaFile():
+      return os.path.basename(self.getFastaFile())
+    return None
+
+  def getGtfFile(self):
+    return self._gtfFile.get()
+
+  def setGtfFile(self, value):
+    self._gtfFile.set(value)
+
+  def hasGtfFile(self):
+    return bool(self.getGtfFile())
+
+  def getGtfName(self):
+    if self.hasGtfFile():
+      return os.path.basename(self.getGtfFile())
+    return None
+
+  # -------------------------------------------------------
+  # Representation
+  # -------------------------------------------------------
+
+  def __str__(self):
+    species = self.getScientificName() or "Unknown"
+    assembly = self.getAssembly() or "Unknown"
+    release = self.getRelease() or "Unknown"
+
+    return "{} ({}, Ensembl {})".format(
+      species,
+      assembly,
+      release
+    )
+
+  def getObjLabel(self):
+    label = self.getScientificName() or "Genome"
+
+    if self.hasAssembly():
+      label += " ({})".format(self.getAssembly())
+
+    return label
+
+
+class SetOfGenomes(data.EMSet):
+  """Set of genomes."""
+
+  ITEM_TYPE = Genome
+  FILE_TEMPLATE_NAME = "setOfGenomes%s.sqlite"
+
+  def getGenomeById(self, genomeId):
+    """Return the genome stored at the given position (1-based)."""
+    for i, genome in enumerate(self, start=1):
+      if i == genomeId:
+        return genome
+    return None
+
+  def getGenomeLabels(self):
+    """Return one label per genome."""
+    labels = []
+
+    for i, genome in enumerate(self, start=1):
+      labels.append(
+        "{} - {} ({})".format(
+          i,
+          genome.getScientificName() or "Unknown",
+          genome.getAssembly() or "Unknown"
+        )
+      )
+
+    return labels
+
+
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################

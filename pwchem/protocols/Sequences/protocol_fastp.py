@@ -25,14 +25,14 @@
 # **************************************************************************
 
 import os
-import gzip
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, PointerParam, IntParam
 
 from pwchem import Plugin
-from pwchem.constants import OPENBABEL_DIC
+from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import FastqFile
+from pwchem.utils.sequence_utils import getFastqStats, runFastqc
 
 
 class ProtFastpFilter(EMProtocol):
@@ -65,9 +65,6 @@ class ProtFastpFilter(EMProtocol):
 
     lengthRequired : int
         Minimum read length required after filtering.
-
-    threads : int
-        Number of worker threads used by fastp.
 
     qualifiedQualityPhred : int
         Minimum base quality considered qualified.
@@ -138,12 +135,6 @@ class ProtFastpFilter(EMProtocol):
                       help='Reads shorter than this value will be discarded. '
                            'Corresponds to fastp option -l / --length_required.')
 
-        form.addParam('threads', IntParam,
-                      default=4,
-                      label='Threads: ',
-                      help='Number of worker threads. '
-                           'Corresponds to fastp option -w / --thread.')
-
         form.addParam('qualifiedQualityPhred', IntParam,
                       default=15,
                       label='Qualified quality phred: ',
@@ -174,6 +165,8 @@ class ProtFastpFilter(EMProtocol):
                       help='Disable fastp adapter trimming. '
                            'Corresponds to fastp option -A / --disable_adapter_trimming.')
 
+        form.addParallelSection(threads=4, mpi=0)
+
     def _insertAllSteps(self):
         self._insertFunctionStep(self.filterStep)
 
@@ -186,11 +179,6 @@ class ProtFastpFilter(EMProtocol):
             htmlFiles = self._runFastqc(outputFastq)
 
             if outputFastq.isPaired():
-                if len(htmlFiles) < 2:
-                    raise RuntimeError(
-                        'Expected two FastQC HTML reports for paired-end data.'
-                    )
-
                 outputFastq.setFastqcHtmlR1(htmlFiles[0])
                 outputFastq.setFastqcHtmlR2(htmlFiles[1])
             else:
@@ -203,7 +191,7 @@ class ProtFastpFilter(EMProtocol):
         isPaired = inputFastq.isPaired()
 
         lengthRequired = self.lengthRequired.get()
-        threads = self.threads.get()
+        threads = self.numberOfThreads.get()
         qualifiedQualityPhred = self.qualifiedQualityPhred.get()
         unqualifiedPercentLimit = self.unqualifiedPercentLimit.get()
         nBaseLimit = self.nBaseLimit.get()
@@ -274,12 +262,32 @@ class ProtFastpFilter(EMProtocol):
                 f'-j "{reportJson}"'
             )
 
-        Plugin.runCondaCommand(self, arguments, OPENBABEL_DIC, 'fastp')
+        Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'fastp')
 
-        numReads, readLength = self._getFastqStats(out1)
+        if not os.path.exists(out1):
+            raise RuntimeError(
+                f'fastp did not generate the expected output FASTQ: {out1}'
+            )
+
+        if isPaired and not os.path.exists(out2):
+            raise RuntimeError(
+                f'fastp did not generate the expected read 2 FASTQ: {out2}'
+            )
+
+        if not os.path.exists(reportHtml):
+            raise RuntimeError(
+                f'fastp did not generate the expected HTML report: {reportHtml}'
+            )
+
+        if not os.path.exists(reportJson):
+            raise RuntimeError(
+                f'fastp did not generate the expected JSON report: {reportJson}'
+            )
+
+        numReads, readLength = getFastqStats(out1)
 
         if isPaired:
-            numReads2, readLength2 = self._getFastqStats(out2)
+            numReads2, readLength2 = getFastqStats(out2)
 
             if numReads != numReads2:
                 raise RuntimeError(
@@ -297,10 +305,7 @@ class ProtFastpFilter(EMProtocol):
         outputFastq.setHasQuality(True)
         outputFastq.setReadLength(readLength)
         outputFastq.setNumReads(numReads)
-
-        sample = inputFastq.getSampleName()
-        if sample:
-            outputFastq.setSampleName(sample)
+        outputFastq.setSampleName(sampleName)
 
         if isPaired:
             outputFastq.setFileName2(out2)
@@ -310,34 +315,6 @@ class ProtFastpFilter(EMProtocol):
 
         return outputFastq
 
-    def _openFastq(self, fn):
-        if fn.endswith('.gz'):
-            return gzip.open(fn, 'rt')
-
-        return open(fn, 'r')
-
-    def _getFastqStats(self, fn):
-        numReads = 0
-        totalLength = 0
-
-        with self._openFastq(fn) as f:
-            while True:
-                header = f.readline()
-
-                if not header:
-                    break
-
-                seq = f.readline().strip()
-                f.readline()
-                f.readline()
-
-                numReads += 1
-                totalLength += len(seq)
-
-        readLength = int(round(totalLength / numReads)) if numReads else 0
-
-        return numReads, readLength
-
     def _runFastqc(self, outputFastq):
         if not outputFastq.supportsFastQC():
             raise RuntimeError(
@@ -345,34 +322,12 @@ class ProtFastpFilter(EMProtocol):
                 'contain quality scores.'
             )
 
-        fn1 = outputFastq.getFileName()
-
-        outDir = self._getExtraPath('fastqc')
-        os.makedirs(outDir, exist_ok=True)
-
-        arguments = f'-o "{outDir}" "{fn1}"'
+        fastqFiles = [outputFastq.getFileName()]
 
         if outputFastq.isPaired():
-            fn2 = outputFastq.getFileName2()
-            arguments += f' "{fn2}"'
+            fastqFiles.append(outputFastq.getFileName2())
 
-        Plugin.runCondaCommand(self, arguments, OPENBABEL_DIC, 'fastqc')
-
-        htmlFiles = self._getFastqcHtmlFiles(outDir)
-
-        if not htmlFiles:
-            raise RuntimeError(
-                'FastQC finished but no HTML report was generated.'
-            )
-
-        return htmlFiles
-
-    def _getFastqcHtmlFiles(self, outDir):
-        return sorted([
-            os.path.join(outDir, f)
-            for f in os.listdir(outDir)
-            if f.endswith('.html')
-        ])
+        return runFastqc(self, fastqFiles)
 
     def _validate(self):
         errors = []
@@ -403,9 +358,6 @@ class ProtFastpFilter(EMProtocol):
                     f'than the input read length ({inputFastq.getReadLength()}).'
                 )
 
-        if self.threads.get() < 1:
-            errors.append('Threads must be greater than or equal to 1.')
-
         if not 0 <= self.qualifiedQualityPhred.get() <= 36:
             errors.append('Qualified quality phred must be between 0 and 36.')
 
@@ -427,7 +379,7 @@ class ProtFastpFilter(EMProtocol):
 
         summary.append('FASTQ filtering performed with fastp')
         summary.append(f'Minimum read length: {self.lengthRequired.get()}')
-        summary.append(f'Threads: {self.threads.get()}')
+        summary.append(f'Threads: {self.numberOfThreads.get()}')
         summary.append(f'Qualified quality phred: {self.qualifiedQualityPhred.get()}')
         summary.append(f'Unqualified percent limit: {self.unqualifiedPercentLimit.get()}')
         summary.append(f'N base limit: {self.nBaseLimit.get()}')
@@ -477,7 +429,7 @@ class ProtFastpFilter(EMProtocol):
         methods.append(
             'Reads were filtered using fastp with the following parameters: '
             f'minimum read length {self.lengthRequired.get()} bp, '
-            f'{self.threads.get()} threads, '
+            f'{self.numberOfThreads.get()} threads, '
             f'qualified quality phred {self.qualifiedQualityPhred.get()}, '
             f'unqualified percent limit {self.unqualifiedPercentLimit.get()}%, '
             f'N base limit {self.nBaseLimit.get()}, '

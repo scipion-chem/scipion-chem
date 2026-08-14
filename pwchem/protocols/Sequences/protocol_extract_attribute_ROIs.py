@@ -47,7 +47,7 @@ from pwem.convert.atom_struct import toPdb, toCIF, AtomicStructHandler, addScipi
 
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
-from pwchem.utils.utilsFasta import pairwiseAlign
+from pwchem.utils.sequence_utils import pairwiseAlign
 from pwchem import Plugin
 
 

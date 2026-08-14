@@ -46,7 +46,7 @@ from pwchem.protocols import *
 
 from pwchem.viewers.viewers_sequences import SequenceAliView
 from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
-from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
+from pwchem.utils.sequence_utils import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
 

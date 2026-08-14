@@ -21,44 +21,12 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
-# Scipion em imports
-from pyworkflow.tests import BaseTest, setupTestProject
+# Scipion imports
+from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
 # Scipion chem imports
 from pwchem.protocols import ProtImportFastq, ProtFastpFilter
 from pwchem.utils import assertHandle
-
-FASTQ_R1_CONTENT = (
-    '@READ_1\n'
-    'ACGTACGTACGTACGTACGT\n'
-    '+\n'
-    'IIIIIIIIIIIIIIIIIIII\n'
-    '@READ_2\n'
-    'TTTTCCCCAAAAGGGGTTTT\n'
-    '+\n'
-    'IIIIIIIIIIIIIIIIIIII\n'
-)
-
-FASTQ_R2_CONTENT = (
-    '@READ_1\n'
-    'TGCATGCATGCATGCATGCA\n'
-    '+\n'
-    'IIIIIIIIIIIIIIIIIIII\n'
-    '@READ_2\n'
-    'AAAACCCCGGGGTTTTAAAA\n'
-    '+\n'
-    'IIIIIIIIIIIIIIIIIIII\n'
-)
-
-def writeFastqFiles(cls, prefix):
-    cls.fastqR1 = cls.proj.getTmpPath(f'{prefix}_R1.fastq')
-    cls.fastqR2 = cls.proj.getTmpPath(f'{prefix}_R2.fastq')
-
-    with open(cls.fastqR1, 'w') as f:
-        f.write(FASTQ_R1_CONTENT)
-
-    with open(cls.fastqR2, 'w') as f:
-        f.write(FASTQ_R2_CONTENT)
 
 
 def assertOutputExists(test, protocol, outputFastq):
@@ -69,8 +37,7 @@ def assertOutputExists(test, protocol, outputFastq):
     )
 
 
-def assertFastqStats(test, protocol, outputFastq, sampleName,
-                      numReads=2, readLength=20):
+def assertFastqProperties(test, protocol, outputFastq, sampleName):
     assertHandle(
         test.assertEqual,
         outputFastq.getSampleName(),
@@ -79,16 +46,35 @@ def assertFastqStats(test, protocol, outputFastq, sampleName,
     )
 
     assertHandle(
-        test.assertEqual,
+        test.assertGreater,
         outputFastq.getNumReads(),
-        numReads,
+        0,
+        cwd=protocol.getWorkingDir()
+    )
+
+    assertHandle(
+        test.assertGreater,
+        outputFastq.getReadLength(),
+        0,
         cwd=protocol.getWorkingDir()
     )
 
     assertHandle(
         test.assertEqual,
-        outputFastq.getReadLength(),
-        readLength,
+        outputFastq.getFormat(),
+        'FASTQ',
+        cwd=protocol.getWorkingDir()
+    )
+
+    assertHandle(
+        test.assertTrue,
+        outputFastq.hasQuality(),
+        cwd=protocol.getWorkingDir()
+    )
+
+    assertHandle(
+        test.assertTrue,
+        outputFastq.isCompressed(),
         cwd=protocol.getWorkingDir()
     )
 
@@ -98,16 +84,23 @@ class TestImportFastq(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        writeFastqFiles(cls, 'sample')
+
+        cls.dataset = DataSet.getDataSet('genomics')
+
+        cls.mouseFastq = cls.dataset.getFile('mouseFastq')
+
+        cls.humanFastqR1 = cls.dataset.getFile('humanFastqR1')
+        cls.humanFastqR2 = cls.dataset.getFile('humanFastqR2')
+
 
     def testImportSingleFastqWithFastqc(self):
         print("\nImport FASTQ: single-end with FastQC")
 
         prot = self.newProtocol(
             ProtImportFastq,
-            sampleName='test_single',
+            sampleName='mouse_single',
             isPaired=False,
-            inputFastq1=self.fastqR1,
+            inputFastq1=self.mouseFastq,
             runFastqc=True
         )
 
@@ -116,11 +109,24 @@ class TestImportFastq(BaseTest):
         outputFastq = getattr(prot, 'outputFastq', None)
 
         assertOutputExists(self, prot, outputFastq)
-        assertFastqStats(self, prot, outputFastq, 'test_single')
+
+        assertFastqProperties(
+            self,
+            prot,
+            outputFastq,
+            'mouse_single'
+        )
 
         assertHandle(
             self.assertFalse,
             outputFastq.isPaired(),
+            cwd=prot.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            outputFastq.getFileName(),
+            self.mouseFastq,
             cwd=prot.getWorkingDir()
         )
 
@@ -135,10 +141,10 @@ class TestImportFastq(BaseTest):
 
         prot = self.newProtocol(
             ProtImportFastq,
-            sampleName='test_paired',
+            sampleName='human_paired',
             isPaired=True,
-            inputFastq1=self.fastqR1,
-            inputFastq2=self.fastqR2,
+            inputFastq1=self.humanFastqR1,
+            inputFastq2=self.humanFastqR2,
             runFastqc=True
         )
 
@@ -147,7 +153,13 @@ class TestImportFastq(BaseTest):
         outputFastq = getattr(prot, 'outputFastq', None)
 
         assertOutputExists(self, prot, outputFastq)
-        assertFastqStats(self, prot, outputFastq, 'test_paired')
+
+        assertFastqProperties(
+            self,
+            prot,
+            outputFastq,
+            'human_paired'
+        )
 
         assertHandle(
             self.assertTrue,
@@ -157,8 +169,15 @@ class TestImportFastq(BaseTest):
 
         assertHandle(
             self.assertEqual,
+            outputFastq.getFileName(),
+            self.humanFastqR1,
+            cwd=prot.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
             outputFastq.getFileName2(),
-            self.fastqR2,
+            self.humanFastqR2,
             cwd=prot.getWorkingDir()
         )
 
@@ -180,31 +199,41 @@ class TestFastpFilter(BaseTest):
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
-        writeFastqFiles(cls, 'fastp_sample')
+
+        cls.dataset = DataSet.getDataSet('genomics')
+
+        cls.mouseFastq = cls.dataset.getFile('mouseFastq')
+        cls.humanFastqR1 = cls.dataset.getFile('humanFastqR1')
+        cls.humanFastqR2 = cls.dataset.getFile('humanFastqR2')
 
     def _importFastq(self, sampleName, isPaired):
         kwargs = {
             'sampleName': sampleName,
             'isPaired': isPaired,
-            'inputFastq1': self.fastqR1,
             'runFastqc': False
         }
 
         if isPaired:
-            kwargs['inputFastq2'] = self.fastqR2
+            kwargs['inputFastq1'] = self.humanFastqR1
+            kwargs['inputFastq2'] = self.humanFastqR2
+        else:
+            kwargs['inputFastq1'] = self.mouseFastq
 
-        protImport = self.newProtocol(ProtImportFastq, **kwargs)
+        protImport = self.newProtocol(
+            ProtImportFastq,
+            **kwargs
+        )
+
         self.launchProtocol(protImport)
 
-        return protImport
+        return protImport.outputFastq
 
     def _runFastp(self, inputFastq):
         protFastp = self.newProtocol(
             ProtFastpFilter,
             inputFastq=inputFastq,
-            runFastqc=False,
-            lengthRequired=1,
-            threads=1,
+            runFastqc=True,
+            lengthRequired=15,
             qualifiedQualityPhred=15,
             unqualifiedPercentLimit=40,
             nBaseLimit=10,
@@ -212,69 +241,123 @@ class TestFastpFilter(BaseTest):
             disableAdapterTrimming=True
         )
 
+        protFastp.numberOfThreads.set(1)
+
         self.launchProtocol(protFastp)
 
         return protFastp
 
-    def _assertFastpReports(self, protocol, outputFastq):
+    def _testFastpFilter(self, isPaired):
+        sampleName = 'human_paired' if isPaired else 'mouse_single'
+
+        inputFastq = self._importFastq(
+            sampleName=sampleName,
+            isPaired=isPaired
+        )
+
+        protFastp = self._runFastp(inputFastq)
+
+        outputFastq = getattr(
+            protFastp,
+            'outputFastq',
+            None
+        )
+
+        assertOutputExists(
+            self,
+            protFastp,
+            outputFastq
+        )
+
+        assertHandle(
+            self.assertEqual,
+            outputFastq.getSampleName(),
+            sampleName,
+            cwd=protFastp.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertGreater,
+            outputFastq.getNumReads(),
+            0,
+            cwd=protFastp.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertGreater,
+            outputFastq.getReadLength(),
+            0,
+            cwd=protFastp.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            outputFastq.getFormat(),
+            'FASTQ',
+            cwd=protFastp.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertTrue,
+            outputFastq.hasQuality(),
+            cwd=protFastp.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertFalse,
+            outputFastq.isCompressed(),
+            cwd=protFastp.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            outputFastq.isPaired(),
+            isPaired,
+            cwd=protFastp.getWorkingDir()
+        )
+
         assertHandle(
             self.assertTrue,
             outputFastq.hasFastpHtml(),
-            cwd=protocol.getWorkingDir()
+            cwd=protFastp.getWorkingDir()
         )
 
         assertHandle(
             self.assertTrue,
             outputFastq.hasFastpJson(),
-            cwd=protocol.getWorkingDir()
+            cwd=protFastp.getWorkingDir()
         )
+
+        if isPaired:
+            assertHandle(
+                self.assertTrue,
+                outputFastq.hasFileName2(),
+                cwd=protFastp.getWorkingDir()
+            )
+
+            assertHandle(
+                self.assertTrue,
+                outputFastq.hasFastqcHtmlR1(),
+                cwd=protFastp.getWorkingDir()
+            )
+
+            assertHandle(
+                self.assertTrue,
+                outputFastq.hasFastqcHtmlR2(),
+                cwd=protFastp.getWorkingDir()
+            )
+
+        else:
+            assertHandle(
+                self.assertTrue,
+                outputFastq.hasFastqcHtml(),
+                cwd=protFastp.getWorkingDir()
+            )
 
     def testFastpFilterSingleEnd(self):
         print("\nFASTP filter: single-end")
-
-        protImport = self._importFastq(
-            sampleName='fastp_single',
-            isPaired=False
-        )
-
-        protFastp = self._runFastp(protImport.outputFastq)
-        outputFastq = getattr(protFastp, 'outputFastq', None)
-
-        assertOutputExists(self, protFastp, outputFastq)
-        assertFastqStats(self, protFastp, outputFastq, 'fastp_single')
-
-        assertHandle(
-            self.assertFalse,
-            outputFastq.isPaired(),
-            cwd=protFastp.getWorkingDir()
-        )
-
-        self._assertFastpReports(protFastp, outputFastq)
+        self._testFastpFilter(isPaired=False)
 
     def testFastpFilterPairedEnd(self):
         print("\nFASTP filter: paired-end")
-
-        protImport = self._importFastq(
-            sampleName='fastp_paired',
-            isPaired=True
-        )
-
-        protFastp = self._runFastp(protImport.outputFastq)
-        outputFastq = getattr(protFastp, 'outputFastq', None)
-
-        assertOutputExists(self, protFastp, outputFastq)
-        assertFastqStats(self, protFastp, outputFastq, 'fastp_paired')
-
-        assertHandle(
-            self.assertTrue,
-            outputFastq.isPaired(),
-            cwd=protFastp.getWorkingDir()
-        )
-
-        assertHandle(
-            self.assertTrue,
-            outputFastq.hasFileName2(),
-            cwd=protFastp.getWorkingDir()
-        )
-
-        self._assertFastpReports(protFastp, outputFastq)
+        self._testFastpFilter(isPaired=True)
