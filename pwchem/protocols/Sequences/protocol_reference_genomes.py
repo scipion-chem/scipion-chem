@@ -31,6 +31,7 @@ import shutil
 import urllib.error
 import urllib.request
 import zipfile
+from urllib.parse import urlparse
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam,EnumParam,StringParam
@@ -487,6 +488,7 @@ class ProtReferenceGenomes(EMProtocol):
 
     SOURCE_ENSEMBL = 0
     SOURCE_NCBI = 1
+    SOURCE_CONDITION = 'source == %d'
 
     # ---------------------------------------------------------------------
     # Genome selection
@@ -632,7 +634,7 @@ class ProtReferenceGenomes(EMProtocol):
             'assemblies',
             StringParam,
             default='Latest',
-            condition='source == %d' % self.SOURCE_ENSEMBL,
+            condition=self.SOURCE_CONDITION % self.SOURCE_ENSEMBL,
             label='Assemblies: ',
             help=(
                 'Use "Latest" to resolve the current assembly for every '
@@ -650,7 +652,7 @@ class ProtReferenceGenomes(EMProtocol):
             'releases',
             StringParam,
             default='Latest',
-            condition='source == %d' % self.SOURCE_ENSEMBL,
+            condition=self.SOURCE_CONDITION % self.SOURCE_ENSEMBL,
             label='Ensembl releases: ',
             help=(
                 'Use "Latest" to query the current Ensembl release.\n\n'
@@ -672,7 +674,7 @@ class ProtReferenceGenomes(EMProtocol):
             'ncbiAssemblies',
             StringParam,
             default='Latest',
-            condition='source == %d' % self.SOURCE_NCBI,
+            condition=self.SOURCE_CONDITION % self.SOURCE_NCBI,
             label='NCBI assemblies: ',
             help=(
                 'Use "Latest" to download the most recently released '
@@ -752,20 +754,18 @@ class ProtReferenceGenomes(EMProtocol):
     def _getSelectedSpecies(self):
         """Return selected species according to the selection mode."""
 
-        if self.genomeSelection.get() == self.GENOME_COMMON:
-            value = self.commonGenomes.get()
-        else:
-            value = self.customGenomes.get()
+        value = (
+            self.commonGenomes.get()
+            if self.genomeSelection.get() == self.GENOME_COMMON
+            else self.customGenomes.get()
+        )
 
         selected = self._splitParameterValues(value)
 
-        if self.genomeSelection.get() == self.GENOME_COMMON:
-            selected = [
-                item.lower()
-                for item in selected
-            ]
-
-        elif self.source.get() == self.SOURCE_ENSEMBL:
+        if (
+                self.genomeSelection.get() == self.GENOME_COMMON
+                or self.source.get() == self.SOURCE_ENSEMBL
+        ):
             selected = [
                 item.lower()
                 for item in selected
@@ -1061,7 +1061,6 @@ class ProtReferenceGenomes(EMProtocol):
                 html = response.read().decode()
 
         except (
-            urllib.error.HTTPError,
             urllib.error.URLError,
             TimeoutError
         ) as error:
@@ -1332,32 +1331,62 @@ class ProtReferenceGenomes(EMProtocol):
     # ---------------------------------------------------------------------
     # NCBI download
     # ---------------------------------------------------------------------
+    def _canReuseNcbiDownload(self, genomeInfo):
+        existingFasta = genomeInfo.get('fastaFile')
+        existingGtf = genomeInfo.get('gtfFile')
+
+        fastaExists = (
+                existingFasta
+                and os.path.exists(existingFasta)
+        )
+
+        gtfExists = (
+                existingGtf
+                and os.path.exists(existingGtf)
+        )
+
+        return (
+                not self.overwrite.get()
+                and fastaExists
+                and (
+                        not self.downloadAnnotation.get()
+                        or gtfExists
+                )
+        )
+
+    def _prepareNcbiDownloadPaths(
+            self,
+            outputDir,
+            extractDir,
+            zipFile):
+
+        if (
+                self.overwrite.get()
+                and os.path.exists(outputDir)
+        ):
+            shutil.rmtree(outputDir)
+
+        os.makedirs(
+            outputDir,
+            exist_ok=True
+        )
+
+        if os.path.exists(extractDir):
+            shutil.rmtree(extractDir)
+
+        if os.path.exists(zipFile):
+            os.remove(zipFile)
 
     def _downloadNcbiGenomes(self, genomes):
 
         for genomeInfo in genomes:
 
-            # If the step is resumed after a complete download, reuse it.
-            existingFasta = genomeInfo.get('fastaFile')
-            existingGtf = genomeInfo.get('gtfFile')
-
-            if (
-                not self.overwrite.get()
-                and existingFasta
-                and os.path.exists(existingFasta)
-                and (
-                    not self.downloadAnnotation.get()
-                    or (
-                        existingGtf
-                        and os.path.exists(existingGtf)
-                    )
-                )
-            ):
+            if self._canReuseNcbiDownload(genomeInfo):
                 continue
 
             queryName = (
-                genomeInfo.get('accession')
-                or genomeInfo['ncbiTaxon']
+                    genomeInfo.get('accession')
+                    or genomeInfo['ncbiTaxon']
             )
 
             outputDir = self._getExtraPath(
@@ -1367,17 +1396,6 @@ class ProtReferenceGenomes(EMProtocol):
                     ),
                     self._safeName(queryName)
                 )
-            )
-
-            if (
-                self.overwrite.get()
-                and os.path.exists(outputDir)
-            ):
-                shutil.rmtree(outputDir)
-
-            os.makedirs(
-                outputDir,
-                exist_ok=True
             )
 
             zipFile = os.path.join(
@@ -1390,16 +1408,17 @@ class ProtReferenceGenomes(EMProtocol):
                 'package'
             )
 
-            if os.path.exists(extractDir):
-                shutil.rmtree(extractDir)
+            self._prepareNcbiDownloadPaths(
+                outputDir,
+                extractDir,
+                zipFile
+            )
 
-            if os.path.exists(zipFile):
-                os.remove(zipFile)
-
-            includeFiles = 'genome'
-
-            if self.downloadAnnotation.get():
-                includeFiles += ',gtf'
+            includeFiles = (
+                'genome,gtf'
+                if self.downloadAnnotation.get()
+                else 'genome'
+            )
 
             # -------------------------------------------------------------
             # Build NCBI Datasets command
@@ -1455,8 +1474,8 @@ class ProtReferenceGenomes(EMProtocol):
             )
 
             accession = (
-                report.get('accession')
-                or report.get('currentAccession')
+                    report.get('accession')
+                    or report.get('currentAccession')
             )
 
             if not accession:
@@ -1471,8 +1490,8 @@ class ProtReferenceGenomes(EMProtocol):
             )
 
             assemblyName = (
-                assemblyInfo.get('assemblyName')
-                or accession
+                    assemblyInfo.get('assemblyName')
+                    or accession
             )
 
             organismInfo = report.get(
@@ -1481,8 +1500,8 @@ class ProtReferenceGenomes(EMProtocol):
             )
 
             scientificName = (
-                organismInfo.get('organismName')
-                or genomeInfo['scientificName']
+                    organismInfo.get('organismName')
+                    or genomeInfo['scientificName']
             )
 
             annotationInfo = report.get(
@@ -1515,7 +1534,6 @@ class ProtReferenceGenomes(EMProtocol):
             gtfFile = None
 
             if self.downloadAnnotation.get():
-
                 gtfSource = self._findNcbiPackageFile(
                     extractDir,
                     ('.gtf',),
@@ -1695,6 +1713,20 @@ class ProtReferenceGenomes(EMProtocol):
     # =====================================================================
     # Common download utilities
     # =====================================================================
+    @staticmethod
+    def _validateEnsemblDownloadUrl(url):
+        parsedUrl = urlparse(url)
+
+        if (
+                parsedUrl.scheme != 'https'
+                or parsedUrl.netloc != 'ftp.ensembl.org'
+                or not parsedUrl.path.startswith('/pub/release-')
+        ):
+            raise RuntimeError(
+                'Invalid Ensembl download URL: {}'.format(url)
+            )
+
+        return url
 
     def _downloadAndUncompress(
             self,
@@ -1716,6 +1748,8 @@ class ProtReferenceGenomes(EMProtocol):
             ):
                 if os.path.exists(path):
                     os.remove(path)
+
+        url = self._validateEnsemblDownloadUrl(url)
 
         Plugin.runCondaCommand(
             self,
@@ -1802,7 +1836,6 @@ class ProtReferenceGenomes(EMProtocol):
                 )
 
         except (
-            urllib.error.HTTPError,
             urllib.error.URLError,
             TimeoutError,
             json.JSONDecodeError

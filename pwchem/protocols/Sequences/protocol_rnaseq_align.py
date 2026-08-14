@@ -27,6 +27,7 @@
 import json
 import os
 import re
+import shlex
 import shutil
 
 from pyworkflow.protocol.params import BooleanParam,EnumParam,IntParam,PathParam,PointerParam,StringParam
@@ -268,6 +269,7 @@ class ProtRNASeqAlignment(EMProtocol):
 
     ALIGN_STAR = 0
     ALIGN_HISAT2 = 1
+    ALIGNER_CONDITION = 'aligner == %d'
 
     # -------------------------------------------------------
     # Reference input choices
@@ -275,6 +277,7 @@ class ProtRNASeqAlignment(EMProtocol):
 
     REFERENCE_FROM_OBJECT = 0
     REFERENCE_FROM_FILES = 1
+    REFERENCE_SOURCE_CONDITION = 'referenceSource == %d'
 
     _label = 'RNA-seq alignment'
 
@@ -318,7 +321,7 @@ class ProtRNASeqAlignment(EMProtocol):
             PointerParam,
             pointerClass='SetOfGenomes',
             label='Reference genomes: ',
-            condition='referenceSource == %d' % self.REFERENCE_FROM_OBJECT,
+            condition=self.REFERENCE_SOURCE_CONDITION % self.REFERENCE_FROM_OBJECT,
             help=(
                 'Set of reference genomes produced by the '
                 'Reference genomes protocol.'
@@ -329,7 +332,7 @@ class ProtRNASeqAlignment(EMProtocol):
             'genomeIndex',
             IntParam,
             default=0,
-            condition='referenceSource == %d' % self.REFERENCE_FROM_OBJECT,
+            condition=self.REFERENCE_SOURCE_CONDITION % self.REFERENCE_FROM_OBJECT,
             label='Genome: ',
             help='Select the reference genome using the wizard.'
         )
@@ -338,7 +341,7 @@ class ProtRNASeqAlignment(EMProtocol):
             'manualFasta',
             PathParam,
             label='Reference FASTA: ',
-            condition='referenceSource == %d' % self.REFERENCE_FROM_FILES,
+            condition=self.REFERENCE_SOURCE_CONDITION % self.REFERENCE_FROM_FILES,
             help='Local reference genome in FASTA format.'
         )
 
@@ -347,7 +350,7 @@ class ProtRNASeqAlignment(EMProtocol):
             PathParam,
             allowsNull=True,
             label='Reference GTF: ',
-            condition='referenceSource == %d' % self.REFERENCE_FROM_FILES,
+            condition=self.REFERENCE_SOURCE_CONDITION % self.REFERENCE_FROM_FILES,
             help='Optional GTF annotation matching the reference FASTA.'
         )
 
@@ -356,7 +359,7 @@ class ProtRNASeqAlignment(EMProtocol):
             StringParam,
             default='Custom reference',
             label='Reference name: ',
-            condition='referenceSource == %d' % self.REFERENCE_FROM_FILES,
+            condition=self.REFERENCE_SOURCE_CONDITION % self.REFERENCE_FROM_FILES,
             help='Descriptive name stored in the output AlignmentFile.'
         )
 
@@ -365,7 +368,7 @@ class ProtRNASeqAlignment(EMProtocol):
             StringParam,
             default='Local files',
             label='Reference source name: ',
-            condition='referenceSource == %d' % self.REFERENCE_FROM_FILES,
+            condition=self.REFERENCE_SOURCE_CONDITION % self.REFERENCE_FROM_FILES,
             help='Example: Ensembl, GENCODE, RefSeq, UCSC or Local files.'
         )
 
@@ -384,7 +387,7 @@ class ProtRNASeqAlignment(EMProtocol):
             BooleanParam,
             default=True,
             label='STAR two-pass mode: ',
-            condition='aligner == %d' % self.ALIGN_STAR,
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
             help=(
                 'Run STAR in Basic two-pass mode to improve splice-junction '
                 'detection.'
@@ -396,7 +399,7 @@ class ProtRNASeqAlignment(EMProtocol):
             IntParam,
             default=0,
             label='STAR sjdbOverhang: ',
-            condition='aligner == %d' % self.ALIGN_STAR,
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
             help=(
                 'Use 0 to infer readLength - 1 from the FastqFile object. '
                 'Otherwise provide a positive value.'
@@ -408,7 +411,7 @@ class ProtRNASeqAlignment(EMProtocol):
             BooleanParam,
             default=True,
             label='HISAT2 downstream transcriptome mode: ',
-            condition='aligner == %d' % self.ALIGN_HISAT2,
+            condition=self.ALIGNER_CONDITION % self.ALIGN_HISAT2,
             help='Enable --dta for downstream transcript assembly.'
         )
 
@@ -1184,13 +1187,13 @@ class ProtRNASeqAlignment(EMProtocol):
                 totalReads - mappedReads
             )
 
-        if statistics.get('mappingRate', 0.0) == 0.0:
+        if not statistics.get('mappingRate', 0.0):
             statistics['mappingRate'] = self._percentage(
                 mappedReads,
                 totalReads
             )
 
-        if statistics.get('unmappedRate', 0.0) == 0.0:
+        if not statistics.get('unmappedRate', 0.0):
             statistics['unmappedRate'] = self._percentage(
                 statistics['unmappedReads'],
                 totalReads
@@ -1468,11 +1471,7 @@ class ProtRNASeqAlignment(EMProtocol):
 
     @staticmethod
     def _quote(value):
-        escaped = str(value).replace(
-            '"',
-            '\\"'
-        )
-        return '"{}"'.format(escaped)
+        return shlex.quote(str(value))
 
     # -------------------------------------------------------
     # Validation
@@ -1523,55 +1522,60 @@ class ProtRNASeqAlignment(EMProtocol):
 
     def _validateReference(self, errors):
         if (
-            self.referenceSource.get()
-            == self.REFERENCE_FROM_OBJECT
+                self.referenceSource.get()
+                == self.REFERENCE_FROM_OBJECT
         ):
-            try:
-                genome = self._getSelectedGenome()
-            except RuntimeError as error:
-                errors.append(str(error))
-                return
-
-            fastaFile = genome.getFastaFile()
-
-            if not fastaFile:
-                errors.append(
-                    'The selected Genome does not contain a FASTA file.'
-                )
-            elif not os.path.isfile(fastaFile):
-                errors.append(
-                    'The genome FASTA file does not exist: {}'
-                    .format(fastaFile)
-                )
-
-            if genome.hasGtfFile():
-                gtfFile = genome.getGtfFile()
-
-                if not os.path.isfile(gtfFile):
-                    errors.append(
-                        'The genome GTF file does not exist: {}'
-                        .format(gtfFile)
-                    )
-
+            self._validateGenomeObjectReference(errors)
         else:
-            fastaFile = (self.manualFasta.get() or '').strip()
-            gtfFile = (self.manualGtf.get() or '').strip()
+            self._validateLocalReference(errors)
 
-            if not fastaFile:
-                errors.append(
-                    'A reference FASTA file is required.'
-                )
-            elif not os.path.isfile(fastaFile):
-                errors.append(
-                    'The reference FASTA file does not exist: {}'
-                    .format(fastaFile)
-                )
+    def _validateGenomeObjectReference(self, errors):
+        try:
+            genome = self._getSelectedGenome()
+        except RuntimeError as error:
+            errors.append(str(error))
+            return
 
-            if gtfFile and not os.path.isfile(gtfFile):
+        fastaFile = genome.getFastaFile()
+
+        if not fastaFile:
+            errors.append(
+                'The selected Genome does not contain a FASTA file.'
+            )
+        elif not os.path.isfile(fastaFile):
+            errors.append(
+                'The genome FASTA file does not exist: {}'
+                .format(fastaFile)
+            )
+
+        if genome.hasGtfFile():
+            gtfFile = genome.getGtfFile()
+
+            if not os.path.isfile(gtfFile):
                 errors.append(
-                    'The reference GTF file does not exist: {}'
+                    'The genome GTF file does not exist: {}'
                     .format(gtfFile)
                 )
+
+    def _validateLocalReference(self, errors):
+        fastaFile = (self.manualFasta.get() or '').strip()
+        gtfFile = (self.manualGtf.get() or '').strip()
+
+        if not fastaFile:
+            errors.append(
+                'A reference FASTA file is required.'
+            )
+        elif not os.path.isfile(fastaFile):
+            errors.append(
+                'The reference FASTA file does not exist: {}'
+                .format(fastaFile)
+            )
+
+        if gtfFile and not os.path.isfile(gtfFile):
+            errors.append(
+                'The reference GTF file does not exist: {}'
+                .format(gtfFile)
+            )
 
     def _validateAlignmentParameters(self, errors):
         if (
@@ -1585,95 +1589,132 @@ class ProtRNASeqAlignment(EMProtocol):
     # -------------------------------------------------------
     # Summary and methods
     # -------------------------------------------------------
+    def _getAvailableGenomesSummary(self):
+        summary = []
+
+        genomeSet = self.inputGenomes.get()
+
+        if genomeSet is None:
+            return summary
+
+        if genomeSet.getSize() == 0:
+            return summary
+
+        summary.append(
+            'Available genomes:'
+        )
+
+        for i, genome in enumerate(genomeSet):
+            summary.append(
+                self._formatGenomeSummary(
+                    i,
+                    genome
+                )
+            )
+
+        summary.extend([
+            '',
+            "Use the wizard next to 'Genome' to select "
+            "the reference genome.",
+            ''
+        ])
+
+        return summary
+
+    @staticmethod
+    def _formatGenomeSummary(index, genome):
+        species = (
+            genome.getScientificName()
+            if genome.hasScientificName()
+            else 'Unknown species'
+        )
+
+        assembly = (
+            genome.getAssembly()
+            if genome.hasAssembly()
+            else ''
+        )
+
+        release = (
+            genome.getRelease()
+            if genome.hasRelease()
+            else ''
+        )
+
+        source = (
+            genome.getSource()
+            if genome.hasSource()
+            else ''
+        )
+
+        line = '{} -> {}'.format(
+            index,
+            species
+        )
+
+        if assembly:
+            line += ' ({})'.format(
+                assembly
+            )
+
+        if release:
+            if source:
+                line += ', {} {}'.format(
+                    source,
+                    release
+                )
+            else:
+                line += ', release {}'.format(
+                    release
+                )
+
+        return line
 
     def _summary(self):
         summary = []
 
-        # -----------------------------------------
-        # Show available genomes before execution
-        # -----------------------------------------
-
         if self.referenceSource.get() == self.REFERENCE_FROM_OBJECT:
-
-            genomeSet = self.inputGenomes.get()
-
-            if genomeSet is not None:
-
-                if genomeSet.getSize() > 0:
-                    summary.append('Available genomes:')
-
-                    for i, genome in enumerate(genomeSet):
-                        species = (
-                            genome.getScientificName()
-                            if genome.hasScientificName()
-                            else 'Unknown species'
-                        )
-
-                        assembly = (
-                            genome.getAssembly()
-                            if genome.hasAssembly()
-                            else ''
-                        )
-
-                        release = (
-                            genome.getRelease()
-                            if genome.hasRelease()
-                            else ''
-                        )
-
-                        line = '{} -> {}'.format(i, species)
-
-                        if assembly:
-                            line += ' ({})'.format(assembly)
-
-                        source = (
-                            genome.getSource()
-                            if genome.hasSource()
-                            else ''
-                        )
-
-                        if release:
-                            if source:
-                                line += ', {} {}'.format(source, release)
-                            else:
-                                line += ', release {}'.format(release)
-
-                        summary.append(line)
-
-                    summary.append('')
-                    summary.append(
-                        "Use the wizard next to 'Genome' to select "
-                        "the reference genome."
-                    )
-                    summary.append('')
-
-        # -----------------------------------------
-        # Before execution
-        # -----------------------------------------
+            summary.extend(
+                self._getAvailableGenomesSummary()
+            )
 
         if not hasattr(self, 'outputAlignment'):
-            summary.append('No alignment has been generated.')
+            summary.append(
+                'No alignment has been generated.'
+            )
             return summary
-
-        # -----------------------------------------
-        # After execution
-        # -----------------------------------------
 
         output = self.outputAlignment
 
         summary.extend([
-            'Aligner: {}'.format(output.getAligner()),
-            'Reference: {}'.format(output.getReferenceName()),
-            'Reference source: {}'.format(output.getReferenceSource()),
-            'Output: {}'.format(output.getFileName()),
-            'Mapping rate: {:.2f}%'.format(output.getMappingRate()),
-            'Mapped reads: {}'.format(output.getMappedReads()),
-            'Unmapped reads: {}'.format(output.getUnmappedReads())
+            'Aligner: {}'.format(
+                output.getAligner()
+            ),
+            'Reference: {}'.format(
+                output.getReferenceName()
+            ),
+            'Reference source: {}'.format(
+                output.getReferenceSource()
+            ),
+            'Output: {}'.format(
+                output.getFileName()
+            ),
+            'Mapping rate: {:.2f}%'.format(
+                output.getMappingRate()
+            ),
+            'Mapped reads: {}'.format(
+                output.getMappedReads()
+            ),
+            'Unmapped reads: {}'.format(
+                output.getUnmappedReads()
+            )
         ])
 
         if output.hasReferenceGtf():
             summary.append(
-                'Annotation: {}'.format(output.getReferenceGtf())
+                'Annotation: {}'.format(
+                    output.getReferenceGtf()
+                )
             )
 
         return summary
