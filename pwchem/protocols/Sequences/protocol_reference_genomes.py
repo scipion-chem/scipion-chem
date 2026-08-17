@@ -952,15 +952,6 @@ class ProtReferenceGenomes(EMProtocol):
                 genomeInfo
             )
 
-            fastaUrl, gtfUrl = (
-                self._buildEnsemblDownloadUrls(
-                    genomeInfo
-                )
-            )
-
-            genomeInfo['fastaUrl'] = fastaUrl
-            genomeInfo['gtfUrl'] = gtfUrl
-
     def _getLatestEnsemblRelease(self):
 
         data = self._requestJson(
@@ -1300,9 +1291,11 @@ class ProtReferenceGenomes(EMProtocol):
                 exist_ok=True
             )
 
-            # FASTA
-            fastaUrl = genomeInfo['fastaUrl']
+            fastaUrl, gtfUrl = self._buildEnsemblDownloadUrls(
+                genomeInfo
+            )
 
+            #FASTA
             fastaGz = os.path.join(
                 outputDir,
                 'genome.fa.gz'
@@ -1324,8 +1317,6 @@ class ProtReferenceGenomes(EMProtocol):
 
             # GTF
             if self.downloadAnnotation.get():
-
-                gtfUrl = genomeInfo['gtfUrl']
 
                 gtfGz = os.path.join(
                     outputDir,
