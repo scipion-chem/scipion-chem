@@ -8,4 +8,5 @@ from .wizard_pharm import *
 from .wizard_select_object import *
 from .wizard_defaults import *
 from .wizard_show_file import *
+from .wizard_add_mutations import *
 

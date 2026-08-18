@@ -53,6 +53,11 @@ RESIDUES3TO1 = {'CYS': 'C', 'ASP': 'D', 'SER': 'S', 'GLN': 'Q', 'LYS': 'K',
 
 RESIDUES1TO3 = {v: k for k, v in RESIDUES3TO1.items()}
 
+MODIFIED_RESIDUES3TO1 = {'PTR': 'y', 'TPO': 'p', 'SEP': 's', 'HYP': 'h', 'TYS': 'z',
+                         'MLZ': 'k', 'MLY': 'm', 'M3L': 'l', 'H1S': 'o', 'H2S': 'e',
+                         'H3S': 'f', 'ALL': 'X', 'HZP': 'p', 'CYX': 'C', 'HID': 'H',
+                         'HIE': 'H', 'MSE': 'M', 'ASH': 'D', 'GLH': 'E', 'LYN': 'K'}
+
 SEED_RANDOM = '''get_seeded_random()
 {
   seed="$1"
