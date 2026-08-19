@@ -66,7 +66,6 @@ class Plugin(pwem.Plugin):
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
         cls.addCocadaPackage(env)
-
         cls.addRNASeqPackage(env)
 
     @classmethod
@@ -356,6 +355,8 @@ class Plugin(pwem.Plugin):
             dependencies=['conda'],
             default=default
         )
+
+    @classmethod
     def addCocadaPackage(cls, env, default=True):
         # Instantiating install helper
         installer = InstallHelper(COCADA_DIC['name'], packageHome=cls.getVar(COCADA_DIC['home']),
