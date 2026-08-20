@@ -45,6 +45,8 @@ from pwchem.protocols import ProtocolRANXFuse
 
 PER_SET_ATTR_PATTERN = re.compile(r'^(.+)_setIdx_(\d+)$')
 
+NO_DATA_TITLE = 'No data'
+
 CONSENSUS_OPS = ['<', '<=', '>', '>=']
 CONSENSUS_OP_FUNCS = {'<': operator.lt, '<=': operator.le, '>': operator.gt, '>=': operator.ge}
 
@@ -135,7 +137,7 @@ class RANXFuseViewer(ProtocolViewer):
     dataList = counts.most_common()
 
     if not dataList:
-      showError('No data', 'No data available to display.', self.getTkRoot())
+      showError(NO_DATA_TITLE, '{} available to display.'.format(NO_DATA_TITLE), self.getTkRoot())
       return
 
     TableView(headerList=['NativePosition', 'Frequency'],
@@ -172,7 +174,7 @@ class RANXFuseViewer(ProtocolViewer):
         valuesBySet[setIdx].append(value)
 
     if not valuesBySet:
-      showError('No data', 'No "%s_setIdx_<n>" attribute was found in the output set.' % attrUsed,
+      showError(NO_DATA_TITLE, 'No "%s_setIdx_<n>" attribute was found in the output set.' % attrUsed,
                 self.getTkRoot())
       return
 
@@ -204,7 +206,7 @@ class RANXFuseViewer(ProtocolViewer):
 
     perItem = self.getPerItemValues(outSet, attrUsed)
     if not perItem:
-      showError('No data', 'No "%s_setIdx_<n>" attribute was found in the output set.' % attrUsed,
+      showError(NO_DATA_TITLE, 'No "%s_setIdx_<n>" attribute was found in the output set.' % attrUsed,
                 self.getTkRoot())
       return
 
