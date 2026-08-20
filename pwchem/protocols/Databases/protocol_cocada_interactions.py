@@ -75,6 +75,42 @@ RING_ATOMS = {
 }
 
 
+def joinWrappedAtomSiteRows(cifFile):
+    '''Some mmCIF writers (e.g. Chai-1's) wrap an _atom_site row onto a continuation line
+    when a coordinate happens to be printed with extra digits (observed with coordinates very
+    close to 0, e.g. "0.000356"), splitting off the trailing field(s) with no atom keyword. Our
+    own downstream Biopython-based parsing tolerates this, but COCADA's own CIF reader tokenizes
+    the file with a naive line.split() and crashes. Rejoin any such row in place; a well-formed
+    file is left untouched.'''
+    with open(cifFile) as f:
+        lines = f.readlines()
+
+    out, nCols, inAtomSite, inData, buffer = [], None, False, False, []
+    for raw in lines:
+        stripped = raw.strip()
+
+        if stripped.startswith('_atom_site.'):
+            inAtomSite, nCols = True, (nCols or 0) + 1
+            out.append(raw)
+            continue
+        elif inAtomSite and not inData:
+            inData = True
+
+        if inData and stripped not in ('#', ''):
+            buffer.extend(stripped.split())
+            while len(buffer) >= nCols:
+                out.append(' '.join(buffer[:nCols]) + '\n')
+                buffer = buffer[nCols:]
+            continue
+        elif inData and stripped == '#':
+            inAtomSite, inData = False, False
+
+        out.append(raw)
+
+    with open(cifFile, 'w') as f:
+        f.writelines(out)
+
+
 class ProtCocadaInteractions(EMProtocol):
     """
     Gets a COCADA residue-residue contacts CSV (columns: Chain1,Res1,ResName1,Atom1,Chain2,
@@ -178,6 +214,7 @@ class ProtCocadaInteractions(EMProtocol):
     def convertInputStep(self):
         inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         cifFromASFile(inFile, self.getCifFile())
+        joinWrappedAtomSiteRows(self.getCifFile())
 
     def runCocadaStep(self):
         outDir = self.getCocadaOutDir()
