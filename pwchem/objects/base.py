@@ -1254,27 +1254,35 @@ class StructROI(data.EMFile):
   def getConvexVolume(self):
     '''Calculate the convex volume of the points forming the pocket'''
     coords = np.array(self.getPointsCoords())
-    vol = spatial.ConvexHull(coords).volume if len(coords) > 3 else 0
-    return vol
+    if len(coords) <= 3:
+      return 0
+    try:
+      return spatial.ConvexHull(coords).volume
+    except spatial.QhullError:
+      # Too few points, or (near-)coplanar/collinear ones (common for pockets built from
+      # only a handful of contacts), can't form a proper 3D hull.
+      return 0
 
   def getSurfaceConvexVolume(self):
     '''Calculate the convex volume of the protein contact atoms'''
     cAtoms = self.buildContactAtoms()
     cCoords = self.getAtomsCoords(cAtoms)
-    if len(cCoords) >= 4:
-      cHull = spatial.ConvexHull(cCoords)
-      return cHull.volume
-    else:
+    if len(cCoords) < 4:
+      return len(cCoords)
+    try:
+      return spatial.ConvexHull(cCoords).volume
+    except spatial.QhullError:
       return len(cCoords)
 
   def getSurfaceConvexArea(self):
     '''Calculate the convex area of the protein contact atoms'''
     cAtoms = self.buildContactAtoms()
     cCoords = self.getAtomsCoords(cAtoms)
-    if len(cCoords) >= 3:
-      cHull = spatial.ConvexHull(cCoords)
-      return cHull.area
-    else:
+    if len(cCoords) < 3:
+      return len(cCoords)
+    try:
+      return spatial.ConvexHull(cCoords).area
+    except spatial.QhullError:
       return len(cCoords)
 
   def getPocketBox(self):
