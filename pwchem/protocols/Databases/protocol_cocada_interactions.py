@@ -102,12 +102,7 @@ def joinWrappedAtomSiteRows(cifFile):
 
 class ProtCocadaInteractions(EMProtocol):
     """
-    Gets a COCADA residue-residue contacts CSV (columns: Chain1,Res1,ResName1,Atom1,Chain2,
-    Res2,ResName2,Atom2,Distance,Type) -- either imported or freshly computed by running COCADA
-    on the input structure -- and defines a SetOfStructROIs with one ROI per interaction type
-    plus one ROI for the whole interface. The contacts can come from any structure supported by
-    COCADA (single-chain, multi-chain complex, protein-peptide, protein-DNA, protein-RNA...), not
-    only a two-chain protein-protein complex.
+    Protocol to get COCADA residue-residue contact maps as structural ROIs.
 
     AI Generated:
 
