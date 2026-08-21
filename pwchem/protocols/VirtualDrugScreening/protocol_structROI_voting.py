@@ -29,18 +29,20 @@ times each residue appears across models (one count per model, not per pocket).
 It outputs a SetOfStructROIs and a SequenceChem with per-residue frequency attributes.
 """
 
-import os
-import sqlite3
 import pyworkflow.object as pwobj
+from Bio.PDB import PDBParser, MMCIFParser
 from pwem.protocols import EMProtocol
-from pwem.convert.atom_struct import AtomicStructHandler
+from pwem.objects import AtomStruct
+from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute
 from pyworkflow.protocol import params
 from pwchem.objects import SetOfStructROIs, StructROI, SequenceChem
-from pwchem.utils import getBaseName
+from pwchem.utils import getBaseName, createPocketFile
 
 
 class ProtROIVoting(EMProtocol):
     _label = 'ROI voting (multi-model integration)'
+    _ATTRNAME = 'frequency'
+    _OUTNAME = 'outputAtomStruct'
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -57,95 +59,105 @@ class ProtROIVoting(EMProtocol):
         proteinFile = None
 
         for p in self.roisList:
-            try:
-                roiSet = p.get()
-                if proteinFile is None:
-                    proteinFile = roiSet.getProteinFile()
+            roiSet = p.get()
+            if proteinFile is None:
+                proteinFile = roiSet.getProteinFile()
 
-                dbPath = roiSet.getFileName()
-                conn = sqlite3.connect(dbPath)
-                cur = conn.cursor()
+            modelResidues = set()
+            for roi in roiSet:
+                modelResidues.update(roi.getDecodedCResidues())
 
-                cols = [c[1] for c in cur.execute("PRAGMA table_info(Objects);")]
-                if "c06" in cols:
-                    cur.execute("SELECT c06 FROM Objects;")
-                elif "_contactResidues" in cols:
-                    cur.execute("SELECT _contactResidues FROM Objects;")
-                else:
-                    self.warning(f"No residue column found in {dbPath}")
-                    conn.close()
-                    continue
-
-                modelResidues = set()
-                for (val,) in cur.fetchall():
-                    if not val:
-                        continue
-                    for r in (x.strip() for x in val.split('-') if x.strip()):
-                        if r.startswith("A_"):
-                            modelResidues.add(r)
-                conn.close()
-
-                for r in modelResidues:
-                    residueCounts[r] = residueCounts.get(r, 0) + 1
-
-            except Exception as e:
-                self.warning(f"Error reading {p}: {e}")
+            for r in modelResidues:
+                residueCounts[r] = residueCounts.get(r, 0) + 1
 
         if not residueCounts:
-            self.warning("No residues found for chain A.")
+            self.warning("No contact residues found in the input ROI sets.")
             return
 
         maxCount = max(residueCounts.values())
-        topResidues = sorted(residueCounts.items(), key=lambda x: x[1], reverse=True)
+        sortedResidues = sorted(residueCounts.items(), key=lambda x: x[1], reverse=True)
+        resCoordsDic = self.parseResidueCoords(proteinFile)
 
         outSet = SetOfStructROIs(filename=self._getPath('ROIVoting.sqlite'))
+        for i, (residue, count) in enumerate(sortedResidues):
+            coords = resCoordsDic.get(residue)
+            if not coords:
+                self.warning(f"Residue {residue} not found in {proteinFile}, skipping")
+                continue
 
-        for residue, count in topResidues:
-            chain, resnum = residue.split('_')
-            pocketCoords = []
-            with open(proteinFile) as f:
-                for line in f:
-                    if line.startswith('ATOM'):
-                        parts = line.split()
-                        if parts[4] == chain and parts[5] == resnum:
-                            pocketCoords.append(line)
+            pocketFile = self._getExtraPath(f'roi_{residue}.cif')
+            createPocketFile(coords, i + 1, pocketFile)
 
-            pocketFile = self._getExtraPath(f'roi_{residue}.pdb')
-            with open(pocketFile, 'w') as f:
-                for i, line in enumerate(pocketCoords):
-                    parts = line.split()
-                    x, y, z = float(parts[6]), float(parts[7]), float(parts[8])
-                    f.write(f"HETATM{i:5d} APOL STP C   1    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          Ve\n")
-
-            roi = StructROI(pocketFile, proteinFile=None)
-            roi._proteinFile = pwobj.String(proteinFile)
-            roi._contactResidues = pwobj.String(residue)
+            roi = StructROI(pocketFile, proteinFile)
+            roi.setObjId(i + 1)
+            roi.calculateContacts()
             roi._frequency = pwobj.Integer(count)
             roi._percentage = pwobj.Float(round((count / maxCount) * 100.0, 2))
             outSet.append(roi)
 
         if len(outSet) > 0:
+            outSet.buildPDBhetatmFile()
             self._defineOutputs(outputStructROIs=outSet)
             self._defineSourceRelation(self.roisList, self.outputStructROIs)
 
-        if proteinFile and os.path.exists(proteinFile):
-            ash = AtomicStructHandler()
-            ash.read(proteinFile)
-            seqStr = str(ash.getSequenceFromChain(modelID=0, chainID='A'))
-            nRes = len(seqStr)
+            self.createSequenceOutputs(outSet, residueCounts, maxCount)
+            self.createAtomStructOutput(proteinFile, residueCounts, resCoordsDic)
 
-            freqValues = [residueCounts.get(f'A_{i}', 0) for i in range(1, nRes + 1)]
-            base = getBaseName(proteinFile)
+    def createAtomStructOutput(self, proteinFile, residueCounts, resCoordsDic):
+        '''Embeds the per-residue voting frequency as a Scipion attribute in the protein cif file,
+        so it can be inspected with the generic ChimeraAttributeViewer (3D coloring, histogram...).
+        Every residue in the structure gets a value (0 if not voted): pwem's replaceOcuppancyWithAttribute
+        crashes on residues missing from the attribute dict, so it must not be left sparse.'''
+        attrDic = {residue.replace('_', ':', 1): 0 for residue in resCoordsDic}
+        attrDic.update({residue.replace('_', ':', 1): count for residue, count in residueCounts.items()})
+
+        ash = AtomicStructHandler()
+        inpCif = toCIF(proteinFile, self._getTmpPath('inputStruct.cif'))
+        cifDic = addScipionAttribute(ash.readLowLevel(inpCif), attrDic, self._ATTRNAME)
+
+        outStructFileName = self._getPath('outputStructureVoting.cif')
+        ash._writeLowLevel(outStructFileName, cifDic)
+        self._defineOutputs(outputAtomStruct=AtomStruct(filename=outStructFileName))
+
+    def createSequenceOutputs(self, roiSet, residueCounts, maxCount):
+        '''Defines one SequenceChem output (with a per-residue frequency attribute) for each
+        protein chain that has at least one voted contact residue'''
+        seqDic = roiSet.getProteinSequencesDic()
+        resIdxDic = roiSet.getProteinSequencesResIdsDic()
+        base = getBaseName(roiSet.getProteinFile())
+
+        chainsWithROIs = sorted({residue.rsplit('_', 1)[0] for residue in residueCounts})
+        for chainId in chainsWithROIs:
+            if chainId not in seqDic:
+                continue
+
+            seqStr = seqDic[chainId]
+            freqValues = [0] * len(seqStr)
+            for resId, seqIdx in resIdxDic[chainId].items():
+                # Trailing non-standard residues (waters, heteroatoms) are counted here but
+                # trimmed from seqStr by getSequenceFromChain, so they fall outside its range
+                if seqIdx < len(seqStr):
+                    freqValues[seqIdx] = residueCounts.get(f'{chainId}_{resId}', 0)
+
             outSeq = SequenceChem(
-                name=f'{base}_A',
+                name=f'{base}_{chainId}',
                 sequence=seqStr,
-                id=f'{base}_A',
-                attributesFile=self._getExtraPath('sequenceAttributes.txt')
+                id=f'{base}_{chainId}',
+                attributesFile=self._getExtraPath(f'sequenceAttributes_{chainId}.txt')
             )
             outSeq.addAttributes({'frequency': freqValues})
-            self._defineOutputs(outputSequence=outSeq)
-        else:
-            self.warning("Could not find protein file for sequence output.")
+            self._defineOutputs(**{f'outputSequence_{chainId}': outSeq})
+
+    def parseResidueCoords(self, asFile):
+        '''Maps every residue of the protein structure (all chains) to its atom coordinates,
+        as {"chainId_resNum": [[x, y, z], ...]}'''
+        resCoordsDic = {}
+        parser = PDBParser if asFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
+        struct = parser(QUIET=True).get_structure(getBaseName(asFile), asFile)[0]
+        for chain in struct.get_chains():
+            for res in chain.get_residues():
+                resCoordsDic[f'{chain.id}_{res.get_id()[1]}'] = [a.get_coord().tolist() for a in res.get_atoms()]
+        return resCoordsDic
 
     def _summary(self):
         summary = []

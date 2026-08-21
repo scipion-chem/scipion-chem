@@ -25,47 +25,32 @@
 
 import os
 import webbrowser
-import numpy as np
-import matplotlib.pyplot as plt
 
-import pyworkflow.viewer as pwviewer
 import pyworkflow.protocol.params as params
-from pwchem.viewers.viewers_data import PyMolViewer
-from pwchem.objects import SetOfStructROIs
+from pwem.viewers import ChimeraAttributeViewer
 from pwchem.protocols.VirtualDrugScreening.protocol_structROI_voting import ProtROIVoting
+from pwchem.viewers.viewer_structure_attributes import plotSequenceAttribute
 
 
-def plot_residue_attribute(attrValues, attrName='Attribute'):
-    attrValues = list(map(float, attrValues))
-    maxY = max(attrValues)
-    xs = np.arange(len(attrValues))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.bar(xs, attrValues, color='steelblue')
-    yloc = plt.MaxNLocator(10)
-    ax.yaxis.set_major_locator(yloc)
-    ax.set_ylim(0, maxY + maxY / 10)
-
-    plt.xlabel("Sequence position")
-    plt.ylabel(f"{attrName} value")
-    plt.title(f'{attrName} values along sequence')
-    plt.show()
-
-
-class ViewerROIVoting(pwviewer.ProtocolViewer):
+class ViewerROIVoting(ChimeraAttributeViewer):
     _label = 'Viewer ROI Voting'
-    _environments = [pwviewer.DESKTOP_TKINTER]
     _targets = [ProtROIVoting]
 
-    def _defineParams(self, form):
-        form.addSection(label='3D Visualization')
-        form.addParam('displayPyMol', params.LabelParam,
-                      label='Display residues colored by frequency (white to red)',
-                      help='Colors each residue by its voting frequency percentage in PyMol.')
+    def _getSequenceOutputsDic(self):
+        '''{chainId: SequenceChem output} for every per-chain sequence output of the protocol'''
+        seqOutputs = {}
+        for attrName in dir(self.protocol):
+            if attrName.startswith('outputSequence_'):
+                seqOutputs[attrName[len('outputSequence_'):]] = getattr(self.protocol, attrName)
+        return seqOutputs
 
-        if hasattr(self.protocol, 'outputSequence'):
+    def _defineParams(self, form):
+        seqOutputs = self._getSequenceOutputsDic()
+        if seqOutputs:
             form.addSection(label='Sequence')
+            if len(seqOutputs) > 1:
+                form.addParam('seqChain', params.EnumParam, choices=sorted(seqOutputs.keys()), default=0,
+                              label='Chain: ', help='Chain whose sequence frequency will be displayed.')
             form.addParam('viewFrequency', params.LabelParam,
                           label='Display frequency over sequence: ',
                           help='Display a bar chart with frequency values per residue.')
@@ -73,69 +58,35 @@ class ViewerROIVoting(pwviewer.ProtocolViewer):
                           label='Display sequence colored by frequency: ',
                           help='Shows the sequence with each AA colored white to red by frequency.')
 
+        if hasattr(self.protocol, self.protocol._OUTNAME):
+            super()._defineParams(form)
+
     def _getVisualizeDict(self):
-        visDic = {
-            'displayPyMol': self._showColorMap,
-        }
-        if hasattr(self.protocol, 'outputSequence'):
+        visDic = {}
+        if self._getSequenceOutputsDic():
             visDic['viewFrequency'] = self._showFrequency
             visDic['viewSequenceColored'] = self._showSequenceColored
+        if hasattr(self.protocol, self.protocol._OUTNAME):
+            visDic.update(super()._getVisualizeDict())
         return visDic
 
-    def _validate(self):
-        return []
-
-    def _showColorMap(self, paramName=None):
-        if isinstance(self.protocol, SetOfStructROIs):
-            roiSet = self.protocol
-        elif hasattr(self.protocol, 'outputStructROIs'):
-            roiSet = self.protocol.outputStructROIs
-        elif hasattr(self.protocol, 'outputFilteredROIs'):
-            roiSet = self.protocol.outputFilteredROIs
+    def _getSelectedSequenceOutput(self):
+        seqOutputs = self._getSequenceOutputsDic()
+        if len(seqOutputs) > 1:
+            chainId = sorted(seqOutputs.keys())[self.seqChain.get()]
         else:
-            print("NO ROISET FOUND")
-            return []
-
-        projectPath = self.getProject().getPath()
-        proteinFile = os.path.join(projectPath, roiSet.getProteinFile())
-        outDir = roiSet.getSetDir()
-        pmlFile = os.path.join(outDir, 'colormap.pml')
-        pmlFile = self._generatePmlScript(roiSet, proteinFile, pmlFile)
-        pymolV = PyMolViewer(project=self.getProject())
-        return pymolV._visualize(pmlFile, cwd=os.path.dirname(pmlFile))
-
-    def _generatePmlScript(self, roiSet, proteinFile, pmlFile):
-        with open(pmlFile, 'w') as f:
-            f.write(f'load {proteinFile}\n')
-            f.write('hide everything\n')
-            f.write('show cartoon\n')
-            f.write('color white\n')
-
-            for roi in roiSet:
-                residue = roi._contactResidues.get()
-                perc = roi._percentage.get() if hasattr(roi, '_percentage') else 0.0
-
-                try:
-                    chain, resnum = residue.split('_')
-                    intensity = max(0.0, min(1.0, perc / 100.0))
-                    r = 1.0
-                    g = 1.0 - intensity
-                    b = 1.0 - intensity
-                    f.write(f'set_color col_{resnum}, [{r:.3f}, {g:.3f}, {b:.3f}]\n')
-                    f.write(f'color col_{resnum}, chain {chain} and resi {resnum}\n')
-                except Exception:
-                    continue
-
-        return pmlFile
+            chainId = list(seqOutputs.keys())[0]
+        return seqOutputs[chainId]
 
     def _showFrequency(self, paramName=None):
-        attrDic = self.protocol.outputSequence.getAttributesDic()
-        plot_residue_attribute(attrDic['frequency'], attrName='ROI Voting Frequency')
+        attrDic = self._getSelectedSequenceOutput().getAttributesDic()
+        plotSequenceAttribute(attrDic['frequency'], attrName='ROI Voting Frequency')
 
     def _showSequenceColored(self, paramName=None):
-        attrDic = self.protocol.outputSequence.getAttributesDic()
+        seqOutput = self._getSelectedSequenceOutput()
+        attrDic = seqOutput.getAttributesDic()
         freqValues = list(map(float, attrDic['frequency']))
-        seqStr = self.protocol.outputSequence.getSequence()
+        seqStr = seqOutput.getSequence()
         maxFreq = max(freqValues) if max(freqValues) > 0 else 1
 
         htmlContent = """
