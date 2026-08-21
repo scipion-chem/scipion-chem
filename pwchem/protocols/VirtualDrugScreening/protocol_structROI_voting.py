@@ -2,6 +2,7 @@
 # *
 # * Authors: Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
 # *          Irene Sánchez Martín (100495638@alumnos.uc3m.es)
+# *          Judith Maestro (judith.maestro@cnb.csic.es)
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
