@@ -75,7 +75,7 @@ class ViewerROIVoting(ChimeraAttributeViewer):
         if len(seqOutputs) > 1:
             chainId = sorted(seqOutputs.keys())[self.seqChain.get()]
         else:
-            chainId = list(seqOutputs.keys())[0]
+            chainId = next(iter(seqOutputs.keys()))
         return seqOutputs[chainId]
 
     def _showFrequency(self, paramName=None):
