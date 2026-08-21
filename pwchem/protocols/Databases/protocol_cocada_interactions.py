@@ -25,17 +25,6 @@
 # *
 # **************************************************************************
 
-"""
-This protocol gets a residue/atom contact map computed by COCADA (https://github.com/LBS-UFMG/COCaDA),
-either by importing a CSV already computed (e.g. downloaded from the COCADA web server,
-https://bioinfo.dcc.ufmg.br/cocada-web/public/) or by running COCADA itself on an input AtomStruct,
-and defines one structural ROI per interaction type found in the file (hydrogen bonds, hydrophobic,
-salt bridges...), plus one extra ROI grouping the whole interface, so the different bond types can
-be inspected / visualized independently. COCADA computes intra- and inter-molecular contacts on any
-kind of biomolecular structure, not just two-chain protein complexes: single-chain proteins,
-multi-chain complexes, protein-peptide, protein-DNA and protein-RNA structures are all supported
-(see the example entries in the COCADA documentation).
-"""
 import os, csv, shutil, glob, json
 from collections import defaultdict
 
