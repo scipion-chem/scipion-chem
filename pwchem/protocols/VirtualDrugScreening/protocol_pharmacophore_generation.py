@@ -43,8 +43,76 @@ scriptName = 'pharmacophore_generation.py'
 
 class ProtocolPharmacophoreGeneration(EMProtocol):
     """
-    Perform the construction of a consensus pharmacophore from a set of docked small molecules
-    """
+    AI Generated:
+
+This protocol generates a consensus pharmacophore model from a set of reference ligands,
+typically obtained from docking results or experimentally derived complexes.
+
+The goal is to identify and cluster recurring chemical interaction features across multiple
+ligands and build a unified pharmacophore representation that captures the key
+binding determinants shared among them.
+
+Core Concepts
+-------------
+Pharmacophore:
+    A 3D abstract representation of essential interaction features required for molecular recognition,
+    such as hydrogen bond donors/acceptors, hydrophobic regions, aromatic centers, and charged groups.
+
+Ligand Feature Extraction:
+    Each input ligand is analyzed to identify pharmacophoric features based on predefined chemical rules
+    (e.g., RDKit feature definitions). These features are mapped in 3D space.
+
+Consensus Building:
+    Features from multiple ligands are aggregated and clustered to identify spatially consistent patterns
+    that are likely relevant for binding.
+
+Clustering:
+    Feature points are grouped using clustering methods (e.g., DBSCAN or KMeans) to define consensus
+    pharmacophoric sites. Cluster size and density criteria determine which features are retained.
+
+Pharmacophore Construction:
+    Each selected cluster is transformed into a pharmacophore feature defined by:
+    - 3D coordinates (cluster center)
+    - Radius derived from spatial dispersion of points
+    - Feature type (chemical interaction class)
+
+Workflow
+--------
+1. Input a set of ligands (typically docked poses or known binders).
+2. Optionally define a receptor structure for context.
+3. Convert ligand structures into RDKit-compatible formats.
+4. Extract pharmacophoric features from each ligand.
+5. Cluster features across all ligands using DBSCAN or KMeans.
+6. Filter clusters based on size criteria:
+   - Absolute number of points
+   - Proportion of molecules contributing features
+   - Proportion of total feature occurrences
+7. Select top clusters per feature type (optional).
+8. Compute cluster centers and radii.
+9. Generate a consensus pharmacophore model.
+
+Output
+------
+- outputPharmacophore:
+    A PharmacophoreChem object containing:
+    - Pharmacophore features (PharmFeature objects)
+    - 3D coordinates of each feature center
+    - Feature radii representing spatial variability
+    - Optional associated receptor structure
+
+Use Cases
+---------
+- Deriving pharmacophore models from docking ensembles
+- Identifying common interaction patterns in active compounds
+- Virtual screening based on consensus binding hypotheses
+- Guiding structure-based drug design
+
+Notes
+-----
+- The quality of the pharmacophore strongly depends on ligand diversity and alignment quality.
+- DBSCAN is useful for density-based feature grouping, while KMeans requires predefining cluster counts.
+- Feature selection thresholds directly affect model specificity vs sensitivity.
+"""
     _label = 'Pharmacophore generation'
 
     ##### -------------------------- DEFINE param functions ----------------------

@@ -32,9 +32,125 @@ from pyworkflow.protocol import params
 
 from pwem.protocols import EMProtocol
 from pwchem.objects import MDSystem
-
 class ProtocolImportMDSystem(EMProtocol):
-    """Import a Molecular Dynamics system from a system file and a topology file. Trajectory file and extra files are optional.
+    """
+    AI Generated:
+
+    Protocol to import a Molecular Dynamics (MD) system into the Scipion/pwchem framework.
+
+    This protocol creates a unified MDSystem object (or backend-specific variant such as OpenMM,
+    Amber, or Gromacs systems) from coordinate, topology, and optional trajectory files.
+
+    It acts as an interface layer between external MD simulation outputs and the Scipion data model.
+
+    Overview
+    --------
+    The protocol performs the following steps:
+
+    1. Input file preparation
+       - Copies input coordinate and topology files into the protocol workspace
+       - Optionally copies trajectory and system-specific files
+
+    2. System instantiation
+       - Creates the appropriate MD system object depending on selected backend:
+         * MDSystem (generic)
+         * OpenMMSystem
+         * AmberSystem
+         * GromacsSystem
+
+    3. System configuration
+       - Registers file paths inside the MD object
+       - Optionally assigns ligand information
+
+    4. Output definition
+       - Produces a single structured MDSystem-like object
+
+    Input
+    -----
+    outputType:
+        Type of MD system to generate:
+        - MDSystem (generic representation)
+        - OpenMMSystem (OpenMM-specific system with XML support)
+        - AmberSystem (Amber RST7-based system)
+        - GromacsSystem (GROMACS-based system)
+
+    inputCoords:
+        Coordinate file of the system.
+        Supported formats: PDB, CIF, GRO.
+
+    inputTopology:
+        Topology file defining the system structure.
+        Supported formats: PDB, TOP, TPR, PRMTOP, PARM7, CMS, XML.
+
+    inputSerie:
+        (OpenMM only) XML series file required for OpenMM systems.
+
+    inputCrd:
+        (Amber only) Initial coordinate file in RST7 format.
+
+    addTraj:
+        Boolean flag indicating whether a trajectory file is provided.
+
+    inputTrajectory:
+        Optional trajectory file.
+        Supported formats: XTC, NC, NETCDF, DCD.
+
+    hasLig:
+        Boolean flag indicating presence of a ligand in the system.
+
+    ligID:
+        Identifier of the ligand residue in the structure (e.g. "LIG").
+
+    Workflow
+    --------
+    1. Copy input files to protocol working directory.
+    2. Determine system type from outputType.
+    3. Instantiate appropriate MD system class.
+    4. Load backend-specific files:
+       - OpenMM → XML + CIF
+       - Amber → RST7
+       - Gromacs → standard files
+    5. Assign common system files:
+       - Coordinates file
+       - Topology file
+    6. Optionally assign trajectory file.
+    7. Optionally assign ligand ID.
+    8. Export final MD system object.
+
+    Output
+    ------
+    outputSystem:
+        MDSystem (or subclass) containing:
+        - system coordinates file
+        - topology file
+        - optional trajectory file
+        - optional ligand annotation
+
+    Supported backends
+    ------------------
+    MDSystem:
+        Generic representation without backend dependency.
+
+    OpenMMSystem:
+        Includes OpenMM XML serialization and CIF linkage.
+
+    AmberSystem:
+        Supports Amber coordinate (RST7) integration.
+
+    GromacsSystem:
+        Minimal wrapper for GROMACS simulation files.
+
+    Summary
+    -------
+    This protocol provides a standardized way to import molecular dynamics systems
+    from multiple simulation engines into Scipion, enabling downstream analysis,
+    visualization, and protocol chaining in a unified format.
+
+    Key features:
+    - Multi-backend MD support
+    - Automatic file management inside protocol workspace
+    - Optional ligand annotation
+    - Optional trajectory integration
     """
     _label = 'Import Molecular Dynamics System'
 

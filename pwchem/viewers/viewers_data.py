@@ -22,6 +22,8 @@
 # *
 # **************************************************************************
 import json
+import pandas as pd
+import matplotlib.pyplot as plt
 from tkinter.messagebox import askokcancel
 
 import os
@@ -94,6 +96,79 @@ class VmdViewPopen(pwviewer.CommandView):
       fullProgram = '%s && %s' % (pwchemPlugin.getEnvActivationCommand(VMD_DIC), self._cmd)
       Popen(fullProgram, cwd=self._cwd, shell=True)
 
+import numpy as np
+def plotLocalizationHistogramFromDataFrame(df):
+    localizationCols = [
+        'Cytoplasm',
+        'Nucleus',
+        'Extracellular',
+        'Cell membrane',
+        'Mitochondrion',
+        'Plastid',
+        'Endoplasmic reticulum',
+        'Lysosome/Vacuole',
+        'Golgi apparatus',
+        'Peroxisome',
+        'Peripheral',
+        'Transmembrane',
+        'Lipid anchor',
+        'Soluble'
+    ]
+
+    # Keep only columns that are actually present
+    localizationCols = [
+        col for col in localizationCols
+        if col in df.columns
+    ]
+
+    proteinIds = df['Protein_ID'].astype(str).tolist()
+
+    nProteins = len(proteinIds)
+    nLocalizations = len(localizationCols)
+
+    x = np.arange(nLocalizations)
+
+    # Width of each individual bar
+    width = 0.8 / nProteins
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    for i, proteinId in enumerate(proteinIds):
+        values = df.loc[
+            df['Protein_ID'].astype(str) == proteinId,
+            localizationCols
+        ].iloc[0].astype(float).values
+
+        offset = (i - (nProteins - 1) / 2) * width
+
+        ax.bar(
+            x + offset,
+            values,
+            width,
+            label=proteinId
+        )
+
+    ax.set_xlabel('Localization')
+    ax.set_ylabel('Probability')
+    ax.set_title('DeepLoc localization probabilities')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(
+        localizationCols,
+        rotation=45,
+        ha='right'
+    )
+
+    ax.set_ylim(0, 1)
+    ax.legend(title='Protein ID')
+
+    plt.tight_layout()
+    plt.show()
+
+def plotLocalizationHistogram(csvFile):
+    df = pd.read_csv(csvFile)
+    plotLocalizationHistogramFromDataFrame(df)
+
 class AtomStructViewer(pwviewer.ProtocolViewer):
     _label = 'Viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
@@ -107,11 +182,46 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
                      choices=self._viewerOptions, default=0,
                      label='Display AtomStruct with: ',
                      help='Display the AtomStruct object with which software.\nAvailable: PyMol, ChimeraX')
+      obj = self.getAtomStruct()
+
+      if hasattr(obj, '_localizationPerc'):
+          form.addSection(label='DeepLoc localization')
+          form.addParam(
+              'viewLocalization',
+              params.LabelParam,
+              label='Display localization probabilities: ',
+              help='Display the DeepLoc predicted localization probabilities.'
+          )
 
     def _getVisualizeDict(self):
-      return {
-        'displaySoftware': self._viewAtomStruct,
-      }
+        visDic = {
+            'displaySoftware': self._viewAtomStruct,
+        }
+
+        obj = self.getAtomStruct()
+
+        if hasattr(obj, '_localizationPerc'):
+            visDic['viewLocalization'] = self._showLocalization
+
+        return visDic
+
+    def _showLocalization(self, e=None):
+        obj = self.getAtomStruct()
+
+        localizationPerc = getattr(obj, '_localizationPerc', None)
+
+        if localizationPerc is None:
+            return
+
+        if hasattr(localizationPerc, 'get'):
+            localizationPerc = localizationPerc.get()
+
+        if not os.path.exists(localizationPerc):
+            raise FileNotFoundError(
+                f"Localization probability file not found: {localizationPerc}"
+            )
+
+        plotLocalizationHistogram(localizationPerc)
 
     def _viewAtomStruct(self, e=None):
       if self.displaySoftware.get() == 0:
@@ -190,9 +300,23 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
                   label='Display Atom Struct set in table format: ',
                   help='Display the Atom Struct set in the set in table format with their respective attributes')
     structs = self.getStructSet()
-    data = structs._getData()
-    if data:
-        BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+    if hasattr(structs, '_getData'):
+        data = structs._getData()
+        if data:
+            BaseInteractionViewer._defineInteractionParams(self, form=form, data=data)
+
+    hasLocalization = False
+    if hasattr(structs, '_localizationPerc'):
+        hasLocalization = True
+
+    if hasLocalization:
+        form.addSection(label='DeepLoc localization')
+        form.addParam(
+            'viewLocalization',
+            params.LabelParam,
+            label='Display localization probabilities: ',
+            help='Display the DeepLoc predicted localization probabilities.'
+        )
 
   def _getVisualizeDict(self):
       d = {
@@ -200,9 +324,41 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
           'displayTable': self._viewTable,
       }
 
+      structs = self.getStructSet()
+
+      if hasattr(structs, '_localizationPerc'):
+          d['viewLocalization'] = self._showLocalization
+
       d.update(BaseInteractionViewer._getVisualizeDict(self))
 
       return d
+
+  def _showLocalization(self, e=None):
+      structs = self.getStructSet()
+
+      localizationPerc = getattr(
+          structs,
+          '_localizationPerc',
+          None
+      )
+
+      if hasattr(localizationPerc, 'get'):
+          localizationPerc = localizationPerc.get()
+
+      if not localizationPerc:
+          raise FileNotFoundError(
+              "No DeepLoc localization probability file was found."
+          )
+
+      if not os.path.exists(localizationPerc):
+          raise FileNotFoundError(
+              f"DeepLoc localization file not found: "
+              f"{localizationPerc}"
+          )
+
+      df = pd.read_csv(localizationPerc)
+
+      plotLocalizationHistogramFromDataFrame(df)
 
   def _viewSetStructure(self, e=None):
     if self.displaySoftware.get() == 0:

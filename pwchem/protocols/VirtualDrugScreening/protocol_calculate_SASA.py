@@ -44,7 +44,64 @@ from pwchem.constants import MGL_DIC
 
 class ProtCalculateSASA(EMProtocol):
     """
-    Calculate SASA of an AtomStruct
+    AI Generated:
+
+    This protocol calculates the Solvent Accessible Surface Area (SASA) of a protein structure
+    (AtomStruct) and optionally maps the resulting accessibility values onto the sequence.
+
+    SASA is a structural property that describes how exposed each atom or residue is to the
+    solvent, and it is widely used to study protein folding, stability, and interaction sites.
+
+    Workflow
+    --------
+    1. Input a protein structure (AtomStruct).
+    2. Clean the structure by removing heteroatoms and optionally water molecules.
+    3. Run an external SASA calculation tool on the cleaned PDB structure.
+    4. Read the resulting SASA values per residue/atom.
+    5. Map SASA values back onto the structure.
+    6. Generate an annotated CIF file containing SASA as a structural attribute.
+    7. Optionally extract the protein sequence with per-residue SASA values.
+
+    SASA Calculation
+    ----------------
+    - SASA values are computed for each residue/atom in the input structure.
+    - Results are stored in a plain text file with identifiers and numeric values.
+    - Each value represents the solvent exposure of a structural position.
+
+    Output Structure Annotation
+    --------------------------
+    - The output is a CIF structure file.
+    - Each residue/atom includes an additional attribute:
+        - SASA (Solvent Accessible Surface Area)
+    - This allows visualization and downstream analysis in structural tools.
+
+    Optional Sequence Output
+    -----------------------
+    If enabled, the protocol also produces a sequence object where:
+    - The amino acid sequence of a selected chain is extracted.
+    - Each residue is associated with its SASA value.
+    - Values are stored as sequence attributes for further analysis.
+
+    Input
+    -----
+    AtomStruct:
+        Protein structure to analyze.
+
+    Output
+    ------
+    outputAtomStruct:
+        CIF structure annotated with SASA values.
+
+    outputSequence (optional):
+        Sequence of a selected chain with per-residue SASA annotations.
+
+    Use Cases
+    ---------
+    - Identification of solvent-exposed residues
+    - Detection of potential binding sites
+    - Protein–protein interaction analysis
+    - Structural stability and folding studies
+    - Feature extraction for downstream modeling
     """
     _label = 'Calculate SASA'
     _ATTRNAME = 'SASA'

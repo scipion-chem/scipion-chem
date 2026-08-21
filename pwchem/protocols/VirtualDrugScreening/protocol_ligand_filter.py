@@ -46,6 +46,80 @@ ATKEY, ANKEY, CKEY = 'typeAtom',  'numAtoms', 'numCycles'
 scriptName = 'ligand_filter_script.py'
 
 class ProtocolBaseLibraryToSetOfMols(EMProtocol):
+    """
+    AI Generated:
+
+    Ligand Filtering and Selection Module
+    --------------------------------------
+
+    This module provides tools to filter, clean, and select subsets of small molecules
+    from either a molecular library or a pre-existing Scipion SetOfSmallMolecules.
+
+    It is designed for high-throughput molecular preprocessing workflows where large
+    chemical spaces need to be reduced based on physicochemical, structural, or
+    user-defined criteria.
+
+    Core Concepts
+    -------------
+
+    Small Molecule Set:
+        A collection of chemical compounds represented either as individual structures
+        or as entries in a tabular library (e.g., SMI format).
+
+    Library Mode vs Set Mode:
+        - Library Mode: molecules are stored in a tabular library with descriptors.
+        - Set Mode: molecules are independent structure files.
+
+    Filtering Logic:
+        Molecules can be selected or removed based on:
+        - Number of atoms
+        - Atom type presence
+        - Number of cycles (rings)
+        - User-defined numerical attributes (e.g., scores)
+
+    Filter Expressions:
+        Multiple filtering rules can be combined and applied sequentially, allowing
+        complex selection strategies for chemical datasets.
+
+    Workflow
+    --------
+
+    1. Input selection:
+       - Either a molecular library or a set of small molecules.
+
+    2. Subsetting:
+       - Input is split into manageable batches for processing.
+
+    3. Filtering:
+       - Each batch is processed using user-defined filter rules.
+
+    4. Aggregation:
+       - Molecules passing all filters are collected into a final output set.
+
+    5. Output generation:
+       - Filtered molecules are returned as:
+         - SetOfSmallMolecules, or
+         - filtered molecular library
+
+    Output
+    ------
+
+    - outputSmallMolecules:
+        Filtered subset of input molecules as independent structures.
+
+    - outputLibrary:
+        Filtered subset stored in SMI/tabular format with annotations preserved.
+
+    Use Cases
+    ---------
+
+    - Pre-filtering chemical libraries before docking campaigns
+    - Removing undesired scaffolds or fragments
+    - Selecting drug-like subsets based on descriptors
+    - Filtering molecules by structural complexity or composition
+    - Cleaning large compound datasets for machine learning workflows
+
+    """
 
     def addInputParams(self, form):
       form.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
@@ -148,7 +222,73 @@ class ProtocolBaseLibraryToSetOfMols(EMProtocol):
 
 class ProtocolGeneralLigandFiltering(ProtocolBaseLibraryToSetOfMols):
     """
-    Filters a set of ligands by some user defined attributes: forbidden / necessary atom types, max/min size...
+    AI Generated:
+
+    General ligand filtering protocol for molecular datasets.
+
+    This protocol allows the selection or removal of molecules from a dataset
+    based on user-defined chemical and structural criteria.
+
+    It supports both molecular libraries and structure-based molecule sets,
+    enabling flexible filtering strategies across different types of chemical data.
+
+    Filtering Capabilities
+    ----------------------
+
+    Molecules can be filtered using the following criteria:
+
+    Atom-based filters:
+        Select or remove molecules containing specific atom types.
+
+    Size filters:
+        Restrict molecules based on the number of atoms.
+
+    Ring complexity:
+        Filter molecules by the number of cyclic structures.
+
+    Custom attribute filters:
+        Use numerical descriptors (e.g., scores, properties) stored in the dataset.
+
+    Filtering Modes
+    ---------------
+
+    Remove mode:
+        Excludes molecules matching the filter criteria.
+
+    Keep mode:
+        Retains only molecules matching the filter criteria.
+
+    Multi-filter logic:
+        Multiple filters can be combined and applied sequentially,
+        allowing progressive refinement of the dataset.
+
+    Workflow
+    --------
+
+    1. Input dataset (library or molecule set).
+    2. Split dataset into processing batches.
+    3. Apply user-defined filter expressions.
+    4. Evaluate each molecule against filter rules.
+    5. Collect molecules that pass all filters.
+    6. Return filtered dataset as output.
+
+    Output
+    ------
+
+    - outputSmallMolecules:
+        Filtered set of molecules (structure-based input).
+
+    - outputLibrary:
+        Filtered molecular library preserving original annotations.
+
+    Use Cases
+    ---------
+
+    - Drug discovery pipeline filtering
+    - Removal of chemically undesirable compounds
+    - Selection of compounds for docking or simulation
+    - Dataset refinement for QSAR or ML models
+    - Custom chemical space exploration workflows
     """
     _label = 'ligand filtering'
     stepsExecutionMode = params.STEPS_PARALLEL

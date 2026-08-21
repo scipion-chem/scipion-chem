@@ -850,7 +850,7 @@ class SmallMoleculesLibrary(data.EMObject):
     inFile = self.getFileName()
     with open(inFile) as f:
       for line in f:
-        molName = line.split('\t')[col].replace(' ', '_')
+        molName = line.split('\t')[col].replace(' ', '_').strip()
 
         oFile = os.path.join(outDir, f'{molName}.smi')
         with open(oFile, 'w') as fO:
@@ -1647,12 +1647,24 @@ class SetOfStructROIs(data.EMSet, SetClass):
 
     return oFile
 
+  def getProtocolId(self):
+    return self.getFileName().split('/')[1].split('_')[0]
+
+  def getHetatmFileProtId(self):
+    protId = None
+    atmFile = self.getProteinHetatmFile()
+    if atmFile != None:
+      protId = atmFile.split('_')[-2]
+    return protId
+
   def buildPDBhetatmFile(self, suffix=''):
     protName = self.getProteinName()
     protFile = self.getProteinFile()
     ext = os.path.splitext(protFile)[1]
+    protId = self.getProtocolId()
+
     outDir = self.getSetDir()
-    outFile = os.path.join(outDir, protName + f'{suffix}_out{ext}')
+    outFile = os.path.join(outDir, f'{protName}{suffix}_{protId}_out{ext}')
 
     with open(outFile, 'w') as f:
       if ext in ('.pdb', '.pdbqt'):
@@ -1866,6 +1878,7 @@ class MDSystem(data.EMFile):
     super().__init__(filename=filename, **kwargs)
     self._topoFile = pwobj.String(kwargs.get('topoFile', None))
     self._trjFile = pwobj.String(kwargs.get('trjFile', None))
+    self._minFile = pwobj.String(kwargs.get('minFile', None))
     self._ff = pwobj.String(kwargs.get('ff', None))
     self._wff = pwobj.String(kwargs.get('wff', None))
 
@@ -1919,6 +1932,13 @@ class MDSystem(data.EMFile):
   def setTrajectoryFile(self, value):
     value = os.path.relpath(value)
     self._trjFile.set(value)
+
+  def getMinimizedFile(self):
+    return self._minFile.get()
+
+  def setMinimizedFile(self, value):
+    value = os.path.relpath(value)
+    self._minFile.set(value)
 
   def getForceField(self):
     return self._ff.get()

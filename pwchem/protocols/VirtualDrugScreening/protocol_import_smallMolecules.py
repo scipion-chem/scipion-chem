@@ -154,9 +154,112 @@ def gunzipFile(gzFile, remove=True):
   return sdfFile
 
 class ProtChemImportSmallMolecules(ProtChemImportMoleculesLibrary):
-  """Import small molecules from a directory. Each molecule should be in a separate file.
-     Smiles (.smi), SDF (.sdf), Tripos Mol2 (.mol2), Maestro (.mae, .maegz), PDB blocks (.pdb)
-     are accepted.
+  """
+  AI Generated:
+
+    ProtChemImportSmallMolecules is a Scipion protocol for importing and/or downloading
+    small molecule libraries from multiple sources and formats.
+
+    This protocol supports:
+    - Predefined chemical libraries (ECBL, ZINC, PubChem)
+    - ZINC subsets, tranches, and SMILES-based reconstruction
+    - PubChem chunk sampling with reproducibility via seed
+    - Local file import (single or multi-molecule files)
+    - Multiple chemistry backends (RDKit or OpenBabel)
+    - Optional 3D structure generation and optimization
+
+    Overview
+    --------
+    The protocol allows users to construct a SetOfSmallMolecules either from local
+    files or by downloading curated chemical libraries. It standardizes molecular
+    formats and optionally generates 3D conformations for downstream workflows.
+
+    Supported Libraries
+    -------------------
+    - ECBL:
+      European Compound Library subsets (bioactive, diversity, fragments)
+
+    - ZINC:
+      Large-scale drug-like compound database with:
+      - Predefined subsets
+      - SMILES-based reconstruction
+      - ZINC20 tranches (size, logP, reactivity, purchasability, PH, charge)
+
+    - PubChem:
+      Random sampling of SDF chunks from the PubChem FTP repository
+
+    Input Modes
+    -----------
+    1. Predefined libraries (download mode)
+    2. Local files (user-provided molecules)
+
+    Molecule Processing
+    -------------------
+    Each molecule undergoes:
+    - Format detection and conversion (SDF, MOL2, PDB, SMILES, MAE, etc.)
+    - Optional 3D coordinate generation
+    - Standardization using RDKit or OpenBabel
+    - Name assignment from file or metadata keys
+
+    ZINC Tranche System
+    -------------------
+    When using ZINC tranches, molecules are selected based on:
+    - Molecular size
+    - logP
+    - Reactivity
+    - Purchasability
+    - Protonation state (PH)
+    - Charge state
+
+    These codes are combined into tranche identifiers to retrieve corresponding
+    molecule subsets from ZINC distributed files.
+
+    Workflow
+    --------
+    1. Select input source (library or local files)
+    2. Download or load molecular data
+    3. Split data into manageable batches
+    4. Convert and standardize molecular structures
+    5. Optionally generate 3D conformations
+    6. Organize molecules into output directories
+    7. Build Scipion SetOfSmallMolecules
+
+    Output
+    ------
+    outputSmallMolecules:
+        A Scipion SetOfSmallMolecules containing standardized molecules with:
+
+        - file-based molecular representation
+        - optional metadata (ZINC tranche descriptors)
+        - consistent naming and formatting
+        - optional 3D coordinates
+
+    Key Features
+    ------------
+    - Multi-source chemical library support
+    - High-throughput batch processing
+    - RDKit/OpenBabel backend abstraction
+    - PubChem random sampling
+    - ZINC tranche-based chemical space exploration
+    - Automatic format normalization
+    - Optional 3D structure generation
+    - Parallel processing support
+
+    Use Cases
+    ---------
+    - Virtual screening library preparation
+    - Drug discovery pipeline setup
+    - Chemical space sampling (ZINC/PubChem)
+    - Standardization of heterogeneous molecular datasets
+    - Large-scale docking preparation workflows
+
+    Notes
+    -----
+    - Internet access required for library downloads
+    - ZINC tranche downloads may generate very large datasets
+    - RDKit/OpenBabel must be properly configured in environment
+    - 3D generation increases computational cost
+    - File naming consistency is important for downstream workflows
   """
   _label = 'import small mols'
   supportedExt = ['smi', 'mol2', 'sdf', 'pdb', 'mae', 'maegz', 'mol', 'pdbqt']

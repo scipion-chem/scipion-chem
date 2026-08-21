@@ -31,7 +31,63 @@ from pyworkflow.protocol.params import PathParam, StringParam
 from pwchem.objects import DatabaseID, SetOfDatabaseID
 
 class ProtChemImportSetOfDatabaseIDs(EMProtocol):
-    """Import a set of databaseIDs from a text file with each ID in a line
+    """
+    AI Generated:
+
+    This protocol imports a set of database identifiers from a plain text file
+    and converts them into a structured SetOfDatabaseID object for use in
+    downstream bioinformatics and chemoinformatics workflows.
+
+    Each line of the input file is expected to contain a single identifier
+    belonging to a specified biological or chemical database.
+
+    Inputs
+    ------
+    filePath:
+        Path to a text file containing database identifiers.
+        Each line represents one ID.
+
+    databaseName:
+        Name of the source database to assign to all imported IDs
+        (e.g., UniProt, ChEMBL, PDB, BindingDB, etc.).
+
+    Workflow
+    --------
+    1. Input reading
+       - Opens the provided text file
+       - Reads identifiers line by line
+
+    2. Object creation
+       - Initializes an empty SetOfDatabaseID container
+       - Converts each line into a DatabaseID object:
+         - dbId = trimmed line content
+         - database = user-defined databaseName
+
+    3. Population step
+       - Appends each DatabaseID object into the collection
+
+    4. Output generation
+       - Produces a structured SetOfDatabaseID object
+       - Stores it in the protocol output directory
+
+    Output
+    ------
+    outputDatabaseIDs:
+        SetOfDatabaseID object containing:
+        - All imported identifiers
+        - Associated database label for each entry
+
+    Summary
+    -------
+    This protocol provides a simple interface to import external identifier
+    lists into the Scipion/PWEM ecosystem, enabling interoperability with
+    other protocols that require structured database ID inputs.
+
+    Notes
+    -----
+    - The input file must contain one ID per line.
+    - No validation of ID format is performed beyond trimming whitespace.
+    - All IDs are assigned the same database name.
     """
     _label = 'Import set of DatabaseIDs'
 
