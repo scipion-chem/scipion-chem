@@ -36,6 +36,7 @@ from .tests_general import *
 from .tests_databases import *
 from .tests_epitopes import *
 from .tests_molecular_dynamics import *
+from .tests_structROI_voting import *
 
 from enum import Enum
 
@@ -46,4 +47,4 @@ class DataSetMDSystem(Enum):
     amberCrdFile = 'amberSystem/3p6h.rst7'
     amberTrjFile = 'amberSystem/3p6h.nc'
 
-DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in DataSetMDSystem})from .tests_structROI_voting import *
+DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in DataSetMDSystem})
