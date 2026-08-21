@@ -23,12 +23,6 @@
 # *
 # **************************************************************************
 
-"""
-This protocol combines the results from several ROI sets and counts how many
-times each residue appears across models (one count per model, not per pocket).
-It outputs a SetOfStructROIs and a SequenceChem with per-residue frequency attributes.
-"""
-
 import pyworkflow.object as pwobj
 from pwem.protocols import EMProtocol
 from pwem.objects import AtomStruct
@@ -39,6 +33,123 @@ from pwchem.utils import getBaseName, createPocketFile, parseResidueCoords
 
 
 class ProtROIVoting(EMProtocol):
+    """
+    Protocol to combine several SetOfStructROIs by residue voting.
+
+    AI Generated:
+
+        ProtROIVoting - User Manual
+
+        Overview
+        --------
+        The ProtROIVoting protocol integrates the results of several independent
+        structural ROI (region of interest) detections performed on the same
+        protein structure -e.g. repeated pocket-detection runs, docking-derived
+        contact residues, or ROIs defined on different structural models- into
+        a single consensus result based on residue voting.
+
+        For each input SetOfStructROIs ("model"), the protocol collects the set
+        of protein residues in contact with at least one of its ROIs (one vote
+        per model, regardless of how many ROIs/pockets in that model contain the
+        residue). Residues are then ranked by how many models voted for them,
+        and this frequency is embedded in a new SetOfStructROIs, in per-chain
+        sequence attributes, and in the original structure so it can be
+        inspected in ChimeraX.
+
+        Inputs
+        ------
+        - **roisList**:
+            A list of SetOfStructROIs objects (pointers), each one typically
+            coming from a different ROI-detection run (e.g. several
+            ProtDefineStructROIs / ProtocolConsensusStructROIs executions, or
+            pockets computed on different conformations/models) over the *same*
+            protein structure. All the input sets must describe the same
+            structure (same chains and residue numbering), since residues are
+            compared directly by chain and residue number across sets.
+
+        Workflow
+        --------
+        1. **Voting**:
+           - For every input SetOfStructROIs, the contact residues of all its
+             ROIs are decoded and merged into a single set (so a residue counts
+             once per model, even if it appears in several of that model's
+             pockets).
+           - A global counter tallies, for every residue, in how many of the
+             input models it appeared.
+
+        2. **Structural ROI reconstruction**:
+           - For every voted residue, its atom coordinates are looked up in the
+             (shared) protein structure and written out as a single-residue
+             StructROI, with its contacts recalculated on the actual structure.
+           - ROIs are numbered by decreasing vote count.
+           - Each ROI stores its raw vote count (`_frequency`) and its
+             percentage relative to the most-voted residue (`_percentage`).
+
+        3. **Per-chain sequence output**:
+           - For every protein chain that has at least one voted residue, a
+             SequenceChem is created with a `frequency` per-residue attribute
+             (0 for residues that were never voted).
+
+        4. **Structure attribute output**:
+           - The `frequency` value of every residue in the structure (0 if it
+             was never voted) is embedded as a Scipion attribute in a copy of
+             the protein structure, so it can be visualized in 3D.
+
+        Outputs
+        -------
+        - **outputStructROIs**:
+            SetOfStructROIs containing one ROI per voted residue, ordered by
+            descending vote count, each with `_frequency` and `_percentage`
+            attributes.
+
+        - **outputSequence_<chainId>** (one per chain with voted residues):
+            SequenceChem of that chain with a `frequency` per-residue attribute.
+
+        - **outputAtomStruct**:
+            AtomStruct (cif) of the input protein with the per-residue
+            `frequency` embedded as a Scipion attribute, meant to be explored
+            with the ROI Voting viewer (3D coloring in ChimeraX, histogram and
+            sequence plot of the voting frequency).
+
+        Practical Recommendations
+        -------------------------
+        - Use this protocol to find the contact residues/pockets that are
+          consistently detected across several independent runs (different
+          pocket-detection algorithms, different conformations/models, or
+          repeated stochastic predictions), rather than trusting a single run.
+        - All inputs should come from the same protein (same chains/numbering);
+          mixing SetOfStructROIs from different structures will produce
+          meaningless votes.
+        - Open the "Viewer ROI Voting" on this protocol to inspect the results:
+          color the structure by voting frequency in ChimeraX, or plot/inspect
+          the frequency along the sequence.
+
+        Interpretation
+        --------------
+        The `_frequency`/`frequency` value of a residue is the number of input
+        models in which that residue was in contact with at least one ROI.
+        `_percentage` normalizes this count so that the most-voted residue is
+        100%. Residues with high frequency/percentage are the ones most
+        consistently identified as relevant across the different inputs.
+
+        Warnings
+        --------
+        - Input SetOfStructROIs describing different structures (or the same
+          structure with different chain/residue numbering) will not be
+          compared correctly, since voting matches residues by chain and
+          residue number.
+        - If none of the inputs report any contact residue, no outputs are
+          generated.
+
+        Final Perspective
+        -----------------
+        ProtROIVoting provides a simple consensus mechanism to combine several
+        structural ROI detections into a single, ranked, and visualizable set of
+        the most consistently identified residues, complementing more complex
+        consensus approaches (e.g. ProtocolConsensusStructROIs) with a
+        lightweight, residue-level voting scheme.
+    """
+
     _label = 'ROI voting (multi-model integration)'
     _ATTRNAME = 'frequency'
     _OUTNAME = 'outputAtomStruct'
