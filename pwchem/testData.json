@@ -1,5 +1,5 @@
 {
-	"datasets": ["model_building_tutorial", "smallMolecules"],
+	"datasets": ["model_building_tutorial", "smallMolecules", "genomics"],
 	"skippable": {
 		"gpu": [
 
