@@ -21,11 +21,10 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
-from pyworkflow.tests import BaseTest, DataSet, setupTestProject
-from pwem.protocols import ProtImportPdb
-
-from pwchem.protocols import ProtDefineStructROIs, ProtROIVoting
+from pwchem.protocols import ProtROIVoting
 from pwchem.utils import assertHandle
+
+from .tests_structROIs import TestDefineStructROIs
 
 defROIsStr = '''1) Coordinate: {"X": 45, "Y": 65, "Z": 60}
 2) Residues: {"model": 0, "chain": "A", "index": "1-4", "residues": "VLSP"}'''
@@ -34,32 +33,7 @@ defROIsStr2 = '''1) Residues: {"model": 0, "chain": "A", "index": "61-63", "resi
 2) Residues: {"model": 0, "chain": "A", "index": "80-84", "residues": "LSALS"}'''
 
 
-class TestROIVoting(BaseTest):
-    @classmethod
-    def setUpClass(cls):
-        setupTestProject(cls)
-        cls.ds = DataSet.getDataSet('model_building_tutorial')
-        cls._runImportPDB()
-
-    @classmethod
-    def _runImportPDB(cls):
-        protImportPDB = cls.newProtocol(
-            ProtImportPdb,
-            inputPdbData=1,
-            pdbFile=cls.ds.getFile('PDBx_mmCIF/5ni1.pdb'))
-        cls.launchProtocol(protImportPDB)
-        cls.protImportPDB = protImportPDB
-
-    @classmethod
-    def _runDefStructROIs(cls, defStr):
-        protDef = cls.newProtocol(
-            ProtDefineStructROIs,
-            inROIs=defStr)
-        protDef.inputAtomStruct.set(cls.protImportPDB)
-        protDef.inputAtomStruct.setExtended('outputPdb')
-        cls.proj.launchProtocol(protDef)
-        return protDef
-
+class TestROIVoting(TestDefineStructROIs):
     @classmethod
     def _runROIVoting(cls, protDefs):
         prot = cls.newProtocol(ProtROIVoting)

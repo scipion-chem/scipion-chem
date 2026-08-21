@@ -30,13 +30,12 @@ It outputs a SetOfStructROIs and a SequenceChem with per-residue frequency attri
 """
 
 import pyworkflow.object as pwobj
-from Bio.PDB import PDBParser, MMCIFParser
 from pwem.protocols import EMProtocol
 from pwem.objects import AtomStruct
 from pwem.convert.atom_struct import toCIF, AtomicStructHandler, addScipionAttribute
 from pyworkflow.protocol import params
 from pwchem.objects import SetOfStructROIs, StructROI, SequenceChem
-from pwchem.utils import getBaseName, createPocketFile
+from pwchem.utils import getBaseName, createPocketFile, parseResidueCoords
 
 
 class ProtROIVoting(EMProtocol):
@@ -76,7 +75,7 @@ class ProtROIVoting(EMProtocol):
 
         maxCount = max(residueCounts.values())
         sortedResidues = sorted(residueCounts.items(), key=lambda x: x[1], reverse=True)
-        resCoordsDic = self.parseResidueCoords(proteinFile)
+        resCoordsDic = parseResidueCoords(proteinFile)
 
         outSet = SetOfStructROIs(filename=self._getPath('ROIVoting.sqlite'))
         for i, (residue, count) in enumerate(sortedResidues):
@@ -147,17 +146,6 @@ class ProtROIVoting(EMProtocol):
             )
             outSeq.addAttributes({'frequency': freqValues})
             self._defineOutputs(**{f'outputSequence_{chainId}': outSeq})
-
-    def parseResidueCoords(self, asFile):
-        '''Maps every residue of the protein structure (all chains) to its atom coordinates,
-        as {"chainId_resNum": [[x, y, z], ...]}'''
-        resCoordsDic = {}
-        parser = PDBParser if asFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
-        struct = parser(QUIET=True).get_structure(getBaseName(asFile), asFile)[0]
-        for chain in struct.get_chains():
-            for res in chain.get_residues():
-                resCoordsDic[f'{chain.id}_{res.get_id()[1]}'] = [a.get_coord().tolist() for a in res.get_atoms()]
-        return resCoordsDic
 
     def _summary(self):
         summary = []
