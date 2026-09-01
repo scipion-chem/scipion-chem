@@ -100,8 +100,9 @@ class ProtROIVoting(EMProtocol):
         -------
         - **outputStructROIs**:
             SetOfStructROIs containing one ROI per voted residue, ordered by
-            descending vote count, each with `_frequency` and `_percentage`
-            attributes.
+            descending vote count, each with `_frequency`, `_percentage`,
+            `_chain` and `_residue` (chain + amino acid + position, e.g.
+            `A:L145`) attributes.
 
         - **outputSequence_<chainId>** (one per chain with voted residues):
             SequenceChem of that chain with a `frequency` per-residue attribute.
@@ -190,6 +191,9 @@ class ProtROIVoting(EMProtocol):
         resCoordsDic = parseResidueCoords(proteinFile)
 
         outSet = SetOfStructROIs(filename=self._getPath('ROIVoting.sqlite'))
+        seqDic = outSet.getProteinSequencesDic(proteinFile)
+        resIdxDic = outSet.getProteinSequencesResIdsDic(proteinFile)
+
         for i, (residue, count) in enumerate(sortedResidues):
             coords = resCoordsDic.get(residue)
             if not coords:
@@ -204,6 +208,9 @@ class ProtROIVoting(EMProtocol):
             roi.calculateContacts()
             roi._frequency = pwobj.Integer(count)
             roi._percentage = pwobj.Float(round((count / maxCount) * 100.0, 2))
+            chainId, resNum = residue.rsplit('_', 1)
+            roi._chain = pwobj.String(chainId)
+            roi._residue = pwobj.String(self.buildResidueLabel(chainId, int(resNum), seqDic, resIdxDic))
             outSet.append(roi)
 
         if len(outSet) > 0:
@@ -211,8 +218,16 @@ class ProtROIVoting(EMProtocol):
             self._defineOutputs(outputStructROIs=outSet)
             self._defineSourceRelation(self.roisList, self.outputStructROIs)
 
-            self.createSequenceOutputs(outSet, residueCounts, maxCount)
+            self.createSequenceOutputs(outSet, residueCounts, maxCount, seqDic, resIdxDic)
             self.createAtomStructOutput(proteinFile, residueCounts, resCoordsDic)
+
+    def buildResidueLabel(self, chainId, resNum, seqDic, resIdxDic):
+        '''Builds a "chain:residuePosition" label (e.g. "A:L145") combining chain,
+        position and amino acid in a single value'''
+        seqIdx = resIdxDic.get(chainId, {}).get(resNum)
+        seqStr = seqDic.get(chainId, '')
+        aa = seqStr[seqIdx] if seqIdx is not None and seqIdx < len(seqStr) else '?'
+        return f'{chainId}:{aa}{resNum}'
 
     def createAtomStructOutput(self, proteinFile, residueCounts, resCoordsDic):
         '''Embeds the per-residue voting frequency as a Scipion attribute in the protein cif file,
@@ -230,11 +245,9 @@ class ProtROIVoting(EMProtocol):
         ash._writeLowLevel(outStructFileName, cifDic)
         self._defineOutputs(outputAtomStruct=AtomStruct(filename=outStructFileName))
 
-    def createSequenceOutputs(self, roiSet, residueCounts, maxCount):
+    def createSequenceOutputs(self, roiSet, residueCounts, maxCount, seqDic, resIdxDic):
         '''Defines one SequenceChem output (with a per-residue frequency attribute) for each
         protein chain that has at least one voted contact residue'''
-        seqDic = roiSet.getProteinSequencesDic()
-        resIdxDic = roiSet.getProteinSequencesResIdsDic()
         base = getBaseName(roiSet.getProteinFile())
 
         chainsWithROIs = sorted({residue.rsplit('_', 1)[0] for residue in residueCounts})

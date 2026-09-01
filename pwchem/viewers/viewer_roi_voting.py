@@ -28,9 +28,12 @@ import os
 import webbrowser
 
 import pyworkflow.protocol.params as params
-from pwem.viewers import ChimeraAttributeViewer
+from pwem.viewers import ChimeraAttributeViewer, ObjectView
+from pwem.viewers.showj import MODE, MODE_TABLE, ORDER, RENDER, VISIBLE
 from pwchem.protocols.VirtualDrugScreening.protocol_structROI_voting import ProtROIVoting
 from pwchem.viewers.viewer_structure_attributes import plotSequenceAttribute
+
+TABLE_LABELS = 'id _chain _residue _filename _frequency _percentage'
 
 
 class ViewerROIVoting(ChimeraAttributeViewer):
@@ -47,6 +50,13 @@ class ViewerROIVoting(ChimeraAttributeViewer):
 
     def _defineParams(self, form):
         seqOutputs = self._getSequenceOutputsDic()
+        if hasattr(self.protocol, 'outputStructROIs'):
+            form.addSection(label='Table view')
+            form.addParam('displayTable', params.LabelParam,
+                          label='Display voted residues in table format: ',
+                          help='Display the outputStructROIs set in table format, with the vote '
+                               'frequency and percentage of each residue as columns.')
+
         if seqOutputs:
             form.addSection(label='Sequence')
             if len(seqOutputs) > 1:
@@ -64,12 +74,20 @@ class ViewerROIVoting(ChimeraAttributeViewer):
 
     def _getVisualizeDict(self):
         visDic = {}
+        if hasattr(self.protocol, 'outputStructROIs'):
+            visDic['displayTable'] = self._viewSet
         if self._getSequenceOutputsDic():
             visDic['viewFrequency'] = self._showFrequency
             visDic['viewSequenceColored'] = self._showSequenceColored
         if hasattr(self.protocol, self.protocol._OUTNAME):
             visDic.update(super()._getVisualizeDict())
         return visDic
+
+    def _viewSet(self, paramName=None):
+        '''Table view of outputStructROIs restricted to the columns relevant to ROI voting'''
+        molSet = self.protocol.outputStructROIs
+        viewParams = {ORDER: TABLE_LABELS, VISIBLE: TABLE_LABELS, RENDER: 'no', MODE: MODE_TABLE}
+        return [ObjectView(self.getProject(), molSet.strId(), molSet.getFileName(), viewParams=viewParams)]
 
     def _getSelectedSequenceOutput(self):
         seqOutputs = self._getSequenceOutputsDic()
