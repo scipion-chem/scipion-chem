@@ -396,7 +396,7 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
   def _showResidueImportance(self, e=None):
       from pathlib import Path
       from pyworkflow.viewer import CommandView
-      localizationFile = self.getAtomStruct()._localizationPerc.get()
+      localizationFile = self.getAtomStructs()._localizationPerc.get()
 
       outputDir = Path(localizationFile).parent
       pngFiles = list(outputDir.glob("*.png"))
