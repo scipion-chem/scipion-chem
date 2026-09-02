@@ -317,6 +317,12 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
             label='Display localization probabilities: ',
             help='Display the DeepLoc predicted localization probabilities.'
         )
+        form.addParam(
+            'viewSequence',
+            params.LabelParam,
+            label='Display residue importance: ',
+            help='Display the DeepLoc predicted residue importance.'
+        )
 
   def _getVisualizeDict(self):
       d = {
@@ -328,6 +334,7 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
 
       if hasattr(structs, '_localizationPerc'):
           d['viewLocalization'] = self._showLocalization
+          d['viewSequence'] = self._showResidueImportance
 
       d.update(BaseInteractionViewer._getVisualizeDict(self))
 
@@ -359,6 +366,22 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
       df = pd.read_csv(localizationPerc)
 
       plotLocalizationHistogramFromDataFrame(df)
+
+  from pyworkflow.viewer import CommandView
+
+  def _showResidueImportance(self, e=None):
+      from glob import glob
+
+      pngFiles = glob(self.protocol._getPath("outputs/*.png"))
+
+      if not pngFiles:
+          raise FileNotFoundError(
+              "No PNG files found in the outputs folder."
+          )
+      return [
+          CommandView(f'xdg-open "{pngFile}"')
+          for pngFile in pngFiles
+      ]
 
   def _viewSetStructure(self, e=None):
     if self.displaySoftware.get() == 0:
