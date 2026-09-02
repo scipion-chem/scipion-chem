@@ -230,15 +230,20 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
 
         plotLocalizationHistogram(localizationPerc)
 
-    from pyworkflow.viewer import CommandView
 
     def _showResidueImportance(self, e=None):
-        from glob import glob
-        pngFiles = glob(self.protocol._getPath("outputs/*.png"))
+        from pathlib import Path
+        from pyworkflow.viewer import CommandView
+        localizationFile = self.getAtomStruct()._localizationPerc.get()
+
+        outputDir = Path(localizationFile).parent
+        pngFiles = list(outputDir.glob("*.png"))
+
         if not pngFiles:
             raise FileNotFoundError(
-                "No PNG files found in the outputs folder."
+                f"No PNG files found in {outputDir}"
             )
+
         return [
             CommandView(f'xdg-open "{pngFile}"')
             for pngFile in pngFiles
@@ -388,17 +393,19 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
 
       plotLocalizationHistogramFromDataFrame(df)
 
-  from pyworkflow.viewer import CommandView
-
   def _showResidueImportance(self, e=None):
-      from glob import glob
+      from pathlib import Path
+      from pyworkflow.viewer import CommandView
+      localizationFile = self.getAtomStruct()._localizationPerc.get()
 
-      pngFiles = glob(self.protocol._getPath("outputs/*.png"))
+      outputDir = Path(localizationFile).parent
+      pngFiles = list(outputDir.glob("*.png"))
 
       if not pngFiles:
           raise FileNotFoundError(
-              "No PNG files found in the outputs folder."
+              f"No PNG files found in {outputDir}"
           )
+
       return [
           CommandView(f'xdg-open "{pngFile}"')
           for pngFile in pngFiles
