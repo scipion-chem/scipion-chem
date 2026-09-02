@@ -192,6 +192,12 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
               label='Display localization probabilities: ',
               help='Display the DeepLoc predicted localization probabilities.'
           )
+          form.addParam(
+              'viewSequence',
+              params.LabelParam,
+              label='Display residue importance: ',
+              help='Display the DeepLoc predicted residue importance.'
+          )
 
     def _getVisualizeDict(self):
         visDic = {
@@ -202,6 +208,7 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
 
         if hasattr(obj, '_localizationPerc'):
             visDic['viewLocalization'] = self._showLocalization
+            visDic['viewSequence'] = self._showResidueImportance
 
         return visDic
 
@@ -222,6 +229,20 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
             )
 
         plotLocalizationHistogram(localizationPerc)
+
+    from pyworkflow.viewer import CommandView
+
+    def _showResidueImportance(self, e=None):
+        from glob import glob
+        pngFiles = glob(self.protocol._getPath("outputs/*.png"))
+        if not pngFiles:
+            raise FileNotFoundError(
+                "No PNG files found in the outputs folder."
+            )
+        return [
+            CommandView(f'xdg-open "{pngFile}"')
+            for pngFile in pngFiles
+        ]
 
     def _viewAtomStruct(self, e=None):
       if self.displaySoftware.get() == 0:
