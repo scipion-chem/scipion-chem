@@ -1381,6 +1381,17 @@ def createPocketFile(coords, pocketK, oFile):
   with open(oFile, 'w') as f:
     f.write(outStr)
 
+def parseResidueCoords(asFile):
+  '''Maps every residue of a structure file (all chains) to its atom coordinates,
+  as {"chainId_resNum": [[x, y, z], ...]}'''
+  resCoordsDic = {}
+  parser = PDBParser if asFile.endswith(('.pdb', '.pdbqt')) else MMCIFParser
+  struct = parser(QUIET=True).get_structure(getBaseName(asFile), asFile)[0]
+  for chain in struct.get_chains():
+    for res in chain.get_residues():
+      resCoordsDic[f'{chain.id}_{res.get_id()[1]}'] = [a.get_coord().tolist() for a in res.get_atoms()]
+  return resCoordsDic
+
 ################# Wizard utils #####################
 def getChainIds(chainStr):
   '''Parses a line of json with the description of a chain or chains and returns the ids'''
