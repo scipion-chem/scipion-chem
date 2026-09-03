@@ -4,6 +4,7 @@
 # * Authors:      Carlos Oscar Sorzano (coss@cnb.csic.es)
 # *               Natalia del Rey
 # *               Daniel Del Hoyo (ddelhoyo@cnb.csic.es)
+# *               Judith Maestro (judith.maestro@cnb.csic.es)
 # *
 # * Natl. Center of Biotechnology CSIC
 # *
@@ -27,11 +28,7 @@
 # *
 # **************************************************************************
 
-"""
-This protocol is used to merge different lists scores generating a combined ranking.
-"""
-
-import os, json, re
+import os, json, re, csv
 
 from pyworkflow.constants import BETA
 import pyworkflow.protocol.params as params
@@ -48,151 +45,109 @@ MUTATION_ID_PATTERN = re.compile(r'^([A-Za-z])([A-Za-z]+)(\d+)([A-Za-z])$')
 
 class ProtocolRANXFuse(EMProtocol):
   """
+  Protocol to fuse multiple Sets of Statistics into a single combined ranking using Ranx-based
+  score fusion and rank aggregation methods.
+
   AI Generated:
 
-    Protocol to fuse multiple Sets of Statistics into a single combined ranking using Ranx-based
-    score fusion and rank aggregation methods.
-
-    This protocol integrates multiple independent scoring sources (e.g. ΔΔG predictions,
-    mutation scores, docking scores, or other SetOfStats outputs) into a unified consensus
-    score and ranking.
-
-    It supports both score-based and rank-based fusion strategies using the Ranx framework.
+    ProtocolRANXFuse - User Manual
 
     Overview
     --------
-    The protocol performs three main operations:
+    The ProtocolRANXFuse protocol integrates multiple independent scoring sources (e.g. ΔΔG
+    predictions, mutation scores, docking scores, or other SetOfStats outputs) into a single,
+    unified consensus score and ranking, using the Ranx library
+    (https://amenra.github.io/ranx/fusion/).
 
-    1. Input parsing and alignment
-       - Reads multiple input SetOfStats
-       - Extracts ID attributes and score attributes
-       - Builds per-set dictionaries of scores
+    It supports both score-based and rank-based fusion strategies.
 
-    2. Score fusion (external execution)
-       - Prepares a configuration file describing:
-         * normalization method
-         * fusion algorithm
-         * input score dictionaries
-       - Executes external script (ranx_fusion.py) using Ranx library
-
-    3. Output reconstruction
-       - Reads fused results file
-       - Computes final ranking
-       - Rebuilds Scipion SetOfStats with:
-         * fused score
-         * rank
-         * optionally expanded per-set attributes
-
-    Input
-    -----
-    inputSets:
-        List of EMSet objects (typically SetOfStats) containing scored items.
-
-    inSetID:
-        Name/identifier of each input set used in configuration of fusion.
-
-    inAttrName:
-        Attribute used as unique identifier for each item (e.g. mutation ID).
-
-    inAttrVal:
-        Attribute containing the score values to be fused across sets.
-
-    high:
-        Boolean flag indicating whether higher scores are better.
-        If False, scores are inverted internally for correct ranking.
-
-    outName:
-        Name of the output fused score attribute.
-
-    inAttrs:
-        Text configuration defining:
-        - which sets contribute
-        - which attributes are used
-        - mapping between IDs and values
-
-    Fusion configuration
-    --------------------
-    typeAlgorithm:
-        Select fusion family:
-        - Score-based methods
-        - Rank-based methods
-
-    scoreAlgorithm:
-        Score-based fusion methods (e.g. median, average).
-
-    rankAlgorithm:
-        Rank-based fusion methods:
-        - ISR
-        - Log_ISR
-        - LogN_ISR
-        - RRF
-        - RBC
-
-    normStrategy:
-        Normalization strategy applied before fusion (Ranx normalization options).
-
-    sigma:
-        Parameter for LogN_ISR method (controls frequency smoothing).
-
-    kparameter:
-        Parameter for RRF method (controls rank damping).
-
-    phi:
-        Parameter for RBC method (controls rank persistence).
+    Input Parameters
+    -----------------
+    - **inputSets**: List of EMSet objects (typically SetOfStats) containing the scored items
+      to combine.
+    - **inSetID / inAttrName / inAttrVal / high**: Define, one input set at a time, which set to
+      take attributes from (inSetID), which of its attributes is the unique item ID
+      (inAttrName, e.g. mutation ID), which attribute holds the score to fuse (inAttrVal), and
+      whether higher values of that score are better (high). Only one ID attribute is used per
+      input set.
+    - **addAttr**: Appends the ID/score/direction combination currently defined above as a new
+      line in **inAttrs**.
+    - **inAttrs**: Accumulated list (one JSON line per entry) of all the input set/attribute/
+      value/direction combinations that will be fused. The output combines all input sets,
+      stacking items that share the same ID; if other attributes are shared across sets, the
+      value from the earliest set is kept.
+    - **outName**: Name given to the fused score attribute in the output (default "RanxScore").
+    - **extractNativePosition**: When enabled, and the ID values follow the mutation format
+      "[aaFrom][Chain][Position][aaTo]" (e.g. "CA182Y"), adds a "NativePosition" attribute
+      ("[aaFrom][Chain][Position]", e.g. "CA182") to every item, so mutations affecting the same
+      native residue can be grouped together.
+    - **typeAlgorithm**: Selects the fusion family, Score-based methods or Rank-based methods.
+    - **scoreAlgorithm**: Score-based fusion method (e.g. median, average) when typeAlgorithm is
+      "Score-based Methods".
+    - **rankAlgorithm**: Rank-based fusion method (ISR, Log_ISR, LogN_ISR, RRF, RBC) when
+      typeAlgorithm is "Rank-based Methods".
+    - **normStrategy**: Normalization strategy applied before fusion (Ranx normalization
+      options).
+    - **sigma / kparameter / phi**: Extra parameters required by LogN_ISR (sigma, 0-1), RRF
+      (kparameter, 10-100) and RBC (phi, 0-1) respectively.
 
     Workflow
     --------
-    1. Parse input sets and build per-set ID → score mappings.
-    2. Apply direction normalization (higher/lower is better).
-    3. Generate run dictionaries for each dataset.
-    4. Write parameter file for external Ranx execution.
-    5. Execute ranx_fusion.py via plugin environment.
-    6. Read fused output file (ranked scores).
-    7. Build final ranked dictionary:
-       - score
-       - rank
-    8. Clone original items and attach fused attributes.
-    9. Produce final output SetOfStats.
+    1. Parse the input sets and build, for each entry in inAttrs, a per-set ID -> score
+       dictionary, inverting the sign of the score when lower is better.
+    2. Write a parameter file (normalization, fusion method, per-set dictionaries) and execute
+       the external `ranx_fusion.py` script through the Ranx library to compute the fused score
+       and rank of every item ID.
+    3. Rebuild the output set: clone the items of the first input set, drop their original
+       per-set score attributes, and attach the per-set attributes renamed as
+       "<attribute>_setIdx_<i>", the fused score (outName) and the fused rank ("RanxRank").
+       Optionally add "NativePosition".
+    4. Export the same information (ID, per-set attributes, fused score/rank and, if enabled,
+       "NativePosition") as a flat CSV table (see Outputs) for direct inspection outside Scipion.
 
-    Output
-    ------
-    outputSet:
-        EMSet containing original items enriched with:
-        - fused score (outName)
-        - fused rank (RanxRank)
-        - optionally expanded per-set attributes
-
-    Internal data structures
-    -------------------------
-    runDics:
-        Dictionary mapping input set indices and attributes to score dictionaries.
-
-    perSetAttrs:
-        Expanded representation of all attributes per item across sets.
-
-    ranked:
-        Final mapping:
-        ID → {score, rank}
-
-    Validation
-    ----------
-    - Ensures sigma ∈ [0,1] for LogN_ISR
-    - Ensures k ∈ [10,100] for RRF
-    - Ensures phi ∈ [0,1] for RBC
-
-    Summary
+    Outputs
     -------
-    This protocol enables meta-analysis of multiple scoring systems by:
-    - normalizing heterogeneous score sources
-    - applying state-of-the-art fusion algorithms (Ranx)
-    - producing a unified ranking of biological entities
+    - **outputSet**: EMSet containing the original items enriched with the per-set attributes,
+      the fused score (outName) and rank ("RanxRank"), and optionally "NativePosition".
+    - **extra/rankAggregation.tsv**: Raw rank/score table produced by the Ranx fusion script.
+    - **extra/fusionResults.csv**: Flat CSV table with one row per item and one column for the
+      item ID, each per-set attribute, the fused score, "RanxRank" and (if enabled)
+      "NativePosition". Open it directly (spreadsheet, pandas, grep, etc.) to search or filter
+      specific mutations, since the Scipion GUI only exposes the output set as a
+      "Metadata:stats.sqlite" table.
 
-    Notes
-    -----
-    - Relies on external script (ranx_fusion.py) for fusion computation.
-    - Designed for large-scale comparative scoring datasets.
-    - Particularly useful for integrating multiple prediction models.
-    - Final ranking is deterministic based on selected fusion method.
+    Interpretation
+    --------------
+    Sort or group the output set (or the CSV) by "RanxRank" (or outName) to see which items rank
+    best once all input sources are combined. When "extractNativePosition" is enabled, grouping
+    by "NativePosition" shows which native residue accumulates the largest number of
+    well-ranked substitutions, i.e. the position most favorable to mutate.
+
+    Practical Recommendations
+    --------------------------
+    - Prefer rank-based methods (RRF, RBC...) when the input scores are not directly comparable
+      in scale or units; prefer score-based methods (median, average) when they already are.
+    - Only enable "extractNativePosition" when all input IDs follow the
+      "[aaFrom][Chain][Position][aaTo]" mutation format; otherwise the attribute is left
+      undefined for the non-matching items.
+    - Use the CSV output rather than the GUI table whenever you need to search, filter or sort
+      by specific mutation IDs or native positions.
+
+    Warnings
+    --------
+    - If several ID attributes are defined for the same input set index, only the first one
+      configured is used.
+    - If none of the IDs match the expected mutation format, "NativePosition" is not added to
+      any item and a warning is printed.
+    - sigma must be in [0,1] for LogN_ISR, kparameter in [10,100] for RRF, and phi in [0,1] for
+      RBC; otherwise the protocol raises a validation error.
+
+    Final Perspective
+    ------------------
+    ProtocolRANXFuse enables meta-analysis of multiple scoring systems by normalizing
+    heterogeneous score sources and applying state-of-the-art Ranx fusion algorithms, producing
+    both a Scipion SetOfStats output and a plain CSV table for direct inspection and searching
+    of the combined ranking.
   """
   _label = 'Ranx Score Fusion'
 
@@ -334,6 +289,7 @@ class ProtocolRANXFuse(EMProtocol):
     inAttrDic = self.getInputAttrsDic()
     originalAttrs = self.getOriginalAttrs(inAttrDic)
     perSetAttrs = self.buildPerSetAttributeDictionary(inAttrDic)
+    perSetAttrNames = self.getPerSetAttrNames(inAttrDic)
     outSet = inSet.createCopy(self._getPath(), copyInfo=True)
 
     nativePosMatches = 0
@@ -347,6 +303,7 @@ class ProtocolRANXFuse(EMProtocol):
       outSet.append(newItem)
 
     self.warnIfNoNativePositionMatch(len(inSet), nativePosMatches)
+    self.writeOutputCSV(outSet, outAttrName, perSetAttrNames)
     self._defineOutputs(outputSet=outSet)
 
   def buildOutputItem(self, item, inID, originalAttrs, perSetAttrs, outData):
@@ -509,6 +466,37 @@ class ProtocolRANXFuse(EMProtocol):
   def getOutFile(self):
     return self._getExtraPath("rankAggregation.tsv")
 
+  def getCSVFile(self):
+    return self._getExtraPath("fusionResults.csv")
+
+  def getPerSetAttrNames(self, inAttrDic):
+    '''Returns the ordered list of per-set attribute names (e.g. "ddg_setIdx_0") that
+    buildPerSetAttributeDictionary would generate, derived directly from the input attributes
+    definition. This keeps the column set stable even if some IDs are missing from some
+    input sets.
+    '''
+    names = set()
+    for key, attrVals in inAttrDic.items():
+      inPointIdx, _ = key.split('-')
+      for attrVal in attrVals:
+        names.add(f"{attrVal[0]}_setIdx_{inPointIdx}")
+    return sorted(names, key=lambda x: (int(x.split('_setIdx_')[-1]), x.split('_setIdx_')[0]))
+
+  def writeOutputCSV(self, outSet, outAttrName, perSetAttrNames):
+    '''Writes a flat CSV table (mutation ID, per-set score attributes, fused score/rank and,
+    optionally, native position) so the results can be searched/filtered outside the Scipion
+    GUI, which only exposes the output set as a "Metadata:stats.sqlite".
+    '''
+    fieldNames = [outAttrName] + perSetAttrNames + [self.outName.get(), 'RanxRank']
+    if self.extractNativePosition.get():
+      fieldNames.append('NativePosition')
+
+    with open(self.getCSVFile(), 'w', newline='') as f:
+      writer = csv.DictWriter(f, fieldnames=fieldNames)
+      writer.writeheader()
+      for item in outSet:
+        writer.writerow({fieldName: item.getAttributeValue(fieldName) for fieldName in fieldNames})
+
   def writeParamsFile(self, runDics, norm, fus, kwargs):
     paramsFile = self._getExtraPath('inputParams.txt')
     with open(paramsFile, 'w') as f:
@@ -563,10 +551,12 @@ class ProtocolRANXFuse(EMProtocol):
 
   def _summary(self):
     summary = []
-    outputFile = self._getExtraPath('RankAggregation.tsv')
-    if os.path.exists(outputFile):
-      with open(outputFile) as f:
+    if os.path.exists(self.getOutFile()):
+      with open(self.getOutFile()) as f:
         summary.append(f.read())
+    if os.path.exists(self.getCSVFile()):
+      summary.append('A CSV table with all the per-set attributes, the fused score/rank and the '
+                      'native position (if extracted) is available at: %s' % self.getCSVFile())
     return summary
 
   def _methods(self):
