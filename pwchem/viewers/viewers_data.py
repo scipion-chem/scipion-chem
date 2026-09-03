@@ -169,6 +169,13 @@ def plotLocalizationHistogram(csvFile):
     df = pd.read_csv(csvFile)
     plotLocalizationHistogramFromDataFrame(df)
 
+def openPngFiles(pngFiles):
+    from pyworkflow.viewer import CommandView
+
+    return [
+        CommandView(f'xdg-open "{pngFile}"')
+        for pngFile in pngFiles
+    ]
 class AtomStructViewer(pwviewer.ProtocolViewer):
     _label = 'Viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
@@ -192,6 +199,12 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
               label='Display localization probabilities: ',
               help='Display the DeepLoc predicted localization probabilities.'
           )
+          form.addParam(
+              'viewSequence',
+              params.LabelParam,
+              label='Display residue importance: ',
+              help='Display the DeepLoc predicted residue importance.'
+          )
 
     def _getVisualizeDict(self):
         visDic = {
@@ -202,6 +215,7 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
 
         if hasattr(obj, '_localizationPerc'):
             visDic['viewLocalization'] = self._showLocalization
+            visDic['viewSequence'] = self._showResidueImportance
 
         return visDic
 
@@ -222,6 +236,18 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
             )
 
         plotLocalizationHistogram(localizationPerc)
+
+    def _showResidueImportance(self, e=None):
+        from pathlib import Path
+        localizationFile = self.getAtomStruct()._localizationPerc.get()
+
+        outputDir = Path(localizationFile).parent
+        pngFiles = list(outputDir.glob("*.png"))
+        if not pngFiles:
+            raise FileNotFoundError(
+                f"No PNG files found in {outputDir}"
+            )
+        return openPngFiles(pngFiles)
 
     def _viewAtomStruct(self, e=None):
       if self.displaySoftware.get() == 0:
@@ -367,21 +393,17 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
 
       plotLocalizationHistogramFromDataFrame(df)
 
-  from pyworkflow.viewer import CommandView
-
   def _showResidueImportance(self, e=None):
-      from glob import glob
+      from pathlib import Path
+      localizationFile = self.getAtomStructs()._localizationPerc.get()
 
-      pngFiles = glob(self.protocol._getPath("outputs/*.png"))
-
+      outputDir = Path(localizationFile).parent
+      pngFiles = list(outputDir.glob("*.png"))
       if not pngFiles:
           raise FileNotFoundError(
-              "No PNG files found in the outputs folder."
+              f"No PNG files found in {outputDir}"
           )
-      return [
-          CommandView(f'xdg-open "{pngFile}"')
-          for pngFile in pngFiles
-      ]
+      return openPngFiles(pngFiles)
 
   def _viewSetStructure(self, e=None):
     if self.displaySoftware.get() == 0:
