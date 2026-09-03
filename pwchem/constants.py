@@ -42,6 +42,17 @@ POSEB_DIC =     {'name': 'posebusters',      'version': '0.6.3',           'home
 SCORCH2_DIC = {'name': 'scorch2', 'version': '1.0', 'home': 'SCORCH2_HOME'}
 COCADA_DIC = {'name': 'cocada', 'version': '1.6', 'home': 'COCADA_HOME'}
 
+# LANL/CATNAP bnAb cross-reference (see ProtLANLCATNAPCrossref): wraps no
+# external tool, pure pandas/csv logic over two local reference databases
+# (LANL HIV Molecular Immunology DB + optional CATNAP neutralization
+# potency, Yoon et al. 2015). NOT auto-downloaded: hiv.lanl.gov has no
+# stable download URL for the antibody DB, only an interactive search
+# form, and the site explicitly states it is increasing its blocking of
+# automated traffic -- the user downloads both files manually once and
+# points to them here.
+LANL_AB_ALL_PATH = 'LANL_AB_ALL_PATH'
+CATNAP_ABS_PATH = 'CATNAP_ABS_PATH'
+
 #Autoligand
 POCKET_ATTRIBUTES_MAPPING = {'Pocket Score': 'score', 'Drug Score': 'druggability', 'nPoints': 'nPoints',
                       'Total Volume': 'volume', 'Total Energy per Vol': 'energy', 'class': 'class',

@@ -81,6 +81,11 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
         cls._defineEmVar(COCADA_DIC['home'], cls.getEnvName(COCADA_DIC))
 
+        # LANL/CATNAP reference databases (manually downloaded, see
+        # ProtLANLCATNAPCrossref / constants.py for why this stays manual)
+        cls._defineVar(LANL_AB_ALL_PATH, '')
+        cls._defineVar(CATNAP_ABS_PATH, '')
+
         # Common enviroments
         cls._defineVar('RDKIT_ENV_ACTIVATION', cls.getEnvActivationCommand(RDKIT_DIC))
         cls._defineVar('BIOCONDA_ENV_ACTIVATION', cls.getEnvActivationCommand(BIOCONDA_DIC))
