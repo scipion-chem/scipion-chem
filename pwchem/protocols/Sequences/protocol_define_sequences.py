@@ -37,7 +37,7 @@ from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 from pwem.objects.data import SetOfSequences, Sequence
 
-from pwchem.utils.utilsFasta import parseFasta
+from pwchem.utils.sequence_utils import parseFasta
 
 
 class ProtDefineSetOfSequences(EMProtocol):

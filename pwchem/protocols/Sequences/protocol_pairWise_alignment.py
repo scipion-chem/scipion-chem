@@ -29,7 +29,7 @@ import os, json
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import StringParam, PointerParam, BooleanParam
 from pwchem.objects import SetOfSequencesChem, Sequence
-from pwchem.utils.utilsFasta import pairwiseAlign, parseAlnFile
+from pwchem.utils.sequence_utils import pairwiseAlign, parseAlnFile
 
 
 class ProtChemPairWiseAlignment(EMProtocol):

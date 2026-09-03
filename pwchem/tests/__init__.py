@@ -35,7 +35,10 @@ from .tests_pharmacophores import *
 from .tests_general import *
 from .tests_databases import *
 from .tests_epitopes import *
+from .tests_fastq import *
+from .tests_reference_genomes import *
 from .tests_molecular_dynamics import *
+from .tests_rnaseq_align import *
 
 from enum import Enum
 
@@ -47,3 +50,21 @@ class DataSetMDSystem(Enum):
     amberTrjFile = 'amberSystem/3p6h.nc'
 
 DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in DataSetMDSystem})
+
+
+class DataSetGenomics(Enum):
+    # Human
+    humanDir = 'human'
+    humanGtfFile = 'human/Homo_sapiens.GRCh38.116.gtf'
+    humanGenomeFile = 'human/Homo_sapiens.GRCh38.dna.primary_assembly.fa'
+    humanFastqR1 = 'human/SRR390728_1.fastq.gz'
+    humanFastqR2 = 'human/SRR390728_2.fastq.gz'
+
+    # Mouse
+    mouseDir = 'mouse'
+    mouseGtfFile = 'mouse/Mus_musculus.GRCm39.116.gtf'
+    mouseGenomeFile = 'mouse/Mus_musculus.GRCm39.dna.primary_assembly.fa'
+    mouseFastq = 'mouse/SRR1552445.fastq.gz'
+
+
+DataSet(name='genomics',folder='genomics',files={el.name: el.value for el in DataSetGenomics})

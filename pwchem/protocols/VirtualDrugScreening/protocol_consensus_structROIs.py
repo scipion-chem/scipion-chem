@@ -45,7 +45,7 @@ from pyworkflow.utils import Message
 
 from pwchem.objects import SetOfStructROIs, PredictStructROIsOutput, StructROI
 from pwchem.utils import writePDBLine, splitPDBLine, flipDic, createPocketFile, getBaseName, invertDic
-from pwchem.utils.utilsFasta import getMultipleAlignmentCline
+from pwchem.utils.sequence_utils import getMultipleAlignmentCline
 
 import networkx as nx
 from typing import List, Dict

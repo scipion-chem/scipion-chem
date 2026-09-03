@@ -5,4 +5,6 @@ from .viewers_sequences import SequenceAliViewer, SequenceGeneralViewer
 from .viewer_pharmacophore import *
 from .viewer_structure_attributes import ConservationViewer, SASAStructureViewer
 from .viewers_MD import *
+from .viewer_fastq import FastqHtmlViewer
+from .viewer_alignment import AlignmentViewer
 from .viewer_ranx_fuse import RANXFuseViewer

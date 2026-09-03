@@ -29,7 +29,7 @@ import os
 from pyworkflow.protocol.params import EnumParam, PointerParam, BooleanParam, LEVEL_ADVANCED, TextParam
 from pwem.protocols import EMProtocol
 
-from pwchem.utils.utilsFasta import EMBOSS_FORMATS, parseFasta, parseAlnFile, getMultipleAlignmentCline
+from pwchem.utils.sequence_utils import EMBOSS_FORMATS, parseFasta, parseAlnFile, getMultipleAlignmentCline
 from pwchem.objects import SetOfSequencesChem, Sequence
 
 CLUSTALO, MUSCLE, MAFFT = 'Clustal_Omega', 'Muscle', 'Mafft'

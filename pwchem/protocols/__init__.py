@@ -92,6 +92,10 @@ except ImportError:
 
 from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
 
+from pwchem.protocols.Sequences.protocol_import_fastq import ProtImportFastq
+from pwchem.protocols.Sequences.protocol_fastp import ProtFastpFilter
+from pwchem.protocols.Sequences.protocol_rnaseq_align import ProtRNASeqAlignment
+from pwchem.protocols.Sequences.protocol_reference_genomes import ProtReferenceGenomes
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
