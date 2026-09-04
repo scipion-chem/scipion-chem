@@ -32,6 +32,7 @@ This module will extract the ligand from a complex pdb.
 
 import os, sys, json
 from Bio.PDB import PDBParser, PDBIO, Select, MMCIFParser, MMCIFIO
+from Bio.PDB.Polypeptide import is_aa
 
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
@@ -225,13 +226,26 @@ class ProtExtractLigands(EMProtocol):
             exit()
 
         ligandFiles = []
+        STANDARD_NUCLEOTIDES = {
+            "A", "C", "G", "U",
+            "DA", "DC", "DG", "DT", "DI"
+        }
         for model in struct:
             for chain in model:
                 for residue in chain:
-                    if not isHet(residue): continue
-                    heavyAtoms = [a for a in residue if a.element != 'H']
-                    if len(heavyAtoms) < self.nAtoms.get(): continue
                     resname = residue.get_resname().strip()
+                    # Skip waters
+                    if resname in ("HOH", "WAT"):
+                        continue
+                    # Skip standard amino acids
+                    if is_aa(residue, standard=True):
+                        continue
+                    # Skip standard nucleotides
+                    if resname in STANDARD_NUCLEOTIDES:
+                        continue
+                    heavyAtoms = [a for a in residue if a.element != "H"]
+                    if len(heavyAtoms) < self.nAtoms.get():
+                        continue
                     res_id = residue.get_id()[1]
                     outFile = self._getPath(f"{struct_name}_{resname}_{res_id}.cif")
 
