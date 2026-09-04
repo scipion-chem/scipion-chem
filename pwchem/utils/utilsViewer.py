@@ -93,6 +93,29 @@ def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=Tr
     return pmlStr
 
 
+def buildPMLCovalentStr(covDic, disable=True):
+    '''PyMOL script for covalently docked poses.
+
+    :param covDic: {objectName: covalent complex file}
+    :param disable: hide every object but the first, so poses do not overlap
+    '''
+    pmlStr = 'set cartoon_transparency, 0.65\n'
+    for i, (objName, covFile) in enumerate(covDic.items()):
+        pmlStr += f'load {os.path.abspath(covFile)}, {objName}\n'
+        pmlStr += f'hide everything, {objName}\n'
+        pmlStr += f'show cartoon, {objName} and polymer\n'
+        pmlStr += f'show sticks, {objName} and not polymer and not solvent\n'
+        pmlStr += f'show sticks, byres ({objName} and polymer within 5 of ' \
+                  f'({objName} and resn LIG))\n'
+        pmlStr += f'color grey70, {objName} and polymer and elem C\n'
+        pmlStr += f'color cyan, {objName} and resn LIG and elem C\n'
+        if disable and i != 0:
+            pmlStr += f'disable {objName}\n'
+
+    if covDic:
+        pmlStr += f'orient {next(iter(covDic))} and resn LIG\n'
+    return pmlStr
+
 def writePmlFile(pmlFile, pmlStr):
     with open(pmlFile, 'w') as f:
         f.write(pmlStr)
