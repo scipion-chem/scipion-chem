@@ -26,6 +26,8 @@ import os
 import json
 from subprocess import Popen
 from tkinter.messagebox import askokcancel
+import numpy as np
+import matplotlib.pyplot as plt
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.protocol import params, Protocol
@@ -38,7 +40,7 @@ from pwem.viewers.mdviewer.viewer import MDViewer
 from pwchem import Plugin as pwchem_plugin
 from pwchem.objects import SequenceVariants, SetOfSequenceROIs, SetOfSequencesChem, SequenceChem, MultiEpitope
 from pwchem.constants import *
-from pwchem.viewers.viewers_data import BioinformaticsDataViewer
+from pwchem.viewers.viewers_data import BioinformaticsDataViewer, plotLocalizationHistogram, plotLocalizationHistogramFromDataFrame
 from pwchem.viewers.viewer_interaction import BaseInteractionViewer
 
 
@@ -131,6 +133,45 @@ class SequenceGeneralViewer(BaseInteractionViewer):
             and self.checkIfInteractions()):
         BaseInteractionViewer._defineParams(self, form)
 
+    if self._hasDeepLocResiduePredictions():
+        form.addSection(label='DeepLoc residue importance')
+        form.addParam(
+            'viewLocalization',
+            params.LabelParam,
+            label='Display localization probabilities: ',
+            help='Display the DeepLoc predicted localization probabilities.'
+        )
+        form.addParam(
+            'viewResidueImportance',
+            params.LabelParam,
+            label='Display residue importance: ',
+            help='Display the DeepLoc residue importance over the sequence.'
+        )
+
+  def _hasDeepLocResiduePredictions(self):
+      seqSet = self.getOutSequences()
+
+      if isinstance(seqSet, SequenceChem):
+          sequences = [seqSet]
+      elif isinstance(seqSet, SetOfSequencesChem):
+          sequences = list(seqSet)
+      else:
+          return False
+
+      for sequence in sequences:
+          try:
+              attrDic = sequence.getAttributesDic()
+          except (FileNotFoundError, AttributeError):
+              continue
+
+          if any(
+                  attrName.startswith('DeepLoc_')
+                  for attrName in attrDic
+          ):
+              return True
+
+      return False
+
   def _getVisualizeDict(self):
       visDict = {
           'aliLabel': self._viewSeqSet,
@@ -141,6 +182,10 @@ class SequenceGeneralViewer(BaseInteractionViewer):
 
       if isinstance(seqSet, SetOfSequencesChem) and self.checkIfInteractions():
           visDict.update(BaseInteractionViewer._getVisualizeDict(self))
+
+      if self._hasDeepLocResiduePredictions():
+          visDict['viewLocalization'] = self._showLocalization
+          visDict['viewResidueImportance'] = self._showResidueImportance
 
       return visDict
 
@@ -164,6 +209,50 @@ class SequenceGeneralViewer(BaseInteractionViewer):
     setV = SequenceAliViewer(project=self.getProject())
     views = setV._visualize(seqSet)
     return views
+
+  def _showLocalization(self, e=None):
+      seqSet = self.getOutSequences()
+
+      localizationPerc = getattr(seqSet, '_localizationPerc', None)
+
+      if localizationPerc is None:
+          return
+
+      if hasattr(localizationPerc, 'get'):
+          localizationPerc = localizationPerc.get()
+
+      if not os.path.exists(localizationPerc):
+          raise FileNotFoundError(
+              f"Localization probability file not found: {localizationPerc}"
+          )
+
+      plotLocalizationHistogram(localizationPerc)
+
+  def _showResidueImportance(self, paramName=None):
+      seqSet = self.getOutSequences()
+
+      if isinstance(seqSet, SequenceChem):
+          sequences = [seqSet]
+      else:
+          sequences = seqSet.iterItems()
+
+      sequenceData = []
+
+      for sequence in sequences:
+          attrDic = sequence.getAttributesDic()
+
+          for attrName, values in attrDic.items():
+              if attrName.startswith('DeepLoc_'):
+                  sequenceData.append({
+                      'name': sequence.getSeqName(),
+                      'attrName': attrName,
+                      'values': list(map(float, values))
+                  })
+
+      if sequenceData:
+          SequenceAttributeViewer(sequenceData)
+
+          plt.show(block=False)
 
   def _viewTable(self, e=None):
     seqSet = self.getOutSequences()
@@ -251,3 +340,65 @@ class SequenceGeneralViewer(BaseInteractionViewer):
               prot.setObjLabel('Filtered sequences')
 
               project.launchProtocol(prot, wait=True)
+
+from matplotlib.widgets import Button
+
+class SequenceAttributeViewer:
+    def __init__(self, sequenceData):
+        self.sequenceData = sequenceData
+        self.index = 0
+
+        self.fig = plt.figure(figsize=(10, 6))
+        self.ax = self.fig.add_axes([0.08, 0.20, 0.88, 0.70])
+
+        axPrev = self.fig.add_axes([0.25, 0.05, 0.18, 0.07])
+        axNext = self.fig.add_axes([0.57, 0.05, 0.18, 0.07])
+
+        self.prevButton = Button(axPrev, '◀ Previous')
+        self.nextButton = Button(axNext, 'Next ▶')
+
+        self.prevButton.on_clicked(self.previous)
+        self.nextButton.on_clicked(self.next)
+
+        self.update()
+
+    def update(self):
+        data = self.sequenceData[self.index]
+
+        values = data['values']
+        seqName = data['name']
+        attrName = data['attrName']
+
+        self.ax.clear()
+
+        xs = np.arange(len(values))
+        self.ax.bar(xs, values)
+
+        self.ax.set_xlabel("Sequence position")
+        self.ax.set_ylabel("{} value".format(attrName))
+
+        self.ax.set_title(
+            "{} — Sequence {}/{} — {}".format(
+                attrName,
+                self.index + 1,
+                len(self.sequenceData),
+                seqName
+            )
+        )
+
+        self.ax.set_xlim(-1, len(values))
+
+        maxY = max(values)
+        self.ax.set_ylim(0, maxY + maxY / 10)
+
+        self.fig.canvas.draw_idle()
+
+    def next(self, event):
+        if self.index < len(self.sequenceData) - 1:
+            self.index += 1
+            self.update()
+
+    def previous(self, event):
+        if self.index > 0:
+            self.index -= 1
+            self.update()
