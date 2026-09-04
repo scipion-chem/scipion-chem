@@ -44,6 +44,7 @@ from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 PYMOL, CHIMERAX, VIEWDOCKX = 0, 1, 2
 PYMOL_LAB, CHIMERAX_LAB, VIEWDOCKX_LAB = 'PyMol', 'ChimeraX', 'ViewDockX'
 SINGLE, MOLECULE, POCKET, SET = 'single', 'molecule', 'pocket', 'set'
+COVALENT_POSE_ATTR = 'covalentPoseFile'
 
 def chimeraInstalled():
   return Chimera.getHome() and os.path.exists(Chimera.getProgram())
@@ -138,6 +139,37 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
 
+    #Covalent section: only when the molecules carry a covalent complex file
+    if self.checkIfCovalent():
+        form.addSection(label='Covalent view')
+        group = form.addGroup('Visualize covalent complexes with:')
+        group.addParam('displaySoftwareCov', params.EnumParam,
+                       choices=self._viewerOptions[:2], default=PYMOL,
+                       label='Display covalent complexes with: ',
+                       help='Display the selected group of covalent complexes with which software. '
+                            'Available: PyMol and ChimeraX')
+
+        group = form.addGroup('Display covalent complexes')
+        group.addParam('displaySetCov', params.EnumParam,
+                       choices=self.setLabels, default=0,
+                       label='Display covalent complexes in set: ',
+                       help='Display the covalent complex of every pose in this set.\n'
+                            'Each complex holds the receptor and one pose with the covalent bond '
+                            'already in the file, so the bond is drawn without any further set-up')
+
+        group.addParam('displayROICov', params.EnumParam,
+                       choices=self.pocketLabels, default=0,
+                       label='Display covalent complexes in ROI: ',
+                       help='Display the covalent complex of every pose docked on this ROI')
+
+        group.addParam('displayMoleculeCov', params.StringParam, default='',
+                       label='Display covalent complexes of molecule: ',
+                       help='Display the covalent complex of every pose of this molecule')
+
+        group.addParam('displaySingleCov', params.StringParam, default='',
+                       label='Display covalent complex of ligand: ',
+                       help='Display the covalent complex of this single pose')
+
     #Molecules section
     form.addSection(label='Small molecules view')
     group = form.addGroup('Visualize molecules with:')
@@ -201,7 +233,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
 
 
   def _getVisualizeDict(self):
-    return {
+    visualizeDict = {
       #Docking
       'displaySetDock': self._viewSetDock,
       'displayROIDock': self._viewROIDock,
@@ -218,6 +250,15 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       'displayTable': self._viewTable,
     }
 
+    #Covalent: the params exist only when the output carries the complexes
+    if self.checkIfCovalent():
+      visualizeDict.update({
+        'displaySetCov': self._viewSetCov,
+        'displayROICov': self._viewROICov,
+        'displayMoleculeCov': self._viewMoleculeCov,
+        'displaySingleCov': self._viewSingleCov,
+      })
+    return visualizeDict
 
 ################# MAIN VIEWER FUNCTIONS ###################
 
@@ -415,6 +456,81 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
         print('PLIP found no interactions in the docking position')
 
+################### COVALENT COMPLEX VIEWS #################
+
+  def _viewSetCov(self, e=None):
+      if self.checkIfProtocol():
+          ligandLabel = self.getEnumText('displaySetCov')
+          sLabel = ligandLabel
+      else:
+          ligandLabel, sLabel = 'All', 'allSetCovalentMolecules'
+
+      mols = self.getGroupMols(self.setLigandsDic, ligandLabel)
+      if len(mols) > 0:
+        return self.viewCovalentMols(mols, sLabel)
+
+  def _viewROICov(self, e=None):
+    ligandLabel = self.getEnumText('displayROICov')
+
+    mols = self.getGroupMols(self.pocketLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      return self.viewCovalentMols(mols, ligandLabel)
+
+  def _viewMoleculeCov(self, e=None):
+    ligandLabel = self.displayMoleculeCov.get()
+
+    mols = self.getGroupMols(self.moleculeLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      return self.viewCovalentMols(mols, ligandLabel)
+
+  def _viewSingleCov(self, e=None):
+    ligandLabel = self.displaySingleCov.get()
+
+    mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
+    if len(mols) > 0:
+      return self.viewCovalentMols(mols, ligandLabel, disable=False)
+
+  def viewCovalentMols(self, mols, ligandLabel, disable=True, e=None):
+    '''Open the covalent complexes of these poses with the selected software'''
+    covDic = self.getCovalentMolDic(mols)
+    if not covDic:
+      showError('Not found', 'None of the selected poses has a covalent complex file on disk.',
+                self.getTkRoot())
+      return []
+
+    if self.getEnumText('displaySoftwareCov') == CHIMERAX_LAB:
+      if not chimeraInstalled():
+        print(CHIMERA_ERROR)
+        return [self.warnMessage(CHIMERA_ERROR, 'Chimera not found')]
+      # addTarget=False: the receptor is inside each complex already, and adding
+      # the original one on top would double every atom of the protein.
+      chimScript = self.writeChimeraScript(covDic, f'{ligandLabel}_covalent',
+                                           addTarget=False, disable=disable)
+      return [ChimeraView(chimScript)]
+
+    pmlFile = os.path.join(self.getPmlsDir(), f'{ligandLabel}_covalent.pml')
+    writePmlFile(pmlFile, buildPMLCovalentStr(covDic, disable=disable))
+
+    pymolV = PyMolViewer(project=self.getProject())
+    return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
+
+  def getCovalentFile(self, mol):
+    '''Covalent complex file of a molecule, or None if it has none on disk'''
+    covAttr = getattr(mol, COVALENT_POSE_ATTR, None)
+    covFile = covAttr.get() if covAttr is not None else None
+    return os.path.abspath(covFile) if covFile and os.path.exists(covFile) else None
+
+  def getCovalentMolDic(self, mols):
+    '''{objectName: covalent complex file} for the poses that have one'''
+    covDic = {}
+    for mol in mols:
+      covFile = self.getCovalentFile(mol)
+      if covFile:
+        covDic[mol.getUniqueName()] = covFile
+      else:
+        print(f'Warning: no covalent complex file for {mol.getUniqueName()}, skipping it')
+    return covDic
+
 ################### MOLECULES VIEWS #################
 
   def _viewSet(self, e=None):
@@ -482,6 +598,22 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         return molSet.isDocked()
       else:
         return False
+
+  def checkIfCovalent(self):
+      '''True when the output molecules carry a covalent complex file.'''
+      molSet = None
+      if not self.checkIfProtocol():
+          molSet = self.protocol
+      else:
+          for oAttr in self.protocol.iterOutputAttributes():
+              if type(getattr(self.protocol, oAttr[0])) == SetOfSmallMolecules:
+                  molSet = getattr(self.protocol, oAttr[0])
+
+      if molSet is None:
+        return False
+
+      mol = molSet.getFirstItem()
+      return mol is not None and getattr(mol, COVALENT_POSE_ATTR, None) is not None
 
   def checkIfProtocol(self):
       if issubclass(type(self.protocol), SetOfSmallMolecules):
