@@ -40,7 +40,6 @@ from pwchem.objects.idw import InvDistTree3D
 
 DEFAULT_SEARCH_RADIUS = 15.0
 DEFAULT_IDW_POWER = 2.0
-OUTPUT_STRUCTUresName = 'reconstructedStructures'
 
 
 class ProtocolInverseDistanceWeighting(EMProtocol):
@@ -327,7 +326,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
                 outDir,
                 baseName + '_reconstruct' + extension
             )
-            
+
             io.set_structure(outStruct)
             io.save(outPath)
             self._fixPdbFormat(outPath)
@@ -348,7 +347,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
             asObj.setFileName(os.path.join(outDir, pdbFile))
             outputSet.append(asObj)
 
-        self._defineOutputs(**{OUTPUT_STRUCTUresName: outputSet})
+        self._defineOutputs(**{'outputAtomStructs': outputSet})
         self._defineSourceRelation(self.inputReference, outputSet)
         self._defineSourceRelation(self.inputEnsemble, outputSet)
         self.info('Output: %d structure(s).' % len(outputSet))
@@ -552,7 +551,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
             atom.set_coord(coord)
 
     def _summary(self):
-        out = getattr(self, OUTPUT_STRUCTUresName, None)
+        out = getattr(self, 'outputAtomStructs', None)
 
         if self.isFinished() and out is not None:
             return [
