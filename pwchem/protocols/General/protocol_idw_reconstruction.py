@@ -320,7 +320,14 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
             _, outAtoms = self._extractAllAtomCoords(outStruct)
             self._applyCoordsToStructure(outAtoms, newCoords)
 
-            outPath = os.path.join(outDir, 'reconstructed_%04d.pdb' % i)
+            baseName = os.path.splitext(os.path.basename(targetPath))[0]
+            extension = os.path.splitext(targetPath)[1]
+
+            outPath = os.path.join(
+                outDir,
+                baseName + '_reconstruct' + extension
+            )
+            
             io.set_structure(outStruct)
             io.save(outPath)
             self._fixPdbFormat(outPath)
