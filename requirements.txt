@@ -1,7 +1,7 @@
 scipion-app
 scipion-em
 scipion-pyworkflow
-lxml
+lxml==6.1.2
 scipy
 parmed
 scikit-learn
