@@ -310,7 +310,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
                 dstCa=dstAligned,
                 allAtoms=allAtomCoords,
                 idw=idw,
-                R=r,
+                r=r,
                 k=k,
                 power=p
             )
