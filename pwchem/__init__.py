@@ -307,23 +307,34 @@ class Plugin(pwem.Plugin):
         )
 
         #download and extract models from Zenodo
+        # Download and extract models from Zenodo
         modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
-        installer.addCommand(
-            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
-            "cd scorchModels && "
-            f"wget -O SCORCH2_models.xz {modelUrl} && "
-            "xz -d SCORCH2_models.xz && "
-            "tar -xf SCORCH2_models && "
-            "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
-            "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
-            "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
-            'SCORCH_MODELS_DOWNLOADED'
-        )
 
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
-            "git clone https://github.com/LinCompbio/SCORCH2.git",
-            'SCORCH2_REPO_CLONED'
+            "cd scorchModels && "
+            f'wget -S -O SCORCH2_models.xz "{modelUrl}" && '
+            "echo '=== Downloaded file ===' && "
+            "ls -lh SCORCH2_models.xz && "
+            "file SCORCH2_models.xz && "
+            "echo '=== Testing xz ===' && "
+            "xz -t SCORCH2_models.xz && "
+            "echo '=== Decompressing ===' && "
+            "xz -d SCORCH2_models.xz && "
+            "echo '=== Tar file ===' && "
+            "ls -lh SCORCH2_models && "
+            "echo '=== Tar contents ===' && "
+            "tar -tf SCORCH2_models | head -20 && "
+            "echo '=== Extracting ===' && "
+            "tar -xf SCORCH2_models && "
+            "echo '=== Extracted model files ===' && "
+            "find models -maxdepth 1 -type f -printf '%f\\n' | sort && "
+            "[ -f models/sc2_ps.xgb ] && "
+            "[ -f models/sc2_pb.xgb ] && "
+            "[ -f models/sc2_ps_scaler ] && "
+            "[ -f models/sc2_pb_scaler ] && "
+            "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
+            'SCORCH_MODELS_DOWNLOADED'
         )
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
