@@ -504,7 +504,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
             )
 
     def _reconstructAtoms(self, srcCa, dstCa, allAtoms, idw,
-                          R=15.0, k=8, power=2.0, leafsize=10):
+                          r=15.0, k=8, power=2.0, leafsize=10):
         srcCa = np.asarray(srcCa, dtype=np.float64)
         dstCa = np.asarray(dstCa, dtype=np.float64)
         allAtoms = np.asarray(allAtoms, dtype=np.float64)
@@ -516,7 +516,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
             )
 
         displacements = np.asarray(dstCa, dtype=np.float64) - np.asarray(srcCa, dtype=np.float64)
-        interpolated = idw(allAtoms, displacements, R=R, k=k, p=power)
+        interpolated = idw(allAtoms, displacements, R=r, k=k, p=power)
         return allAtoms + interpolated
 
     def _extractCaCoords(self, structure):
