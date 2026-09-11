@@ -365,119 +365,130 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
         Chain IDs are ignored. Reference and target chains are matched based
         on the number of common residue identifiers. Once chains are paired,
         residues are matched by residue number and insertion code.
-
-        This allows a chain to be renamed (e.g. I -> A) without affecting
-        the reconstruction.
         """
-        srcChains = {}
-        dstChains = {}
+        srcChains = self._groupKeysByChain(srcKeys)
+        dstChains = self._groupKeysByChain(dstKeys)
 
-        for i, key in enumerate(srcKeys):
-            chainId, _, _ = key
-            srcChains.setdefault(chainId, []).append(i)
+        srcResidues = self._getChainResidues(srcKeys, srcChains)
+        dstResidues = self._getChainResidues(dstKeys, dstChains)
 
-        for i, key in enumerate(dstKeys):
-            chainId, _, _ = key
-            dstChains.setdefault(chainId, []).append(i)
+        chainPairs = self._matchChains(srcChains, dstChains,
+                                       srcResidues, dstResidues)
 
-        srcResidues = {}
+        srcAligned, dstAligned = self._alignMatchedChains(
+            chainPairs, srcChains, dstChains, srcKeys, dstKeys,
+            srcCoords, dstCoords
+        )
 
-        for chainId, indices in srcChains.items():
-            srcResidues[chainId] = {
-                (srcKeys[i][1], srcKeys[i][2])
-                for i in indices
+        self._warnUnmatchedChains(
+            srcChains, dstChains, chainPairs
+        )
+
+        if not srcAligned:
+            return np.empty((0, 3)), np.empty((0, 3))
+
+        return (
+            np.array(srcAligned, dtype=np.float64),
+            np.array(dstAligned, dtype=np.float64)
+        )
+
+    def _groupKeysByChain(self, keys):
+        chains = {}
+
+        for index, key in enumerate(keys):
+            chainId = key[0]
+            chains.setdefault(chainId, []).append(index)
+
+        return chains
+
+    def _getChainResidues(self, keys, chains):
+        return {
+            chainId: {
+                (keys[index][1], keys[index][2])
+                for index in indices
             }
+            for chainId, indices in chains.items()
+        }
 
-        dstResidues = {}
-
-        for chainId, indices in dstChains.items():
-            dstResidues[chainId] = {
-                (dstKeys[i][1], dstKeys[i][2])
-                for i in indices
-            }
-
-        unusedDstChains = set(dstChains.keys())
+    def _matchChains(self, srcChains, dstChains, srcResidues, dstResidues):
+        unusedDstChains = set(dstChains)
         chainPairs = []
 
         for srcChainId in srcChains:
+            bestDstChain, bestCommon = self._findBestChain(
+                srcResidues[srcChainId],
+                unusedDstChains,
+                dstResidues
+            )
+
+            if bestDstChain is not None:
+                chainPairs.append((srcChainId, bestDstChain, bestCommon))
+                unusedDstChains.remove(bestDstChain)
 
             if not unusedDstChains:
                 break
 
-            bestDstChain = None
-            bestCommon = 0
+        return chainPairs
 
-            for dstChainId in unusedDstChains:
+    def _findBestChain(self, srcResidues, dstChains, dstResidues):
+        bestDstChain = None
+        bestCommon = 0
 
-                common = len(
-                    srcResidues[srcChainId] &
-                    dstResidues[dstChainId]
-                )
+        for dstChainId in dstChains:
+            common = len(srcResidues & dstResidues[dstChainId])
 
-                if common > bestCommon:
-                    bestCommon = common
-                    bestDstChain = dstChainId
+            if common > bestCommon:
+                bestCommon = common
+                bestDstChain = dstChainId
 
-            if bestDstChain is not None and bestCommon > 0:
-                chainPairs.append(
-                    (srcChainId, bestDstChain, bestCommon)
-                )
+        return bestDstChain, bestCommon
 
-                unusedDstChains.remove(bestDstChain)
-
+    def _alignMatchedChains(
+            self, chainPairs, srcChains, dstChains,
+            srcKeys, dstKeys, srcCoords, dstCoords
+    ):
         srcAligned = []
         dstAligned = []
 
-        matchedSrcChains = set()
-        matchedDstChains = set()
-
-        for srcChainId, dstChainId, common in chainPairs:
-
-            matchedSrcChains.add(srcChainId)
-            matchedDstChains.add(dstChainId)
-
-            # Target residue -> C-alpha index
-            dstMap = {}
-
-            for idx in dstChains[dstChainId]:
-                residueKey = (
-                    dstKeys[idx][1],
-                    dstKeys[idx][2]
-                )
-                dstMap[residueKey] = idx
-
+        for srcChainId, dstChainId, _ in chainPairs:
+            dstMap = self._buildResidueMap(dstChains[dstChainId], dstKeys)
             chainMatches = 0
 
             for srcIdx in srcChains[srcChainId]:
+                residueKey = (srcKeys[srcIdx][1], srcKeys[srcIdx][2])
 
-                residueKey = (
-                    srcKeys[srcIdx][1],
-                    srcKeys[srcIdx][2]
-                )
+                if residueKey not in dstMap:
+                    continue
 
-                if residueKey in dstMap:
-                    dstIdx = dstMap[residueKey]
-
-                    srcAligned.append(srcCoords[srcIdx])
-                    dstAligned.append(dstCoords[dstIdx])
-
-                    chainMatches += 1
+                dstIdx = dstMap[residueKey]
+                srcAligned.append(srcCoords[srcIdx])
+                dstAligned.append(dstCoords[dstIdx])
+                chainMatches += 1
 
             self.info(
                 'Matched chain %s -> %s: %d C_alfa'
                 % (srcChainId, dstChainId, chainMatches)
             )
 
-        unmatchedSrc = [
-            chainId
-            for chainId in srcChains
-            if chainId not in matchedSrcChains
-        ]
+        return srcAligned, dstAligned
 
+    def _buildResidueMap(self, indices, keys):
+        return {
+            (keys[index][1], keys[index][2]): index
+            for index in indices
+        }
+
+    def _warnUnmatchedChains(self, srcChains, dstChains, chainPairs):
+        matchedSrc = {pair[0] for pair in chainPairs}
+        matchedDst = {pair[1] for pair in chainPairs}
+
+        unmatchedSrc = [
+            chainId for chainId in srcChains
+            if chainId not in matchedSrc
+        ]
         unmatchedDst = [
-            chainId
-            for chainId in dstChains
-            if chainId not in matchedDstChains
+            chainId for chainId in dstChains
+            if chainId not in matchedDst
         ]
 
         if unmatchedSrc:
@@ -491,17 +502,6 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
                 'Target chains with no matching reference chain: %s'
                 % unmatchedDst
             )
-
-        if not srcAligned:
-            return (
-                np.empty((0, 3)),
-                np.empty((0, 3))
-            )
-
-        return (
-            np.array(srcAligned, dtype=np.float64),
-            np.array(dstAligned, dtype=np.float64)
-        )
 
     def _reconstructAtoms(self, srcCa, dstCa, allAtoms, idw,
                           R=15.0, k=8, power=2.0, leafsize=10):
