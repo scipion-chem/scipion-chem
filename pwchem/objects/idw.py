@@ -107,7 +107,7 @@ class InvDistTree3D:
             # All neighbours have d < R (guaranteed by query_ball_point)
             w = ((r - dists) / (r * dists)) ** p
             wSum = w.sum()
-            if wSum == 0.0:
+            if np.isclose(wSum, 0.0):
                 continue
 
             w /= wSum
