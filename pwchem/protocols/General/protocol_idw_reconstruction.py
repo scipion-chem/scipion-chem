@@ -249,7 +249,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
 
     def reconstructStep(self):
 
-        R = self.searchRadius.get()
+        r = self.searchRadius.get()
         p = self.idwPower.get()
 
         refPath = self.inputReference.get().getFileName()
@@ -265,17 +265,17 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
 
         # Automatic k selection based on mean number of C_alfa within R
         treRref = cKDTree(srcCaCoords)
-        counts = [len(treRref.query_ball_point(ca, r=R)) for ca in srcCaCoords]
+        counts = [len(treRref.query_ball_point(ca, r=r)) for ca in srcCaCoords]
 
         if self.maxNeighbours.get() == 0:
             k = max(int(np.mean(counts) * 2), 1)
             self.info('Auto k = %d (mean C_alfa within R=%.1f A: %.1f)'
-                      % (k, R, np.mean(counts)))
+                      % (k, r, np.mean(counts)))
         else:
             k = self.maxNeighbours.get()
 
         self.info('Reference: %d C_alfa, %d total atoms, R=%.1f A, k=%d, p=%.2f'
-                  % (len(srcCaKeys), len(allAtoms), R, k, p))
+                  % (len(srcCaKeys), len(allAtoms), r, k, p))
 
         outDir = self._getExtraPath('reconstructed')
         os.makedirs(outDir, exist_ok=True)
@@ -310,7 +310,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
                 dstCa=dstAligned,
                 allAtoms=allAtomCoords,
                 idw=idw,
-                R=R,
+                R=r,
                 k=k,
                 power=p
             )
@@ -373,11 +373,11 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
         dstChains = {}
 
         for i, key in enumerate(srcKeys):
-            chainId, resNum, insCode = key
+            chainId, _, _ = key
             srcChains.setdefault(chainId, []).append(i)
 
         for i, key in enumerate(dstKeys):
-            chainId, resNum, insCode = key
+            chainId, _, _ = key
             dstChains.setdefault(chainId, []).append(i)
 
         srcResidues = {}

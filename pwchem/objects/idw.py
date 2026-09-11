@@ -44,11 +44,11 @@ class InvDistTree3D:
     interpolated = idw(all_atom_coords, displacements, R=15.0, k=8)
     """
 
-    def __init__(self, src_ca, leafsize=10):
-        src_ca = np.asarray(src_ca, dtype=np.float64)
-        self.tree = cKDTree(src_ca, leafsize=leafsize)
+    def __init__(self, srcCa, leafsize=10):
+        srcCa = np.asarray(srcCa, dtype=np.float64)
+        self.tree = cKDTree(srcCa, leafsize=leafsize)
 
-    def __call__(self, q, displacements, R=15.0, k=8, p=2.0):
+    def __call__(self, q, displacements, r=15.0, k=8, p=2.0):
         """
         Interpolate displacement vectors at query points.
 
@@ -81,7 +81,7 @@ class InvDistTree3D:
             q = q[np.newaxis, :]  # create matrix, no vector (from (4, ) to (1, 4))
 
         result = np.zeros_like(q)
-        neighbours = self.tree.query_ball_point(q, r=R, workers=-1)
+        neighbours = self.tree.query_ball_point(q, r=r, workers=-1)
 
         for j in range(len(q)):
             idx = np.array(neighbours[j], dtype=np.intp)
@@ -99,18 +99,18 @@ class InvDistTree3D:
                 dists = dists[order]
 
             # if d(x, x_i) = 0 for some i -> u(x) = u_i  (no division by zero)
-            zero_mask = dists < 1e-10
-            if np.any(zero_mask):
-                result[j] = displacements[idx[np.argmax(zero_mask)]]
+            zeroMask = dists < 1e-10
+            if np.any(zeroMask):
+                result[j] = displacements[idx[np.argmax(zeroMask)]]
                 continue
 
             # All neighbours have d < R (guaranteed by query_ball_point)
-            w = ((R - dists) / (R * dists)) ** p
-            w_sum = w.sum()
-            if w_sum == 0.0:
+            w = ((r - dists) / (r * dists)) ** p
+            wSum = w.sum()
+            if wSum == 0.0:
                 continue
 
-            w /= w_sum
+            w /= wSum
             result[j] = np.dot(w, displacements[idx])  # sumatorio
 
         return result[0] if single else result
