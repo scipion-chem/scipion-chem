@@ -66,6 +66,7 @@ class Plugin(pwem.Plugin):
         cls.addSCORCHenv(env)
         cls.addPoseBustersPackage(env)
         cls.addCocadaPackage(env)
+        cls.addRNASeqPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -79,6 +80,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(SHAPEIT_DIC['home'], cls.getEnvName(SHAPEIT_DIC))
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
+        cls._defineEmVar(RNASEQ_DIC['home'], cls.getEnvName(RNASEQ_DIC))
         cls._defineEmVar(COCADA_DIC['home'], cls.getEnvName(COCADA_DIC))
 
         # Common enviroments
@@ -88,6 +90,7 @@ class Plugin(pwem.Plugin):
         cls._defineVar(MAX_MOLS_SET, 1000000, var_type=VarTypes.INTEGER,
                                      description='Maximum size for a SetOfSmallMolecules with 1 file per molecule to avoid memory '
                                                              'and IO overuse')
+
 
 ########################### ENVIROMENT MANIPULATION COMMON FUNCTIONS ###########################
     @classmethod
@@ -304,26 +307,56 @@ class Plugin(pwem.Plugin):
         )
 
         #download and extract models from Zenodo
+        # Download and extract models from Zenodo
         modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
+
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "cd scorchModels && "
-            f"wget -O SCORCH2_models.xz {modelUrl} && "
+            f'wget -O SCORCH2_models.xz "{modelUrl}" && '
+            "xz -t SCORCH2_models.xz && "
             "xz -d SCORCH2_models.xz && "
             "tar -xf SCORCH2_models && "
-            "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
-            "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
+            "[ -f models/sc2_ps.xgb ] && "
+            "[ -f models/sc2_pb.xgb ] && "
+            "[ -f models/sc2_ps_scaler ] && "
+            "[ -f models/sc2_pb_scaler ] && "
             "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
             'SCORCH_MODELS_DOWNLOADED'
         )
 
-        installer.addCommand(
-            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
-            "git clone https://github.com/LinCompbio/SCORCH2.git",
-            'SCORCH2_REPO_CLONED'
+        installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
+
+    @classmethod
+    def addRNASeqPackage(cls, env, default=True):
+        installer = InstallHelper(
+            RNASEQ_DIC['name'],
+            packageHome=cls.getVar(RNASEQ_DIC['home']),
+            packageVersion=RNASEQ_DIC['version']
         )
 
-        installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
+        rnaseqEnvName = cls.getEnvName(RNASEQ_DIC)
+
+
+        installer.addCommand(
+            f'conda create -y -n {rnaseqEnvName} '
+            f'-c conda-forge -c bioconda '
+            f'fastqc={FASTQC_DIC["version"]} '
+            f'fastp={FASTP_DIC["version"]} '
+            f'star={STAR_DIC["version"]} '
+            f'hisat2={HISAT2_DIC["version"]} '
+            f'samtools={SAMTOOLS_DIC["version"]} '
+            f'picard={PICARD_DIC["version"]} '
+            f'gatk4={GATK_DIC["version"]} '
+            f'igv={IGV_DIC["version"]} '
+            f'igvtools={IGVTOOLS_DIC["version"]} '
+            f'ncbi-datasets-cli={NCBI_DATASETS_DIC["version"]}',
+            'RNASEQ_ENV_CREATED'
+        ).addPackage(
+                    env,
+                    dependencies=['conda'],
+                    default=default
+                )
 
     @classmethod
     def addCocadaPackage(cls, env, default=True):

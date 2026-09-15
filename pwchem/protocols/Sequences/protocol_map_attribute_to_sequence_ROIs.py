@@ -43,7 +43,7 @@ from pwem.viewers.viewer_localres import getStructureRecipient, getResiduePositi
 from pwem.convert.atom_struct import AtomicStructHandler
 
 from pwchem.utils import Float, runOpenBabel
-from pwchem.utils.utilsFasta import pairwiseAlign
+from pwchem.utils.sequence_utils import pairwiseAlign
 
 STRUCTURE, SEQUENCE = 0, 1
 fastaName = "pairWise.fasta"

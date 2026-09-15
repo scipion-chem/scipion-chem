@@ -24,14 +24,14 @@
 # *
 # **************************************************************************
 
-import os, subprocess
+import os, subprocess, gzip, re
 from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
 
 from pwem.convert.sequence import alignClustalSequences
 from pwchem.objects import SetOfDatabaseID
-from pwchem.constants import BIOCONDA_DIC
+from pwchem.constants import BIOCONDA_DIC, RNASEQ_DIC
 from pwchem import Plugin
 
 EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x and 10.x': 'gcg', 'GCG 8.x': 'gcg8',
@@ -42,14 +42,15 @@ EMBOSS_FORMATS = {'Fasta': 'fasta', 'Clustal': 'aln', 'Wisconsin Package GCG 9.x
                   'Mega': 'mega', 'Meganon': 'meganon', 'Nexus/PAUP': 'nexus', 'Nexusnon/PAUPnon': 'nexusnon',
                   'Jackknifer': 'jackknifer','Jackknifernon': 'jackknifernon', 'Treecon': 'treecon',
                   'EMBOSS sequence object report': 'debug'}
+CONDA_ACTIVATION = '%s && '
 
 def convertEMBOSSformat(inputAlignmentFile, embossFormat, outputAligmentFile):
   '''Connvert alignment files. Options in EMBOSS_FORMATS dictionary
   Returns a command line which must be executed into the scipion environment'''
-  cl_run = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
-  cl_run += 'seqret -sequence {} -osformat2 {} {}'. \
-    format(inputAlignmentFile, embossFormat, outputAligmentFile)
-  return cl_run
+  clRun = CONDA_ACTIVATION % Plugin.getEnvActivationCommand(BIOCONDA_DIC)
+  clRun += 'seqret -sequence {} -osformat2 {} {}'. \
+      format(inputAlignmentFile, embossFormat, outputAligmentFile)
+  return clRun
 
 def copyFastaSequenceAndRead(protocol):
   outFileName = protocol._getExtraPath("sequence.fasta")
@@ -115,8 +116,12 @@ def pairwiseAlign(seq1, seq2, outPath, seqName1=None, seqName2=None, force=False
         fmt = 'clu'
 
     # Alignment
-    activate_env_line = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
-    cline = '{} {} --outfmt={}'.format(activate_env_line, alignClustalSequences(oriFasta, outPath), fmt)
+    activateEnvLine = CONDA_ACTIVATION % Plugin.getEnvActivationCommand(BIOCONDA_DIC)
+    cline = '{} {} --outfmt={}'.format(
+        activateEnvLine,
+        alignClustalSequences(oriFasta, outPath),
+        fmt
+    )
     if force:
         cline += ' --force'
     subprocess.check_call(cline, cwd=outDir, shell=True)
@@ -138,11 +143,12 @@ def parseAlnFile(alnFile):
         f.readline()
         for line in f:
             if line.strip() and not line.startswith(' '):
-                id, seq = line.strip().split()[:2]
-                if id in seqDic:
-                    seqDic[id] += seq
+                seqId, seq = line.strip().split()[:2]
+
+                if seqId in seqDic:
+                    seqDic[seqId] += seq
                 else:
-                    seqDic[id] = seq
+                    seqDic[seqId] = seq
     return seqDic
 
 
@@ -182,7 +188,7 @@ def getMultipleAlignmentCline(programName, inputFasta, outputFile, extraArgs=Non
     else:
       extraArgs = ''
 
-  cline = '%s && ' % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
+  cline = CONDA_ACTIVATION  % (Plugin.getEnvActivationCommand(BIOCONDA_DIC))
   # Clustal Omega
   if programName == CLUSTALO:
     cline += 'clustalo -i {} {} -o {} --outfmt=clu'.format(inputFasta, extraArgs, outputFile)
@@ -198,3 +204,213 @@ def getMultipleAlignmentCline(programName, inputFasta, outputFile, extraArgs=Non
 
   return cline
 
+def openFastq(fn):
+  """Open plain or gzip-compressed FASTQ files."""
+
+  if fn.endswith('.gz'):
+    return gzip.open(fn, 'rt')
+
+  return open(fn, 'r')
+
+
+def getFastqStats(fn):
+  """Calculate number of reads and mean read length from a FASTQ file."""
+
+  numReads = 0
+  totalLength = 0
+
+  with openFastq(fn) as f:
+    while True:
+      header = f.readline()
+
+      if not header:
+        break
+
+      seq = f.readline().strip()
+      f.readline()
+      f.readline()
+
+      numReads += 1
+      totalLength += len(seq)
+
+  readLength = int(round(totalLength / numReads)) if numReads else 0
+
+  return numReads, readLength
+
+def runFastqc(protocol, fastqFiles):
+    """Run FastQC and return the generated HTML reports.
+
+    Parameters
+    ----------
+    protocol
+        Scipion protocol executing FastQC.
+    fastqFiles : list
+        FASTQ file paths to analyze.
+
+    Returns
+    -------
+    list
+        FastQC HTML report paths in the same order as fastqFiles.
+    """
+    outDir = protocol._getExtraPath('fastqc')
+    os.makedirs(outDir, exist_ok=True)
+
+    arguments = f'-o "{outDir}"'
+    arguments += ''.join(f' "{fn}"' for fn in fastqFiles)
+
+    Plugin.runCondaCommand(
+        protocol,
+        arguments,
+        RNASEQ_DIC,
+        'fastqc'
+    )
+
+    htmlFiles = []
+
+    for fn in fastqFiles:
+        baseName = os.path.basename(fn)
+
+        for ext in ['.fastq.gz', '.fq.gz', '.fastq', '.fq']:
+            if baseName.endswith(ext):
+                baseName = baseName[:-len(ext)]
+                break
+
+        htmlFile = os.path.join(
+            outDir,
+            f'{baseName}_fastqc.html'
+        )
+
+        if not os.path.exists(htmlFile):
+            raise RuntimeError(
+                f'FastQC report was not generated for: {fn}'
+            )
+
+        htmlFiles.append(htmlFile)
+
+    return htmlFiles
+
+# ============================================================================
+# Species utilities
+# ============================================================================
+COMMON_SPECIES = {
+    "Homo sapiens": {
+        "ensembl": "homo_sapiens",
+        "ncbi": "Homo sapiens",
+        "assembly": "GRCh38",
+    },
+    "Mus musculus": {
+        "ensembl": "mus_musculus",
+        "ncbi": "Mus musculus",
+        "assembly": "GRCm39",
+    },
+    "Rattus norvegicus": {
+        "ensembl": "rattus_norvegicus",
+        "ncbi": "Rattus norvegicus",
+        "assembly": "mRatBN7.2",
+    },
+    "Danio rerio": {
+        "ensembl": "danio_rerio",
+        "ncbi": "Danio rerio",
+        "assembly": "GRCz11",
+    },
+    "Drosophila melanogaster": {
+        "ensembl": "drosophila_melanogaster",
+        "ncbi": "Drosophila melanogaster",
+        "assembly": "BDGP6.46",
+    },
+    "Caenorhabditis elegans": {
+        "ensembl": "caenorhabditis_elegans",
+        "ncbi": "Caenorhabditis elegans",
+        "assembly": "WBcel235",
+    },
+    "Saccharomyces cerevisiae": {
+        "ensembl": "saccharomyces_cerevisiae",
+        "ncbi": "Saccharomyces cerevisiae",
+        "assembly": "R64-1-1",
+    },
+    "Arabidopsis thaliana": {
+        "ensembl": "arabidopsis_thaliana",
+        "ncbi": "Arabidopsis thaliana",
+        "assembly": "TAIR10",
+    },
+}
+
+def getCommonSpecies():
+    """Return the scientific names of the predefined common species.
+
+    Returns
+    -------
+    list
+        Scientific species names available as common genomic resources.
+    """
+    return list(COMMON_SPECIES.keys())
+
+def getProviderSpeciesName(species, provider):
+    """Return the species identifier expected by a genomic data provider.
+
+    Parameters
+    ----------
+    species : str
+        Scientific species name, for example ``"Homo sapiens"``.
+    provider : str
+        Genomic data provider. Currently supported values are
+        ``"ensembl"`` and ``"ncbi"``.
+
+    Returns
+    -------
+    str
+        Species identifier expected by the selected provider.
+
+    Notes
+    -----
+    If the species is not included in ``COMMON_SPECIES``, a generic
+    conversion is used for Ensembl and the original scientific name is
+    preserved for NCBI. This allows custom species to be used without
+    requiring them to be predefined.
+    """
+    provider = provider.lower()
+    species = species.strip()
+
+    if provider not in ("ensembl", "ncbi"):
+        raise ValueError(
+            f"Unsupported genomic data provider: {provider}"
+        )
+
+    speciesInfo = COMMON_SPECIES.get(species)
+
+    if speciesInfo is not None:
+        return speciesInfo[provider]
+
+    if provider == "ensembl":
+        return species.lower().replace(" ", "_")
+
+    return species
+
+
+def parseCustomSpecies(speciesText):
+    """Parse a comma- or semicolon-separated list of custom species.
+
+    Parameters
+    ----------
+    speciesText : str
+        Species entered by the user, separated by commas or semicolons.
+        For example::
+
+            Homo sapiens;Mus musculus;Canis lupus familiaris
+
+    Returns
+    -------
+    list
+        Cleaned species names. Empty entries are ignored and duplicate
+        species are removed while preserving their original order.
+    """
+    if not speciesText:
+        return []
+
+    species = [
+        item.strip()
+        for item in re.split(r'[;,]', speciesText)
+        if item.strip()
+    ]
+
+    return list(dict.fromkeys(species))

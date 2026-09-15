@@ -36,7 +36,7 @@ from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.protocols import EMProtocol
 
-from pwchem.utils.utilsFasta import pairwiseAlign, parseFasta
+from pwchem.utils.sequence_utils import pairwiseAlign, parseFasta
 from pwchem.objects import SequenceROI, SetOfSequenceROIs, Sequence
 from pwchem.utils import *
 
