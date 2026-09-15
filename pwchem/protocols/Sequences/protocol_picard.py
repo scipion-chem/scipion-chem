@@ -94,6 +94,7 @@ class ProtPicard(EMProtocol):
 
     _label = 'Picard processing'
 
+    PICARD_COMMAND = 'picard {}'
     # -------------------------------------------------------
     # Parameters
     # -------------------------------------------------------
@@ -208,7 +209,7 @@ class ProtPicard(EMProtocol):
         )
 
         self._validateBamFile(outputBam)
-        self._appendCommand('picard {}'.format(args))
+        self._appendCommand(self.PICARD_COMMAND.format(args))
 
     def markDuplicatesStep(self):
         inputBam = self._getInputForMarkDuplicates()
@@ -246,7 +247,7 @@ class ProtPicard(EMProtocol):
                 .format(metricsFile)
             )
 
-        self._appendCommand('picard {}'.format(args))
+        self._appendCommand(self.PICARD_COMMAND.format(args))
 
     def reorderBamStep(self):
         inputAlignment = self.inputAlignment.get()
@@ -287,7 +288,7 @@ class ProtPicard(EMProtocol):
         )
 
         self._validateBamFile(outputBam)
-        self._appendCommand('picard {}'.format(args))
+        self._appendCommand(self.PICARD_COMMAND.format(args))
 
     # -------------------------------------------------------
     # Final BAM

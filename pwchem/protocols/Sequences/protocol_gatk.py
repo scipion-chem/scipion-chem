@@ -76,6 +76,8 @@ class ProtGATK(EMProtocol):
 
     _label = 'GATK processing'
 
+    GATK_COMMAND = 'gatk {}'
+
     # -------------------------------------------------------
     # Parameters
     # -------------------------------------------------------
@@ -234,11 +236,11 @@ class ProtGATK(EMProtocol):
         )
 
         self._validateBamFile(outputBam)
-        self._appendCommand('gatk {}'.format(args))
+        self._appendCommand(self.GATK_COMMAND.format(args))
 
     def baseRecalibratorStep(self):
         alignment = self.inputAlignment.get()
-        inputBam = self._getInputForBaseRecalibrator()
+        inputBam = self._getInputAfterSplit()
         referenceFasta = self._getReferenceFasta(alignment)
         knownSites = (self.knownSites.get() or '').strip()
         recalTable = self._getRecalibrationTable()
@@ -271,11 +273,11 @@ class ProtGATK(EMProtocol):
                 .format(recalTable)
             )
 
-        self._appendCommand('gatk {}'.format(args))
+        self._appendCommand(self.GATK_COMMAND.format(args))
 
     def applyBQSRStep(self):
         alignment = self.inputAlignment.get()
-        inputBam = self._getInputForApplyBQSR()
+        inputBam = self._getInputAfterSplit()
         referenceFasta = self._getReferenceFasta(alignment)
         recalTable = self._getRecalibrationTable()
         outputBam = self._getBqsrBam()
@@ -309,7 +311,7 @@ class ProtGATK(EMProtocol):
         )
 
         self._validateBamFile(outputBam)
-        self._appendCommand('gatk {}'.format(args))
+        self._appendCommand(self.GATK_COMMAND.format(args))
 
     # -------------------------------------------------------
     # Final BAM
@@ -366,14 +368,8 @@ class ProtGATK(EMProtocol):
     # -------------------------------------------------------
     # BAM flow
     # -------------------------------------------------------
-
-    def _getInputForBaseRecalibrator(self):
-        if self.splitNCigarReads.get():
-            return self._getSplitBam()
-
-        return self.inputAlignment.get().getFileName()
-
-    def _getInputForApplyBQSR(self):
+    def _getInputAfterSplit(self):
+        """Return the BAM produced by SplitNCigarReads, if enabled."""
         if self.splitNCigarReads.get():
             return self._getSplitBam()
 

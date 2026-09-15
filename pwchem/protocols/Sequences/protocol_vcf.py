@@ -29,6 +29,7 @@ import re
 import shutil
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import (
@@ -80,6 +81,10 @@ class ProtVCF(EMProtocol):
         '?content-type=application/json'
     )
 
+    ENSEMBL_FTP_BASE_URL = (
+        'https://ftp.ensembl.org/pub/'
+    )
+
     # ---------------------------------------------------------------------
     # NCBI dbSNP
     # ---------------------------------------------------------------------
@@ -87,6 +92,16 @@ class ProtVCF(EMProtocol):
     NCBI_DBSNP_VCF_URL = (
         'https://ftp.ncbi.nih.gov/snp/latest_release/VCF/'
     )
+
+    # ---------------------------------------------------------------------
+    # Allowed remote hosts
+    # ---------------------------------------------------------------------
+
+    ALLOWED_HOSTS = {
+        'rest.ensembl.org',
+        'ftp.ensembl.org',
+        'ftp.ncbi.nih.gov'
+    }
 
     _label = 'download VCF'
 
@@ -287,9 +302,9 @@ class ProtVCF(EMProtocol):
 
         self._writeVCFInfo(vcfInfo)
 
-    # ---------------------------------------------------------------------
+    # =====================================================================
     # Species
-    # ---------------------------------------------------------------------
+    # =====================================================================
 
     @staticmethod
     def _splitParameterValues(value):
@@ -309,7 +324,6 @@ class ProtVCF(EMProtocol):
             selected = self._splitParameterValues(
                 self.commonSpecies.get()
             )
-
         else:
             selected = parseCustomSpecies(
                 self.customSpecies.get()
@@ -322,9 +336,9 @@ class ProtVCF(EMProtocol):
 
         return selected
 
-    # ---------------------------------------------------------------------
+    # =====================================================================
     # VCF information
-    # ---------------------------------------------------------------------
+    # =====================================================================
 
     def _getSelectedVCFs(self):
 
@@ -794,14 +808,17 @@ class ProtVCF(EMProtocol):
             )
 
             baseUrl = (
-                'https://ftp.ensembl.org/pub/'
-                'release-{}/variation/vcf/{}/'
+                '{}release-{}/variation/vcf/{}/'
             ).format(
+                self.ENSEMBL_FTP_BASE_URL,
                 info['release'],
                 info['ensemblName']
             )
 
-            vcfUrl = baseUrl + filename
+            vcfUrl = (
+                baseUrl
+                + filename
+            )
 
             outputVCF = os.path.join(
                 outputDir,
@@ -814,11 +831,13 @@ class ProtVCF(EMProtocol):
             )
 
             indexUrl = (
-                vcfUrl + '.tbi'
+                vcfUrl
+                + '.tbi'
             )
 
             indexFile = (
-                outputVCF + '.tbi'
+                outputVCF
+                + '.tbi'
             )
 
             if self._remoteFileExists(
@@ -840,9 +859,9 @@ class ProtVCF(EMProtocol):
     ):
 
         url = (
-            'https://ftp.ensembl.org/pub/'
-            'release-{}/variation/vcf/{}/'
+            '{}release-{}/variation/vcf/{}/'
         ).format(
+            self.ENSEMBL_FTP_BASE_URL,
             info['release'],
             info['ensemblName']
         )
@@ -871,7 +890,6 @@ class ProtVCF(EMProtocol):
                 )
             )
 
-        # Prefer a whole-genome file containing all variants.
         preferred = [
             filename
             for filename in candidates
@@ -922,14 +940,13 @@ class ProtVCF(EMProtocol):
 
             accession = info['accession']
 
-            filename = (
-                '{}.gz'.format(
-                    accession
-                )
+            filename = '{}.gz'.format(
+                accession
             )
 
             indexName = (
-                filename + '.tbi'
+                filename
+                + '.tbi'
             )
 
             if filename not in availableFiles:
@@ -962,7 +979,8 @@ class ProtVCF(EMProtocol):
             )
 
             self._downloadFile(
-                self.NCBI_DBSNP_VCF_URL + filename,
+                self.NCBI_DBSNP_VCF_URL
+                + filename,
                 outputVCF
             )
 
@@ -971,16 +989,51 @@ class ProtVCF(EMProtocol):
             if indexName in availableFiles:
 
                 indexFile = (
-                    outputVCF + '.tbi'
+                    outputVCF
+                    + '.tbi'
                 )
 
                 self._downloadFile(
-                    self.NCBI_DBSNP_VCF_URL + indexName,
+                    self.NCBI_DBSNP_VCF_URL
+                    + indexName,
                     indexFile
                 )
 
             info['vcfFile'] = outputVCF
             info['indexFile'] = indexFile
+
+    # =====================================================================
+    # URL validation
+    # =====================================================================
+
+    @classmethod
+    def _validateUrl(
+        cls,
+        url
+    ):
+        """Validate that a URL points to an allowed HTTPS server."""
+
+        parsedUrl = urlparse(
+            url
+        )
+
+        if parsedUrl.scheme != 'https':
+            raise ValueError(
+                'Only HTTPS URLs are allowed: {}'
+                .format(
+                    url
+                )
+            )
+
+        if parsedUrl.hostname not in cls.ALLOWED_HOSTS:
+            raise ValueError(
+                'URL host is not allowed: {}'
+                .format(
+                    parsedUrl.hostname
+                )
+            )
+
+        return url
 
     # =====================================================================
     # HTTP utilities
@@ -1002,10 +1055,16 @@ class ProtVCF(EMProtocol):
             self.overwrite.get()
             and os.path.exists(outputFile)
         ):
-            os.remove(outputFile)
+            os.remove(
+                outputFile
+            )
+
+        safeUrl = self._validateUrl(
+            url
+        )
 
         request = urllib.request.Request(
-            url,
+            safeUrl,
             headers={
                 'User-Agent': 'Scipion-Chem'
             }
@@ -1033,18 +1092,24 @@ class ProtVCF(EMProtocol):
             TimeoutError
         ) as error:
 
-            if os.path.exists(outputFile):
-                os.remove(outputFile)
+            if os.path.exists(
+                outputFile
+            ):
+                os.remove(
+                    outputFile
+                )
 
             raise RuntimeError(
-                'Could not download VCF file from:\n{}\n\n{}'
-                .format(
-                    url,
+                'Could not download VCF file from:\n'
+                '{}\n\n{}'.format(
+                    safeUrl,
                     error
                 )
             )
 
-        if not os.path.exists(outputFile):
+        if not os.path.exists(
+            outputFile
+        ):
             raise RuntimeError(
                 'Downloaded VCF file was not created: {}'
                 .format(
@@ -1052,11 +1117,18 @@ class ProtVCF(EMProtocol):
                 )
             )
 
-    @staticmethod
-    def _readRemoteDirectory(url):
+    @classmethod
+    def _readRemoteDirectory(
+        cls,
+        url
+    ):
+
+        safeUrl = cls._validateUrl(
+            url
+        )
 
         request = urllib.request.Request(
-            url,
+            safeUrl,
             headers={
                 'User-Agent': 'Scipion-Chem'
             }
@@ -1079,18 +1151,25 @@ class ProtVCF(EMProtocol):
         ) as error:
 
             raise RuntimeError(
-                'Cannot access remote directory:\n{}\n\n{}'
-                .format(
-                    url,
+                'Cannot access remote directory:\n'
+                '{}\n\n{}'.format(
+                    safeUrl,
                     error
                 )
             )
 
-    @staticmethod
-    def _remoteFileExists(url):
+    @classmethod
+    def _remoteFileExists(
+        cls,
+        url
+    ):
+
+        safeUrl = cls._validateUrl(
+            url
+        )
 
         request = urllib.request.Request(
-            url,
+            safeUrl,
             method='HEAD',
             headers={
                 'User-Agent': 'Scipion-Chem'
@@ -1111,18 +1190,23 @@ class ProtVCF(EMProtocol):
         ):
             return False
 
-    # ---------------------------------------------------------------------
+    # =====================================================================
     # JSON utilities
-    # ---------------------------------------------------------------------
+    # =====================================================================
 
-    @staticmethod
+    @classmethod
     def _requestJson(
+        cls,
         url,
         description
     ):
 
+        safeUrl = cls._validateUrl(
+            url
+        )
+
         request = urllib.request.Request(
-            url,
+            safeUrl,
             headers={
                 'Accept': 'application/json',
                 'User-Agent': 'Scipion-Chem'
@@ -1157,14 +1241,20 @@ class ProtVCF(EMProtocol):
             )
 
     @staticmethod
-    def _readJsonLines(filename):
+    def _readJsonLines(
+        filename
+    ):
 
-        if not os.path.exists(filename):
+        if not os.path.exists(
+            filename
+        ):
             return []
 
         reports = []
 
-        with open(filename) as inputFile:
+        with open(
+            filename
+        ) as inputFile:
 
             for line in inputFile:
 
@@ -1172,13 +1262,17 @@ class ProtVCF(EMProtocol):
 
                 if line:
                     reports.append(
-                        json.loads(line)
+                        json.loads(
+                            line
+                        )
                     )
 
         return reports
 
     @staticmethod
-    def _safeName(value):
+    def _safeName(
+        value
+    ):
 
         return re.sub(
             r'[^A-Za-z0-9_.-]+',
@@ -1273,7 +1367,9 @@ class ProtVCF(EMProtocol):
                 True
             )
 
-            if info.get('indexFile'):
+            if info.get(
+                'indexFile'
+            ):
                 vcf.setIndexFile(
                     info['indexFile']
                 )
@@ -1297,135 +1393,122 @@ class ProtVCF(EMProtocol):
     # Validation
     # =====================================================================
 
-    def _validate(self):
+    def _validateEnsemblParams(self, species, errors):
+        assemblies = self._splitParameterValues(
+            self.assemblies.get()
+        )
 
+        releases = self._splitParameterValues(
+            self.releases.get()
+        )
+
+        self._validateParameterCount(
+            assemblies,
+            species,
+            'Assemblies',
+            errors
+        )
+
+        self._validateParameterCount(
+            releases,
+            species,
+            'Ensembl releases',
+            errors
+        )
+
+        for release in releases:
+            if release.lower() == 'latest':
+                continue
+
+            try:
+                releaseValue = int(release)
+
+                if releaseValue <= 0:
+                    raise ValueError
+
+            except ValueError:
+                errors.append(
+                    'Ensembl release must be "Latest" '
+                    'or a positive integer: {}'.format(
+                        release
+                    )
+                )
+
+    def _validateNcbiParams(self, species, errors):
+        assemblies = self._splitParameterValues(
+            self.ncbiAssemblies.get()
+        )
+
+        self._validateParameterCount(
+            assemblies,
+            species,
+            'NCBI assemblies',
+            errors
+        )
+
+        accessionPattern = re.compile(
+            r'^(GCF|GCA)_\d+\.\d+$',
+            re.IGNORECASE
+        )
+
+        for assembly in assemblies:
+            if assembly.lower() == 'latest':
+                continue
+
+            if not accessionPattern.match(assembly):
+                errors.append(
+                    'NCBI assembly must be "Latest" or '
+                    'a valid versioned GCF_/GCA_ accession: {}'
+                    .format(
+                        assembly
+                    )
+                )
+
+    @staticmethod
+    def _validateParameterCount(
+            values,
+            species,
+            parameterName,
+            errors
+    ):
+        if not values:
+            errors.append(
+                '{} cannot be empty.'.format(
+                    parameterName
+                )
+            )
+            return
+
+        if (
+                species
+                and len(values) not in (
+                1,
+                len(species)
+        )
+        ):
+            errors.append(
+                '{} must contain one value or '
+                'one value per species.'.format(
+                    parameterName
+                )
+            )
+
+    def _validate(self):
         errors = []
 
         try:
-
             species = self._getSelectedSpecies()
-
         except ValueError as error:
-
-            errors.append(
-                str(error)
-            )
-
+            errors.append(str(error))
             species = []
 
         if self.source.get() == self.SOURCE_ENSEMBL:
-
-            assemblies = self._splitParameterValues(
-                self.assemblies.get()
-            )
-
-            releases = self._splitParameterValues(
-                self.releases.get()
-            )
-
-            if not assemblies:
-                errors.append(
-                    'Assemblies cannot be empty.'
-                )
-
-            elif (
-                species
-                and len(assemblies) not in (
-                    1,
-                    len(species)
-                )
-            ):
-                errors.append(
-                    'Assemblies must contain one value or '
-                    'one value per species.'
-                )
-
-            if not releases:
-                errors.append(
-                    'Ensembl releases cannot be empty.'
-                )
-
-            elif (
-                species
-                and len(releases) not in (
-                    1,
-                    len(species)
-                )
-            ):
-                errors.append(
-                    'Ensembl releases must contain one value '
-                    'or one value per species.'
-                )
-
-            for release in releases:
-
-                if release.lower() == 'latest':
-                    continue
-
-                try:
-                    releaseValue = int(
-                        release
-                    )
-
-                    if releaseValue <= 0:
-                        raise ValueError
-
-                except ValueError:
-                    errors.append(
-                        'Ensembl release must be "Latest" '
-                        'or a positive integer: {}'
-                        .format(
-                            release
-                        )
-                    )
-
+            self._validateEnsemblParams(species, errors)
         else:
-
-            assemblies = self._splitParameterValues(
-                self.ncbiAssemblies.get()
-            )
-
-            if not assemblies:
-
-                errors.append(
-                    'NCBI assemblies cannot be empty.'
-                )
-
-            elif (
-                species
-                and len(assemblies) not in (
-                    1,
-                    len(species)
-                )
-            ):
-
-                errors.append(
-                    'NCBI assemblies must contain one value '
-                    'or one value per species.'
-                )
-
-            accessionPattern = re.compile(
-                r'^(GCF|GCA)_\d+\.\d+$',
-                re.IGNORECASE
-            )
-
-            for assembly in assemblies:
-
-                if assembly.lower() == 'latest':
-                    continue
-
-                if not accessionPattern.match(
-                    assembly
-                ):
-                    errors.append(
-                        'NCBI assembly must be "Latest" or '
-                        'a valid versioned GCF_/GCA_ accession: {}'
-                        .format(
-                            assembly
-                        )
-                    )
+            self._validateNcbiParams(species, errors)
 
         return errors
+
 
     # =====================================================================
     # Summary
