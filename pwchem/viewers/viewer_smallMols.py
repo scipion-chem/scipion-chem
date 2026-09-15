@@ -502,6 +502,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       if not chimeraInstalled():
         print(CHIMERA_ERROR)
         return [self.warnMessage(CHIMERA_ERROR, 'Chimera not found')]
+
       # addTarget=False: the receptor is inside each complex already, and adding
       # the original one on top would double every atom of the protein.
       chimScript = self.writeChimeraScript(covDic, f'{ligandLabel}_covalent',
