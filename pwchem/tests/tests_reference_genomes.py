@@ -122,7 +122,7 @@ class TestReferenceGenomes(BaseTest):
             ProtReferenceGenomes,
             source=ProtReferenceGenomes.SOURCE_ENSEMBL,
             genomeSelection=ProtReferenceGenomes.GENOME_COMMON,
-            commonGenomes='saccharomyces_cerevisiae',
+            commonSpecies='Saccharomyces cerevisiae',
             assemblies='Latest',
             releases='Latest',
             downloadAnnotation=True,
@@ -186,7 +186,7 @@ class TestReferenceGenomes(BaseTest):
             ProtReferenceGenomes,
             source=ProtReferenceGenomes.SOURCE_NCBI,
             genomeSelection=ProtReferenceGenomes.GENOME_COMMON,
-            commonGenomes='homo_sapiens',
+            commonSpecies='Homo sapiens',
             ncbiAssemblies='Latest',
             downloadAnnotation=True,
             overwrite=False
@@ -255,9 +255,9 @@ class TestReferenceGenomes(BaseTest):
             ProtReferenceGenomes,
             source=ProtReferenceGenomes.SOURCE_ENSEMBL,
             genomeSelection=ProtReferenceGenomes.GENOME_COMMON,
-            commonGenomes=(
-                'saccharomyces_cerevisiae;'
-                'caenorhabditis_elegans'
+            commonSpecies=(
+                'Saccharomyces cerevisiae;'
+                'Caenorhabditis elegans'
             ),
             assemblies='Latest',
             releases='Latest',
@@ -334,7 +334,7 @@ class TestReferenceGenomes(BaseTest):
             ProtReferenceGenomes,
             source=ProtReferenceGenomes.SOURCE_NCBI,
             genomeSelection=ProtReferenceGenomes.GENOME_CUSTOM,
-            customGenomes='Homo sapiens;Mus musculus',
+            customSpecies='Homo sapiens;Mus musculus',
             ncbiAssemblies='Latest',
             downloadAnnotation=False,
             overwrite=False
