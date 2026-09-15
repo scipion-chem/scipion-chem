@@ -141,12 +141,6 @@ class SequenceGeneralViewer(BaseInteractionViewer):
             label='Display localization probabilities: ',
             help='Display the DeepLoc predicted localization probabilities.'
         )
-        form.addParam(
-            'viewResidueImportance',
-            params.LabelParam,
-            label='Display residue importance: ',
-            help='Display the DeepLoc residue importance over the sequence.'
-        )
 
   def _hasDeepLocResiduePredictions(self):
       seqSet = self.getOutSequences()
@@ -185,7 +179,6 @@ class SequenceGeneralViewer(BaseInteractionViewer):
 
       if self._hasDeepLocResiduePredictions():
           visDict['viewLocalization'] = self._showLocalization
-          visDict['viewResidueImportance'] = self._showResidueImportance
 
       return visDict
 
@@ -227,32 +220,6 @@ class SequenceGeneralViewer(BaseInteractionViewer):
           )
 
       plotLocalizationHistogram(localizationPerc)
-
-  def _showResidueImportance(self, paramName=None):
-      seqSet = self.getOutSequences()
-
-      if isinstance(seqSet, SequenceChem):
-          sequences = [seqSet]
-      else:
-          sequences = seqSet.iterItems()
-
-      sequenceData = []
-
-      for sequence in sequences:
-          attrDic = sequence.getAttributesDic()
-
-          for attrName, values in attrDic.items():
-              if attrName.startswith('DeepLoc_'):
-                  sequenceData.append({
-                      'name': sequence.getSeqName(),
-                      'attrName': attrName,
-                      'values': list(map(float, values))
-                  })
-
-      if sequenceData:
-          SequenceAttributeViewer(sequenceData)
-
-          plt.show(block=False)
 
   def _viewTable(self, e=None):
     seqSet = self.getOutSequences()

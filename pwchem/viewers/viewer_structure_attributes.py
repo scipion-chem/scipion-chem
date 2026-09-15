@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 from pyworkflow.protocol import params
 from pwem.viewers import ChimeraAttributeViewer
 from pwchem.protocols import ProtCalculateSASA, ProtSeqCalculateConservation
+from deeploc.protocols import ProtDeepLoc
 from pwchem.viewers.viewers_sequences import SequenceAliView
 
 def plotSequenceAttribute(attrValues, attrName='Attribute', thres=None):
@@ -99,48 +100,220 @@ class ConservationViewer(ChimeraAttributeViewer):
 
 
 class SASAStructureViewer(ChimeraAttributeViewer):
-    """ Viewer for attribute SASA of an AtomStruct.
-      Includes structure visualization in chimera and in histograms or accesibility sequence regions"""
-    _targets = [ProtCalculateSASA]
-    _label = 'Accesibility viewer'
+    """Viewer for residue attributes stored in an AtomStruct.
+    Includes structure visualization in ChimeraX and attribute
+    visualization as histograms or accessibility sequence regions.
+    """
+
+    _targets = [ProtCalculateSASA, ProtDeepLoc]
+    _label = 'Accessibility viewer'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def _defineParams(self, form):
         if hasattr(self.protocol, 'outputSequence'):
-            form.addSection(label='Visualization of sequence SASA')
-            form.addParam('viewSequence', params.LabelParam, label='View sequence: ',
-                        help='View output sequence')
-            form.addParam('viewSASA', params.LabelParam,
-                        label='Display SASA over sequence: ',
-                        help='Display a graph witht the values of the selected attribute over the sequence.')
+            if isinstance(self.protocol, ProtDeepLoc):
+                sectionLabel = 'Visualization of DeepLoc residue importance'
+                sequenceLabel = 'View sequence: '
+                attributeLabel = 'Display DeepLoc residue importance: '
+            else:
+                sectionLabel = 'Visualization of sequence SASA'
+                sequenceLabel = 'View sequence: '
+                attributeLabel = 'Display SASA over sequence: '
+
+            form.addSection(label=sectionLabel)
+
+            form.addParam(
+                'viewSequence',
+                params.LabelParam,
+                label=sequenceLabel,
+                help='View output sequence'
+            )
+
+            form.addParam(
+                'viewSequenceAttribute',
+                params.LabelParam,
+                label=attributeLabel,
+                help='Display the residue attribute over the sequence.'
+            )
+        if hasattr(self.protocol, 'outputSequences'):
+            if isinstance(self.protocol, ProtDeepLoc):
+                sectionLabel = 'Visualization of DeepLoc residue importance'
+            else:
+                sectionLabel = 'Visualization of sequence SASA'
+
+            form.addSection(label=sectionLabel)
+
+            form.addParam(
+                'viewSequences',
+                params.LabelParam,
+                label='View all sequences: ',
+                help='View all output sequences.'
+            )
+            form.addParam(
+                'viewSequencesAttribute',
+                params.LabelParam,
+                label='Display residue attribute for all sequences: ',
+                help='Display the residue attribute for all output sequences.'
+            )
 
         if hasattr(self.protocol, 'outputAtomStruct'):
             super()._defineParams(form)
-            # Overwrite defaults
             from pwem.wizards.wizard import ColorScaleWizardBase
             group = form.addGroup('Color settings')
-            ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
-                                                  defaultColorMap='RdBu')
+
+            if isinstance(self.protocol, ProtDeepLoc):
+                lowest = 0
+                highest = 1
+            else:
+                lowest = 0
+                highest = 200
+
+            ColorScaleWizardBase.defineColorScaleParams(
+                group,
+                defaultLowest=lowest,
+                defaultHighest=highest,
+                defaultIntervals=21,
+                defaultColorMap='RdBu'
+            )
+        if hasattr(self.protocol, 'outputAtomStructs'): #todo
+
+            form.addSection(
+                label='Visualization of structure set'
+            )
+
+            form.addParam(
+                'viewAtomStructs',
+                params.LabelParam,
+                label='View all structures: ',
+                help='View all output structures in ChimeraX.'
+            )
 
     def _getVisualizeDict(self):
         visDic = {}
         if hasattr(self.protocol, 'outputSequence'):
-            visDic = {'viewSequence': self._showSequenceAttrs, 'viewSASA': self._showSASA}
+
+            visDic.update({
+                'viewSequence':
+                    self._showSequenceAttrs,
+
+                'viewSequenceAttribute':
+                    self._showSequenceAttribute
+            })
+        if hasattr(self.protocol, 'outputSequences'):
+
+            visDic.update({
+                'viewSequences':
+                    self._showSequences,
+
+                'viewSequencesAttribute':
+                    self._showSequencesAttribute
+            })
         if hasattr(self.protocol, 'outputAtomStruct'):
-            visDic.update(super()._getVisualizeDict())
+
+            visDic.update(
+                super()._getVisualizeDict()
+            )
+        if hasattr(self.protocol, 'outputAtomStructs'):
+
+            visDic.update({
+                'viewAtomStructs':
+                    self._showAtomStructs
+            })
+
         return visDic
 
     def _showSequenceAttrs(self, paramName=None):
-        obj = self.protocol.outputSequence
-        outPath = os.path.abspath(self.protocol._getExtraPath('viewSequences_{}.fasta'.
-                                                              format(obj.getId())))
-        obj.exportToFile(outPath)
-        return [SequenceAliView([outPath], cwd=self.protocol._getExtraPath())]
 
-    def _showSASA(self, paramName=None):
+        obj = self.protocol.outputSequence
+
+        outPath = os.path.abspath(
+            self.protocol._getExtraPath(
+                'viewSequences_{}.fasta'.format(obj.getId())
+            )
+        )
+
+        obj.exportToFile(outPath)
+
+        return [
+            SequenceAliView(
+                [outPath],
+                cwd=self.protocol._getExtraPath()
+            )
+        ]
+
+    def _showSequenceAttribute(self, paramName=None):
+
         prot = self.protocol
+        attrName = prot._ATTRNAME
+
         attrDic = prot.outputSequence.getAttributesDic()
-        plotSequenceAttribute(attrDic['SASA'], attrName='SASA')
+
+        plotSequenceAttribute(
+            attrDic[attrName],
+            attrName=attrName
+        )
+
+        # ================================================================
+        # Set of Sequences
+        # ================================================================
+
+    def _showSequences(self, paramName=None):
+
+        outPath = os.path.abspath(
+            self.protocol._getExtraPath('viewSequences.fasta')
+        )
+
+        if os.path.exists(outPath):
+            os.remove(outPath)
+
+        self.protocol.outputSequences.exportToFile(outPath)
+
+        return [
+            SequenceAliView(
+                [outPath],
+                cwd=self.protocol._getExtraPath()
+            )
+        ]
+
+    def _showSequencesAttribute(self, paramName=None):
+
+        attrName = self.protocol._ATTRNAME
+
+        for sequence in self.protocol.outputSequences:
+            attrDic = sequence.getAttributesDic()
+
+            if attrName not in attrDic:
+                continue
+
+            plotSequenceAttribute(
+                attrDic[attrName],
+                attrName='{} - {}'.format(
+                    sequence.getSeqName(),
+                    attrName
+                )
+            )
+
+        # ================================================================
+        # Set of AtomStructs
+        # ================================================================
+
+    def _showAtomStructs(self, paramName=None):
+
+        modelFiles = []
+
+        for atomStruct in self.protocol.outputAtomStructs:
+            modelFiles.append(
+                os.path.abspath(
+                    atomStruct.getFileName()
+                )
+            )
+
+        return [
+            ChimeraView(
+                modelFiles,
+                cwd=self.protocol._getExtraPath()
+            )
+        ]
 
