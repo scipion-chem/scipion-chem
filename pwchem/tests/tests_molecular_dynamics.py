@@ -95,7 +95,6 @@ class TestTrajClustering(TestImportMDSystems):
                      cwd=protClustFromSet.getWorkingDir())
 
 class TestIDWreconstruct(TestTrajClustering):
-
     @classmethod
     def _runImportPDB(cls):
         protImportPDB = cls.newProtocol(
@@ -116,6 +115,8 @@ class TestIDWreconstruct(TestTrajClustering):
 
     def test_idw(self):
         self._runImportSystem()
+        self._runImportPDB()
+        
         protClust = self._runClustering()
         self._runIDWreconstruct(protClust.outputAtomStructs)
 

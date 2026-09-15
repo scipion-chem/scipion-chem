@@ -516,7 +516,7 @@ class ProtocolInverseDistanceWeighting(EMProtocol):
             )
 
         displacements = np.asarray(dstCa, dtype=np.float64) - np.asarray(srcCa, dtype=np.float64)
-        interpolated = idw(allAtoms, displacements, R=r, k=k, p=power)
+        interpolated = idw(allAtoms, displacements, r=r, k=k, p=power)
         return allAtoms + interpolated
 
     def _extractCaCoords(self, structure):
