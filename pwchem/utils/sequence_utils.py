@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os, subprocess, gzip
+import os, subprocess, gzip, re
 from Bio import SeqIO
 from pyworkflow.utils.path import createLink
 from pwem.objects.data import Sequence
@@ -288,3 +288,129 @@ def runFastqc(protocol, fastqFiles):
         htmlFiles.append(htmlFile)
 
     return htmlFiles
+
+# ============================================================================
+# Species utilities
+# ============================================================================
+COMMON_SPECIES = {
+    "Homo sapiens": {
+        "ensembl": "homo_sapiens",
+        "ncbi": "Homo sapiens",
+        "assembly": "GRCh38",
+    },
+    "Mus musculus": {
+        "ensembl": "mus_musculus",
+        "ncbi": "Mus musculus",
+        "assembly": "GRCm39",
+    },
+    "Rattus norvegicus": {
+        "ensembl": "rattus_norvegicus",
+        "ncbi": "Rattus norvegicus",
+        "assembly": "mRatBN7.2",
+    },
+    "Danio rerio": {
+        "ensembl": "danio_rerio",
+        "ncbi": "Danio rerio",
+        "assembly": "GRCz11",
+    },
+    "Drosophila melanogaster": {
+        "ensembl": "drosophila_melanogaster",
+        "ncbi": "Drosophila melanogaster",
+        "assembly": "BDGP6.46",
+    },
+    "Caenorhabditis elegans": {
+        "ensembl": "caenorhabditis_elegans",
+        "ncbi": "Caenorhabditis elegans",
+        "assembly": "WBcel235",
+    },
+    "Saccharomyces cerevisiae": {
+        "ensembl": "saccharomyces_cerevisiae",
+        "ncbi": "Saccharomyces cerevisiae",
+        "assembly": "R64-1-1",
+    },
+    "Arabidopsis thaliana": {
+        "ensembl": "arabidopsis_thaliana",
+        "ncbi": "Arabidopsis thaliana",
+        "assembly": "TAIR10",
+    },
+}
+
+def getCommonSpecies():
+    """Return the scientific names of the predefined common species.
+
+    Returns
+    -------
+    list
+        Scientific species names available as common genomic resources.
+    """
+    return list(COMMON_SPECIES.keys())
+
+def getProviderSpeciesName(species, provider):
+    """Return the species identifier expected by a genomic data provider.
+
+    Parameters
+    ----------
+    species : str
+        Scientific species name, for example ``"Homo sapiens"``.
+    provider : str
+        Genomic data provider. Currently supported values are
+        ``"ensembl"`` and ``"ncbi"``.
+
+    Returns
+    -------
+    str
+        Species identifier expected by the selected provider.
+
+    Notes
+    -----
+    If the species is not included in ``COMMON_SPECIES``, a generic
+    conversion is used for Ensembl and the original scientific name is
+    preserved for NCBI. This allows custom species to be used without
+    requiring them to be predefined.
+    """
+    provider = provider.lower()
+    species = species.strip()
+
+    if provider not in ("ensembl", "ncbi"):
+        raise ValueError(
+            f"Unsupported genomic data provider: {provider}"
+        )
+
+    speciesInfo = COMMON_SPECIES.get(species)
+
+    if speciesInfo is not None:
+        return speciesInfo[provider]
+
+    if provider == "ensembl":
+        return species.lower().replace(" ", "_")
+
+    return species
+
+
+def parseCustomSpecies(speciesText):
+    """Parse a comma- or semicolon-separated list of custom species.
+
+    Parameters
+    ----------
+    speciesText : str
+        Species entered by the user, separated by commas or semicolons.
+        For example::
+
+            Homo sapiens;Mus musculus;Canis lupus familiaris
+
+    Returns
+    -------
+    list
+        Cleaned species names. Empty entries are ignored and duplicate
+        species are removed while preserving their original order.
+    """
+    if not speciesText:
+        return []
+
+    species = [
+        item.strip()
+        for item in re.split(r'[;,]', speciesText)
+        if item.strip()
+    ]
+
+    return list(dict.fromkeys(species))

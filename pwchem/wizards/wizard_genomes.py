@@ -30,57 +30,57 @@ from pyworkflow.gui import ListTreeProviderString, dialog
 from pwem.wizards import VariableWizard
 
 from pwchem.protocols.Sequences.protocol_reference_genomes import ProtReferenceGenomes
+from pwchem.protocols.Sequences.protocol_vcf import ProtVCF
 from pwchem.protocols.Sequences.protocol_rnaseq_align import ProtRNASeqAlignment
+from pwchem.utils.sequence_utils import getCommonSpecies
 
 
-
-COMMON_GENOMES = {
-    "Homo sapiens": "homo_sapiens",
-    "Mus musculus": "mus_musculus",
-    "Rattus norvegicus": "rattus_norvegicus",
-    "Danio rerio": "danio_rerio",
-    "Drosophila melanogaster": "drosophila_melanogaster",
-    "Caenorhabditis elegans": "caenorhabditis_elegans",
-    "Saccharomyces cerevisiae": "saccharomyces_cerevisiae",
-    "Arabidopsis thaliana": "arabidopsis_thaliana"
-}
-
-
-class SelectGenomeWizard(VariableWizard):
-    """Wizard to select one or more common genomes."""
+class SelectCommonSpeciesWizard(VariableWizard):
+    """Wizard to select one or more common species."""
 
     _targets, _inputs, _outputs = [], {}, {}
 
     def show(self, form, *params):
-        finalList = [String(name) for name in COMMON_GENOMES]
+        commonSpecies = getCommonSpecies()
+
+        finalList = [
+            String(species)
+            for species in commonSpecies
+        ]
 
         provider = ListTreeProviderString(finalList)
 
         dlg = dialog.ListDialog(
             form.root,
-            "Common genomes",
+            "Common species",
             provider,
-            "Select one or more genomes",
+            "Select one or more species",
             selectmode="extended"
         )
 
         if dlg.resultYes():
             selected = [
-                COMMON_GENOMES[obj.get()]
+                obj.get()
                 for obj in dlg.values
             ]
 
             form.setVar(
-                'commonGenomes',
+                'commonSpecies',
                 ';'.join(selected)
             )
 
 
-SelectGenomeWizard().addTarget(
+SelectCommonSpeciesWizard().addTarget(
     protocol=ProtReferenceGenomes,
-    targets=['commonGenomes'],
+    targets=['commonSpecies'],
     inputs=[],
-    outputs=['commonGenomes']
+    outputs=['commonSpecies']
+)
+SelectCommonSpeciesWizard().addTarget(
+    protocol=ProtVCF,
+    targets=['commonSpecies'],
+    inputs=[],
+    outputs=['commonSpecies']
 )
 
 class SelectGenomeFromSetWizard(VariableWizard):

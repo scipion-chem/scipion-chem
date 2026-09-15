@@ -23,17 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
 import json
 import gzip
 import os
 import re
-import shlex
 import shutil
 import urllib.error
 import urllib.request
 import zipfile
-from urllib.parse import urlparse, unquote
 
+from pwchem.utils.sequence_utils import COMMON_SPECIES,getProviderSpeciesName,parseCustomSpecies
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam,EnumParam,StringParam
 from pwchem import Plugin
@@ -82,6 +82,9 @@ class ProtReferenceGenomes(EMProtocol):
            Both the assembly and Ensembl release can be specified explicitly
            or resolved automatically using ``Latest``.
 
+           Species are provided using their scientific names. The corresponding
+           Ensembl species identifier is resolved automatically by the protocol.
+
        NCBI
            Reference genomes are downloaded using the NCBI Datasets command
            line interface.
@@ -102,6 +105,9 @@ class ProtReferenceGenomes(EMProtocol):
 
            The resolved accession is then used to download the genome data
            package.
+
+           Species are provided using their scientific names and used directly
+           as NCBI taxon queries.
 
 
        ---------------------------------------------------------------------
@@ -125,19 +131,25 @@ class ProtReferenceGenomes(EMProtocol):
            - Saccharomyces cerevisiae
            - Arabidopsis thaliana
 
+           Common species information is shared across genomic protocols and
+           includes provider-specific identifiers and the default reference
+           assembly when available.
+
        Custom genomes
-           Enter one or more species manually.
+           Enter one or more species manually using their scientific names.
 
            Multiple species can be separated by semicolons or commas.
 
-           For Ensembl, species must be provided using Ensembl identifiers,
-           for example::
-
-               bos_taurus;oryza_sativa
-
-           For NCBI, scientific names can be provided, for example::
+           For example::
 
                Bos taurus;Oryza sativa
+
+           or::
+
+               Bos taurus,Oryza sativa
+
+           Provider-specific species identifiers are resolved automatically
+           for Ensembl and NCBI.
 
            Duplicate species entries are automatically removed while
            preserving their original order.
@@ -313,17 +325,25 @@ class ProtReferenceGenomes(EMProtocol):
            - Common genomes
            - Custom genomes
 
-       commonGenomes : str
-           One or more genomes selected from the predefined common genome
+       commonSpecies: str
+           One or more species selected from the predefined common species
            list.
 
-           Only available when ``genomeSelection`` is set to
-           ``Common genomes``.
+           The selected values are scientific species names.
 
-       customGenomes : str
-           One or more manually specified species.
+           Only available when ``genomeSelection`` is set to
+           ``Common species`.
+
+       customSpecies : str
+           One or more manually specified species using their scientific
+           names.
 
            Multiple species can be separated by semicolons or commas.
+
+           Examples::
+
+               Bos taurus
+               Bos taurus;Oryza sativa
 
            Only available when ``genomeSelection`` is set to
            ``Custom genomes``.
@@ -405,8 +425,10 @@ class ProtReferenceGenomes(EMProtocol):
 
        1. Resolve genomes
 
-          The selected species, assemblies and releases are interpreted and
-          converted into source-specific genome metadata.
+          The selected scientific species names, assemblies and releases are
+          interpreted and converted into source-specific genome metadata.
+
+          Provider-specific species identifiers are resolved automatically.
 
           Each selected species is represented independently.
 
@@ -438,8 +460,6 @@ class ProtReferenceGenomes(EMProtocol):
 
        - Internet access to the Ensembl REST API.
        - Internet access to the Ensembl FTP server.
-       - curl.
-       - gunzip.
 
        NCBI downloads require:
 
@@ -456,7 +476,12 @@ class ProtReferenceGenomes(EMProtocol):
 
        - Multiple genomes can be downloaded in a single protocol execution.
 
+       - Species are specified using scientific names.
+
        - Species values can be separated by semicolons or commas.
+
+       - Provider-specific species identifiers are resolved automatically
+         for Ensembl and NCBI.
 
        - Duplicate species are removed while preserving their original order.
 
@@ -470,9 +495,6 @@ class ProtReferenceGenomes(EMProtocol):
          resolved independently for each selected taxon.
 
        - NCBI assembly accessions must include their version number.
-
-       - Ensembl species identifiers use underscores, whereas NCBI custom
-         species are specified using scientific names.
 
        - Genome information is persisted internally in ``genomes.json``
          between protocol steps.
@@ -511,45 +533,6 @@ class ProtReferenceGenomes(EMProtocol):
         'https://rest.ensembl.org/info/assembly/{}'
         '?content-type=application/json'
     )
-
-    # ---------------------------------------------------------------------
-    # Common genomes
-    # ---------------------------------------------------------------------
-
-    COMMON_GENOMES = {
-        'homo_sapiens': {
-            'scientificName': 'Homo sapiens',
-            'assembly': 'GRCh38'
-        },
-        'mus_musculus': {
-            'scientificName': 'Mus musculus',
-            'assembly': 'GRCm39'
-        },
-        'rattus_norvegicus': {
-            'scientificName': 'Rattus norvegicus',
-            'assembly': 'mRatBN7.2'
-        },
-        'danio_rerio': {
-            'scientificName': 'Danio rerio',
-            'assembly': 'GRCz11'
-        },
-        'drosophila_melanogaster': {
-            'scientificName': 'Drosophila melanogaster',
-            'assembly': 'BDGP6.46'
-        },
-        'caenorhabditis_elegans': {
-            'scientificName': 'Caenorhabditis elegans',
-            'assembly': 'WBcel235'
-        },
-        'saccharomyces_cerevisiae': {
-            'scientificName': 'Saccharomyces cerevisiae',
-            'assembly': 'R64-1-1'
-        },
-        'arabidopsis_thaliana': {
-            'scientificName': 'Arabidopsis thaliana',
-            'assembly': 'TAIR10'
-        }
-    }
 
     _label = 'reference genomes'
 
@@ -602,27 +585,27 @@ class ProtReferenceGenomes(EMProtocol):
         )
 
         form.addParam(
-            'commonGenomes',
+            'commonSpecies',
             StringParam,
             default='',
             condition='genomeSelection == %d' % self.GENOME_COMMON,
-            label='Common genomes: ',
+            label='Common species: ',
             help=(
-                'Select one or more common genomes using the wizard.'
+                'Select one or more common species using the wizard.'
             )
         )
 
         form.addParam(
-            'customGenomes',
+            'customSpecies',
             StringParam,
             default='',
             condition='genomeSelection == %d' % self.GENOME_CUSTOM,
             label='Species: ',
             help=(
-                'Enter one or more species separated by semicolons.\n\n'
-                'For Ensembl use species identifiers:\n'
-                'bos_taurus;oryza_sativa\n\n'
-                'For NCBI use scientific names:\n'
+                'Enter one or more scientific species names separated '
+                'by semicolons.\n\n'
+                'Examples:\n'
+                'Bos taurus\n'
                 'Bos taurus;Oryza sativa'
             )
         )
@@ -755,28 +738,18 @@ class ProtReferenceGenomes(EMProtocol):
     def _getSelectedSpecies(self):
         """Return selected species according to the selection mode."""
 
-        value = (
-            self.commonGenomes.get()
-            if self.genomeSelection.get() == self.GENOME_COMMON
-            else self.customGenomes.get()
-        )
-
-        selected = self._splitParameterValues(value)
-
-        if (
-                self.genomeSelection.get() == self.GENOME_COMMON
-                or self.source.get() == self.SOURCE_ENSEMBL
-        ):
-            selected = [
-                item.lower()
-                for item in selected
-            ]
-
-        selected = list(dict.fromkeys(selected))
+        if self.genomeSelection.get() == self.GENOME_COMMON:
+            selected = self._splitParameterValues(
+                self.commonSpecies.get()
+            )
+        else:
+            selected = parseCustomSpecies(
+                self.customSpecies.get()
+            )
 
         if not selected:
             raise ValueError(
-                'At least one genome must be selected.'
+                'At least one species must be selected.'
             )
 
         return selected
@@ -817,24 +790,26 @@ class ProtReferenceGenomes(EMProtocol):
                 species,
                 assemblies,
                 releases):
+            scientificName = speciesName.strip()
 
-            if speciesName in self.COMMON_GENOMES:
-                info = self.COMMON_GENOMES[speciesName]
+            ensemblName = getProviderSpeciesName(
+                scientificName,
+                'ensembl'
+            )
 
-                scientificName = info['scientificName']
-                defaultAssembly = info['assembly']
+            speciesInfo = COMMON_SPECIES.get(
+                scientificName
+            )
 
-            else:
-                scientificName = (
-                    self._speciesIdentifierToScientificName(
-                        speciesName
-                    )
-                )
-                defaultAssembly = None
+            defaultAssembly = (
+                speciesInfo.get('assembly')
+                if speciesInfo
+                else None
+            )
 
             genomes.append({
                 'scientificName': scientificName,
-                'ensemblName': speciesName,
+                'ensemblName': ensemblName,
                 'defaultAssembly': defaultAssembly,
                 'assembly': assembly,
                 'release': release,
@@ -862,21 +837,12 @@ class ProtReferenceGenomes(EMProtocol):
                 species,
                 assemblies):
 
-            commonKey = (
-                speciesName
-                .strip()
-                .lower()
-                .replace(' ', '_')
-            )
+            scientificName = speciesName.strip()
 
-            if commonKey in self.COMMON_GENOMES:
-                scientificName = (
-                    self.COMMON_GENOMES[
-                        commonKey
-                    ]['scientificName']
-                )
-            else:
-                scientificName = speciesName.strip()
+            ncbiTaxon = getProviderSpeciesName(
+                scientificName,
+                'ncbi'
+            )
 
             if assemblyRequest.lower() == 'latest':
                 accession = None
@@ -885,7 +851,7 @@ class ProtReferenceGenomes(EMProtocol):
 
             genomes.append({
                 'scientificName': scientificName,
-                'ncbiTaxon': scientificName,
+                'ncbiTaxon': ncbiTaxon,
                 'assemblyRequest': assemblyRequest,
                 'accession': accession,
                 'assembly': 'Latest',
@@ -1048,7 +1014,7 @@ class ProtReferenceGenomes(EMProtocol):
         try:
             with urllib.request.urlopen(
                     request,
-                    timeout=30) as response:
+                    timeout=120) as response:
 
                 html = response.read().decode()
 
@@ -1777,7 +1743,7 @@ class ProtReferenceGenomes(EMProtocol):
         try:
             with urllib.request.urlopen(
                     request,
-                    timeout=30) as response:
+                    timeout=120) as response:
                 with open(
                         compressedFile,
                         'wb') as output:
@@ -1843,19 +1809,6 @@ class ProtReferenceGenomes(EMProtocol):
         )
 
     @staticmethod
-    def _speciesIdentifierToScientificName(species):
-
-        species = species.replace(
-            '_',
-            ' '
-        )
-
-        return ' '.join(
-            word.capitalize()
-            for word in species.split()
-        )
-
-    @staticmethod
     def _requestJson(url, description):
 
         request = urllib.request.Request(
@@ -1869,7 +1822,7 @@ class ProtReferenceGenomes(EMProtocol):
         try:
             with urllib.request.urlopen(
                     request,
-                    timeout=30) as response:
+                    timeout=120) as response:
 
                 return json.loads(
                     response.read().decode('utf-8')
@@ -2075,15 +2028,6 @@ class ProtReferenceGenomes(EMProtocol):
                 'Ensembl release',
                 errors
             )
-
-        for species in genomes:
-
-            if ' ' in species:
-
-                errors.append(
-                    'Ensembl species identifiers must use '
-                    'underscores: {}'.format(species)
-                )
 
     # ---------------------------------------------------------------------
     # NCBI validation

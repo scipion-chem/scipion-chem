@@ -313,22 +313,10 @@ class Plugin(pwem.Plugin):
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "cd scorchModels && "
-            f'wget -S -O SCORCH2_models.xz "{modelUrl}" && '
-            "echo '=== Downloaded file ===' && "
-            "ls -lh SCORCH2_models.xz && "
-            "file SCORCH2_models.xz && "
-            "echo '=== Testing xz ===' && "
+            f'wget -O SCORCH2_models.xz "{modelUrl}" && '
             "xz -t SCORCH2_models.xz && "
-            "echo '=== Decompressing ===' && "
             "xz -d SCORCH2_models.xz && "
-            "echo '=== Tar file ===' && "
-            "ls -lh SCORCH2_models && "
-            "echo '=== Tar contents ===' && "
-            "tar -tf SCORCH2_models | head -20 && "
-            "echo '=== Extracting ===' && "
             "tar -xf SCORCH2_models && "
-            "echo '=== Extracted model files ===' && "
-            "find models -maxdepth 1 -type f -printf '%f\\n' | sort && "
             "[ -f models/sc2_ps.xgb ] && "
             "[ -f models/sc2_pb.xgb ] && "
             "[ -f models/sc2_ps_scaler ] && "
@@ -349,6 +337,7 @@ class Plugin(pwem.Plugin):
 
         rnaseqEnvName = cls.getEnvName(RNASEQ_DIC)
 
+
         installer.addCommand(
             f'conda create -y -n {rnaseqEnvName} '
             f'-c conda-forge -c bioconda '
@@ -357,15 +346,17 @@ class Plugin(pwem.Plugin):
             f'star={STAR_DIC["version"]} '
             f'hisat2={HISAT2_DIC["version"]} '
             f'samtools={SAMTOOLS_DIC["version"]} '
+            f'picard={PICARD_DIC["version"]} '
+            f'gatk4={GATK_DIC["version"]} '
             f'igv={IGV_DIC["version"]} '
             f'igvtools={IGVTOOLS_DIC["version"]} '
             f'ncbi-datasets-cli={NCBI_DATASETS_DIC["version"]}',
             'RNASEQ_ENV_CREATED'
         ).addPackage(
-            env,
-            dependencies=['conda'],
-            default=default
-        )
+                    env,
+                    dependencies=['conda'],
+                    default=default
+                )
 
     @classmethod
     def addCocadaPackage(cls, env, default=True):

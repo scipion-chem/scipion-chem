@@ -2728,7 +2728,218 @@ class SetOfGenomes(data.EMSet):
 
     return labels
 
+class VCFFile(data.EMFile):
+    """Object representing a Variant Call Format (VCF) file."""
 
+    def __init__(self, filename=None, **kwargs):
+      super().__init__(filename=filename, **kwargs)
+
+      self._scientificName = pwobj.String(
+        kwargs.get('scientificName', None)
+      )
+      self._assembly = pwobj.String(
+        kwargs.get('assembly', None)
+      )
+      self._source = pwobj.String(
+        kwargs.get('source', None)
+      )
+      self._database = pwobj.String(
+        kwargs.get('database', None)
+      )
+      self._release = pwobj.String(
+        kwargs.get('release', None)
+      )
+      self._variantType = pwobj.String(
+        kwargs.get('variantType', None)
+      )
+      self._indexFile = pwobj.String(
+        kwargs.get('indexFile', None)
+      )
+      self._isCompressed = pwobj.Boolean(
+        kwargs.get('isCompressed', False)
+      )
+
+    # -------------------------------------------------------
+    # Species
+    # -------------------------------------------------------
+
+    def getScientificName(self):
+      return self._scientificName.get()
+
+    def setScientificName(self, value):
+      self._scientificName.set(value)
+
+    def hasScientificName(self):
+      return bool(self.getScientificName())
+
+    # -------------------------------------------------------
+    # Assembly
+    # -------------------------------------------------------
+
+    def getAssembly(self):
+      return self._assembly.get()
+
+    def setAssembly(self, value):
+      self._assembly.set(value)
+
+    def hasAssembly(self):
+      return bool(self.getAssembly())
+
+    # -------------------------------------------------------
+    # Source
+    # -------------------------------------------------------
+
+    def getSource(self):
+      return self._source.get()
+
+    def setSource(self, value):
+      self._source.set(value)
+
+    def hasSource(self):
+      return bool(self.getSource())
+
+    # -------------------------------------------------------
+    # Database
+    # -------------------------------------------------------
+
+    def getDatabase(self):
+      return self._database.get()
+
+    def setDatabase(self, value):
+      self._database.set(value)
+
+    def hasDatabase(self):
+      return bool(self.getDatabase())
+
+    # -------------------------------------------------------
+    # Release
+    # -------------------------------------------------------
+
+    def getRelease(self):
+      return self._release.get()
+
+    def setRelease(self, value):
+      self._release.set(value)
+
+    def hasRelease(self):
+      return bool(self.getRelease())
+
+    # -------------------------------------------------------
+    # Variant type
+    # -------------------------------------------------------
+
+    def getVariantType(self):
+      return self._variantType.get()
+
+    def setVariantType(self, value):
+      self._variantType.set(value)
+
+    def hasVariantType(self):
+      return bool(self.getVariantType())
+
+    # -------------------------------------------------------
+    # Index
+    # -------------------------------------------------------
+
+    def getIndexFile(self):
+      return self._indexFile.get()
+
+    def setIndexFile(self, value):
+      self._indexFile.set(value)
+
+    def hasIndexFile(self):
+      return bool(self.getIndexFile())
+
+    # -------------------------------------------------------
+    # Compression
+    # -------------------------------------------------------
+
+    def isCompressed(self):
+      return self._isCompressed.get()
+
+    def setIsCompressed(self, value):
+      self._isCompressed.set(value)
+
+    # -------------------------------------------------------
+    # Files
+    # -------------------------------------------------------
+
+    def getFiles(self):
+      files = []
+
+      if self.getFileName():
+        files.append(self.getFileName())
+
+      if self.hasIndexFile():
+        files.append(self.getIndexFile())
+
+      return files
+
+    # -------------------------------------------------------
+    # Representation
+    # -------------------------------------------------------
+
+    def __str__(self):
+      species = self.getScientificName() or 'Unknown'
+      assembly = self.getAssembly() or 'Unknown'
+      source = self.getSource() or 'Unknown'
+      database = self.getDatabase() or 'Unknown'
+
+      return '{} ({}, {}, {}, {})'.format(
+        self.getClassName(),
+        species,
+        assembly,
+        source,
+        database
+      )
+
+    def getObjLabel(self):
+      species = self.getScientificName()
+
+      if species:
+        if self.hasAssembly():
+          return '{} ({})'.format(
+            species,
+            self.getAssembly()
+          )
+
+        return species
+
+      filename = self.getFileName()
+
+      if filename:
+        return os.path.basename(filename)
+
+      return 'VCF'
+
+class SetOfVCFFiles(data.EMSet):
+    """Set of VCF files."""
+
+    ITEM_TYPE = VCFFile
+    FILE_TEMPLATE_NAME = "setOfVCFFiles%s.sqlite"
+
+    def getVCFById(self, vcfId):
+      """Return the VCF stored at the given position (1-based)."""
+      for i, vcfFile in enumerate(self, start=1):
+        if i == vcfId:
+          return vcfFile
+
+      return None
+
+    def getVCFLabels(self):
+      """Return one label per VCF file."""
+      labels = []
+
+      for i, vcfFile in enumerate(self, start=1):
+        labels.append(
+          '{} - {} ({})'.format(
+            i,
+            vcfFile.getScientificName() or 'Unknown',
+            vcfFile.getAssembly() or 'Unknown'
+          )
+        )
+
+      return labels
 
 ############################################################
 ##############  POSSIBLE OUTPUTS OBJECTS ###################
