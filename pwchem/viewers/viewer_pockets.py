@@ -334,9 +334,9 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
 
   def _buildPLIPInterfacePml(self, pseFile, outDir):
       '''Wrap the PLIP .pse session in a small PyMol script that hides every represented atom
-      outside the interface (i.e. the rest of both chains, including the full-chain cartoons
-      PLIP draws by default in its protein-protein/peptide mode), keeping the PLIP interaction
-      lines intact, so only the interacting residues/atoms remain visible.
+      outside the interface, keeping the PLIP interaction lines intact and a thin cartoon of
+      both full chains for context, so only the interacting residues/atoms are emphasized as
+      sticks instead of the rest of the chains disappearing outright.
       "AllBSRes" (protein-side interacting residues) and the "*-L" glob (ligand-side
       interacting-atom selections, e.g. Hydrophobic-L/HBondDonor-L...) are PLIP's own selection
       names, created by its pymol visualization module (plip.visualization.pymol.
@@ -344,13 +344,22 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
       "metals"/"solvent" are plain PyMol selection keywords (not PLIP-specific selection names)
       used defensively for the same reason: unlike a glob, a literal PLIP selection name such as
       "Water" or "Metal-P" errors out the whole command if PLIP ended up deleting it for being
-      empty (it prunes unused selections when saving the session).'''
+      empty (it prunes unused selections when saving the session).
+      PLIP's own default view is asymmetric between the two chains: in its protein-protein/
+      peptide mode, only the "ligand"-side chain gets a full cartoon by default (the "protein"-
+      side chain has none, shown only via its interacting-residue sticks). Blanket-hiding
+      everything outside the interface therefore wipes out the ligand chain's only
+      representation entirely, making it look like that whole chain vanished, while the other
+      chain looks unchanged -- hence the explicit "show cartoon, polymer" below, re-adding a
+      (transparent) backbone trace of both full chains so neither one disappears.'''
       interfaceSel = 'byres (AllBSRes or *-L or metals or solvent)'
       pmlFile = os.path.join(outDir, 'plip_interface_only.pml')
       with open(pmlFile, 'w') as f:
           f.write('load {}\n'.format(os.path.abspath(pseFile)))
           f.write('hide everything, not ({})\n'.format(interfaceSel))
           f.write('show sticks, {}\n'.format(interfaceSel))
+          f.write('show cartoon, polymer\n')
+          f.write('set cartoon_transparency, 0.6, polymer\n')
           f.write('zoom {}, 5\n'.format(interfaceSel))
       return pmlFile
 
