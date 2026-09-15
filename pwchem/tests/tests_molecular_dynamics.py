@@ -26,8 +26,9 @@
 # **************************************************************************
 
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
+from pwem.protocols import ProtImportPdb
 
-from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering
+from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering, ProtocolInverseDistanceWeighting
 from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import MDSYSTEM, SETOFSTRUCTS
 from pwchem.utils import assertHandle
 from pwchem.tests import TestImportMDSystems
@@ -92,3 +93,32 @@ class TestTrajClustering(TestImportMDSystems):
         protClustFromSet = self._runClustering(inputSetOfStructs=protClust.outputAtomStructs, nGroup=3)
         assertHandle(self.assertIsNotNone, getattr(protClustFromSet, 'outputAtomStructs', None),
                      cwd=protClustFromSet.getWorkingDir())
+
+class TestIDWreconstruct(TestTrajClustering):
+    @classmethod
+    def _runImportPDB(cls):
+        protImportPDB = cls.newProtocol(
+            ProtImportPdb, inputPdbData=0,
+            pdbId='3p6h')
+        cls.launchProtocol(protImportPDB, wait=True)
+        cls.protImportPDB = protImportPDB
+
+    @classmethod
+    def _runIDWreconstruct(cls, clust):
+        protIDW = cls.newProtocol(
+            ProtocolInverseDistanceWeighting,
+            inputReference=cls.protImportPDB.outputPdb,
+            inputEnsemble=clust
+        )
+        cls.launchProtocol(protIDW, wait=True)
+        cls.protIDW = protIDW
+
+    def test_idw(self):
+        self._runImportSystem()
+        self._runImportPDB()
+        
+        protClust = self._runClustering()
+        self._runIDWreconstruct(protClust.outputAtomStructs)
+
+        assertHandle(self.assertIsNotNone, getattr(self.protIDW, 'outputAtomStructs', None),
+                     cwd=self.protIDW.getWorkingDir())
