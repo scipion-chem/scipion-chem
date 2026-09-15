@@ -581,6 +581,11 @@ class ProtVCF(EMProtocol):
         species
     ):
 
+        species = self._validateUrlComponent(
+            species,
+            'Ensembl species'
+        )
+
         url = (
             self.ENSEMBL_REST_ASSEMBLY_URL
             .format(species)
@@ -790,11 +795,26 @@ class ProtVCF(EMProtocol):
 
         for info in vcfInfo:
 
+            release = self._validateUrlComponent(
+                info['release'],
+                'Ensembl release'
+            )
+
+            ensemblName = self._validateUrlComponent(
+                info['ensemblName'],
+                'Ensembl species'
+            )
+
+            assembly = self._validateUrlComponent(
+                info['assembly'],
+                'assembly'
+            )
+
             outputDir = self._getExtraPath(
                 '{}_{}_release-{}'.format(
-                    info['ensemblName'],
-                    info['assembly'],
-                    info['release']
+                    ensemblName,
+                    assembly,
+                    release
                 )
             )
 
@@ -807,12 +827,17 @@ class ProtVCF(EMProtocol):
                 info
             )
 
+            filename = self._validateUrlComponent(
+                filename,
+                'Ensembl VCF filename'
+            )
+
             baseUrl = (
                 '{}release-{}/variation/vcf/{}/'
             ).format(
                 self.ENSEMBL_FTP_BASE_URL,
-                info['release'],
-                info['ensemblName']
+                release,
+                ensemblName
             )
 
             vcfUrl = (
@@ -858,12 +883,22 @@ class ProtVCF(EMProtocol):
         info
     ):
 
+        release = self._validateUrlComponent(
+            info['release'],
+            'Ensembl release'
+        )
+
+        ensemblName = self._validateUrlComponent(
+            info['ensemblName'],
+            'Ensembl species'
+        )
+
         url = (
             '{}release-{}/variation/vcf/{}/'
         ).format(
             self.ENSEMBL_FTP_BASE_URL,
-            info['release'],
-            info['ensemblName']
+            release,
+            ensemblName
         )
 
         html = self._readRemoteDirectory(
@@ -886,7 +921,7 @@ class ProtVCF(EMProtocol):
                 'Ensembl does not provide a VCF file for '
                 '{} in release {}.'.format(
                     info['scientificName'],
-                    info['release']
+                    release
                 )
             )
 
@@ -914,7 +949,10 @@ class ProtVCF(EMProtocol):
                 )
             )
 
-        return candidates[0]
+        return self._validateUrlComponent(
+            candidates[0],
+            'Ensembl VCF filename'
+        )
 
     # =====================================================================
     # NCBI dbSNP download
@@ -938,7 +976,10 @@ class ProtVCF(EMProtocol):
 
         for info in vcfInfo:
 
-            accession = info['accession']
+            accession = self._validateUrlComponent(
+                info['accession'],
+                'NCBI accession'
+            )
 
             filename = '{}.gz'.format(
                 accession
@@ -1002,113 +1043,176 @@ class ProtVCF(EMProtocol):
             info['vcfFile'] = outputVCF
             info['indexFile'] = indexFile
 
-    # =====================================================================
-    # URL validation
-    # =====================================================================
-
-    @classmethod
-    def _validateUrl(
-        cls,
-        url
-    ):
-        """Validate that a URL points to an allowed HTTPS server."""
-
-        parsedUrl = urlparse(
-            url
-        )
-
-        if parsedUrl.scheme != 'https':
-            raise ValueError(
-                'Only HTTPS URLs are allowed: {}'
-                .format(
-                    url
-                )
-            )
-
-        if parsedUrl.hostname not in cls.ALLOWED_HOSTS:
-            raise ValueError(
-                'URL host is not allowed: {}'
-                .format(
-                    parsedUrl.hostname
-                )
-            )
-
-        return url
 
     # =====================================================================
     # HTTP utilities
     # =====================================================================
 
-    def _downloadFile(
-        self,
-        url,
-        outputFile
+    HTTP_TIMEOUT = 120
+    DOWNLOAD_TIMEOUT = 300
+
+    HTTP_HEADERS = {
+        'User-Agent': 'Scipion-Chem'
+    }
+
+    JSON_HEADERS = {
+        'Accept': 'application/json',
+        'User-Agent': 'Scipion-Chem'
+    }
+
+    @staticmethod
+    def _validateUrlComponent(value, componentName):
+        """Validate a value before using it in a remote URL."""
+
+        value = str(value).strip()
+
+        if not value:
+            raise ValueError(
+                '{} cannot be empty.'.format(
+                    componentName
+                )
+            )
+
+        if not re.fullmatch(
+                r'[A-Za-z0-9_.-]+',
+                value
+        ):
+            raise ValueError(
+                'Invalid {}: {}'.format(
+                    componentName,
+                    value
+                )
+            )
+
+        return value
+
+    @classmethod
+    def _validateRemoteUrl(cls, url):
+        """Validate an HTTPS URL against the remote-host allowlist."""
+
+        parsedUrl = urlparse(url)
+
+        if parsedUrl.scheme != 'https':
+            raise ValueError(
+                'Only HTTPS URLs are allowed.'
+            )
+
+        if parsedUrl.hostname not in cls.ALLOWED_HOSTS:
+            raise ValueError(
+                'Remote host is not allowed: {}'
+                .format(
+                    parsedUrl.hostname
+                )
+            )
+
+        if parsedUrl.username or parsedUrl.password:
+            raise ValueError(
+                'Credentials are not allowed in remote URLs.'
+            )
+
+        if parsedUrl.port not in (None, 443):
+            raise ValueError(
+                'Only the default HTTPS port is allowed.'
+            )
+
+        pathParts = [
+            part
+            for part in parsedUrl.path.split('/')
+            if part
+        ]
+
+        if any(
+                part in ('.', '..')
+                for part in pathParts
+        ):
+            raise ValueError(
+                'Path traversal is not allowed in remote URLs.'
+            )
+
+        return url
+
+    @classmethod
+    def _openRemoteRequest(
+            cls,
+            url,
+            *,
+            headers=None,
+            method=None,
+            timeout=None
     ):
+        """Open a validated request to an allowed remote server."""
+
+        validatedUrl = cls._validateRemoteUrl(url)
+
+        request = urllib.request.Request(
+            validatedUrl,
+            headers=headers or cls.HTTP_HEADERS,
+            method=method
+        )
+
+        return urllib.request.urlopen(  # NOSONAR
+            request,
+            timeout=timeout or cls.HTTP_TIMEOUT
+        )
+
+    def _downloadFile(
+            self,
+            url,
+            outputFile
+    ):
+        """Download a file from an allowed remote server."""
 
         if (
-            os.path.exists(outputFile)
-            and not self.overwrite.get()
+                os.path.exists(outputFile)
+                and not self.overwrite.get()
         ):
             return
 
         if (
-            self.overwrite.get()
-            and os.path.exists(outputFile)
+                self.overwrite.get()
+                and os.path.exists(outputFile)
         ):
             os.remove(
                 outputFile
             )
 
-        safeUrl = self._validateUrl(
-            url
-        )
-
-        request = urllib.request.Request(
-            safeUrl,
-            headers={
-                'User-Agent': 'Scipion-Chem'
-            }
-        )
-
         try:
-
-            with urllib.request.urlopen(
-                request,
-                timeout=300
+            with self._openRemoteRequest(
+                    url,
+                    timeout=self.DOWNLOAD_TIMEOUT
             ) as response:
 
                 with open(
-                    outputFile,
-                    'wb'
+                        outputFile,
+                        'wb'
                 ) as output:
-
                     shutil.copyfileobj(
                         response,
                         output
                     )
 
         except (
-            urllib.error.URLError,
-            TimeoutError
+                urllib.error.URLError,
+                TimeoutError,
+                ValueError
         ) as error:
 
             if os.path.exists(
-                outputFile
+                    outputFile
             ):
                 os.remove(
                     outputFile
                 )
 
             raise RuntimeError(
-                'Could not download VCF file from:\n'
-                '{}\n\n{}'.format(
-                    safeUrl,
+                'Could not download VCF file: {}'
+                .format(
                     error
                 )
-            )
+            ) from error
 
         if not os.path.exists(
-            outputFile
+                outputFile
         ):
             raise RuntimeError(
                 'Downloaded VCF file was not created: {}'
@@ -1119,26 +1223,14 @@ class ProtVCF(EMProtocol):
 
     @classmethod
     def _readRemoteDirectory(
-        cls,
-        url
-    ):
-
-        safeUrl = cls._validateUrl(
+            cls,
             url
-        )
-
-        request = urllib.request.Request(
-            safeUrl,
-            headers={
-                'User-Agent': 'Scipion-Chem'
-            }
-        )
+    ):
+        """Read an allowed remote directory."""
 
         try:
-
-            with urllib.request.urlopen(
-                request,
-                timeout=120
+            with cls._openRemoteRequest(
+                    url
             ) as response:
 
                 return response.read().decode(
@@ -1146,47 +1238,36 @@ class ProtVCF(EMProtocol):
                 )
 
         except (
-            urllib.error.URLError,
-            TimeoutError
+                urllib.error.URLError,
+                TimeoutError,
+                ValueError
         ) as error:
 
             raise RuntimeError(
-                'Cannot access remote directory:\n'
-                '{}\n\n{}'.format(
-                    safeUrl,
+                'Cannot access remote directory: {}'
+                .format(
                     error
                 )
-            )
+            ) from error
 
     @classmethod
     def _remoteFileExists(
-        cls,
-        url
-    ):
-
-        safeUrl = cls._validateUrl(
+            cls,
             url
-        )
-
-        request = urllib.request.Request(
-            safeUrl,
-            method='HEAD',
-            headers={
-                'User-Agent': 'Scipion-Chem'
-            }
-        )
+    ):
+        """Return whether a remote file exists."""
 
         try:
-
-            with urllib.request.urlopen(
-                request,
-                timeout=120
+            with cls._openRemoteRequest(
+                    url,
+                    method='HEAD'
             ):
                 return True
 
         except (
-            urllib.error.URLError,
-            TimeoutError
+                urllib.error.URLError,
+                TimeoutError,
+                ValueError
         ):
             return False
 
@@ -1201,23 +1282,10 @@ class ProtVCF(EMProtocol):
         description
     ):
 
-        safeUrl = cls._validateUrl(
-            url
-        )
-
-        request = urllib.request.Request(
-            safeUrl,
-            headers={
-                'Accept': 'application/json',
-                'User-Agent': 'Scipion-Chem'
-            }
-        )
-
         try:
-
-            with urllib.request.urlopen(
-                request,
-                timeout=120
+            with cls._openRemoteRequest(
+                url,
+                headers=cls.JSON_HEADERS
             ) as response:
 
                 return json.loads(
@@ -1229,6 +1297,7 @@ class ProtVCF(EMProtocol):
         except (
             urllib.error.URLError,
             TimeoutError,
+            ValueError,
             json.JSONDecodeError
         ) as error:
 
@@ -1238,7 +1307,7 @@ class ProtVCF(EMProtocol):
                     description,
                     error
                 )
-            )
+            ) from error
 
     @staticmethod
     def _readJsonLines(
