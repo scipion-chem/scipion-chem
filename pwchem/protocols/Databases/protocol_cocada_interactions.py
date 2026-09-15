@@ -25,17 +25,6 @@
 # *
 # **************************************************************************
 
-"""
-This protocol gets a residue/atom contact map computed by COCADA (https://github.com/LBS-UFMG/COCaDA),
-either by importing a CSV already computed (e.g. downloaded from the COCADA web server,
-https://bioinfo.dcc.ufmg.br/cocada-web/public/) or by running COCADA itself on an input AtomStruct,
-and defines one structural ROI per interaction type found in the file (hydrogen bonds, hydrophobic,
-salt bridges...), plus one extra ROI grouping the whole interface, so the different bond types can
-be inspected / visualized independently. COCADA computes intra- and inter-molecular contacts on any
-kind of biomolecular structure, not just two-chain protein complexes: single-chain proteins,
-multi-chain complexes, protein-peptide, protein-DNA and protein-RNA structures are all supported
-(see the example entries in the COCADA documentation).
-"""
 import os, csv, shutil, glob, json
 from collections import defaultdict
 
@@ -75,14 +64,148 @@ RING_ATOMS = {
 }
 
 
+def joinWrappedAtomSiteRows(cifFile):
+    '''Some mmCIF writers (e.g. Chai-1's) wrap an _atom_site row onto a continuation line
+    when a coordinate happens to be printed with extra digits (observed with coordinates very
+    close to 0, e.g. "0.000356"), splitting off the trailing field(s) with no atom keyword. Our
+    own downstream Biopython-based parsing tolerates this, but COCADA's own CIF reader tokenizes
+    the file with a naive line.split() and crashes. Rejoin any such row in place; a well-formed
+    file is left untouched.'''
+    with open(cifFile) as f:
+        lines = f.readlines()
+
+    out, nCols, inAtomSite, inData, buffer = [], None, False, False, []
+    for raw in lines:
+        stripped = raw.strip()
+
+        if stripped.startswith('_atom_site.'):
+            inAtomSite, nCols = True, (nCols or 0) + 1
+            out.append(raw)
+            continue
+        elif inAtomSite and not inData:
+            inData = True
+
+        if inData and stripped not in ('#', ''):
+            buffer.extend(stripped.split())
+            while len(buffer) >= nCols:
+                out.append(' '.join(buffer[:nCols]) + '\n')
+                buffer = buffer[nCols:]
+            continue
+        elif inData and stripped == '#':
+            inAtomSite, inData = False, False
+
+        out.append(raw)
+
+    with open(cifFile, 'w') as f:
+        f.writelines(out)
+
+
 class ProtCocadaInteractions(EMProtocol):
     """
-    Gets a COCADA residue-residue contacts CSV (columns: Chain1,Res1,ResName1,Atom1,Chain2,
-    Res2,ResName2,Atom2,Distance,Type) -- either imported or freshly computed by running COCADA
-    on the input structure -- and defines a SetOfStructROIs with one ROI per interaction type
-    plus one ROI for the whole interface. The contacts can come from any structure supported by
-    COCADA (single-chain, multi-chain complex, protein-peptide, protein-DNA, protein-RNA...), not
-    only a two-chain protein-protein complex.
+    Protocol to get COCADA residue-residue contact maps as structural ROIs.
+
+    AI Generated:
+
+        ProtCocadaInteractions - User Manual
+
+        Overview
+        --------
+        The ProtCocadaInteractions protocol obtains a residue/atom contact map for an
+        input AtomStruct using COCADA (https://github.com/LBS-UFMG/COCaDA), and turns
+        it into a SetOfStructROIs with one structural ROI per interaction type found
+        (hydrogen bonds, hydrophobic, salt bridges, attractive, repulsive, disulfide
+        bonds, aromatic stacking...), plus one extra "All" ROI grouping the whole
+        interface, so the different bond types can be inspected or visualized
+        independently.
+
+        The contacts CSV can either be imported (e.g. downloaded from the COCADA web
+        server) or freshly computed by running COCADA itself on the input structure.
+        COCADA supports any kind of biomolecular structure, not only two-chain
+        protein-protein complexes: single-chain proteins, multi-chain complexes,
+        protein-peptide, protein-DNA and protein-RNA structures are all valid inputs.
+
+        Inputs
+        ------
+        - **inputAtomStruct**:
+            The structure the COCADA contacts are/were calculated on. If importing a
+            CSV, its chain and residue numbering must match this structure.
+
+        - **cocadaMode**:
+            Contacts source, one of:
+            1. **Import existing CSV**: use a COCADA contacts CSV already computed
+               elsewhere.
+            2. **Compute from structure**: run COCADA itself on the input AtomStruct.
+
+        - **cocadaCsv** (Import mode only):
+            COCADA contacts CSV file, with columns Chain1,Res1,ResName1,Atom1,Chain2,
+            Res2,ResName2,Atom2,Distance,Type.
+
+        COCADA Parameters (Compute mode only)
+        --------------------------------------
+        - **phValue**: pH used to define electrostatic (attractive/repulsive/salt
+          bridge) contacts. Maps to COCADA's `-ph` flag.
+        - **interchainOnly**: restrict the analysis to contacts between different
+          chains. Maps to COCADA's `-inter` flag.
+        - **chainsParam**: restrict the analysis to specific chains (plain "A,B" text,
+          or the JSON produced by the chain-selection wizard). Maps to COCADA's `-c`
+          flag.
+        - **regionParam**: restrict the analysis to a residue range or list. Maps to
+          COCADA's `-r` flag.
+        - **Custom contact distances** (advanced): per-type min/max distance ranges
+          (salt bridge, hydrophobic, hydrogen bond, repulsive, attractive, disulfide
+          bond, aromatic stacking), prefilled with COCADA's own defaults. Maps to
+          COCADA's `-d` flag.
+
+        Workflow
+        --------
+        1. **Input Conversion** (`convertInputStep`):
+           - Converts the input AtomStruct to CIF, and repairs any `_atom_site` row
+             wrapped onto a continuation line by some structure-prediction mmCIF
+             writers (e.g. Chai-1), which would otherwise crash COCADA's own parser.
+
+        2. **COCADA Execution** (`runCocadaStep`, Compute mode only):
+           - Runs COCADA, in its own conda environment, with the selected pH, chain,
+             region and distance parameters.
+           - Locates the produced contacts CSV; raises an error if none was produced.
+
+        3. **Output Generation** (`defineOutputStep`):
+           - Parses the contacts CSV and groups the rows by interaction type.
+           - Builds one StructROI per type (plus one "All" ROI when there is more
+             than one type), matching COCADA atom references back to the input
+             structure (including the "RNG" aromatic-ring pseudo-atom).
+           - Writes a per-residue-pair interactions CSV (for the "Residue interaction
+             view") and a PyMol script drawing the contacts as colored dashed lines
+             grouped by type (for the "PyMol (COCADA bonds)" view).
+
+        Outputs
+        -------
+        - **outputStructROIs** (SetOfStructROIs): one ROI per COCADA interaction type
+          found, plus one "All" ROI, each carrying its contact atoms/residues and
+          (for Compute mode) the raw COCADA contacts CSV and PyMol bonds script.
+
+        Practical Recommendations
+        --------------------------
+        - Use the chain-selection wizard for **chainsParam** instead of typing chain
+          letters directly, to avoid mismatches with the input structure.
+        - Enable **interchainOnly** when only the interface between chains (not
+          intra-chain contacts) is of interest, e.g. antibody-antigen interfaces.
+        - Leave the custom contact distances at their defaults unless there is a
+          specific reason to deviate from COCADA's own definitions.
+
+        Warnings
+        --------
+        - If importing a CSV, its chain and residue numbering must match the input
+          AtomStruct exactly, or contacts will fail to resolve to real atoms.
+        - COCADA requires numpy>=2.0.1/psutil>=6.0.0, incompatible with the scipion3
+          environment, so it runs in its own dedicated conda environment.
+
+        Final Perspective
+        ------------------
+        ProtCocadaInteractions bridges COCADA's typed, exact atom-atom contact
+        detection with Scipion's structural-ROI ecosystem, enabling per-interaction-
+        type visualization and downstream analysis (e.g. mutation scanning, PLIP
+        protein-protein interaction inspection) without re-deriving contacts by
+        distance.
     """
     _label = 'COCADA interactions'
 
@@ -178,6 +301,7 @@ class ProtCocadaInteractions(EMProtocol):
     def convertInputStep(self):
         inFile = os.path.abspath(self.inputAtomStruct.get().getFileName())
         cifFromASFile(inFile, self.getCifFile())
+        joinWrappedAtomSiteRows(self.getCifFile())
 
     def runCocadaStep(self):
         outDir = self.getCocadaOutDir()
