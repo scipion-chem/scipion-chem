@@ -102,6 +102,8 @@ class ProtVCF(EMProtocol):
         'ftp.ensembl.org',
         'ftp.ncbi.nih.gov'
     }
+    EMPTY_PARAMETER_ERROR = '{} cannot be empty.'
+    ENSEMBL_SPECIES = 'Ensembl species'
 
     _label = 'download VCF'
 
@@ -482,7 +484,7 @@ class ProtVCF(EMProtocol):
 
         if not values:
             raise ValueError(
-                '{} cannot be empty.'.format(
+                cls.EMPTY_PARAMETER_ERROR.format(
                     parameterName.capitalize()
                 )
             )
@@ -583,7 +585,7 @@ class ProtVCF(EMProtocol):
 
         species = self._validateUrlComponent(
             species,
-            'Ensembl species'
+            self.ENSEMBL_SPECIES
         )
 
         url = (
@@ -802,7 +804,7 @@ class ProtVCF(EMProtocol):
 
             ensemblName = self._validateUrlComponent(
                 info['ensemblName'],
-                'Ensembl species'
+                self.ENSEMBL_SPECIES
             )
 
             assembly = self._validateUrlComponent(
@@ -890,7 +892,7 @@ class ProtVCF(EMProtocol):
 
         ensemblName = self._validateUrlComponent(
             info['ensemblName'],
-            'Ensembl species'
+            self.ENSEMBL_SPECIES
         )
 
         url = (
@@ -1060,15 +1062,15 @@ class ProtVCF(EMProtocol):
         'User-Agent': 'Scipion-Chem'
     }
 
-    @staticmethod
-    def _validateUrlComponent(value, componentName):
+    @classmethod
+    def _validateUrlComponent(cls,value, componentName):
         """Validate a value before using it in a remote URL."""
 
         value = str(value).strip()
 
         if not value:
             raise ValueError(
-                '{} cannot be empty.'.format(
+                cls.EMPTY_PARAMETER_ERROR.format(
                     componentName
                 )
             )
@@ -1297,10 +1299,8 @@ class ProtVCF(EMProtocol):
         except (
             urllib.error.URLError,
             TimeoutError,
-            ValueError,
-            json.JSONDecodeError
+            ValueError
         ) as error:
-
             raise RuntimeError(
                 'Could not retrieve {}: {}'
                 .format(
@@ -1533,8 +1533,9 @@ class ProtVCF(EMProtocol):
                     )
                 )
 
-    @staticmethod
+    @classmethod
     def _validateParameterCount(
+            cls,
             values,
             species,
             parameterName,
@@ -1542,7 +1543,7 @@ class ProtVCF(EMProtocol):
     ):
         if not values:
             errors.append(
-                '{} cannot be empty.'.format(
+                cls.EMPTY_PARAMETER_ERROR.format(
                     parameterName
                 )
             )
