@@ -195,12 +195,6 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
               label='Display localization probabilities: ',
               help='Display the DeepLoc predicted localization probabilities.'
           )
-          form.addParam(
-              'viewSequence',
-              params.LabelParam,
-              label='Display residue importance in Chimera: ',
-              help='Display the DeepLoc predicted residue importance.'
-          )
 
     def _getVisualizeDict(self):
         visDic = {
@@ -211,7 +205,6 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
 
         if hasattr(obj, '_localizationPerc'):
             visDic['viewLocalization'] = self._showLocalization
-            visDic['viewSequence'] = self._showResidueImportance
 
         return visDic
 
@@ -232,22 +225,6 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
             )
 
         plotLocalizationHistogram(localizationPerc)
-
-    def _showResidueImportance(self, e=None):
-        obj = self.getAtomStruct()
-
-        if not hasattr(obj, '_residuePredictions'):
-            raise ValueError(
-                "No DeepLoc residue predictions available "
-                "for this structure."
-            )
-
-        cxcFile = self.buildDeepLocCXCFile(obj)
-
-        return [
-            ChimeraView(cxcFile)
-        ]
-
     def _viewAtomStruct(self, e=None):
       if self.displaySoftware.get() == 0:
         pymolViewer = AtomStructPymolViewer(project=self.getProject())
@@ -291,172 +268,6 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
 
         view = ChimeraView(fnCmd)
         return [view]
-
-
-    def _getDeepLocResidueData(self, obj):
-        csvFile = obj._residuePredictions.get()
-
-        if not csvFile or not os.path.exists(csvFile):
-            raise FileNotFoundError(
-                f"DeepLoc residue prediction file not found: {csvFile}"
-            )
-
-        df = pd.read_csv(csvFile, sep=None, engine='python')
-        if 'AA' not in df.columns:
-            raise ValueError(
-                f"Invalid DeepLoc residue file: {csvFile}"
-            )
-        scoreColumns = [
-            col for col in df.columns
-            if col != 'AA'
-        ]
-
-        if not scoreColumns:
-            raise ValueError(
-                f"No residue prediction columns found in {csvFile}"
-            )
-
-        scoreColumn = scoreColumns[0]
-        fileName = obj.getFileName()
-
-        if fileName.lower().endswith(('.cif', '.mmcif')):
-            parser = MMCIFParser(QUIET=True)
-        else:
-            parser = PDBParser(QUIET=True)
-
-        structure = parser.get_structure("protein", fileName)
-        ppb = PPBuilder()
-        residues = []
-        structureSequence = []
-
-        for peptide in ppb.build_peptides(structure):
-            sequence = str(peptide.get_sequence())
-
-            for residue, aa in zip(peptide, sequence):
-                residues.append(residue)
-                structureSequence.append(aa)
-
-        deepLocSequence = ''.join(
-            df['AA'].astype(str).tolist()
-        )
-
-        structureSequence = ''.join(structureSequence)
-
-        if len(deepLocSequence) != len(structureSequence):
-            raise ValueError(
-                f"DeepLoc/structure residue count mismatch for "
-                f"{obj.getFileName()}: "
-                f"DeepLoc={len(deepLocSequence)}, "
-                f"structure={len(structureSequence)}"
-            )
-
-        if deepLocSequence != structureSequence:
-            raise ValueError(
-                f"DeepLoc sequence does not match the structure "
-                f"sequence for {obj.getFileName()}"
-            )
-
-        residueData = []
-
-        for residue, score in zip(
-                residues,
-                df[scoreColumn]
-        ):
-            if pd.isna(score):
-                continue
-
-            chain = residue.get_parent()
-            model = chain.get_parent()
-
-            residueData.append({
-                'model': model.id,
-                'chain': chain.id,
-                'residueId': residue.id,
-                'score': float(score)
-            })
-
-        return scoreColumn, residueData
-
-    def _writeDeepLocAttributeFile(self, obj, scoreColumn, residueData):
-        attrFile = self._getPath(
-            f"deeploc_{scoreColumn}.defattr"
-        )
-
-        with open(attrFile, 'w') as f:
-            f.write("attribute: deeploc_score\n")
-            f.write("recipient: residues\n\n")
-
-            for data in residueData:
-                chain = data['chain']
-                _, resnum, insertionCode = data['residueId']
-
-                if insertionCode and insertionCode != ' ':
-                    residueSpec = f"/{chain}:{resnum}{insertionCode}"
-                else:
-                    residueSpec = f"/{chain}:{resnum}"
-
-                f.write(
-                    f"\t{residueSpec}\t{data['score']}\n"
-                )
-
-        return attrFile
-
-    def buildDeepLocCXCFile(self, obj):
-        scoreColumn, residueData = self._getDeepLocResidueData(obj)
-
-        if not residueData:
-            raise ValueError(
-                "No valid DeepLoc residue predictions were found."
-            )
-
-        attrFile = self._writeDeepLocAttributeFile(
-            obj,
-            scoreColumn,
-            residueData
-        )
-
-        cxcFile = self._getPath(
-            f"deeploc_{scoreColumn}.cxc"
-        )
-
-        structureFile = os.path.abspath(
-            obj.getFileName()
-        )
-
-        scores = [
-            data['score']
-            for data in residueData
-        ]
-
-        minScore = min(scores)
-        maxScore = max(scores)
-
-        with open(cxcFile, 'w') as f:
-            f.write(
-                f"open {structureFile}\n"
-            )
-            f.write(
-                f"defattr {os.path.abspath(attrFile)}\n"
-            )
-            f.write(
-                "cartoon\n"
-            )
-            f.write(
-                "color byattribute r:deeploc_score "
-                f"palette white:yellow:red "
-                f"range {minScore},{maxScore} "
-                "target r\n"
-            )
-            f.write(
-                "lighting default\n"
-            )
-
-            f.write(
-                "view\n"
-            )
-
-        return cxcFile
-
 
 class AtomStructPymolViewer(PyMolViewer):
     _label = 'Pymol viewer AtomStruct'
@@ -508,12 +319,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
             label='Display localization probabilities: ',
             help='Display the DeepLoc predicted localization probabilities.'
         )
-        form.addParam(
-            'viewSequence',
-            params.LabelParam,
-            label='Display residue importance in Chimera: ',
-            help='Display the DeepLoc predicted residue importance.'
-        )
 
   def _getVisualizeDict(self):
       d = {
@@ -525,7 +330,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
 
       if hasattr(structs, '_localizationPerc'):
           d['viewLocalization'] = self._showLocalization
-          d['viewSequence'] = self._showResidueImportance
 
       d.update(BaseInteractionViewer._getVisualizeDict(self))
 
@@ -557,16 +361,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
       df = pd.read_csv(localizationPerc)
 
       plotLocalizationHistogramFromDataFrame(df)
-
-  def _showResidueImportance(self, e=None):
-      structs = self.getAtomStructs()
-
-      cxcFile = self.buildDeepLocSetCXCFile(structs)
-
-      return [
-          ChimeraView(cxcFile)
-      ]
-
   def _viewSetStructure(self, e=None):
     if self.displaySoftware.get() == 0:
       pymolViewer = PyMolViewer(project=self.getProject())
@@ -627,72 +421,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
     with open(oFile, 'w') as f:
       f.write(oStr)
     return oFile
-
-  def buildDeepLocSetCXCFile(self, structSet):
-      cxcFile = self._getPath(
-          "deeploc_residue_importance.cxc"
-      )
-
-      with open(cxcFile, 'w') as f:
-
-          for struct in structSet:
-
-              if not hasattr(struct, '_residuePredictions'):
-                  continue
-
-              try:
-                  scoreColumn, residueData = (
-                      self._getDeepLocResidueData(struct)
-                  )
-              except Exception as exc:
-                  self.warning(
-                      f"Could not process DeepLoc residue "
-                      f"predictions for "
-                      f"{struct.getFileName()}: {exc}"
-                  )
-                  continue
-
-              if not residueData:
-                  continue
-
-              attrFile = self._writeDeepLocAttributeFile(
-                  struct,
-                  scoreColumn,
-                  residueData
-              )
-
-              structureFile = os.path.abspath(
-                  struct.getFileName()
-              )
-
-              scores = [
-                  data['score']
-                  for data in residueData
-              ]
-
-              minScore = min(scores)
-              maxScore = max(scores)
-
-              f.write(
-                  f"open {structureFile}\n"
-              )
-              f.write(
-                  f"defattr {os.path.abspath(attrFile)}\n"
-              )
-
-              f.write("cartoon\n")
-
-              f.write(
-                  "color byattribute r:deeploc_score "
-                  f"palette white:yellow:red "
-                  f"range {minScore},{maxScore} "
-                  "target r\n"
-              )
-
-          f.write("view\n")
-
-      return cxcFile
-
   def _getEntityNames(self, data):
       protNames = sorted(data.keys())
       molNames = sorted(next(iter(data.values())).keys())
