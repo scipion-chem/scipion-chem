@@ -40,6 +40,8 @@ from pwem.viewers.mdviewer.viewer import MDViewer
 from pwem.protocols import EMProtocol
 from pwem.objects import SetOfSequences, AtomStruct, SetOfAtomStructs
 
+from Bio.PDB import PDBParser, MMCIFParser, PPBuilder
+
 import pwchem.objects
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import *
@@ -169,6 +171,7 @@ def plotLocalizationHistogram(csvFile):
     df = pd.read_csv(csvFile)
     plotLocalizationHistogramFromDataFrame(df)
 
+
 class AtomStructViewer(pwviewer.ProtocolViewer):
     _label = 'Viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
@@ -222,7 +225,6 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
             )
 
         plotLocalizationHistogram(localizationPerc)
-
     def _viewAtomStruct(self, e=None):
       if self.displaySoftware.get() == 0:
         pymolViewer = AtomStructPymolViewer(project=self.getProject())
@@ -267,7 +269,6 @@ class AtomStructViewer(pwviewer.ProtocolViewer):
         view = ChimeraView(fnCmd)
         return [view]
 
-
 class AtomStructPymolViewer(PyMolViewer):
     _label = 'Pymol viewer AtomStruct'
     _environments = [pwviewer.DESKTOP_TKINTER]
@@ -276,6 +277,7 @@ class AtomStructPymolViewer(PyMolViewer):
     def _visualize(self, obj, **args):
       pymolV = PyMolViewer(project=self.getProject())
       return pymolV._visualize(obj.getFileName())
+
 
 
 class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
@@ -359,7 +361,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
       df = pd.read_csv(localizationPerc)
 
       plotLocalizationHistogramFromDataFrame(df)
-
   def _viewSetStructure(self, e=None):
     if self.displaySoftware.get() == 0:
       pymolViewer = PyMolViewer(project=self.getProject())
@@ -420,7 +421,6 @@ class SetOfAtomStructViewer(AtomStructViewer, BaseInteractionViewer):
     with open(oFile, 'w') as f:
       f.write(oStr)
     return oFile
-
   def _getEntityNames(self, data):
       protNames = sorted(data.keys())
       molNames = sorted(next(iter(data.values())).keys())
