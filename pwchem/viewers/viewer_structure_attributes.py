@@ -42,7 +42,7 @@ def plotSequenceAttribute(attrValues, attrName='Attribute', thres=None):
     maxY = max(attrValues)
     xs = np.arange(len(attrValues))
 
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     ax.bar(xs, attrValues)
     ax.yaxis.set_major_locator(plt.MaxNLocator(10))
     ax.set_ylim(0, maxY + maxY / 10)
@@ -61,7 +61,7 @@ def plotSequenceAttribute(attrValues, attrName='Attribute', thres=None):
     plt.show()
 
 
-def _plotInteractive(data, histogram=False):
+def plotInteractive(data, histogram=False):
     if not data:
         return
 
@@ -120,15 +120,15 @@ def _plotInteractive(data, histogram=False):
 
 
 def plotSequenceAttributesInteractive(sequenceData):
-    _plotInteractive(sequenceData)
+    plotInteractive(sequenceData)
 
 
 def plotAtomStructAttributesInteractive(structureData):
-    _plotInteractive(structureData, histogram=True)
+    plotInteractive(structureData, histogram=True)
 
 
 def plotAtomStructSequenceAttributesInteractive(structureData):
-    _plotInteractive(structureData)
+    plotInteractive(structureData)
 
 class ConservationViewer(ChimeraAttributeViewer):
     """ Viewer for attribute conservation of an AtomStruct.
