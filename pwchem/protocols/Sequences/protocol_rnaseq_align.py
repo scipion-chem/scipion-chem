@@ -383,18 +383,6 @@ class ProtRNASeqAlignment(EMProtocol):
         )
 
         form.addParam(
-            'starTwoPass',
-            BooleanParam,
-            default=True,
-            label='STAR two-pass mode: ',
-            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
-            help=(
-                'Run STAR in Basic two-pass mode to improve splice-junction '
-                'detection.'
-            )
-        )
-
-        form.addParam(
             'starSjdbOverhang',
             IntParam,
             default=0,
@@ -793,9 +781,6 @@ class ProtRNASeqAlignment(EMProtocol):
 
         if fastqObj.isCompressed():
             args.append('--readFilesCommand zcat')
-
-        if self.starTwoPass.get():
-            args.append('--twopassMode Basic')
 
         command = 'STAR {}'.format(' '.join(args))
 
