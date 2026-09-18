@@ -155,8 +155,12 @@ Notes
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('useGPU', params.BooleanParam, default=True, label="Use GPU: ",
-                      help='Whether to use GPU or not. (Unable to choose the GPU id).')
+        form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
+                       label="Use GPU for execution: ",
+                       help="This protocol has both CPU and GPU implementation.\
+                                                     Select the one you want to use.")
+        form.addHidden(params.GPU_LIST, params.StringParam, default='0', label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used (comma-separated)")
         iGroup = form.addGroup('Input')
         # Pre-extracted features
         iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
@@ -274,11 +278,13 @@ Notes
         if self.aggregate.get():
             args.append("--aggregate")
 
-        if self.useGPU.get():
+        gpuIdx=None
+        if getattr(self, params.USE_GPU).get():
             args.append("--gpu")
+            gpuIdx = getattr(self, params.GPU_LIST).get()
 
-        insistentRun(self, 'python', args,
-                     envDic=SCORCH2_DIC, nMax=5, cwd=scriptRescoringDir, sleepTime=5)
+        insistentRun(self, 'python', args, envDic=SCORCH2_DIC,
+                     nMax=5, cwd=scriptRescoringDir, sleepTime=5, gpuIdx=gpuIdx)
 
     def createOutputStep(self):
         inMols = self.inputSmallMolecules.get()
