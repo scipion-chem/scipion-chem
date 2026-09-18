@@ -40,8 +40,8 @@ from pyworkflow.protocol import params, STEPS_PARALLEL
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets, insistentRun
-from pwchem import Plugin, SCORCH2_DIC
+from pwchem.utils import os, shutil, re, makeSubsets, insistentRun
+from pwchem import Plugin, SCORCH2_DIC, OPENBABEL_DIC
 
 
 currentDir = Path(__file__).parent.resolve()
@@ -191,54 +191,24 @@ Notes
         oStep = self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
 
     def organizeInputStep(self):
-        # Receptor
-        proteinDir = self.getProtDir()
-        proteinDir.mkdir(parents=True, exist_ok=True)
+        # Receptor. SCORCH2 takes the PDB ID from the protein file name, hence the "{_defaultName}_" prefix
+        proteinPath = Path(self.inputSmallMolecules.get().getProteinFile())
+        self.prepareStructure(proteinPath, self.getInProtDir(), self.getProtDir(),
+                            f"{self._defaultName}_protein")
+        self.convertToPdbqt(self.getInProtDir(), self.getProtDir())
+        if not any(self.getProtDir().glob("*.pdbqt")):
+            logging.warning("No protein PDBQT file could be prepared for SCORCH2.")
 
-        protein = self.inputSmallMolecules.get().getProteinFile()
-        proteinPath = Path(protein)
-
-        proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
-        shutil.copy(proteinPath, proteinFile)
-
-        proteinFiles = list(proteinDir.glob("*"))
-        if proteinFiles:
-            self.convertFiles(proteinFiles, proteinDir)
-            self.removePdbFiles(proteinDir)
-        else:
-            logging.warning("No protein files found.")
-
-        # Ligands
-        nBatches = self.getNBatches()
-        molSubSets = makeSubsets(self.inputSmallMolecules.get(), nBatches, True)
+        # Ligands -> convertInputStep converts each batch in one call
+        molSubSets = makeSubsets(self.inputSmallMolecules.get(), self.getNBatches(), True)
         for it, subset in enumerate(molSubSets):
-            moleculeDir = self.getMoleculesDir(it)
-            moleculeDir.mkdir(parents=True, exist_ok=True)
-
-            ligandOutDir = moleculeDir / self._defaultName
-            ligandOutDir.mkdir(parents=True, exist_ok=True)
-
-            for i, ligand in enumerate(subset, start=1):
+            for ligand in subset:
                 ligandPath = Path(ligand.getPoseFile())
-                origName = ligandPath.name
-                newName = f"{self._defaultName}_{origName}"
-
-                dest = ligandOutDir / newName
-                shutil.copy(ligandPath, dest)
-
+                self.prepareStructure(ligandPath, self.getInMolsDir(it), self.getLigandDir(it),
+                                    f"{self._defaultName}_{ligandPath.stem}")
 
     def convertInputStep(self, it):
-        ligandDir = self.getMoleculesDir(it)
-
-        ligandFiles = []
-        for subfolder in ligandDir.iterdir():
-            if subfolder.is_dir():
-                ligandFiles.extend(f for f in subfolder.glob("*") if f.is_file())
-        if ligandFiles:
-            self.convertFiles(ligandFiles, os.path.abspath(subfolder))
-            self.removePdbFiles((subfolder))
-        else:
-            logging.warning("No ligand files found.")
+        self.convertToPdbqt(self.getInMolsDir(it), self.getLigandDir(it))
 
 
     def scorchStep(self, it):
@@ -338,6 +308,16 @@ Notes
     def getMoleculesDir(self, it):
         return self.getBatchDir(it) / "molecule"
 
+    def getLigandDir(self, it):
+        """SCORCH2 looks for the poses of a target in <ligand-dir>/<pdbId>/"""
+        return self.getMoleculesDir(it) / self._defaultName
+
+    def getInProtDir(self):
+        return Path(self._getTmpPath("inputProtein"))
+
+    def getInMolsDir(self, it):
+        return Path(self._getTmpPath(f"inputMols_{it}"))
+
     def getResultsDir(self, it):
         return self.getBatchDir(it) / f"results"
 
@@ -355,41 +335,51 @@ Notes
             else:
                 return True, files
 
-    def convertFiles(self, fileList, baseDir):
-        """Convert PDB or CIF to PDBQT, keeping output in the same folder as the input file"""
-        oFiles = []
-        for file in fileList:
-            suffix = file.suffix.lower()
-            basename = file.stem
+    def prepareStructure(self, oriFile, inDir, outDir, baseName):
+        """A file that already is PDBQT goes straight to outDir, anything else convertToPdbqt.
+        """
+        suffix = oriFile.suffix.lower()
+        if suffix == ".pdbqt":
+            outDir.mkdir(parents=True, exist_ok=True)
+            self.linkFile(oriFile, outDir / f"{baseName}.pdbqt")
+            return
 
-            if suffix == ".pdbqt":
-                continue
+        inDir.mkdir(parents=True, exist_ok=True)
+        if suffix == ".cif":
+            cifToPdb(str(oriFile.resolve()), str((inDir / f"{baseName}.pdb").resolve()))
+        else:
+            self.linkFile(oriFile, inDir / f"{baseName}{suffix}")
 
-            pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
-            outputPath = str(pdbqtFile.resolve())
-            oFiles.append(outputPath)
-            inputPath = str(file.resolve())
+    def convertToPdbqt(self, inDir, outDir):
+        """Convert every structure staged in inDir to PDBQT with a SINGLE OpenBabel call.
 
-            if suffix == ".cif":
-                pdbFile = Path(baseDir) / f"{basename}.pdb"
-                cifToPdb(inputPath, str(pdbFile.resolve()))
-                inputPath = str(pdbFile.resolve())
-                suffix = '.pdb'
+        obabel_IO.py --multiFiles walks the directory inside one python process, so a whole batch
+        costs one conda activation instead of one per molecule.
+        """
+        outDir.mkdir(parents=True, exist_ok=True)
+        inFiles = list(inDir.glob("*")) if inDir.exists() else []
+        if not inFiles:
+            # Every input was already in PDBQT and went straight to outDir
+            return
 
-            args = f"-i{suffix[1:]} {inputPath} -opdbqt -O {outputPath}"
-            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
-        return oFiles
+        args = f' --multiFiles -iD "{os.path.abspath(inDir)}" --pattern "*" ' \
+               f'-of pdbqt --outputDir "{os.path.abspath(outDir)}"'
+        Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=os.path.abspath(outDir))
 
+        missed = [f.name for f in inFiles if not (outDir / f"{f.stem}.pdbqt").exists()]
+        if missed:
+            logging.warning(f"OpenBabel could not convert {len(missed)} structure(s) to PDBQT, they "
+                            f"will not be scored: {', '.join(missed)}")
 
-    def removePdbFiles(self, directory):
-        """Removes .pdb files only if their corresponding .pdbqt exists in the same directory."""
-        for pdbFile in directory.rglob("*.pdb"):
-            pdbqtFile = pdbFile.with_suffix(".pdbqt")
-            if pdbqtFile.exists():
-                try:
-                    pdbFile.unlink()
-                except Exception as e:
-                    logging.warning(f"Could not delete {pdbFile.name}: {e}")
+    @staticmethod
+    def linkFile(oriFile, destFile):
+        """Hard link the structure instead of copying it, the staged files are never modified."""
+        if destFile.exists():
+            return
+        try:
+            os.link(oriFile, destFile)
+        except OSError:
+            shutil.copy(oriFile, destFile)
 
     def readScoresTSV(self):
         scoreDict = {}
