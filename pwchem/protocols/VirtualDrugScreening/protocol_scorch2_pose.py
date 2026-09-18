@@ -182,11 +182,11 @@ Notes
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        rStep = self._insertFunctionStep(self.organizeInputStep)
+        rStep = self._insertFunctionStep(self.organizeInputStep, needsGPU=False)
 
         sSteps = []
         for it in range(self.getNBatches()):
-            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep])
+            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep], needsGPU=False)
             sSteps += [self._insertFunctionStep(self.scorchStep, it, prerequisites=[cStep])]
         oStep = self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
 
