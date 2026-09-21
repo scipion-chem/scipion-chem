@@ -28,7 +28,6 @@
 
 """
 SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-based virtual screening. (SC2, https://github.com/LinCompbio/SCORCH2)
-
 """
 import csv
 import logging
@@ -36,16 +35,12 @@ from pathlib import Path
 from pwem.convert import cifToPdb
 
 from pyworkflow.object import Float
-from pyworkflow.protocol import params, STEPS_PARALLEL
+from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import os, shutil, re, makeSubsets, insistentRun
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.utils import os, shutil, makeSubsets, insistentRun
 from pwchem import Plugin, SCORCH2_DIC, OPENBABEL_DIC
-
-
-currentDir = Path(__file__).parent.resolve()
-
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -320,20 +315,6 @@ Notes
 
     def getResultsDir(self, it):
         return self.getBatchDir(it) / f"results"
-
-    def getPDBId(self):
-        protein = self.inputSmallMolecules.get().getProteinFile()
-        proteinPath = Path(protein)
-        return proteinPath.stem
-
-    def checkPdbqtFiles(self, directory):
-        """Check if files are PDBQT"""
-        files = list(directory.glob("*"))
-        for f in files:
-            if f.suffix.lower() != ".pdbqt":
-                return False, files
-            else:
-                return True, files
 
     def prepareStructure(self, oriFile, inDir, outDir, baseName):
         """A file that already is PDBQT goes straight to outDir, anything else convertToPdbqt.
