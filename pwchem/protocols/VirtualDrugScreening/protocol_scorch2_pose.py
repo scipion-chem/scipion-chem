@@ -183,7 +183,7 @@ Notes
         for it in range(self.getNBatches()):
             cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep], needsGPU=False)
             sSteps += [self._insertFunctionStep(self.scorchStep, it, prerequisites=[cStep])]
-        oStep = self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps, needsGPU=False)
+        self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps, needsGPU=False)
 
     def organizeInputStep(self):
         # Receptor. SCORCH2 takes the PDB ID from the protein file name, hence the "{_defaultName}_" prefix
