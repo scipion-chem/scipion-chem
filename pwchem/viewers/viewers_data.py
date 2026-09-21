@@ -40,8 +40,6 @@ from pwem.viewers.mdviewer.viewer import MDViewer
 from pwem.protocols import EMProtocol
 from pwem.objects import SetOfSequences, AtomStruct, SetOfAtomStructs
 
-from Bio.PDB import PDBParser, MMCIFParser, PPBuilder
-
 import pwchem.objects
 from pwchem import Plugin as pwchemPlugin
 from pwchem.constants import *
