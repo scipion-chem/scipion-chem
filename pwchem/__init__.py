@@ -306,23 +306,24 @@ class Plugin(pwem.Plugin):
             'SCORCH_MODELS_FOLDER_CREATED'
         )
 
-        #download and extract models from Zenodo
-        # Download and extract models from Zenodo
+        # download and extract models from Zenodo
         modelUrl = "https://zenodo.org/records/17335679/files/SCORCH2_models.xz?download=1"
-
         installer.addCommand(
             f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
             "cd scorchModels && "
-            f'wget -O SCORCH2_models.xz "{modelUrl}" && '
-            "xz -t SCORCH2_models.xz && "
+            f"wget -O SCORCH2_models.xz {modelUrl} && "
             "xz -d SCORCH2_models.xz && "
             "tar -xf SCORCH2_models && "
-            "[ -f models/sc2_ps.xgb ] && "
-            "[ -f models/sc2_pb.xgb ] && "
-            "[ -f models/sc2_ps_scaler ] && "
-            "[ -f models/sc2_pb_scaler ] && "
+            "[ -f models/sc2_ps.xgb ] && [ -f models/sc2_pb.xgb ] && "
+            "[ -f models/sc2_ps_scaler ] && [ -f models/sc2_pb_scaler ] && "
             "echo '? SCORCH2 models successfully downloaded and placed in scorchModels/models/'",
             'SCORCH_MODELS_DOWNLOADED'
+        )
+
+        installer.addCommand(
+            f"{cls.getEnvActivationCommand(SCORCH2_DIC)} && "
+            "git clone https://github.com/LinCompbio/SCORCH2.git",
+            'SCORCH2_REPO_CLONED'
         )
 
         installer.addPackage(env, dependencies=['mamba', 'conda'], default=default)
