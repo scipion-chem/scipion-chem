@@ -146,33 +146,33 @@ class ProtMergeStructs(EMProtocol):
       model = Model.Model(0)
       structure.add(model)
 
-      used_chain_ids = set()
+      usedChainIds = set()
       chain_pool = iter(
           "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
           "abcdefghijklmnopqrstuvwxyz"
           "0123456789"
       )
 
-      def get_unique_chain_id(preferred_id=None):
+      def getUniqueChainId(preferredId=None):
           """
           Return a chain ID that is not already present in the merged model.
           """
-          if preferred_id and preferred_id not in used_chain_ids:
-              chain_id = preferred_id
+          if preferredId and preferredId not in usedChainIds:
+              chainId = preferredId
           else:
               while True:
                   try:
-                      chain_id = next(chain_pool)
+                      chainId = next(chain_pool)
                   except StopIteration:
                       raise RuntimeError(
                           "No more unique chain IDs available."
                       )
 
-                  if chain_id not in used_chain_ids:
+                  if chainId not in usedChainIds:
                       break
 
-          used_chain_ids.add(chain_id)
-          return chain_id
+          usedChainIds.add(chainId)
+          return chainId
 
       outputExt = None
 
@@ -209,7 +209,7 @@ class ProtMergeStructs(EMProtocol):
 
           for chain in modelIn:
               newChain = chain.copy()
-              newChain.id = get_unique_chain_id(chain.id)
+              newChain.id = getUniqueChainId(chain.id)
               model.add(newChain)
 
       if self.inputLigands:
@@ -301,10 +301,10 @@ class ProtMergeStructs(EMProtocol):
                   for chain in modelIn:
 
                       newChain = chain.copy()
-                      newChain.id = get_unique_chain_id()
+                      newChain.id = getUniqueChainId()
 
                       for residue in newChain:
-                          hetflag, resseq, icode = residue.id
+                          _, resseq, icode = residue.id
 
                           residue.resname = "LIG"
 
@@ -317,7 +317,6 @@ class ProtMergeStructs(EMProtocol):
                       model.add(newChain)
 
                       print(
-                          f"[ProtMergeStructs] "
                           f"Added ligand chain {newChain.id}"
                       )
 
