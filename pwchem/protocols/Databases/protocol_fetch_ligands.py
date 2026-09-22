@@ -45,6 +45,7 @@ URL_MAX_TRIES = 12
 URL_MAX_SLEEP = 10
 CHEMBL_URL = 'https://www.ebi.ac.uk/chembl/api/data'
 CHEMBL_PAGE_SIZE = 1000
+BINDINGDB_URL = 'https://bindingdb.org/rest'
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
 RDKIT, OPENBABEL = 0, 1
@@ -503,17 +504,19 @@ class ProtocolLigandsFetching(EMProtocol):
         return list(set(targetIds))
 
     def mapUniprot2SmilesDic(self, uniprot_id):
+        """{BindingDB monomer id: smiles} of the ligands of a uniprot entry."""
         ligDic = {}
-        url = 'https://bindingdb.org/axis2/services/BDBService/getLigandsByUniprot?uniprot={}'.format(uniprot_id)
-        fullXML = self.readUrl(url).decode('utf-8')
-        ligIds = re.findall(r'<bdb:monomerid>\d+</bdb:monomerid>', fullXML)
-        ligIds = [ligId.split('>')[1].split('<')[0] for ligId in ligIds]
+        url = f'{BINDINGDB_URL}/getLigandsByUniprot?uniprot={uniprot_id}&response=application/json'
+        content = self.readUrl(url).decode('utf-8')
+        if not content.strip():
+            return ligDic
 
-        smiles = re.findall(r'<bdb:smiles>.+?</bdb:smiles>', fullXML)
-        smiles = [smi.split('>')[1].split('<')[0].split()[0] for smi in smiles]
+        jDic = json.loads(content)
+        response = jDic.get('getLindsByUniprotResponse') or next(iter(jDic.values()), {})
 
-        for ligId, smi in zip(ligIds, smiles):
-            ligDic[ligId] = smi
+        for affinity in response.get('bdb.affinities', []):
+            # The ids are numbers here, but they are matched against the text map of getDBDMapDic
+            ligDic[str(affinity['bdb.monomerid'])] = affinity['bdb.smile']
 
         return ligDic
 
@@ -812,16 +815,22 @@ class ProtocolLigandsFetching(EMProtocol):
             # Number of atoms not found in jDic. Number of atoms filter present when ligand is parsed
 
         elif iBase == 1:
+            props = jDic['molecules'][0].get('molecule_properties')
+            if not props:
+                # ChEMBL computes no properties for polymers, peptides and excipients
+                self.addToSummary('ChEMBL id {} has no molecular properties, it is discarded'.format(
+                    jDic['molecules'][0].get('molecule_chembl_id')))
+                return False
+
             checks.append(False)
-            if float(jDic['molecules'][0]['molecule_properties']['full_mwt']) >= weight:
+            if float(props['full_mwt']) >= weight:
                 checks[-1] = True
 
             checks.append(False)
-            if 'heavy_atoms' in jDic['molecules'][0]['molecule_properties'] and \
-                        jDic['molecules'][0]['molecule_properties']['heavy_atoms']:
-                numAtoms = int(jDic['molecules'][0]['molecule_properties']['heavy_atoms'])
+            if 'heavy_atoms' in props and props['heavy_atoms']:
+                numAtoms = int(props['heavy_atoms'])
             else:
-                numAtoms = self.countAtoms(jDic['molecules'][0]['molecule_properties']['full_molformula'])
+                numAtoms = self.countAtoms(props['full_molformula'])
 
             if numAtoms >= minAtoms:
                 checks[-1] = True
