@@ -43,7 +43,8 @@ from ...utils import getBaseName
 from ...constants import RDKIT_DIC, OPENBABEL_DIC, MDTRAJ_DIC
 
 RDKIT, OBABEL = 'RDKit', 'OpenBabel'
-extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': '.mol2', 'SDF': '.sdf', 'Smiles': '.smi'}
+MOL2_EXT = '.mol2'
+extDic = {'PDB': '.pdb', 'cif': '.cif', 'Mol2': MOL2_EXT, 'SDF': '.sdf', 'Smiles': '.smi'}
 
 class ConvertStructures(EMProtocol):
     """
@@ -333,7 +334,7 @@ class ConvertStructures(EMProtocol):
             # RDKit cannot parse a mol2 written by anything but Corina, so those go to OpenBabel
             # even when RDKit was chosen, as protocol_import_smallMolecules.py already does
             manager = self.getEnumText('useManager')
-            if manager == RDKIT and fnSmall.endswith('.mol2'):
+            if manager == RDKIT and fnSmall.endswith(MOL2_EXT):
                 manager = OBABEL
 
             batchDir = self.getBatchDir(manager, i // self.batchSize.get())
@@ -390,7 +391,7 @@ class ConvertStructures(EMProtocol):
         elif fn.endswith('.sd'):  # MDL MOL FORMAT
             args = "-isd"
 
-        elif fn.endswith('.mol2'):  # Sybyl Mol2 format (3D)
+        elif fn.endswith(MOL2_EXT):  # Sybyl Mol2 format (3D)
             args = "-imol2"
         elif fn.endswith('.smi') or fn.endswith('.smiles'):  # Smiles format (2D)
             args = "-ismi"
