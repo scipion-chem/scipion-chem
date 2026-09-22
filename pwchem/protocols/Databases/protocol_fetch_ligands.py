@@ -838,7 +838,7 @@ class ProtocolLigandsFetching(EMProtocol):
                 if e.code < 500 or attempt == maxTries:
                     raise
                 lastError = e
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+            except OSError as e:
                 if attempt == maxTries:
                     raise
                 lastError = e
