@@ -153,6 +153,27 @@ class ProtMergeStructs(EMProtocol):
           "0123456789"
       )
 
+      def get_unique_chain_id(preferred_id=None):
+          """
+          Return a chain ID that is not already present in the merged model.
+          """
+          if preferred_id and preferred_id not in used_chain_ids:
+              chain_id = preferred_id
+          else:
+              while True:
+                  try:
+                      chain_id = next(chain_pool)
+                  except StopIteration:
+                      raise RuntimeError(
+                          "No more unique chain IDs available."
+                      )
+
+                  if chain_id not in used_chain_ids:
+                      break
+
+          used_chain_ids.add(chain_id)
+          return chain_id
+
       outputExt = None
 
       for ptr in self.inputStructs:
@@ -166,111 +187,165 @@ class ProtMergeStructs(EMProtocol):
 
           if ext == ".pdb":
               parser = PDBParser(QUIET=True)
+
           elif ext in [".cif", ".mmcif"]:
               parser = MMCIFParser(QUIET=True)
-          else:
-              raise Exception(f"Unsupported structure format: {structFile}")
 
-          print(f"Structure: {structFile}")
+          else:
+              raise Exception(
+                  f"Unsupported structure format: {structFile}"
+              )
+
+          print(f"[ProtMergeStructs] Structure: {structFile}")
 
           s = parser.get_structure("tmp", structFile)
 
           try:
               modelIn = next(s.get_models())
           except StopIteration:
-              raise Exception(f"No models found in structure: {structFile}")
+              raise Exception(
+                  f"No models found in structure: {structFile}"
+              )
 
           for chain in modelIn:
               newChain = chain.copy()
-
-              if newChain.id in used_chain_ids:
-                  while True:
-                      newId = next(chain_pool)
-                      if newId not in used_chain_ids:
-                          newChain.id = newId
-                          break
-
-              used_chain_ids.add(newChain.id)
+              newChain.id = get_unique_chain_id(chain.id)
               model.add(newChain)
 
-      for ptr in self.inputLigands:
-          ligandSet = ptr.get()
+      if self.inputLigands:
+          for ptr in self.inputLigands:
 
-          for ligand in ligandSet:
-              ligandFile = ligand.getPoseFile()
-              print(f'Ligand: {ligandFile}')
+              ligandSet = ptr.get()
 
-              ext = Path(ligandFile).suffix.lower()
+              if ligandSet is None:
+                  continue
 
-              if ext in [".sdf", ".mol2"]:
-                  convDir = self._getExtraPath("ligands")
-                  os.makedirs(convDir, exist_ok=True)
+              for ligand in ligandSet:
+                  if ligandSet.isDocked():
+                      ligandFile = ligand.getPoseFile()
+                  else:
+                      ligandFile = ligand.getFileName()
 
-                  ligandName = Path(ligandFile).stem
-                  args = (
-                      f' -i "{os.path.abspath(ligandFile)}"'
-                      f' -of pdb'
-                      f' -o "{ligandName}"'
-                      f' -od "{os.path.abspath(convDir)}"'
+                  if not ligandFile:
+                      continue
+
+                  ligandFile = os.path.abspath(ligandFile)
+
+                  ext = Path(ligandFile).suffix.lower()
+
+                  if ext in [".sdf", ".mol2"]:
+                      convDir = self._getExtraPath("ligands")
+                      os.makedirs(convDir, exist_ok=True)
+
+                      ligandName = Path(ligandFile).stem
+
+                      args = (
+                          f' -i "{ligandFile}"'
+                          f' -of pdb'
+                          f' -o "{ligandName}"'
+                          f' -od "{os.path.abspath(convDir)}"'
+                      )
+
+                      print(
+                          f"[ProtMergeStructs] Converting ligand: "
+                          f"{ligandFile}"
+                      )
+
+                      pwchemPlugin.runScript(
+                          self,
+                          'obabel_IO.py',
+                          args,
+                          env=OPENBABEL_DIC,
+                          cwd=convDir
+                      )
+
+                      ligandFile = os.path.join(
+                          convDir,
+                          f"{ligandName}.pdb"
+                      )
+                      ligandFile = self._fixLigandPDBAtomNames(
+                          ligandFile
+                      )
+
+                  ext = Path(ligandFile).suffix.lower()
+
+                  if ext == ".pdb":
+                      parser = PDBParser(QUIET=True)
+
+                  elif ext in [".cif", ".mmcif"]:
+                      parser = MMCIFParser(QUIET=True)
+
+                  else:
+                      raise ValueError(
+                          f"Unsupported ligand format: {ligandFile}"
+                      )
+
+                  print(
+                      f"[ProtMergeStructs] Adding ligand: "
+                      f"{ligandFile}"
                   )
 
-                  pwchemPlugin.runScript(
-                      self,
-                      'obabel_IO.py',
-                      args,
-                      env=OPENBABEL_DIC,
-                      cwd=convDir
+                  s = parser.get_structure(
+                      "ligand",
+                      ligandFile
                   )
 
-                  ligandFile = os.path.join(convDir, f"{ligandName}.pdb")
-                  ligandFile = self._fixLigandPDBAtomNames(ligandFile)
+                  try:
+                      modelIn = next(s.get_models())
 
-              ext = Path(ligandFile).suffix.lower()
+                  except StopIteration as e:
+                      raise ValueError(
+                          f"No models found in ligand: {ligandFile}"
+                      ) from e
 
-              if ext == ".pdb":
-                  parser = PDBParser(QUIET=True)
-              elif ext in [".cif", ".mmcif"]:
-                  parser = MMCIFParser(QUIET=True)
-              else:
-                  raise ValueError(
-                      f"Unsupported ligand format: {ligandFile}"
-                  )
+                  for chain in modelIn:
 
-              s = parser.get_structure("ligand", ligandFile)
+                      newChain = chain.copy()
+                      newChain.id = get_unique_chain_id()
 
-              try:
-                  modelIn = next(s.get_models())
-              except StopIteration as e:
-                  raise ValueError(
-                      f"No models found in ligand: {ligandFile}"
-                  ) from e
+                      for residue in newChain:
+                          hetflag, resseq, icode = residue.id
 
-              for chain in modelIn:
-                  newChain = chain.copy()
+                          residue.resname = "LIG"
 
-                  if newChain.id in used_chain_ids:
-                      while True:
-                          newId = next(chain_pool)
-                          if newId not in used_chain_ids:
-                              newChain.id = newId
-                              break
+                          residue.id = (
+                              "H_LIG",
+                              resseq,
+                              icode
+                          )
 
-                  used_chain_ids.add(newChain.id)
-                  model.add(newChain)
+                      model.add(newChain)
 
-      # Write output in the same format as the first input
+                      print(
+                          f"[ProtMergeStructs] "
+                          f"Added ligand chain {newChain.id}"
+                      )
+
       if outputExt == ".pdb":
-          outFile = self._getPath("merged_struct.pdb")
+          outFile = self._getPath(
+              "merged_struct.pdb"
+          )
           io = PDBIO()
       else:
-          outFile = self._getPath("merged_struct.cif")
+          outFile = self._getPath(
+              "merged_struct.cif"
+          )
           io = MMCIFIO()
 
       io.set_structure(structure)
       io.save(outFile)
 
-      output = AtomStruct(filename=outFile)
-      self._defineOutputs(outputStructure=output)
+      print(
+          f"Merged structure written to: "
+          f"{outFile}"
+      )
+
+      output = AtomStruct(
+          filename=outFile
+      )
+      self._defineOutputs(
+          outputStructure=output
+      )
 
 
   # --------------------------- INFO functions -----------------------------------
@@ -300,3 +375,4 @@ class ProtMergeStructs(EMProtocol):
               f_out.write(line)
 
       return fixedFile
+
