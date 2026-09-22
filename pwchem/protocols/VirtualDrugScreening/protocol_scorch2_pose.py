@@ -40,7 +40,7 @@ from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import os, shutil, makeSubsets, insistentRun
-from pwchem import Plugin, SCORCH2_DIC, OPENBABEL_DIC
+from pwchem import Plugin, SCORCH2_DIC, OPENBABEL_DIC, RDKIT_DIC
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -331,6 +331,12 @@ Notes
         else:
             self.linkFile(oriFile, inDir / f"{baseName}{suffix}")
 
+    def convertMaeToSdf(self, inDir):
+        """Maestro files (Glide output) to SDF with RDKit, since OpenBabel cannot read them at all."""
+        inDir = os.path.abspath(inDir)
+        args = f' --multiFiles -iD "{inDir}" --pattern "*.mae*" -of sdf --keepHs --outputDir "{inDir}"'
+        Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=inDir)
+
     def convertToPdbqt(self, inDir, outDir):
         """Convert every structure staged in inDir to PDBQT with a SINGLE OpenBabel call.
 
@@ -342,6 +348,12 @@ Notes
         if not inFiles:
             # Every input was already in PDBQT and went straight to outDir
             return
+
+        if any(f.suffix.lower() in (".mae", ".maegz") for f in inFiles):
+            self.convertMaeToSdf(inDir)
+            for maeFile in inDir.glob("*.mae*"):
+                maeFile.unlink()
+            inFiles = list(inDir.glob("*"))
 
         args = f' --multiFiles -iD "{os.path.abspath(inDir)}" --pattern "*" ' \
                f'-of pdbqt --outputDir "{os.path.abspath(outDir)}"'
