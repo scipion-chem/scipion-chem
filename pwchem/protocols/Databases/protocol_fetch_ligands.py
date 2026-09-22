@@ -46,6 +46,8 @@ URL_MAX_SLEEP = 10
 CHEMBL_URL = 'https://www.ebi.ac.uk/chembl/api/data'
 CHEMBL_PAGE_SIZE = 1000
 BINDINGDB_URL = 'https://bindingdb.org/rest'
+MODELSERVER_URL = 'https://models.rcsb.org/v1'
+CHAIN_ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
 RDKIT, OPENBABEL = 0, 1
@@ -613,24 +615,84 @@ class ProtocolLigandsFetching(EMProtocol):
         self.saveBDBLigands(ligIds)
 
     def savePDBLigands(self, ligNames, alignedFns):
-        # Save ligands
+        """Save each ligand of the entries, asking the RCSB model server for it first"""
         ligandFiles = {}
-        ligIds = []
         for pdbId in ligNames:
-            s = MMCIFParser().get_structure(pdbId, alignedFns[pdbId])
-            io = PDBIO()
-            io.set_structure(s)
             for ligId in ligNames[pdbId]:
-                for residue in s.get_residues():
-                    # Several HETATM residues with same name might be found. Stored in different structROIs
-                    if residue.get_resname() == ligId:
-                        if len(list(residue.get_atoms())) > self.minAtoms.get():
-                            if ligId not in ligIds:
-                                ligandFiles[ligId] = self._getExtraPath(ligId + '.pdb')
-                                io.save(ligandFiles[ligId], ResSelect(residue))
-                                ligIds.append(ligId)
+                # Several HETATM residues with the same name might be found, only one is stored
+                if ligId in ligandFiles:
+                    continue
+
+                oFile = self.downloadLigand(pdbId, ligId)
+                if not oFile:
+                    oFile = self.extractLigand(pdbId, ligId, alignedFns[pdbId])
+
+                if oFile:
+                    ligandFiles[ligId] = oFile
 
         return ligandFiles
+
+    def downloadLigand(self, pdbId, ligId):
+        """The ligand as deposited in the entry, in SDF, from the RCSB model server.
+        Asking for it is better than carving it out of the mmCIF (no bonds guessed)."""
+        url = f'{MODELSERVER_URL}/{pdbId.lower()}/ligand?auth_comp_id={ligId}&encoding=sdf'
+        try:
+            sdfStr = self.readUrl(url).decode('utf-8')
+        except Exception as e:
+            self.addToSummary(f'Ligand {ligId} of {pdbId} could not be downloaded ({e}), it will be '
+                              f'extracted from the structure')
+            return None
+
+        if self.countSDFAtoms(sdfStr) <= self.minAtoms.get():
+            return None
+
+        oFile = self._getExtraPath(ligId + '.sdf')
+        with open(oFile, 'w') as f:
+            f.write(sdfStr)
+
+        return oFile
+
+    @staticmethod
+    def countSDFAtoms(sdfStr):
+        """Number of atoms of the first molecule of an SDF, 0 if it holds none."""
+        lines = sdfStr.splitlines()
+        if len(lines) < 4:
+            return 0
+
+        try:
+            return int(lines[3][:3])
+        except ValueError:
+            return 0
+
+    def extractLigand(self, pdbId, ligId, structFile):
+        """Ligand carved out of the structure of the entry, used when it cannot be downloaded."""
+        struct = MMCIFParser().get_structure(pdbId, structFile)
+        self.shortenChainIds(struct)
+
+        io = PDBIO()
+        io.set_structure(struct)
+        for residue in struct.get_residues():
+            if residue.get_resname() == ligId and len(list(residue.get_atoms())) > self.minAtoms.get():
+                oFile = self._getExtraPath(ligId + '.pdb')
+                io.save(oFile, ResSelect(residue))
+                return oFile
+
+        return None
+
+    @staticmethod
+    def shortenChainIds(struct):
+        """Rename the chain ids that PDB cannot store.
+
+        mmCIF allows chain ids of several characters while PDB keeps a single column for them, so
+        writing a structure read from mmCIF fails outright on ids such as 'AAA'. The id of a chain
+        is meaningless once a single ligand is taken out of it, so they are just renamed."""
+        used = {chain.id for chain in struct.get_chains() if len(chain.id) == 1}
+        for chain in struct.get_chains():
+            if len(chain.id) > 1:
+                free = [char for char in CHAIN_ID_CHARS if char not in used]
+                if free:
+                    chain.id = free[0]
+                    used.add(free[0])
 
     def getSMILigands(self, ligNames):
         ligandSMIs = {}
