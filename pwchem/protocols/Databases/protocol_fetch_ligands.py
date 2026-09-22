@@ -25,8 +25,8 @@
 # **************************************************************************
 
 # General imports
-import os, re, glob, json
-import urllib
+import os, re, glob, json, time
+import urllib.request, urllib.error
 from Bio.PDB import PDBIO, Select
 
 # Scipion em imports
@@ -39,6 +39,12 @@ from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import MMCIFParser, insistentExecution
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
+
+URL_TIMEOUT = 30
+URL_MAX_TRIES = 12
+URL_MAX_SLEEP = 10
+CHEMBL_URL = 'https://www.ebi.ac.uk/chembl/api/data'
+CHEMBL_PAGE_SIZE = 1000
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
 RDKIT, OPENBABEL = 0, 1
@@ -499,16 +505,15 @@ class ProtocolLigandsFetching(EMProtocol):
     def mapUniprot2SmilesDic(self, uniprot_id):
         ligDic = {}
         url = 'https://bindingdb.org/axis2/services/BDBService/getLigandsByUniprot?uniprot={}'.format(uniprot_id)
-        with urllib.request.urlopen(url) as response:
-            fullXML = response.read().decode('utf-8')
-            ligIds = re.findall(r'<bdb:monomerid>\d+</bdb:monomerid>', fullXML)
-            ligIds = [ligId.split('>')[1].split('<')[0] for ligId in ligIds]
+        fullXML = self.readUrl(url).decode('utf-8')
+        ligIds = re.findall(r'<bdb:monomerid>\d+</bdb:monomerid>', fullXML)
+        ligIds = [ligId.split('>')[1].split('<')[0] for ligId in ligIds]
 
-            smiles = re.findall(r'<bdb:smiles>.+?</bdb:smiles>', fullXML)
-            smiles = [smi.split('>')[1].split('<')[0].split()[0] for smi in smiles]
+        smiles = re.findall(r'<bdb:smiles>.+?</bdb:smiles>', fullXML)
+        smiles = [smi.split('>')[1].split('<')[0].split()[0] for smi in smiles]
 
-            for ligId, smi in zip(ligIds, smiles):
-                ligDic[ligId] = smi
+        for ligId, smi in zip(ligIds, smiles):
+            ligDic[ligId] = smi
 
         return ligDic
 
@@ -549,23 +554,22 @@ class ProtocolLigandsFetching(EMProtocol):
             for targetId in targetIds:
                 self.addRelationToFile('\tChEMBL target', targetId)
 
-                jDic = self.getJDic('ChEMBL', 'activity', targetId, limit=1)
-                nLigs = jDic['page_meta']['total_count']
-                jDic = self.getJDic('ChEMBL', 'activity', targetId, limit=nLigs)
+                actDics = [actDic for actDic in self.getChEMBLActivities(targetId)
+                           if self.checkStructureFilters(actDic, iBase)]
+                molDics = self.getChEMBLMolecules([actDic['molecule_chembl_id'] for actDic in actDics])
 
-                for jLigDic in jDic['activities']:
-                    if self.checkStructureFilters(jLigDic, iBase):
-                        chembl_id = jLigDic['molecule_chembl_id']
-                        jMolDic = self.getJDic('ChEMBL', 'molecule', chembl_id)
-                        if self.checkLigandFilters(jMolDic, iBase):
-                            if chembl_id not in allLigandNames or not self.nonRep.get():
-                                allLigandNames.append(chembl_id)
-                                self.addRelationToFile('\t\tChEMBL compound', chembl_id)
+                for jLigDic in actDics:
+                    chembl_id = jLigDic['molecule_chembl_id']
+                    jMolDic = molDics.get(chembl_id)
+                    if jMolDic and self.checkLigandFilters(jMolDic, iBase):
+                        if chembl_id not in allLigandNames or not self.nonRep.get():
+                            allLigandNames.append(chembl_id)
+                            self.addRelationToFile('\t\tChEMBL compound', chembl_id)
 
-                                if targetId not in ligNames:
-                                    ligNames[targetId] = {chembl_id: jLigDic['canonical_smiles']}
-                                else:
-                                    ligNames[targetId][chembl_id] = jLigDic['canonical_smiles']
+                            if targetId not in ligNames:
+                                ligNames[targetId] = {chembl_id: jLigDic['canonical_smiles']}
+                            else:
+                                ligNames[targetId][chembl_id] = jLigDic['canonical_smiles']
 
         return ligNames
 
@@ -824,6 +828,57 @@ class ProtocolLigandsFetching(EMProtocol):
 
         return all(checks)
 
+    def readUrl(self, url, maxTries=URL_MAX_TRIES):
+        """Read an url, retrying while the server is failing."""
+        for attempt in range(1, maxTries + 1):
+            try:
+                with urllib.request.urlopen(url, timeout=URL_TIMEOUT) as response:
+                    return response.read()
+            except urllib.error.HTTPError as e:
+                if e.code < 500 or attempt == maxTries:
+                    raise
+                lastError = e
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                if attempt == maxTries:
+                    raise
+                lastError = e
+
+            print(f'Attempt {attempt}/{maxTries} of {url} failed ({lastError}), retrying')
+            time.sleep(min(2 * attempt, URL_MAX_SLEEP))
+
+    def getJsonFromUrl(self, url):
+        """Read a json from an url, retrying while the server is failing"""
+        return json.loads(self.readUrl(url))
+
+    def getChEMBLActivities(self, targetId):
+        """Every activity of a ChEMBL target, asked page by page."""
+        activities, offset = [], 0
+        while True:
+            jDic = self.getJsonFromUrl(f'{CHEMBL_URL}/activity.json?limit={CHEMBL_PAGE_SIZE}&'
+                                       f'offset={offset}&target_chembl_id={targetId}')
+            page = jDic.get('activities', [])
+            activities += page
+            offset += CHEMBL_PAGE_SIZE
+
+            if len(page) < CHEMBL_PAGE_SIZE or offset >= jDic['page_meta']['total_count']:
+                return activities
+
+    def getChEMBLMolecules(self, chemblIds, chunkSize=50):
+        """Molecule entries of several ChEMBL ids, asked in chunks instead of one request each.
+        Every request is a chance for the service to fail, and a target with 38 ligands used to mean
+        38 requests that all had to succeed. Asking them in chunks turns those into one."""
+        molDics, uniqueIds = {}, list(dict.fromkeys(chemblIds))
+        for i in range(0, len(uniqueIds), chunkSize):
+            chunk = uniqueIds[i:i + chunkSize]
+            jDic = self.getJsonFromUrl(f'{CHEMBL_URL}/molecule.json?limit={len(chunk)}&'
+                                       f'molecule_chembl_id__in={",".join(chunk)}')
+
+            for mol in jDic.get('molecules', []):
+                # Kept with the shape of a single molecule response, as checkLigandFilters expects
+                molDics[mol['molecule_chembl_id']] = {'molecules': [mol]}
+
+        return molDics
+
     def getJDic(self, database, data, id, id2=None, limit=-1):
         if database == 'Uniprot':
             url = "http://www.uniprot.org/uniprot/%s.json" % id
@@ -846,14 +901,11 @@ class ProtocolLigandsFetching(EMProtocol):
                     url += 'limit=%s&' % limit
                 url += 'molecule_chembl_id=%s' % id
 
-        with urllib.request.urlopen(url) as response:
-            jDic = json.loads(response.read())
-        return jDic
+        return self.getJsonFromUrl(url)
 
     def getDBDSmiles(self, dbid):
         url = 'https://www.bindingdb.org/rwd/bind/chemsearch/marvin/MolStructure.jsp?monomerid={}'.format(dbid)
-        with urllib.request.urlopen(url) as response:
-            fullHTML = response.read().decode('utf-8')
+        fullHTML = self.readUrl(url).decode('utf-8')
 
         smiLine = re.findall(r'<b>SMILES</b> <span class="darkgray">.+?</span>', fullHTML)[0]
         return smiLine.split('"darkgray">')[1].split('<')[0]
@@ -868,9 +920,8 @@ class ProtocolLigandsFetching(EMProtocol):
             url = "https://www.bindingdb.org/rwd/bind/BindingDB_DrugBankID.txt"
 
         if not os.path.exists(mapFile):
-            with urllib.request.urlopen(url) as response:
-                with open(mapFile, 'w') as f:
-                    f.write(response.read().decode('utf-8'))
+            with open(mapFile, 'w') as f:
+                f.write(self.readUrl(url).decode('utf-8'))
 
         with open(mapFile) as f:
             for line in f:
