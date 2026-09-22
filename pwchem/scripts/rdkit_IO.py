@@ -179,6 +179,18 @@ def loadInputFiles(inputFile, nameKey, keepHs=False):
         return mols, "_Name"
     return getMolsFromFile(inputFile, nameKey=nameKey, keepHs=keepHs)
 
+def globInputFiles(inputDir, pattern):
+    '''Files of inputDir matching pattern'''
+    inputDir = os.path.realpath(inputDir)
+    inFiles = []
+    for inFile in sorted(glob.glob(os.path.join(inputDir, pattern))):
+        realFile = os.path.realpath(inFile)
+        if os.path.commonpath([inputDir, realFile]) != inputDir:
+            print('Skipping {}, it is outside the input directory {}'.format(inFile, inputDir))
+            continue
+        inFiles.append(realFile)
+    return inFiles
+
 def convertFile(inputFile, outFormat, outDir, singleOutFile, outName, outBase,
                 overW, make3d, nameKey, nt, keepHs):
     '''Convert one molecule file.'''
@@ -292,7 +304,7 @@ if __name__ == "__main__":
     outBase = args.outputBase if args.outputBase else 'molecule'
     if args.multiFiles:
         # One output per input file, named after it, exactly like obabel_IO.py --multiFiles
-        for inFile in sorted(glob.glob(os.path.join(args.inputDir, args.pattern))):
+        for inFile in globInputFiles(args.inputDir, args.pattern):
             convertFile(inFile, outFormat, outDir, True, os.path.splitext(os.path.basename(inFile))[0],
                         outBase, overW, make3d, nameKey, nt, args.keepHs)
     else:
