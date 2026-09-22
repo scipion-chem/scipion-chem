@@ -232,7 +232,7 @@ class ProtMergeStructs(EMProtocol):
               elif ext in [".cif", ".mmcif"]:
                   parser = MMCIFParser(QUIET=True)
               else:
-                  raise Exception(
+                  raise ValueError(
                       f"Unsupported ligand format: {ligandFile}"
                   )
 
@@ -240,10 +240,10 @@ class ProtMergeStructs(EMProtocol):
 
               try:
                   modelIn = next(s.get_models())
-              except StopIteration:
-                  raise Exception(
+              except StopIteration as e:
+                  raise ValueError(
                       f"No models found in ligand: {ligandFile}"
-                  )
+                  ) from e
 
               for chain in modelIn:
                   newChain = chain.copy()
