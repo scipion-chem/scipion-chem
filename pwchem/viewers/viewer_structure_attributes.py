@@ -118,11 +118,7 @@ class SASAStructureViewer(ChimeraAttributeViewer):
 
         if hasattr(self.protocol, 'outputAtomStruct'):
             super()._defineParams(form)
-            # Overwrite defaults
-            from pwem.wizards.wizard import ColorScaleWizardBase
-            group = form.addGroup('Color settings')
-            ColorScaleWizardBase.defineColorScaleParams(group, defaultLowest=0, defaultHighest=200, defaultIntervals=21,
-                                                  defaultColorMap='RdBu')
+            self._defineColorScale(form)
 
     def _getVisualizeDict(self):
         visDic = {}
@@ -131,6 +127,19 @@ class SASAStructureViewer(ChimeraAttributeViewer):
         if hasattr(self.protocol, 'outputAtomStruct'):
             visDic.update(super()._getVisualizeDict())
         return visDic
+
+    def _defineColorScale(self, form):
+        from pwem.wizards.wizard import ColorScaleWizardBase
+
+        group = form.addGroup('Color settings')
+
+        ColorScaleWizardBase.defineColorScaleParams(
+            group,
+            defaultLowest=0,
+            defaultHighest=200,
+            defaultIntervals=21,
+            defaultColorMap='RdBu'
+        )
 
     def _showSequenceAttrs(self, paramName=None):
         obj = self.protocol.outputSequence
@@ -143,4 +152,3 @@ class SASAStructureViewer(ChimeraAttributeViewer):
         prot = self.protocol
         attrDic = prot.outputSequence.getAttributesDic()
         plotSequenceAttribute(attrDic['SASA'], attrName='SASA')
-
