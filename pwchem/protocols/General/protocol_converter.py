@@ -30,7 +30,7 @@
 import os, shutil, parmed, importlib
 
 # Scipion chem imports
-from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.protocol.params import PointerParam, EnumParam, BooleanParam, IntParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from pwem.objects.data import AtomStruct
 from pwem.protocols import EMProtocol
@@ -200,12 +200,16 @@ class ConvertStructures(EMProtocol):
                        label='Output format: ',
                        help="Output format for the converted molecules")
         group.addParam('usePose', BooleanParam, default=False,
-                       label='Use the docked ligands: ', expertLevel=LEVEL_ADVANCED,
+                       label='Use the docked ligands: ',
                        help='Use the docked ligand files for preparation.')
 
         group.addParam('useManager', EnumParam, default=0, label='Convert using: ',
                       condition=f'{inputTypeCondition}SetOfSmallMolecules)', choices=[RDKIT, OBABEL],
                       help='Whether to convert the input molecules using RDKit or OpenBabel')
+
+        group.addParam('batchSize', IntParam, default=500, expertLevel=LEVEL_ADVANCED,
+                       condition=f'{inputTypeCondition}SetOfSmallMolecules)', label='Batch size: ',
+                       help='Number of molecules converted per call to the conversion script. ')
 
 
         group.addParam('outputFormatTarget', EnumParam, default=0,
@@ -235,38 +239,8 @@ class ConvertStructures(EMProtocol):
         self._insertFunctionStep('convertStep')
 
     def convertStep(self):
-
         if isinstance(self.inputObject.get(), SetOfSmallMolecules):
-            outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
-
-            self.convErrors = []  # Save the file paths that could not be transformed
-            for mol in self.inputObject.get():
-                fnSmall = self.getMolFile(mol)
-                fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-
-                outFormat = extDic[self.getEnumText('outputFormatSmall')]
-                outDir = os.path.abspath(self._getExtraPath())
-                fnOut = os.path.join(outDir, fnRoot + outFormat)
-
-                args = ' -i "{}" -of {} -o {} --outputDir {}'.format(fnSmall, outFormat, fnOut, outDir)
-                if self.getEnumText('useManager') == OBABEL:
-                    Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=outDir)
-                else:
-                    Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=outDir)
-
-                if os.path.exists(fnOut):
-                    smallMolecule = SmallMolecule(smallMolFilename=fnOut, molName='guess')
-                    outputSmallMolecules.append(smallMolecule)
-                else:
-                    self.convErrors.append(fnRoot)
-
-            if len(outputSmallMolecules) > 0:
-                outputSmallMolecules.updateMolClass()
-                self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
-                self._defineSourceRelation(self.inputObject, outputSmallMolecules)
-
-            if len(self.convErrors) > 0:
-                print("The following entries could not be converted: %s" % ','.join(self.convErrors))
+            self.convertMoleculesStep()
 
         elif isinstance(self.inputObject.get(), AtomStruct):
             fnStructure = os.path.abspath(self.inputObject.get().getFileName())
@@ -341,6 +315,68 @@ class ConvertStructures(EMProtocol):
 
             self._defineOutputs(outputSystem=outSystem)
             self._defineSourceRelation(self.inputObject, outSystem)
+
+    def convertMoleculesStep(self):
+        """Convert the input molecules in batches.
+        A conversion script call costs about 2 s just to activate its conda environment, so calling
+        it once per molecule make it really slow"""
+        outFormat = extDic[self.getEnumText('outputFormatSmall')]
+        outDir = os.path.abspath(self._getExtraPath())
+        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+
+        expected, batches = {}, {}
+        for i, mol in enumerate(self.inputObject.get()):
+            fnSmall = self.getMolFile(mol)
+            fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
+            expected[fnRoot] = os.path.join(outDir, fnRoot + outFormat)
+
+            # RDKit cannot parse a mol2 written by anything but Corina, so those go to OpenBabel
+            # even when RDKit was chosen, as protocol_import_smallMolecules.py already does
+            manager = self.getEnumText('useManager')
+            if manager == RDKIT and fnSmall.endswith('.mol2'):
+                manager = OBABEL
+
+            batchDir = self.getBatchDir(manager, i // self.batchSize.get())
+            batches.setdefault(batchDir, manager)
+            self.linkMolecule(fnSmall, os.path.join(batchDir, fnRoot + os.path.splitext(fnSmall)[1]))
+
+        for batchDir, manager in batches.items():
+            args = f' --multiFiles -iD "{batchDir}" --pattern "*" -of {outFormat[1:]} --outputDir "{outDir}"'
+            if manager == OBABEL:
+                Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=batchDir)
+            else:
+                Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=batchDir)
+
+        self.convErrors = []  # Save the file paths that could not be transformed
+        for fnRoot, fnOut in expected.items():
+            if os.path.exists(fnOut):
+                outputSmallMolecules.append(SmallMolecule(smallMolFilename=fnOut, molName='guess'))
+            else:
+                self.convErrors.append(fnRoot)
+
+        if len(outputSmallMolecules) > 0:
+            outputSmallMolecules.updateMolClass()
+            self._defineOutputs(outputSmallMolecules=outputSmallMolecules)
+            self._defineSourceRelation(self.inputObject, outputSmallMolecules)
+
+        if len(self.convErrors) > 0:
+            print("The following entries could not be converted: %s" % ','.join(self.convErrors))
+
+    def getBatchDir(self, manager, it):
+        """One staging directory per batch."""
+        batchDir = os.path.abspath(self._getTmpPath(f'inputMols_{manager}_{it}'))
+        os.makedirs(batchDir, exist_ok=True)
+        return batchDir
+
+    @staticmethod
+    def linkMolecule(molFile, destFile):
+        """Hard link the molecule into its batch directory instead of copying it."""
+        if os.path.exists(destFile):
+            return
+        try:
+            os.link(molFile, destFile)
+        except OSError:
+            shutil.copy(molFile, destFile)
 
     def inputArg(self, fn):  # Input format file (fn)
 
