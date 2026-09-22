@@ -32,14 +32,19 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.objects import AtomStruct
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 
 from pathlib import Path
+import os
 
 from Bio.PDB import (
     PDBParser, MMCIFParser,
     PDBIO, MMCIFIO,
     Structure, Model
 )
+
+from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import OPENBABEL_DIC
 
 
 class ProtMergeStructs(EMProtocol):
@@ -123,6 +128,15 @@ class ProtMergeStructs(EMProtocol):
                    pointerClass='AtomStruct',
                    help='Structures to merge into one single structure.')
 
+    group.addParam(
+        'inputLigands',
+        params.MultiPointerParam,
+        label="Input ligands: ",
+        pointerClass='SetOfSmallMolecules',
+        allowsNull=True,
+        help='Optional sets of ligands to add to the merged structure.'
+    )
+
   # --------------------------- Steps functions --------------------
   def _insertAllSteps(self):
     self._insertFunctionStep(self.createOutputStep)
@@ -157,7 +171,7 @@ class ProtMergeStructs(EMProtocol):
           else:
               raise Exception(f"Unsupported structure format: {structFile}")
 
-          print(f"Reading {structFile}")
+          print(f"Structure: {structFile}")
 
           s = parser.get_structure("tmp", structFile)
 
@@ -179,6 +193,71 @@ class ProtMergeStructs(EMProtocol):
               used_chain_ids.add(newChain.id)
               model.add(newChain)
 
+      for ptr in self.inputLigands:
+          ligandSet = ptr.get()
+
+          for ligand in ligandSet:
+              ligandFile = ligand.getPoseFile()
+              print(f'Ligand: {ligandFile}')
+
+              ext = Path(ligandFile).suffix.lower()
+
+              if ext in [".sdf", ".mol2"]:
+                  convDir = self._getExtraPath("ligands")
+                  os.makedirs(convDir, exist_ok=True)
+
+                  ligandName = Path(ligandFile).stem
+                  args = (
+                      f' -i "{os.path.abspath(ligandFile)}"'
+                      f' -of pdb'
+                      f' -o "{ligandName}"'
+                      f' -od "{os.path.abspath(convDir)}"'
+                  )
+
+                  pwchemPlugin.runScript(
+                      self,
+                      'obabel_IO.py',
+                      args,
+                      env=OPENBABEL_DIC,
+                      cwd=convDir
+                  )
+
+                  ligandFile = os.path.join(convDir, f"{ligandName}.pdb")
+                  ligandFile = self._fixLigandPDBAtomNames(ligandFile)
+
+              ext = Path(ligandFile).suffix.lower()
+
+              if ext == ".pdb":
+                  parser = PDBParser(QUIET=True)
+              elif ext in [".cif", ".mmcif"]:
+                  parser = MMCIFParser(QUIET=True)
+              else:
+                  raise Exception(
+                      f"Unsupported ligand format: {ligandFile}"
+                  )
+
+              s = parser.get_structure("ligand", ligandFile)
+
+              try:
+                  modelIn = next(s.get_models())
+              except StopIteration:
+                  raise Exception(
+                      f"No models found in ligand: {ligandFile}"
+                  )
+
+              for chain in modelIn:
+                  newChain = chain.copy()
+
+                  if newChain.id in used_chain_ids:
+                      while True:
+                          newId = next(chain_pool)
+                          if newId not in used_chain_ids:
+                              newChain.id = newId
+                              break
+
+                  used_chain_ids.add(newChain.id)
+                  model.add(newChain)
+
       # Write output in the same format as the first input
       if outputExt == ".pdb":
           outFile = self._getPath("merged_struct.pdb")
@@ -195,3 +274,29 @@ class ProtMergeStructs(EMProtocol):
 
 
   # --------------------------- INFO functions -----------------------------------
+
+  def _fixLigandPDBAtomNames(self, pdbFile):
+      fixedFile = self._getTmpPath(
+          f"{Path(pdbFile).stem}_fixed.pdb"
+      )
+
+      atomCounters = {}
+
+      with open(pdbFile) as f_in, open(fixedFile, "w") as f_out:
+          for line in f_in:
+              if line.startswith(("ATOM  ", "HETATM")):
+                  element = line[76:78].strip()
+
+                  if not element:
+                      element = line[12:16].strip()[0]
+
+                  atomCounters[element] = atomCounters.get(element, 0) + 1
+                  atomName = f"{element}{atomCounters[element]}"
+
+                  atomName = atomName[:4]
+
+                  line = line[:12] + f"{atomName:>4}" + line[16:]
+
+              f_out.write(line)
+
+      return fixedFile
