@@ -32,7 +32,7 @@ from pyworkflow.protocol.params import BooleanParam, PointerParam, IntParam
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import FastqFile
-from pwchem.utils.sequence_utils import getFastqStats, runFastqc
+from pwchem.utils.utilsRNA import getFastqStats, runFastqc
 
 
 class ProtFastpFilter(EMProtocol):

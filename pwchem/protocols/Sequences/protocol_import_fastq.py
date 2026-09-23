@@ -29,7 +29,7 @@ import os
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, FileParam, StringParam
 from pwchem.objects import FastqFile
-from pwchem.utils.sequence_utils import getFastqStats, runFastqc
+from pwchem.utils.utilsRNA import getFastqStats, runFastqc
 
 
 class ProtImportFastq(EMProtocol):

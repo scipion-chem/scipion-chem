@@ -33,7 +33,7 @@ import urllib.error
 import urllib.request
 import zipfile
 
-from pwchem.utils.sequence_utils import COMMON_SPECIES,getProviderSpeciesName,parseCustomSpecies
+from pwchem.utils.utilsRNA import COMMON_SPECIES,getProviderSpeciesName,parseCustomSpecies
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam,EnumParam,StringParam
 from pwchem import Plugin

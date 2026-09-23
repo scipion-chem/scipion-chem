@@ -41,11 +41,7 @@ from pyworkflow.protocol.params import (
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import VCFFile, SetOfVCFFiles
-from pwchem.utils.sequence_utils import (
-    COMMON_SPECIES,
-    getProviderSpeciesName,
-    parseCustomSpecies
-)
+from pwchem.utils.utilsRNA import COMMON_SPECIES,getProviderSpeciesName,parseCustomSpecies
 
 
 class ProtVCF(EMProtocol):
