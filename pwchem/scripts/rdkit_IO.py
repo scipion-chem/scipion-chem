@@ -99,7 +99,7 @@ def readSmilesMols(inFile, nameKey):
             if not line.strip():
                 continue
 
-            values = line.strip().split('\t')
+            values = line.split()
             if len(values) >= 2:
                 smi, name = values[0], values[1]
             else:
@@ -123,38 +123,17 @@ def getMolsFromFile(inFile, ext=None, nameKey=None, keepHs=False):
         inFile = decompressFile(inFile)
         ext = os.path.splitext(inFile)[1][1:]
 
-    mols = []
-    if ext == 'mae':
-        mols = list(Chem.MaeMolSupplier(inFile))
+    readers = {
+        'mae': lambda: readMaeMols(inFile, keepHs),
+        'smi': lambda: readSmilesMols(inFile, nameKey),
+        'smiles': lambda: readSmilesMols(inFile, nameKey),
+        'mol2': lambda: Mol2MolSupplier(inFile),
+        'sdf': lambda: list(Chem.SDMolSupplier(inFile)),
+        'sd': lambda: list(Chem.SDMolSupplier(inFile)),
+        'pdb': lambda: [Chem.MolFromPDBBlock(block) for block in divideMultiPDB(inFile)],
+    }
 
-    elif ext == 'smi' or ext == 'smiles':
-        with open(inFile) as f:
-            for line in f:
-                if not line.strip():
-                    continue
-
-                values = line.split()
-                if len(values) >= 2:
-                    smi, name = values[0], values[1]
-                else:
-                    smi, name = values[0], os.path.basename(os.path.splitext(inFile)[0])
-                
-                mol = Chem.MolFromSmiles(smi)
-                if mol:
-                    mol.SetProp(nameKey, name)
-                    mols.append(mol)
-
-    elif ext == 'mol2':
-        mols = Mol2MolSupplier(inFile)
-
-    elif ext == 'sdf' or ext == 'sd':
-        mols = list(Chem.SDMolSupplier(inFile))
-
-    elif ext == 'pdb':
-        for pdbBlock in divideMultiPDB(inFile):
-            mols.append(Chem.MolFromPDBBlock(pdbBlock))
-
-    else:
+    if ext not in readers:
         print('Unrecognized format {} for file {}'.format(ext, inFile))
         return [], nameKey
 
