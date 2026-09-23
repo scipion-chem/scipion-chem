@@ -28,7 +28,6 @@
 
 """
 SCORCH2 (SC2) is a machine learning rescoring model designed for interaction-based virtual screening. (SC2, https://github.com/LinCompbio/SCORCH2)
-
 """
 import csv
 import logging
@@ -36,16 +35,12 @@ from pathlib import Path
 from pwem.convert import cifToPdb
 
 from pyworkflow.object import Float
-from pyworkflow.protocol import params, STEPS_PARALLEL
+from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import os, shutil, re, runOpenBabel, makeSubsets, insistentRun
-from pwchem import Plugin, SCORCH2_DIC
-
-
-currentDir = Path(__file__).parent.resolve()
-
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.utils import os, shutil, makeSubsets, insistentRun
+from pwchem import Plugin, SCORCH2_DIC, OPENBABEL_DIC
 
 
 class ProtocolSCORCH2(EMProtocol):
@@ -155,8 +150,12 @@ Notes
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('useGPU', params.BooleanParam, default=True, label="Use GPU: ",
-                      help='Whether to use GPU or not. (Unable to choose the GPU id).')
+        form.addHidden(params.USE_GPU, params.BooleanParam, default=True,
+                       label="Use GPU for execution: ",
+                       help="This protocol has both CPU and GPU implementation.\
+                                                     Select the one you want to use.")
+        form.addHidden(params.GPU_LIST, params.StringParam, default='0', label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used (comma-separated)")
         iGroup = form.addGroup('Input')
         # Pre-extracted features
         iGroup.addParam('inputSmallMolecules', params.PointerParam, pointerClass='SetOfSmallMolecules',
@@ -178,63 +177,33 @@ Notes
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        rStep = self._insertFunctionStep(self.organizeInputStep)
+        rStep = self._insertFunctionStep(self.organizeInputStep, needsGPU=False)
 
         sSteps = []
         for it in range(self.getNBatches()):
-            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep])
+            cStep = self._insertFunctionStep(self.convertInputStep, it, prerequisites=[rStep], needsGPU=False)
             sSteps += [self._insertFunctionStep(self.scorchStep, it, prerequisites=[cStep])]
-        oStep = self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
+        self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps, needsGPU=False)
 
     def organizeInputStep(self):
-        # Receptor
-        proteinDir = self.getProtDir()
-        proteinDir.mkdir(parents=True, exist_ok=True)
+        # Receptor. SCORCH2 takes the PDB ID from the protein file name, hence the "{_defaultName}_" prefix
+        proteinPath = Path(self.inputSmallMolecules.get().getProteinFile())
+        self.prepareStructure(proteinPath, self.getInProtDir(), self.getProtDir(),
+                            f"{self._defaultName}_protein")
+        self.convertToPdbqt(self.getInProtDir(), self.getProtDir())
+        if not any(self.getProtDir().glob("*.pdbqt")):
+            logging.warning("No protein PDBQT file could be prepared for SCORCH2.")
 
-        protein = self.inputSmallMolecules.get().getProteinFile()
-        proteinPath = Path(protein)
-
-        proteinFile = proteinDir / f"{self._defaultName}_protein{proteinPath.suffix}"
-        shutil.copy(proteinPath, proteinFile)
-
-        proteinFiles = list(proteinDir.glob("*"))
-        if proteinFiles:
-            self.convertFiles(proteinFiles, proteinDir)
-            self.removePdbFiles(proteinDir)
-        else:
-            logging.warning("No protein files found.")
-
-        # Ligands
-        nBatches = self.getNBatches()
-        molSubSets = makeSubsets(self.inputSmallMolecules.get(), nBatches, True)
+        # Ligands -> convertInputStep converts each batch in one call
+        molSubSets = makeSubsets(self.inputSmallMolecules.get(), self.getNBatches(), True)
         for it, subset in enumerate(molSubSets):
-            moleculeDir = self.getMoleculesDir(it)
-            moleculeDir.mkdir(parents=True, exist_ok=True)
-
-            ligandOutDir = moleculeDir / self._defaultName
-            ligandOutDir.mkdir(parents=True, exist_ok=True)
-
-            for i, ligand in enumerate(subset, start=1):
+            for ligand in subset:
                 ligandPath = Path(ligand.getPoseFile())
-                origName = ligandPath.name
-                newName = f"{self._defaultName}_{origName}"
-
-                dest = ligandOutDir / newName
-                shutil.copy(ligandPath, dest)
-
+                self.prepareStructure(ligandPath, self.getInMolsDir(it), self.getLigandDir(it),
+                                    f"{self._defaultName}_{ligandPath.stem}")
 
     def convertInputStep(self, it):
-        ligandDir = self.getMoleculesDir(it)
-
-        ligandFiles = []
-        for subfolder in ligandDir.iterdir():
-            if subfolder.is_dir():
-                ligandFiles.extend(f for f in subfolder.glob("*") if f.is_file())
-        if ligandFiles:
-            self.convertFiles(ligandFiles, os.path.abspath(subfolder))
-            self.removePdbFiles((subfolder))
-        else:
-            logging.warning("No ligand files found.")
+        self.convertToPdbqt(self.getInMolsDir(it), self.getLigandDir(it))
 
 
     def scorchStep(self, it):
@@ -274,11 +243,13 @@ Notes
         if self.aggregate.get():
             args.append("--aggregate")
 
-        if self.useGPU.get():
+        gpuIdx=None
+        if getattr(self, params.USE_GPU).get():
             args.append("--gpu")
+            gpuIdx = getattr(self, params.GPU_LIST).get()
 
-        insistentRun(self, 'python', args,
-                     envDic=SCORCH2_DIC, nMax=5, cwd=scriptRescoringDir, sleepTime=5)
+        insistentRun(self, 'python', args, envDic=SCORCH2_DIC,
+                     nMax=5, cwd=scriptRescoringDir, sleepTime=5, gpuIdx=gpuIdx)
 
     def createOutputStep(self):
         inMols = self.inputSmallMolecules.get()
@@ -332,58 +303,64 @@ Notes
     def getMoleculesDir(self, it):
         return self.getBatchDir(it) / "molecule"
 
+    def getLigandDir(self, it):
+        """SCORCH2 looks for the poses of a target in <ligand-dir>/<pdbId>/"""
+        return self.getMoleculesDir(it) / self._defaultName
+
+    def getInProtDir(self):
+        return Path(self._getTmpPath("inputProtein"))
+
+    def getInMolsDir(self, it):
+        return Path(self._getTmpPath(f"inputMols_{it}"))
+
     def getResultsDir(self, it):
         return self.getBatchDir(it) / f"results"
 
-    def getPDBId(self):
-        protein = self.inputSmallMolecules.get().getProteinFile()
-        proteinPath = Path(protein)
-        return proteinPath.stem
+    def prepareStructure(self, oriFile, inDir, outDir, baseName):
+        """A file that already is PDBQT goes straight to outDir, anything else convertToPdbqt.
+        """
+        suffix = oriFile.suffix.lower()
+        if suffix == ".pdbqt":
+            outDir.mkdir(parents=True, exist_ok=True)
+            self.linkFile(oriFile, outDir / f"{baseName}.pdbqt")
+            return
 
-    def checkPdbqtFiles(self, directory):
-        """Check if files are PDBQT"""
-        files = list(directory.glob("*"))
-        for f in files:
-            if f.suffix.lower() != ".pdbqt":
-                return False, files
-            else:
-                return True, files
+        inDir.mkdir(parents=True, exist_ok=True)
+        if suffix == ".cif":
+            cifToPdb(str(oriFile.resolve()), str((inDir / f"{baseName}.pdb").resolve()))
+        else:
+            self.linkFile(oriFile, inDir / f"{baseName}{suffix}")
 
-    def convertFiles(self, fileList, baseDir):
-        """Convert PDB or CIF to PDBQT, keeping output in the same folder as the input file"""
-        oFiles = []
-        for file in fileList:
-            suffix = file.suffix.lower()
-            basename = file.stem
+    def convertToPdbqt(self, inDir, outDir):
+        """Convert every structure staged in inDir to PDBQT with a SINGLE OpenBabel call.
 
-            if suffix == ".pdbqt":
-                continue
+        obabel_IO.py --multiFiles walks the directory inside one python process, so a whole batch
+        costs one conda activation instead of one per molecule.
+        """
+        outDir.mkdir(parents=True, exist_ok=True)
+        inFiles = list(inDir.glob("*")) if inDir.exists() else []
+        if not inFiles:
+            # Every input was already in PDBQT and went straight to outDir
+            return
 
-            pdbqtFile = Path(baseDir) / f"{basename}.pdbqt"
-            outputPath = str(pdbqtFile.resolve())
-            oFiles.append(outputPath)
-            inputPath = str(file.resolve())
+        args = f' --multiFiles -iD "{os.path.abspath(inDir)}" --pattern "*" ' \
+               f'-of pdbqt --outputDir "{os.path.abspath(outDir)}"'
+        Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=os.path.abspath(outDir))
 
-            if suffix == ".cif":
-                pdbFile = Path(baseDir) / f"{basename}.pdb"
-                cifToPdb(inputPath, str(pdbFile.resolve()))
-                inputPath = str(pdbFile.resolve())
-                suffix = '.pdb'
+        missed = [f.name for f in inFiles if not (outDir / f"{f.stem}.pdbqt").exists()]
+        if missed:
+            logging.warning(f"OpenBabel could not convert {len(missed)} structure(s) to PDBQT, they "
+                            f"will not be scored: {', '.join(missed)}")
 
-            args = f"-i{suffix[1:]} {inputPath} -opdbqt -O {outputPath}"
-            runOpenBabel(protocol=self, args=args, cwd=self._getTmpPath())
-        return oFiles
-
-
-    def removePdbFiles(self, directory):
-        """Removes .pdb files only if their corresponding .pdbqt exists in the same directory."""
-        for pdbFile in directory.rglob("*.pdb"):
-            pdbqtFile = pdbFile.with_suffix(".pdbqt")
-            if pdbqtFile.exists():
-                try:
-                    pdbFile.unlink()
-                except Exception as e:
-                    logging.warning(f"Could not delete {pdbFile.name}: {e}")
+    @staticmethod
+    def linkFile(oriFile, destFile):
+        """Hard link the structure instead of copying it, the staged files are never modified."""
+        if destFile.exists():
+            return
+        try:
+            os.link(oriFile, destFile)
+        except OSError:
+            shutil.copy(oriFile, destFile)
 
     def readScoresTSV(self):
         scoreDict = {}
