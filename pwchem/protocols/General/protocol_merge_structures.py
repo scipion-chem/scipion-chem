@@ -32,14 +32,19 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
 from pwem.objects import AtomStruct
+from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 
 from pathlib import Path
+import os
 
 from Bio.PDB import (
     PDBParser, MMCIFParser,
     PDBIO, MMCIFIO,
     Structure, Model
 )
+
+from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import OPENBABEL_DIC
 
 
 class ProtMergeStructs(EMProtocol):
@@ -123,6 +128,15 @@ class ProtMergeStructs(EMProtocol):
                    pointerClass='AtomStruct',
                    help='Structures to merge into one single structure.')
 
+    group.addParam(
+        'inputLigands',
+        params.MultiPointerParam,
+        label="Input ligands: ",
+        pointerClass='SetOfSmallMolecules',
+        allowsNull=True,
+        help='Optional sets of ligands to add to the merged structure.'
+    )
+
   # --------------------------- Steps functions --------------------
   def _insertAllSteps(self):
     self._insertFunctionStep(self.createOutputStep)
@@ -132,12 +146,33 @@ class ProtMergeStructs(EMProtocol):
       model = Model.Model(0)
       structure.add(model)
 
-      used_chain_ids = set()
+      usedChainIds = set()
       chain_pool = iter(
           "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
           "abcdefghijklmnopqrstuvwxyz"
           "0123456789"
       )
+
+      def getUniqueChainId(preferredId=None):
+          """
+          Return a chain ID that is not already present in the merged model.
+          """
+          if preferredId and preferredId not in usedChainIds:
+              chainId = preferredId
+          else:
+              while True:
+                  try:
+                      chainId = next(chain_pool)
+                  except StopIteration:
+                      raise RuntimeError(
+                          "No more unique chain IDs available."
+                      )
+
+                  if chainId not in usedChainIds:
+                      break
+
+          usedChainIds.add(chainId)
+          return chainId
 
       outputExt = None
 
@@ -152,46 +187,191 @@ class ProtMergeStructs(EMProtocol):
 
           if ext == ".pdb":
               parser = PDBParser(QUIET=True)
+
           elif ext in [".cif", ".mmcif"]:
               parser = MMCIFParser(QUIET=True)
-          else:
-              raise Exception(f"Unsupported structure format: {structFile}")
 
-          print(f"Reading {structFile}")
+          else:
+              raise Exception(
+                  f"Unsupported structure format: {structFile}"
+              )
+
+          print(f"[ProtMergeStructs] Structure: {structFile}")
 
           s = parser.get_structure("tmp", structFile)
 
           try:
               modelIn = next(s.get_models())
           except StopIteration:
-              raise Exception(f"No models found in structure: {structFile}")
+              raise Exception(
+                  f"No models found in structure: {structFile}"
+              )
 
           for chain in modelIn:
               newChain = chain.copy()
-
-              if newChain.id in used_chain_ids:
-                  while True:
-                      newId = next(chain_pool)
-                      if newId not in used_chain_ids:
-                          newChain.id = newId
-                          break
-
-              used_chain_ids.add(newChain.id)
+              newChain.id = getUniqueChainId(chain.id)
               model.add(newChain)
 
-      # Write output in the same format as the first input
+      if self.inputLigands:
+          for ptr in self.inputLigands:
+
+              ligandSet = ptr.get()
+
+              if ligandSet is None:
+                  continue
+
+              for ligand in ligandSet:
+                  if ligandSet.isDocked():
+                      ligandFile = ligand.getPoseFile()
+                  else:
+                      ligandFile = ligand.getFileName()
+
+                  if not ligandFile:
+                      continue
+
+                  ligandFile = os.path.abspath(ligandFile)
+
+                  ext = Path(ligandFile).suffix.lower()
+
+                  if ext in [".sdf", ".mol2"]:
+                      convDir = self._getExtraPath("ligands")
+                      os.makedirs(convDir, exist_ok=True)
+
+                      ligandName = Path(ligandFile).stem
+
+                      args = (
+                          f' -i "{ligandFile}"'
+                          f' -of pdb'
+                          f' -o "{ligandName}"'
+                          f' -od "{os.path.abspath(convDir)}"'
+                      )
+
+                      print(
+                          f"[ProtMergeStructs] Converting ligand: "
+                          f"{ligandFile}"
+                      )
+
+                      pwchemPlugin.runScript(
+                          self,
+                          'obabel_IO.py',
+                          args,
+                          env=OPENBABEL_DIC,
+                          cwd=convDir
+                      )
+
+                      ligandFile = os.path.join(
+                          convDir,
+                          f"{ligandName}.pdb"
+                      )
+                      ligandFile = self._fixLigandPDBAtomNames(
+                          ligandFile
+                      )
+
+                  ext = Path(ligandFile).suffix.lower()
+
+                  if ext == ".pdb":
+                      parser = PDBParser(QUIET=True)
+
+                  elif ext in [".cif", ".mmcif"]:
+                      parser = MMCIFParser(QUIET=True)
+
+                  else:
+                      raise ValueError(
+                          f"Unsupported ligand format: {ligandFile}"
+                      )
+
+                  print(
+                      f"[ProtMergeStructs] Adding ligand: "
+                      f"{ligandFile}"
+                  )
+
+                  s = parser.get_structure(
+                      "ligand",
+                      ligandFile
+                  )
+
+                  try:
+                      modelIn = next(s.get_models())
+
+                  except StopIteration as e:
+                      raise ValueError(
+                          f"No models found in ligand: {ligandFile}"
+                      ) from e
+
+                  for chain in modelIn:
+
+                      newChain = chain.copy()
+                      newChain.id = getUniqueChainId()
+
+                      for residue in newChain:
+                          _, resseq, icode = residue.id
+
+                          residue.resname = "LIG"
+
+                          residue.id = (
+                              "H_LIG",
+                              resseq,
+                              icode
+                          )
+
+                      model.add(newChain)
+
+                      print(
+                          f"Added ligand chain {newChain.id}"
+                      )
+
       if outputExt == ".pdb":
-          outFile = self._getPath("merged_struct.pdb")
+          outFile = self._getPath(
+              "merged_struct.pdb"
+          )
           io = PDBIO()
       else:
-          outFile = self._getPath("merged_struct.cif")
+          outFile = self._getPath(
+              "merged_struct.cif"
+          )
           io = MMCIFIO()
 
       io.set_structure(structure)
       io.save(outFile)
 
-      output = AtomStruct(filename=outFile)
-      self._defineOutputs(outputStructure=output)
+      print(
+          f"Merged structure written to: "
+          f"{outFile}"
+      )
+
+      output = AtomStruct(
+          filename=outFile
+      )
+      self._defineOutputs(
+          outputStructure=output
+      )
 
 
   # --------------------------- INFO functions -----------------------------------
+
+  def _fixLigandPDBAtomNames(self, pdbFile):
+      fixedFile = self._getTmpPath(
+          f"{Path(pdbFile).stem}_fixed.pdb"
+      )
+
+      atomCounters = {}
+
+      with open(pdbFile) as f_in, open(fixedFile, "w") as f_out:
+          for line in f_in:
+              if line.startswith(("ATOM  ", "HETATM")):
+                  element = line[76:78].strip()
+
+                  if not element:
+                      element = line[12:16].strip()[0]
+
+                  atomCounters[element] = atomCounters.get(element, 0) + 1
+                  atomName = f"{element}{atomCounters[element]}"
+
+                  atomName = atomName[:4]
+
+                  line = line[:12] + f"{atomName:>4}" + line[16:]
+
+              f_out.write(line)
+
+      return fixedFile
+
