@@ -326,17 +326,16 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
                     format(chainA, chainB), self.getTkRoot())
           return []
 
-      if self.plipHideRest.get():
-          pseFile = self._buildPLIPInterfacePml(pseFile, outDir)
+      pmlFile = self._buildPLIPViewPml(pseFile, outDir, hideRest=self.plipHideRest.get())
 
       pymolV = PyMolViewer(project=self.getProject())
-      return pymolV._visualize(os.path.abspath(pseFile), cwd=os.path.dirname(pseFile))
+      return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
 
-  def _buildPLIPInterfacePml(self, pseFile, outDir):
-      '''Wrap the PLIP .pse session in a small PyMol script that hides every represented atom
-      outside the interface, keeping the PLIP interaction lines intact and a thin cartoon of
-      both full chains for context, so only the interacting residues/atoms are emphasized as
-      sticks instead of the rest of the chains disappearing outright.
+  def _buildPLIPViewPml(self, pseFile, outDir, hideRest):
+      '''Wrap the PLIP .pse session in a small PyMol script that always restores a cartoon for
+      both full chains, and additionally (only if hideRest) hides every represented atom outside
+      the interface, keeping the PLIP interaction lines intact, so only the interacting
+      residues/atoms are emphasized as sticks instead of the rest of the chains disappearing.
       "AllBSRes" (protein-side interacting residues) and the "*-L" glob (ligand-side
       interacting-atom selections, e.g. Hydrophobic-L/HBondDonor-L...) are PLIP's own selection
       names, created by its pymol visualization module (plip.visualization.pymol.
@@ -345,22 +344,25 @@ class ViewerGeneralStructROIs(BaseInteractionViewer):
       used defensively for the same reason: unlike a glob, a literal PLIP selection name such as
       "Water" or "Metal-P" errors out the whole command if PLIP ended up deleting it for being
       empty (it prunes unused selections when saving the session).
-      PLIP's own default view is asymmetric between the two chains: in its protein-protein/
-      peptide mode, only the "ligand"-side chain gets a full cartoon by default (the "protein"-
-      side chain has none, shown only via its interacting-residue sticks). Blanket-hiding
-      everything outside the interface therefore wipes out the ligand chain's only
-      representation entirely, making it look like that whole chain vanished, while the other
-      chain looks unchanged -- hence the explicit "show cartoon, polymer" below, re-adding a
-      (transparent) backbone trace of both full chains so neither one disappears.'''
+      PLIP's own default view is asymmetric between the two chains regardless of hideRest: in
+      its protein-protein/peptide mode, only the "ligand"-side chain gets a full cartoon by
+      default (the "protein"-side chain has none, shown only via its interacting-residue
+      sticks); the "protein"-side chain's own cartoon copy is saved in the session but disabled.
+      So even with hideRest=False the raw session already looks like the "protein"-side chain is
+      missing -- hence the unconditional "show cartoon, polymer" below, restoring a backbone
+      trace of both full chains. With hideRest=True this cartoon is additionally made
+      transparent, so only the interacting residues/atoms are emphasized as sticks.'''
       interfaceSel = 'byres (AllBSRes or *-L or metals or solvent)'
-      pmlFile = os.path.join(outDir, 'plip_interface_only.pml')
+      pmlFile = os.path.join(outDir, 'plip_interface_only.pml' if hideRest else 'plip_view.pml')
       with open(pmlFile, 'w') as f:
           f.write('load {}\n'.format(os.path.abspath(pseFile)))
-          f.write('hide everything, not ({})\n'.format(interfaceSel))
-          f.write('show sticks, {}\n'.format(interfaceSel))
+          if hideRest:
+              f.write('hide everything, not ({})\n'.format(interfaceSel))
+              f.write('show sticks, {}\n'.format(interfaceSel))
           f.write('show cartoon, polymer\n')
-          f.write('set cartoon_transparency, 0.6, polymer\n')
-          f.write('zoom {}, 5\n'.format(interfaceSel))
+          f.write('set cartoon_transparency, {}, polymer\n'.format(0.6 if hideRest else 0.0))
+          if hideRest:
+              f.write('zoom {}, 5\n'.format(interfaceSel))
       return pmlFile
 
 
