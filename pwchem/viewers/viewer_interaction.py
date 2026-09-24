@@ -29,6 +29,7 @@ from tkinter.messagebox import askokcancel
 
 from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER
 from pyworkflow.protocol import params
+import pyworkflow.protocol as pwprot
 
 from pwem.objects import SetOfAtomStructs
 from pwem.viewers import EmPlotter
@@ -38,6 +39,7 @@ from pwem.protocols import ProtSubSet
 
 class BaseInteractionViewer(ProtocolViewer):
     """Generic viewer for interaction matrices"""
+    _molSetOutput = None
 
     def _getData(self):
         return self.getInteractionSet().getInteractScoresDic()
@@ -177,6 +179,29 @@ class BaseInteractionViewer(ProtocolViewer):
     def _getMolSet(self):
         raise NotImplementedError
 
+    def getViewedProtocol(self):
+        """The protocol being viewed"""
+        if isinstance(self.protocol, pwprot.Protocol):
+            return self.protocol
+
+        parentId = self.protocol.getObjParentId() if hasattr(self.protocol, 'getObjParentId') else None
+        if parentId:
+            return self.getProject().getProtocol(parentId)
+
+        return None
+
+    def _setSubsetInput(self, prot, molSet):
+        """Point the subset protocol at the viewed protocol when it publishes the molecules itself.
+
+        Passing the set instead makes pyworkflow resolve the pointer to whichever protocol produced
+        that set. For interaction molecules that is the protocol upstream of the one being viewed."""
+        viewedProt = self.getViewedProtocol()
+        if self._molSetOutput and viewedProt is not None and hasattr(viewedProt, self._molSetOutput):
+            prot.inputFullSet.set(viewedProt)
+            prot.inputFullSet.setExtended(self._molSetOutput)
+        else:
+            prot.inputFullSet.set(molSet)
+
     def _generateMols(self, paramName=None):
         data = self._getData()
 
@@ -208,9 +233,9 @@ class BaseInteractionViewer(ProtocolViewer):
             project = self.getProject()
             prot = project.newProtocol(
                 ProtSubSet,
-                inputFullSet=molSet,
                 selectIds=True,
                 range=','.join(objIds)
             )
+            self._setSubsetInput(prot, molSet)
 
             project.launchProtocol(prot, wait=True)
