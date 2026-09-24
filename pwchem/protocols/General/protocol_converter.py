@@ -38,7 +38,7 @@ from pwem.convert.atom_struct import toCIF, toPdb
 
 # Plugin imports
 from ... import Plugin
-from ...objects import SetOfSmallMolecules, SmallMolecule, MDSystem
+from ...objects import SetOfSmallMolecules, MDSystem
 from ...utils import getBaseName
 from ...constants import RDKIT_DIC, OPENBABEL_DIC, MDTRAJ_DIC
 
@@ -201,6 +201,7 @@ class ConvertStructures(EMProtocol):
                        label='Output format: ',
                        help="Output format for the converted molecules")
         group.addParam('usePose', BooleanParam, default=False,
+                       condition=f'{inputTypeCondition}SetOfSmallMolecules)',
                        label='Use the docked ligands: ',
                        help='Use the docked ligand files for preparation.')
 
@@ -321,15 +322,18 @@ class ConvertStructures(EMProtocol):
         """Convert the input molecules in batches.
         A conversion script call costs about 2 s just to activate its conda environment, so calling
         it once per molecule make it really slow"""
+        inSet = self.inputObject.get()
         outFormat = extDic[self.getEnumText('outputFormatSmall')]
         outDir = os.path.abspath(self._getExtraPath())
-        outputSmallMolecules = SetOfSmallMolecules().create(outputPath=self._getPath(), suffix='SmallMols')
+        # The set is copied whole so that the receptor, the docked flag and the scores of every
+        # molecule are kept. Only the file that was converted is replaced in each of them
+        outputSmallMolecules = SetOfSmallMolecules.createCopy(inSet, self._getPath(), copyInfo=True)
 
-        expected, batches = {}, {}
-        for i, mol in enumerate(self.inputObject.get()):
+        outFiles, batches = {}, {}
+        for i, mol in enumerate(inSet):
             fnSmall = self.getMolFile(mol)
             fnRoot = os.path.splitext(os.path.split(fnSmall)[1])[0]
-            expected[fnRoot] = os.path.join(outDir, fnRoot + outFormat)
+            outFiles[mol.getObjId()] = os.path.join(outDir, fnRoot + outFormat)
 
             # RDKit cannot parse a mol2 written by anything but Corina, so those go to OpenBabel
             # even when RDKit was chosen, as protocol_import_smallMolecules.py already does
@@ -349,11 +353,20 @@ class ConvertStructures(EMProtocol):
                 Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=batchDir)
 
         self.convErrors = []  # Save the file paths that could not be transformed
-        for fnRoot, fnOut in expected.items():
-            if os.path.exists(fnOut):
-                outputSmallMolecules.append(SmallMolecule(smallMolFilename=fnOut, molName='guess'))
+        for mol in inSet:
+            fnOut = outFiles[mol.getObjId()]
+            if not os.path.exists(fnOut):
+                self.convErrors.append(getBaseName(fnOut))
+                continue
+
+            newMol = mol.clone()
+            # Replace the file the conversion read, the rest of the molecule is kept as it was
+            if self.usePose.get():
+                newMol.setPoseFile(fnOut)
             else:
-                self.convErrors.append(fnRoot)
+                newMol.setFileName(fnOut)
+
+            outputSmallMolecules.append(newMol)
 
         if len(outputSmallMolecules) > 0:
             outputSmallMolecules.updateMolClass()
@@ -409,26 +422,13 @@ class ConvertStructures(EMProtocol):
 
     # --------------------------- Summary functions --------------------
     def _summary(self):
-        summary=[]
+        summary = []
+        inObj = self.inputObject.get()
 
-        if isinstance(self.inputObject.get(), SetOfSmallMolecules):
-            if self.outputFormatSmall.get() == 0:
-                summary.append('Converted to PDB')
-            elif self.outputFormatTarget.get() == 1:
-                summary.append('Converted to Cif')
-            elif self.outputFormatSmall.get() == 2:
-                summary.append('Converted to Mol2')
-            elif self.outputFormatSmall.get() == 3:
-                summary.append('Converted to SDF')
-            elif self.outputFormatSmall.get() == 4:
-                summary.append('Converted to Smiles')
+        if isinstance(inObj, SetOfSmallMolecules):
+            summary.append('Converted to {}'.format(self.getEnumText('outputFormatSmall')))
+        elif isinstance(inObj, AtomStruct):
+            summary.append('Converted to {}'.format(self.getEnumText('outputFormatTarget')))
 
-        elif isinstance(self.inputObject.get(), AtomStruct):
-            if self.outputFormatTarget.get() == 0:
-                summary.append('Converted to PDB')
-            elif self.outputFormatTarget.get() == 1:
-                summary.append('Converted to Cif')
-            elif self.outputFormatTarget.get() == 2:
-                summary.append('Converted to Mol2')
         return summary
     
