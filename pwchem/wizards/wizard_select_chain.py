@@ -655,6 +655,16 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                inputs=['singleLabels'],
                                outputs=['displayPymolPLIP'])
 
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayMoleculeCov'],
+                               inputs=['moleculeLabels'],
+                               outputs=['displayMoleculeCov'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displaySingleCov'],
+                               inputs=['singleLabels'],
+                               outputs=['displaySingleCov'])
+
 SelectElementWizard().addTarget(protocol=ProtocolPoseBusters,
                                targets=['filterCol'],
                                inputs=['getColumns'],
