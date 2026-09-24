@@ -24,6 +24,7 @@
 
 import os
 import glob
+import shutil
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
@@ -36,7 +37,7 @@ from .. import Plugin
 from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, PML_MD_STR_AMBER, TCL_MD_LIG_STR
 from ..viewers import PyMolViewer, PyMolView, VmdViewPopen, SetOfAtomStructViewer
 from ..objects import MDSystem
-from ..protocols import ProtocolTrajectoryClustering
+from ..protocols import ProtocolTrajectoryClustering, ProtocolMDVideo
 
 _ANAL_RMSD      = 0
 _ANAL_RMSF      = 1
@@ -126,6 +127,13 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        label='Display trajectory with VMD: ',
                        help='Display trajectory with VMD.\n'
                             'Protein as NewCartoon, waters as dots.')
+
+    def _defineVideoParams(self, form):
+        form.addSection(label='Generate MD video')
+        form.addParam('videoMoved', params.LabelParam,
+                     label='MD video generation has moved: ',
+                     help='Video rendering now runs as a tracked, CPU-bounded Scipion job '
+                          'instead of a detached process. Use the protocol "MD trajectory video".')
 
     def _defineMDTrajParams(self, form):
         form.addSection(label='Trajectory analysis')
@@ -239,6 +247,7 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         if self.getMDSystem().hasTrajectory():
             self._defineSimParams(form)
+            self._defineVideoParams(form)
             self._defineMDTrajParams(form)
 
     def getMDSystem(self, objType=MDSystem):
@@ -456,3 +465,14 @@ class TrajClusteringViewer(SetOfAtomStructViewer):
         if matches:
           images['displayImage_{}'.format(suffix)] = (matches[0], title)
     return images
+
+
+class MDVideoViewer(pwviewer.Viewer):
+  """Opens the video produced by ProtocolMDVideo with the default system player."""
+  _label = 'Viewer MD video'
+  _targets = [ProtocolMDVideo]
+
+  def _visualize(self, obj, **kwargs):
+    videoFile = os.path.abspath(obj.outputVideo.getFileName())
+    opener = shutil.which('xdg-open') or shutil.which('open') or 'xdg-open'
+    return [pwviewer.CommandView('{} "{}"'.format(opener, videoFile))]
