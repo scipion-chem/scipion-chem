@@ -38,6 +38,7 @@ from .tests_epitopes import *
 from .tests_fastq import *
 from .tests_reference_genomes import *
 from .tests_molecular_dynamics import *
+from .tests_structROI_voting import *
 from .tests_rnaseq_align import *
 
 from enum import Enum
