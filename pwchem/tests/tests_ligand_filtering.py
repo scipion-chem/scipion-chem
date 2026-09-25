@@ -147,21 +147,31 @@ class TestOperateSmallMoleculesLibrary(TestImportSmallMoleculesLibrary):
 
 		@classmethod
 		def _runOperateSets(cls, protLibs, op=0):
-			protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, refAttribute=1)
+			protOperateLibrary = cls.newProtocol(
+				ProtocolOperateLibrary,
+				operation=op,
+				refAttribute=1
+			)
+
 			for protLib in protLibs:
 				protOperateLibrary.inputLibraries.append(protLib)
 				protOperateLibrary.inputLibraries[-1].setExtended('outputLibrary')
-	
-			cls.proj.launchProtocol(protOperateLibrary, wait=False)
+
+			cls.proj.launchProtocol(protOperateLibrary, wait=True)
 			return protOperateLibrary
 
 		@classmethod
 		def _runOperateLibrary(cls, protLib, op, kwargs):
-			protOperateLibrary = cls.newProtocol(ProtocolOperateLibrary, operation=op, **kwargs)
+			protOperateLibrary = cls.newProtocol(
+				ProtocolOperateLibrary,
+				operation=op,
+				**kwargs
+			)
+
 			protOperateLibrary.inputLibrary.set(protLib)
 			protOperateLibrary.inputLibrary.setExtended('outputLibrary')
 
-			cls.proj.launchProtocol(protOperateLibrary, wait=False)
+			cls.proj.launchProtocol(protOperateLibrary, wait=True)
 			return protOperateLibrary
 
 
