@@ -95,8 +95,8 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
             for line in f:
                 if not line.strip():
                     continue
-                  
-                values = line.strip().split('\t')
+
+                values = line.split()
                 if len(values) >= 2:
                     smi, name = values[0], values[1]
                 else:

@@ -207,12 +207,13 @@ def organizeThreads(nTasks, nThreads):
   return subsets
 
 def insistentRun(protocol, programPath, progArgs, envDic=None, nMax=5, sleepTime=1, popen=False, gpuIdx=None, **kwargs):
-  fullProgram = programPath
-  if envDic:
-    fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {programPath} '
+  gpuStr = f"CUDA_VISIBLE_DEVICES={gpuIdx} " if gpuIdx is not None else ''
 
-  if gpuIdx:
-    fullProgram = f'CUDA_VISIBLE_DEVICES={gpuIdx} {fullProgram}'
+  # The GPU assignment must sit after the conda hook
+  if envDic:
+    fullProgram = f'{pwchemPlugin.getEnvActivationCommand(envDic)} && {gpuStr}{programPath} '
+  else:
+    fullProgram = f'{gpuStr}{programPath}'
 
   i, finished = 1, False
   while not finished and i <= nMax:
