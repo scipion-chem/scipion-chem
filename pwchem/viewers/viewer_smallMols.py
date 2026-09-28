@@ -49,9 +49,10 @@ COVALENT_POSE_ATTR = 'covalentPoseFile'
 def chimeraInstalled():
   return Chimera.getHome() and os.path.exists(Chimera.getProgram())
 
-CHIMERA_ERROR = 'Chimera program is not found were it was expected: \n\n{}\n\n' \
-                'Either install ChimeraX in this path or install our ' \
-                'scipion-em-chimera plugin'.format(Chimera.getProgram())
+def getChimeraError():
+  return 'Chimera program is not found were it was expected: \n\n{}\n\n' \
+         'Either install ChimeraX in this path or install our ' \
+         'scipion-em-chimera plugin'.format(Chimera.getProgram())
 
 class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   _label = 'Viewer small molecules'
@@ -358,8 +359,8 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
   def viewChimeraXMols(self, mols, ligandLabel, addTarget=True, disable=True,
                        pose=True, vinaDock=False, e=None):
     if not chimeraInstalled():
-        print(CHIMERA_ERROR)
-        return [self.warnMessage(CHIMERA_ERROR, 'Chimera not found')]
+        print(getChimeraError())
+        return [self.warnMessage(getChimeraError(), 'Chimera not found')]
     else:
         molDic = self.getMolDic(mols, pose, vinaDock)
         chimScript = self.writeChimeraScript(molDic, ligandLabel, addTarget, disable, vinaDock)
