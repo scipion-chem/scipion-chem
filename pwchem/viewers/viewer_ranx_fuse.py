@@ -50,6 +50,8 @@ NO_DATA_TITLE = 'No data'
 CONSENSUS_OPS = ['<', '<=', '>', '>=']
 CONSENSUS_OP_FUNCS = {'<': operator.lt, '<=': operator.le, '>': operator.gt, '>=': operator.ge}
 
+RANK_EXTREMES = ['Top (lowest RanxRank)', 'Down (highest RanxRank)']
+
 
 class RANXFuseViewer(ProtocolViewer):
   """ Viewer for the RANX Fuse protocol: NativePosition frequency among the top ranked mutations. """
@@ -59,10 +61,14 @@ class RANXFuseViewer(ProtocolViewer):
 
   def _defineParams(self, form):
     form.addSection(label='Native position frequency')
+    form.addParam('rankExtreme', params.EnumParam, choices=RANK_EXTREMES, default=0,
+                  label='RanxRank extreme: ',
+                  help='Whether to consider the mutations with the best (Top, lowest "RanxRank") or the '
+                       'worst (Down, highest "RanxRank") combined ranking.')
     form.addParam('topN', params.IntParam, default=20,
-                  label='Number of top RanxRank mutations to consider: ',
-                  help='Only the mutations with the best (lowest) "RanxRank", up to this number, are used '
-                       'to count how often each "NativePosition" appears.\n'
+                  label='Number of RanxRank mutations to consider: ',
+                  help='Only the mutations at the chosen extreme (Top/Down) of "RanxRank", up to this '
+                       'number, are used to count how often each "NativePosition" appears.\n'
                        'Requires the output set to have the "NativePosition" attribute, i.e. the protocol '
                        'must have been run with "Extract native position from mutation ID" enabled.')
     form.addParam('displayNativePosFreq', params.LabelParam,
@@ -120,6 +126,7 @@ class RANXFuseViewer(ProtocolViewer):
   def _viewNativePosFreq(self, paramName=None):
     outSet = self.protocol.outputSet
     topN = self.topN.get()
+    isDown = self.rankExtreme.get() == 1
 
     firstItem = outSet.getFirstItem()
     if not firstItem.hasAttribute('NativePosition'):
@@ -130,7 +137,7 @@ class RANXFuseViewer(ProtocolViewer):
 
     records = [(item.getAttributeValue('RanxRank'), item.getAttributeValue('NativePosition'))
                for item in outSet]
-    records.sort(key=lambda r: r[0])
+    records.sort(key=lambda r: r[0], reverse=isDown)
     topRecords = records[:topN]
 
     counts = Counter(nativePos for _, nativePos in topRecords)
@@ -140,11 +147,12 @@ class RANXFuseViewer(ProtocolViewer):
       showError(NO_DATA_TITLE, '{} available to display.'.format(NO_DATA_TITLE), self.getTkRoot())
       return
 
+    extremeLabel = 'worst' if isDown else 'best'
     TableView(headerList=['NativePosition', 'Frequency'],
              dataList=dataList,
-             mesg='Frequency of each native position among the %d best ranked mutations (RanxRank)'
-                  % len(topRecords),
-             title='NativePosition frequency (top %d)' % topN,
+             mesg='Frequency of each native position among the %d %s ranked mutations (RanxRank)'
+                  % (len(topRecords), extremeLabel),
+             title='NativePosition frequency (%s %d)' % (RANK_EXTREMES[self.rankExtreme.get()].split()[0].lower(), topN),
              height=min(len(dataList), 25), width=350)
 
   def getSelectedAttr(self):
