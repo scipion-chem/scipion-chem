@@ -21,12 +21,17 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
+import os
+import unittest
+
 # Scipion em imports
 from pyworkflow.tests import DataSet, setupTestProject
 
 # Scipion chem imports
+from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import LANL_AB_ALL_PATH
 from pwchem.tests import TestDefineSequenceROIs
-from pwchem.protocols import ProtDefineSeqROI, ProtDefineMultiEpitope, ProtModifyMultiEpitope
+from pwchem.protocols import ProtDefineSeqROI, ProtDefineMultiEpitope, ProtModifyMultiEpitope, ProtLANLCATNAPCrossref
 from pwchem.utils import assertHandle
 
 defSeqROIsSeq = '''1) Residues: {"index": "1-10", "residues": "MFVFLVLLPL", "desc": "None"}
@@ -111,4 +116,29 @@ class TestModifyMultiEpitope(TestDefineMultiEpitope):
 		self._waitOutput(protMod, 'outputROIs', sleepTime=5)
 		assertHandle(self.assertIsNotNone, getattr(protMod, 'outputROIs', None),
 								 cwd=protMod.getWorkingDir())
+
+@unittest.skipUnless(
+	os.path.isfile(pwchemPlugin.getVar(LANL_AB_ALL_PATH) or ''),
+	'LANL_AB_ALL_PATH not configured (manually-downloaded LANL bnAb reference, see ProtLANLCATNAPCrossref)')
+class TestLANLCATNAPCrossref(TestDefineMultiEpitope):
+	'''Requires LANL_AB_ALL_PATH to be configured (manually downloaded, see
+	ProtLANLCATNAPCrossref/constants.py): skipped otherwise, see the class decorator.'''
+
+	@classmethod
+	def _runLANLCATNAP(cls, protROIs):
+		protCrossref = cls.newProtocol(ProtLANLCATNAPCrossref)
+		protCrossref.inputROIs.set(protROIs)
+		protCrossref.inputROIs.setExtended('outputROIs')
+
+		cls.proj.launchProtocol(protCrossref, wait=False)
+		return protCrossref
+
+	def test(self):
+		protsROIs = self._runDefSeqROIs(inProt=self.protImportSeq)
+		self._waitOutput(protsROIs, 'outputROIs', sleepTime=5)
+
+		protCrossref = self._runLANLCATNAP(protsROIs)
+		self._waitOutput(protCrossref, 'outputROIs', sleepTime=5)
+		assertHandle(self.assertIsNotNone, getattr(protCrossref, 'outputROIs', None),
+								 cwd=protCrossref.getWorkingDir())
 
