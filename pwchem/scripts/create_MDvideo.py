@@ -409,12 +409,12 @@ def assembleVideo(frameFiles, outBase, fps, fmt, crf, baseDir):
         flattenFrames(frameFiles, flatDir, baseDir)
         pattern = safePath(os.path.join(flatDir, 'seq_%05d.png'), baseDir)
         cmdLine = [
-            ffmpeg, '-y', '-framerate', str(fps), '-i', pattern,
+            ffmpeg, '-y', '-framerate', str(fps), '-i', os.path.realpath(pattern),
             '-c:v', 'libx264', '-preset', 'slow', '-crf', str(crf),
             '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
             # H.264 requires even dimensions.
             '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-            outFile,
+            os.path.realpath(outFile),
         ]
         log('Encoding mp4 with ffmpeg...')
         subprocess.check_call(cmdLine)
