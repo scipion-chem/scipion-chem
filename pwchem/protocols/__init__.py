@@ -128,3 +128,4 @@ from pwchem.protocols.MolecularDynamics.protocol_prolif_analysis import Protocol
 from pwchem.protocols.MolecularDynamics.protocol_import_MDSystem import ProtocolImportMDSystem
 from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import ProtocolTrajectoryClustering
 from pwchem.protocols.MolecularDynamics.protocol_MD_video import ProtocolMDVideo
+from pwchem.protocols.VirtualDrugScreening.protocol_structROI_voting import ProtROIVoting
