@@ -46,7 +46,7 @@ RUN_MODE_IMPORT, RUN_MODE_COMPUTE = 0, 1
 COND_IMPORT = 'cocadaMode==%d' % RUN_MODE_IMPORT
 COND_COMPUTE = 'cocadaMode==%d' % RUN_MODE_COMPUTE
 
-# COCADA interaction type codes (https://bioinfo.dcc.ufmg.br/cocada-web/public/documentation/),
+# COCADA interaction type codes (https://bioinfo.dcc.ufmg.br/cocada-web/documentation),
 # only used for the ROI comment. Fall back to the raw code if one is not present here.
 COCADA_TYPE_NAMES = {
     'HB': 'Hydrogen Bond', 'HY': 'Hydrophobic', 'SB': 'Salt Bridge',
