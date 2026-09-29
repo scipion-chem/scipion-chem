@@ -128,13 +128,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        help='Display trajectory with VMD.\n'
                             'Protein as NewCartoon, waters as dots.')
 
-    def _defineVideoParams(self, form):
-        form.addSection(label='Generate MD video')
-        form.addParam('videoMoved', params.LabelParam,
-                     label='MD video generation has moved: ',
-                     help='Video rendering now runs as a tracked, CPU-bounded Scipion job '
-                          'instead of a detached process. Use the protocol "MD trajectory video".')
-
     def _defineMDTrajParams(self, form):
         form.addSection(label='Trajectory analysis')
         group = form.addGroup('MDTraj analysis')
@@ -247,7 +240,6 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
 
         if self.getMDSystem().hasTrajectory():
             self._defineSimParams(form)
-            self._defineVideoParams(form)
             self._defineMDTrajParams(form)
 
     def getMDSystem(self, objType=MDSystem):
