@@ -44,6 +44,8 @@ RESOLUTIONS = {
 # Atoms that are ions / counter-ions and should not be treated as "the ligand".
 ION_RESNAMES = ('NA', 'CL', 'SOD', 'CLA', 'K', 'MG', 'ZN', 'CA', 'POT', 'BR', 'IOD')
 
+STYLE_CARTOON_STICKS = 'cartoon+sticks'
+
 
 def parseArgs():
     p = argparse.ArgumentParser(description='Render a cinematic MD trajectory video with PyMOL.')
@@ -84,7 +86,7 @@ def parseArgs():
 
     # Visual style
     p.add_argument('--style', default='cartoon',
-                   choices=['cartoon', 'surface', 'sticks', 'ribbon', 'cartoon+sticks'],
+                   choices=['cartoon', 'surface', 'sticks', 'ribbon', STYLE_CARTOON_STICKS],
                    help='Protein representation.')
     p.add_argument('--bg', default='white', choices=['white', 'black'],
                    help='Background color.')
@@ -139,10 +141,10 @@ def log(msg):
 
 
 def safePath(path, baseDir):
-    """Resolve path and reject it if it escapes baseDir (path-traversal guard)."""
+    """Canonicalise a CLI-derived path and refuse anything outside baseDir (S8707)."""
     resolved = os.path.realpath(path)
     base = os.path.realpath(baseDir)
-    if os.path.commonpath([resolved, base]) != base:
+    if resolved != base and not resolved.startswith(base + os.sep):
         raise ValueError('"{}" resolves outside the allowed directory "{}".'.format(path, base))
     return resolved
 
@@ -245,7 +247,7 @@ def colorByScheme(polymerSel, scheme, style):
         return
 
     # rainbow: spectrum N->C, a classic reliably attractive colouring.
-    if style in ('cartoon+sticks', 'sticks'):
+    if style in (STYLE_CARTOON_STICKS, 'sticks'):
         cmd.spectrum('count', 'rainbow', polymerSel)
     else:
         cmd.spectrum('count', 'rainbow', polymerSel + ' and name CA')
@@ -263,10 +265,10 @@ def applyStyle(obj, args):
         cmd.show('surface', polymerSel)
         cmd.color('skyblue', polymerSel)
         cmd.set('surface_quality', 0)      # 0 is plenty for a movie and much faster
-    elif args.style in ('cartoon', 'cartoon+sticks', 'ribbon'):
+    elif args.style in ('cartoon', STYLE_CARTOON_STICKS, 'ribbon'):
         rep = 'ribbon' if args.style == 'ribbon' else 'cartoon'
         cmd.show(rep, polymerSel)
-        if args.style == 'cartoon+sticks':
+        if args.style == STYLE_CARTOON_STICKS:
             cmd.set('cartoon_side_chain_helper', 1)
             cmd.show('sticks', polymerSel + ' and sidechain')
             cmd.set('stick_radius', 0.15, polymerSel)
@@ -318,7 +320,7 @@ def frameCamera(sel, surface=False, spin=False, margin=3.0):
     cmd.clip('slab', radius * 4)
 
 
-def renderStates(obj, states, args, framesDir):
+def renderStates(states, args, framesDir):
     """Render states, named by global index. Spin is absolute (view reset + turned
     by globalIdx * anglePerFrame) so it stays continuous across chunk boundaries."""
     width, height = RESOLUTIONS[args.resolution]
@@ -354,11 +356,11 @@ def frameGlobalIdx(framePath):
     return int(os.path.splitext(os.path.basename(framePath))[0].split('_')[-1])
 
 
-def stampTimeLabels(frameFiles, timesFile):
+def stampTimeLabels(frameFiles, timesFile, baseDir):
     """Overlay "t = X ns" on each frame, from timesFile ({globalFrameIdx: timeNs})."""
     from PIL import Image, ImageDraw
 
-    with open(timesFile) as f:
+    with open(safePath(timesFile, baseDir)) as f:
         times = json.load(f)
 
     font = None
@@ -378,22 +380,23 @@ def stampTimeLabels(frameFiles, timesFile):
         img.save(framePath)
 
 
-def flattenFrames(frameFiles, flatDir):
+def flattenFrames(frameFiles, flatDir, baseDir):
     """Symlink each chunk's frames into one sequentially-named dir (ffmpeg needs that)."""
+    flatDir = safePath(flatDir, baseDir)
     os.makedirs(flatDir, exist_ok=True)
     flatFiles = []
     for i, src in enumerate(frameFiles):
-        dst = os.path.join(flatDir, 'seq_{:05d}.png'.format(i))
+        dst = safePath(os.path.join(flatDir, 'seq_{:05d}.png'.format(i)), baseDir)
         if not os.path.exists(dst):
             try:
-                os.symlink(os.path.abspath(src), dst)
+                os.symlink(safePath(src, baseDir), dst)
             except OSError:
                 shutil.copy(src, dst)
         flatFiles.append(dst)
     return flatFiles
 
 
-def assembleVideo(frameFiles, outBase, fps, fmt, crf=20):
+def assembleVideo(frameFiles, outBase, fps, fmt, crf, baseDir):
     """Mux PNG frames (sorted by global frame index) into mp4 (ffmpeg) or gif (Pillow)."""
     if not frameFiles:
         raise RuntimeError('No frames were rendered.')
@@ -401,10 +404,10 @@ def assembleVideo(frameFiles, outBase, fps, fmt, crf=20):
 
     ffmpeg = shutil.which('ffmpeg')
     if fmt == 'mp4' and ffmpeg:
-        outFile = outBase + '.mp4'
+        outFile = safePath(outBase + '.mp4', baseDir)
         flatDir = outBase + '_ffmpeg_seq'
-        flattenFrames(frameFiles, flatDir)
-        pattern = os.path.join(flatDir, 'seq_%05d.png')
+        flattenFrames(frameFiles, flatDir, baseDir)
+        pattern = safePath(os.path.join(flatDir, 'seq_%05d.png'), baseDir)
         cmdLine = [
             ffmpeg, '-y', '-framerate', str(fps), '-i', pattern,
             '-c:v', 'libx264', '-preset', 'slow', '-crf', str(crf),
@@ -415,14 +418,14 @@ def assembleVideo(frameFiles, outBase, fps, fmt, crf=20):
         ]
         log('Encoding mp4 with ffmpeg...')
         subprocess.check_call(cmdLine)
-        shutil.rmtree(flatDir, ignore_errors=True)
+        shutil.rmtree(safePath(flatDir, baseDir), ignore_errors=True)
         return outFile
 
     # Fallback (or explicit request): animated gif via Pillow.
     if fmt == 'mp4' and not ffmpeg:
         log('ffmpeg not found -> falling back to animated gif.')
     from PIL import Image
-    outFile = outBase + '.gif'
+    outFile = safePath(outBase + '.gif', baseDir)
     log('Encoding gif with Pillow...')
     # A generator, not a list: holding every decoded frame at once doesn't scale.
     frameIter = (Image.open(f).convert('RGB') for f in frameFiles)
@@ -433,10 +436,52 @@ def assembleVideo(frameFiles, outBase, fps, fmt, crf=20):
     return outFile
 
 
+def renderPhase(args, inputStruct, trajectory, framesDir):
+    """Load, style and ray-trace this chunk's states; return the rendered frame paths."""
+    os.makedirs(framesDir, exist_ok=True)
+    log('System    : {}'.format(inputStruct))
+    log('Trajectory: {}'.format(trajectory))
+
+    cmd.feedback('disable', 'all', 'everything')
+    if args.threads:
+        cmd.set('max_threads', args.threads)
+
+    obj, nStates = loadSystem(inputStruct, trajectory)
+    log('Loaded {} states.'.format(nStates))
+
+    if args.alignTraj:
+        log('Aligning trajectory on the protein backbone (intra_fit).')
+        cmd.intra_fit('{} and polymer and name CA'.format(obj))
+
+    if args.smooth > 0 and nStates > 2:
+        log('Smoothing trajectory (window={}, visualization only).'.format(args.smooth))
+        cmd.smooth('all', passes=1, window=args.smooth)
+
+    applyStyle(obj, args)
+    return renderStates(resolveStates(args, nStates), args, framesDir)
+
+
+def encodePhase(args, frameFiles, framesDir, outBase):
+    """Collect frames (if needed), stamp times, mux the video, clean up."""
+    if not frameFiles:
+        pattern = safePath(args.framesGlob or os.path.join(framesDir, '**', 'frame_*.png'),
+                           args.baseDir)
+        frameFiles = sorted(glob.glob(pattern, recursive=True), key=frameGlobalIdx)
+
+    if args.timeLabel and args.timesFile:
+        stampTimeLabels(frameFiles, args.timesFile, args.baseDir)
+
+    outFile = assembleVideo(frameFiles, outBase, args.fps, args.format, args.crf, args.baseDir)
+
+    if not args.keepFrames:
+        for frameDir in {os.path.dirname(f) for f in frameFiles}:
+            shutil.rmtree(frameDir, ignore_errors=True)
+
+    log('DONE. Video written to: {}'.format(outFile))
+
+
 def main():
     args = parseArgs()
-    doRender = not args.encodeOnly
-    doEncode = not args.renderOnly
 
     inputStruct = safePath(args.inputStruct, args.baseDir) if args.inputStruct else None
     trajectory = safePath(args.trajectory, args.baseDir) if args.trajectory else None
@@ -448,45 +493,11 @@ def main():
     outBase = safePath(os.path.join(workdir, args.output), args.baseDir)
 
     frameFiles = []
-    if doRender:
-        os.makedirs(framesDir, exist_ok=True)
-        log('System    : {}'.format(inputStruct))
-        log('Trajectory: {}'.format(trajectory))
+    if not args.encodeOnly:
+        frameFiles = renderPhase(args, inputStruct, trajectory, framesDir)
 
-        cmd.feedback('disable', 'all', 'everything')
-        if args.threads:
-            cmd.set('max_threads', args.threads)
-
-        obj, nStates = loadSystem(inputStruct, trajectory)
-        log('Loaded {} states.'.format(nStates))
-
-        if args.alignTraj:
-            log('Aligning trajectory on the protein backbone (intra_fit).')
-            cmd.intra_fit('{} and polymer and name CA'.format(obj))
-
-        if args.smooth > 0 and nStates > 2:
-            log('Smoothing trajectory (window={}, visualization only).'.format(args.smooth))
-            cmd.smooth('all', passes=1, window=args.smooth)
-
-        applyStyle(obj, args)
-        frameFiles = renderStates(obj, resolveStates(args, nStates), args, framesDir)
-
-    if doEncode:
-        if not frameFiles:
-            pattern = safePath(args.framesGlob or os.path.join(framesDir, '**', 'frame_*.png'),
-                               args.baseDir)
-            frameFiles = sorted(glob.glob(pattern, recursive=True), key=frameGlobalIdx)
-
-        if args.timeLabel and args.timesFile:
-            stampTimeLabels(frameFiles, safePath(args.timesFile, args.baseDir))
-
-        outFile = assembleVideo(frameFiles, outBase, args.fps, args.format, args.crf)
-
-        if not args.keepFrames:
-            for frameDir in {os.path.dirname(f) for f in frameFiles}:
-                shutil.rmtree(frameDir, ignore_errors=True)
-
-        log('DONE. Video written to: {}'.format(outFile))
+    if not args.renderOnly:
+        encodePhase(args, frameFiles, framesDir, outBase)
 
 
 # PyMOL execs scripts with __name__ == 'pymol' (not '__main__'), so accept both.

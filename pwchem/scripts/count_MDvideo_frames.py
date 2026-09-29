@@ -34,10 +34,10 @@ def parseArgs():
 
 
 def safePath(path, baseDir):
-    """Resolve path and reject it if it escapes baseDir (path-traversal guard for security)."""
+    """Canonicalise a CLI-derived path and refuse anything outside baseDir (S8707)."""
     resolved = os.path.realpath(path)
     base = os.path.realpath(baseDir)
-    if os.path.commonpath([resolved, base]) != base:
+    if resolved != base and not resolved.startswith(base + os.sep):
         raise ValueError('"{}" resolves outside the allowed directory "{}".'.format(path, base))
     return resolved
 
