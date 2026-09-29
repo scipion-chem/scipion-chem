@@ -25,10 +25,14 @@
 # *
 # **************************************************************************
 
+import glob
+import os
+
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pwem.protocols import ProtImportPdb
 
-from pwchem.protocols import ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering, ProtocolInverseDistanceWeighting
+from pwchem.protocols import (ProtocolImportMDSystem, ProtocolProlif, ProtocolTrajectoryClustering,
+                              ProtocolInverseDistanceWeighting, ProtocolMDVideo)
 from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import MDSYSTEM, SETOFSTRUCTS
 from pwchem.utils import assertHandle
 from pwchem.tests import TestImportMDSystems
@@ -122,3 +126,40 @@ class TestIDWreconstruct(TestTrajClustering):
 
         assertHandle(self.assertIsNotNone, getattr(self.protIDW, 'outputAtomStructs', None),
                      cwd=self.protIDW.getWorkingDir())
+
+
+class TestMDVideo(TestImportMDSystems):
+
+    @classmethod
+    def _runVideo(cls, vidFormat=0, keepFrames=False):
+        protVideo = cls.newProtocol(
+            ProtocolMDVideo,
+            inputMDSystem=cls.protImportMDSystem.outputSystem,
+            vidResolution=0,        # 480p
+            vidRay=False,
+            maxFrames=10,
+            vidFormat=vidFormat,
+            keepFrames=keepFrames,
+            numberOfThreads=2,
+        )
+        cls.launchProtocol(protVideo)
+        return protVideo
+
+    def _checkVideo(self, protVideo):
+        assertHandle(self.assertIsNotNone, getattr(protVideo, 'outputVideo', None),
+                     cwd=protVideo.getWorkingDir())
+        videoFile = protVideo.outputVideo.getFileName()
+        assertHandle(self.assertTrue, os.path.getsize(videoFile) > 0, cwd=protVideo.getWorkingDir())
+        return videoFile
+
+    def test_video_mp4(self):
+        protVideo = self._runVideo(vidFormat=0, keepFrames=True)
+        self._checkVideo(protVideo)
+
+        plan = protVideo._readPlan()
+        frameFiles = glob.glob(protVideo._getExtraPath('frames', 'chunk_*', 'frame_*.png'))
+        assertHandle(self.assertEqual, len(frameFiles), plan['nTotal'], cwd=protVideo.getWorkingDir())
+
+    def test_video_gif(self):
+        protVideo = self._runVideo(vidFormat=1, keepFrames=False)
+        self._checkVideo(protVideo)
