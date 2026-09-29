@@ -155,7 +155,8 @@ class ProtocolMDVideo(EMProtocol):
         structFile, trjFile = self._getStructTrajFiles()
 
         countFile = os.path.abspath(self._getExtraPath('mdvideo_count.json'))
-        args = '-i "{}" -t "{}" -o "{}"'.format(structFile, trjFile, countFile)
+        args = '-i "{}" -t "{}" -o "{}" -b "{}"'.format(
+            structFile, trjFile, countFile, self._getProjectDir())
         Plugin.runScript(self, 'count_MDvideo_frames.py', args, env=MDTRAJ_DIC)
 
         with open(countFile) as f:
@@ -202,8 +203,9 @@ class ProtocolMDVideo(EMProtocol):
         framesGlob = os.path.abspath(self._getExtraPath('frames', 'chunk_*', 'frame_*.png'))
         fmt = self._selected(_FORMAT_OPTS, self.vidFormat)
 
-        args = (f'-- -o "{outBase}" --workdir "{extraDir}" --encodeOnly --framesGlob "{framesGlob}" '
-               f'--fps {self.vidFps.get()} --format {fmt} --crf {self.videoQuality.get()} '
+        args = (f'-- -o "{outBase}" -b "{self._getProjectDir()}" --workdir "{extraDir}" '
+               f'--encodeOnly --framesGlob "{framesGlob}" --fps {self.vidFps.get()} '
+               f'--format {fmt} --crf {self.videoQuality.get()} '
                f'--keepFrames {int(self.keepFrames.get())}')
 
         if self.timeLabel.get():
@@ -239,6 +241,10 @@ class ProtocolMDVideo(EMProtocol):
 
     def _getOutBase(self):
         return '{}_MDvideo'.format(self.inputMDSystem.get().getSystemName())
+
+    def _getProjectDir(self):
+        # Trust anchor the scripts validate every path against (path-traversal guard).
+        return os.path.abspath(self.getProject().getPath())
 
     def _getNChunks(self):
         # 1 thread coordinates; the rest render chunks concurrently (1 core each).
@@ -285,7 +291,8 @@ class ProtocolMDVideo(EMProtocol):
         spinAxis = self._selected(_AXIS_OPTS, self.spinAxis)
         statesStr = ','.join(map(str, states))
 
-        return (f'-- -i "{structFile}" -t "{trjFile}" --renderOnly --framesDir "{chunkDir}" '
+        return (f'-- -i "{structFile}" -t "{trjFile}" -b "{self._getProjectDir()}" '
+               f'--renderOnly --framesDir "{chunkDir}" '
                f'--states "{statesStr}" --frameOffset {frameOffset} --nTotalFrames {nTotal} '
                f'--threads 1 --style {style} --bg {bg} --colorScheme {colorScheme} '
                f'--ligand "{ligandId}" --highlightLig {int(self.vidHighlightLig.get())} '

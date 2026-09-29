@@ -47,18 +47,20 @@ ION_RESNAMES = ('NA', 'CL', 'SOD', 'CLA', 'K', 'MG', 'ZN', 'CA', 'POT', 'BR', 'I
 
 def parseArgs():
     p = argparse.ArgumentParser(description='Render a cinematic MD trajectory video with PyMOL.')
-    p.add_argument('-i', '--inputStruct', default=None, type=os.path.abspath,
+    p.add_argument('-i', '--inputStruct', default=None,
                    help='System / topology structure file (.pdb, .gro, .prmtop ...).')
-    p.add_argument('-t', '--trajectory', default=None, type=os.path.abspath,
+    p.add_argument('-t', '--trajectory', default=None,
                    help='Trajectory file (.xtc, .trr, .dcd, .nc/.netcdf ...).')
     p.add_argument('-o', '--output', default='md_video', type=os.path.basename,
                    help='Output basename (without extension).')
-    p.add_argument('--workdir', default=None, type=os.path.abspath,
+    p.add_argument('-b', '--baseDir', required=True,
+                   help='Every path must resolve inside this directory.')
+    p.add_argument('--workdir', default=None,
                    help='Directory where the video is written (default: trajectory dir).')
-    p.add_argument('--framesDir', default=None, type=os.path.abspath,
+    p.add_argument('--framesDir', default=None,
                    help='Directory this chunk writes its frame PNGs to '
                         '(default: <workdir>/_md_video_frames).')
-    p.add_argument('--framesGlob', default=None, type=os.path.abspath,
+    p.add_argument('--framesGlob', default=None,
                    help='[encode] Glob pattern collecting every chunk\'s frames, '
                         'e.g. "extra/frames/chunk_*/frame_*.png".')
 
@@ -123,7 +125,7 @@ def parseArgs():
     p.add_argument('--crf', type=int, default=20, help='mp4 encoding quality (libx264 CRF; lower=better).')
     p.add_argument('--timeLabel', type=int, default=0,
                    help='1: overlay "t = X ns" on each frame (needs --timesFile).')
-    p.add_argument('--timesFile', default=None, type=os.path.abspath,
+    p.add_argument('--timesFile', default=None,
                    help='JSON file {globalFrameIdx: timeNs} used by --timeLabel.')
     p.add_argument('--keepFrames', type=int, default=0,
                    help='1: keep the rendered PNG frames after encoding.')
@@ -134,6 +136,15 @@ def parseArgs():
 
 def log(msg):
     print('[create_MDvideo] {}'.format(msg), flush=True)
+
+
+def safePath(path, baseDir):
+    """Resolve path and reject it if it escapes baseDir (path-traversal guard)."""
+    resolved = os.path.realpath(path)
+    base = os.path.realpath(baseDir)
+    if os.path.commonpath([resolved, base]) != base:
+        raise ValueError('"{}" resolves outside the allowed directory "{}".'.format(path, base))
+    return resolved
 
 
 def parseStatesArg(statesStr):
@@ -427,23 +438,26 @@ def main():
     doRender = not args.encodeOnly
     doEncode = not args.renderOnly
 
-    workdir = args.workdir or (os.path.dirname(os.path.abspath(args.trajectory))
-                               if args.trajectory else '.')
+    inputStruct = safePath(args.inputStruct, args.baseDir) if args.inputStruct else None
+    trajectory = safePath(args.trajectory, args.baseDir) if args.trajectory else None
+
+    workdir = args.workdir or (os.path.dirname(trajectory) if trajectory else '.')
+    workdir = safePath(workdir, args.baseDir)
     os.makedirs(workdir, exist_ok=True)
-    framesDir = args.framesDir or os.path.join(workdir, '_md_video_frames')
-    outBase = os.path.join(workdir, args.output)
+    framesDir = safePath(args.framesDir or os.path.join(workdir, '_md_video_frames'), args.baseDir)
+    outBase = safePath(os.path.join(workdir, args.output), args.baseDir)
 
     frameFiles = []
     if doRender:
         os.makedirs(framesDir, exist_ok=True)
-        log('System    : {}'.format(args.inputStruct))
-        log('Trajectory: {}'.format(args.trajectory))
+        log('System    : {}'.format(inputStruct))
+        log('Trajectory: {}'.format(trajectory))
 
         cmd.feedback('disable', 'all', 'everything')
         if args.threads:
             cmd.set('max_threads', args.threads)
 
-        obj, nStates = loadSystem(args.inputStruct, args.trajectory)
+        obj, nStates = loadSystem(inputStruct, trajectory)
         log('Loaded {} states.'.format(nStates))
 
         if args.alignTraj:
@@ -459,11 +473,12 @@ def main():
 
     if doEncode:
         if not frameFiles:
-            pattern = args.framesGlob or os.path.join(framesDir, '**', 'frame_*.png')
+            pattern = safePath(args.framesGlob or os.path.join(framesDir, '**', 'frame_*.png'),
+                               args.baseDir)
             frameFiles = sorted(glob.glob(pattern, recursive=True), key=frameGlobalIdx)
 
         if args.timeLabel and args.timesFile:
-            stampTimeLabels(frameFiles, args.timesFile)
+            stampTimeLabels(frameFiles, safePath(args.timesFile, args.baseDir))
 
         outFile = assembleVideo(frameFiles, outBase, args.fps, args.format, args.crf)
 

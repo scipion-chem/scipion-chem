@@ -25,21 +25,36 @@ import mdtraj as md
 
 def parseArgs():
     p = argparse.ArgumentParser(description='Count MD trajectory frames and their times.')
-    p.add_argument('-i', '--inputStruct', required=True, type=os.path.abspath)
-    p.add_argument('-t', '--trajectory', required=True, type=os.path.abspath)
-    p.add_argument('-o', '--output', required=True, type=os.path.abspath)
+    p.add_argument('-i', '--inputStruct', required=True)
+    p.add_argument('-t', '--trajectory', required=True)
+    p.add_argument('-o', '--output', required=True)
+    p.add_argument('-b', '--baseDir', required=True,
+                   help='Every path must resolve inside this directory.')
     return p.parse_args()
+
+
+def safePath(path, baseDir):
+    """Resolve path and reject it if it escapes baseDir (path-traversal guard for security)."""
+    resolved = os.path.realpath(path)
+    base = os.path.realpath(baseDir)
+    if os.path.commonpath([resolved, base]) != base:
+        raise ValueError('"{}" resolves outside the allowed directory "{}".'.format(path, base))
+    return resolved
 
 
 def main():
     args = parseArgs()
+    inputStruct = safePath(args.inputStruct, args.baseDir)
+    trajectory = safePath(args.trajectory, args.baseDir)
+    output = safePath(args.output, args.baseDir)
+
     nTotal = 0
     timesPs = []
-    for chunk in md.iterload(args.trajectory, top=args.inputStruct, chunk=500):
+    for chunk in md.iterload(trajectory, top=inputStruct, chunk=500):
         nTotal += chunk.n_frames
         timesPs.extend(float(t) for t in chunk.time)
 
-    with open(args.output, 'w') as f:
+    with open(output, 'w') as f:
         json.dump({'nTotal': nTotal, 'timesPs': timesPs}, f)
 
 
