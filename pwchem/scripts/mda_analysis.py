@@ -42,7 +42,6 @@ import MDAnalysis as mda
 from MDAnalysis.analysis.distances import distance_array
 from MDAnalysis.analysis.rms import RMSD
 from MDAnalysis.analysis.hydrogenbonds.hbond_analysis import HydrogenBondAnalysis
-from scripts import ligand_filter_script
 
 # Boltzmann constant in kcal/(mol K); F = -RT ln(P) is expressed in kcal/mol
 _KB_KCAL_MOL_K = 0.001987
