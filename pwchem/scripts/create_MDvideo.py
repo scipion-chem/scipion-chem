@@ -47,18 +47,18 @@ ION_RESNAMES = ('NA', 'CL', 'SOD', 'CLA', 'K', 'MG', 'ZN', 'CA', 'POT', 'BR', 'I
 
 def parseArgs():
     p = argparse.ArgumentParser(description='Render a cinematic MD trajectory video with PyMOL.')
-    p.add_argument('-i', '--inputStruct', default=None,
+    p.add_argument('-i', '--inputStruct', default=None, type=os.path.abspath,
                    help='System / topology structure file (.pdb, .gro, .prmtop ...).')
-    p.add_argument('-t', '--trajectory', default=None,
+    p.add_argument('-t', '--trajectory', default=None, type=os.path.abspath,
                    help='Trajectory file (.xtc, .trr, .dcd, .nc/.netcdf ...).')
-    p.add_argument('-o', '--output', default='md_video',
+    p.add_argument('-o', '--output', default='md_video', type=os.path.basename,
                    help='Output basename (without extension).')
-    p.add_argument('--workdir', default=None,
+    p.add_argument('--workdir', default=None, type=os.path.abspath,
                    help='Directory where the video is written (default: trajectory dir).')
-    p.add_argument('--framesDir', default=None,
+    p.add_argument('--framesDir', default=None, type=os.path.abspath,
                    help='Directory this chunk writes its frame PNGs to '
                         '(default: <workdir>/_md_video_frames).')
-    p.add_argument('--framesGlob', default=None,
+    p.add_argument('--framesGlob', default=None, type=os.path.abspath,
                    help='[encode] Glob pattern collecting every chunk\'s frames, '
                         'e.g. "extra/frames/chunk_*/frame_*.png".')
 
@@ -123,7 +123,7 @@ def parseArgs():
     p.add_argument('--crf', type=int, default=20, help='mp4 encoding quality (libx264 CRF; lower=better).')
     p.add_argument('--timeLabel', type=int, default=0,
                    help='1: overlay "t = X ns" on each frame (needs --timesFile).')
-    p.add_argument('--timesFile', default=None,
+    p.add_argument('--timesFile', default=None, type=os.path.abspath,
                    help='JSON file {globalFrameIdx: timeNs} used by --timeLabel.')
     p.add_argument('--keepFrames', type=int, default=0,
                    help='1: keep the rendered PNG frames after encoding.')

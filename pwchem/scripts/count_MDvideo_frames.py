@@ -18,15 +18,16 @@
 
 import argparse
 import json
+import os
 
 import mdtraj as md
 
 
 def parseArgs():
     p = argparse.ArgumentParser(description='Count MD trajectory frames and their times.')
-    p.add_argument('-i', '--inputStruct', required=True)
-    p.add_argument('-t', '--trajectory', required=True)
-    p.add_argument('-o', '--output', required=True)
+    p.add_argument('-i', '--inputStruct', required=True, type=os.path.abspath)
+    p.add_argument('-t', '--trajectory', required=True, type=os.path.abspath)
+    p.add_argument('-o', '--output', required=True, type=os.path.abspath)
     return p.parse_args()
 
 
