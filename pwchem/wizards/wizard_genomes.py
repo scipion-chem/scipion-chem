@@ -32,7 +32,7 @@ from pwem.wizards import VariableWizard
 from pwchem.protocols.Sequences.protocol_reference_genomes import ProtReferenceGenomes
 from pwchem.protocols.Sequences.protocol_vcf import ProtVCF
 from pwchem.protocols.Sequences.protocol_rnaseq_align import ProtRNASeqAlignment
-from pwchem.utils.utilsFasta import getCommonSpecies
+from pwchem.utils.utilsRNA import getCommonSpecies
 
 
 class SelectCommonSpeciesWizard(VariableWizard):
