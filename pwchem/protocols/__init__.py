@@ -92,6 +92,13 @@ except ImportError:
 
 from pwchem.protocols.Sequences.protocol_sequence_location import ProtGetSequenceLocation
 
+from pwchem.protocols.Sequences.protocol_import_fastq import ProtImportFastq
+from pwchem.protocols.Sequences.protocol_fastp import ProtFastpFilter
+from pwchem.protocols.Sequences.protocol_rnaseq_align import ProtRNASeqAlignment
+from pwchem.protocols.Sequences.protocol_reference_genomes import ProtReferenceGenomes
+from pwchem.protocols.Sequences.protocol_picard import ProtPicard
+from pwchem.protocols.Sequences.protocol_gatk import ProtGATK
+from pwchem.protocols.Sequences.protocol_vcf import ProtVCF
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
@@ -120,3 +127,4 @@ from pwchem.protocols.MolecularDynamics.protocol_parametrize_ligand import Proto
 from pwchem.protocols.MolecularDynamics.protocol_prolif_analysis import ProtocolProlif
 from pwchem.protocols.MolecularDynamics.protocol_import_MDSystem import ProtocolImportMDSystem
 from pwchem.protocols.MolecularDynamics.protocol_trajectory_clustering import ProtocolTrajectoryClustering
+from pwchem.protocols.VirtualDrugScreening.protocol_structROI_voting import ProtROIVoting

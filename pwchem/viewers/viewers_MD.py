@@ -203,7 +203,8 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        label='Display MDTraj analysis: ',
                        help='Run and display the selected analysis.')
 
-        self._defineLigandParams(form)
+        if self.getMDSystem().getLigandID():
+            self._defineLigandParams(form)
 
     def _defineLigandParams(self, form):
         """Receptor-ligand interactions section: ligand-specific trajectory

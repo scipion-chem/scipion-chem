@@ -32,10 +32,9 @@ from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pwem.protocols import ProtImportPdb, protocol
 
 from pwchem import tests
-from pwchem.protocols.VirtualDrugScreening.protocol_group_byAttribute import ProtChemGroupByAtt
 # Scipion chem imports
 from pwchem.tests.tests_imports import TestImportBase
-from pwchem.protocols import ProtChemImportSmallMolecules, ConvertStructures, ProtChemExportCSV, ProtChemOperateSet
+from pwchem.protocols import ProtChemGroupByAtt, ProtMergeStructs, ProtChemImportSmallMolecules, ConvertStructures, ProtChemExportCSV, ProtChemOperateSet
 from pwchem.utils import assertHandle
 
 class TestImportBoth(BaseTest):
@@ -312,3 +311,46 @@ class TestGroupSet(BaseTest):
         sets = self._runGroupByAtt()
         self._waitOutput(sets, 'outputSet0', sleepTime=5)
         assertHandle(self.assertIsNotNone, getattr(sets, 'outputSet0', None), cwd=sets.getWorkingDir())
+
+class TestMergeStructs(BaseTest):
+    @classmethod
+    def setUpClass(cls):
+        setupTestProject(cls)
+        cls.ds = DataSet.getDataSet('model_building_tutorial')
+        cls.dsLig = DataSet.getDataSet("smallMolecules")
+        cls._runImportSmallMols()
+        cls._importPDB()
+
+    @classmethod
+    def _runImportSmallMols(cls):
+        cls.protImportSmallMols = cls.newProtocol(
+            ProtChemImportSmallMolecules,
+            filesPath=cls.dsLig.getFile('mol2'))
+        cls.launchProtocol(cls.protImportSmallMols)
+
+    @classmethod
+    def _importPDB(cls):
+        inputPdbData = 1
+        args = {
+            'inputPdbData': inputPdbData,
+            'pdbFile': cls.ds.getFile('PDBx_mmCIF/1ake_start.pdb')
+        }
+        protocol = cls.newProtocol(ProtImportPdb, **args)
+        cls.launchProtocol(protocol)
+        cls.protPdb = protocol
+
+    @classmethod
+    def _runMergeStructs(cls):
+        protMerge = cls.newProtocol(
+            ProtMergeStructs,
+            inputStructs=[cls.protPdb.outputPdb],
+            inputLigands=[cls.protImportSmallMols.outputSmallMolecules]
+        )
+        cls.proj.launchProtocol(protMerge, wait=False)
+        return protMerge
+
+    def test(self):
+        merge = self._runMergeStructs()
+        self._waitOutput(merge, 'outputStructure', sleepTime=5)
+        assertHandle(self.assertIsNotNone, getattr(merge, 'outputStructure', None), cwd=merge.getWorkingDir())
+

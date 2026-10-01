@@ -246,8 +246,12 @@ class ProtExtractLigands(EMProtocol):
                     heavyAtoms = [a for a in residue if a.element != "H"]
                     if len(heavyAtoms) < self.nAtoms.get():
                         continue
-                    res_id = residue.get_id()[1]
-                    outFile = self._getPath(f"{struct_name}_{resname}_{res_id}.cif")
+                    chainId = chain.id
+                    resId = residue.get_id()[1]
+
+                    outFile = self._getPath(
+                        f"{struct_name}_ligand_{chainId}_{resId}.cif"
+                    )
 
                     io = MMCIFIO()
                     io.set_structure(residue)

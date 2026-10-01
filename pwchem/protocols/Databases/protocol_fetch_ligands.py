@@ -25,8 +25,8 @@
 # **************************************************************************
 
 # General imports
-import os, re, glob, json
-import urllib
+import os, re, glob, json, time
+import urllib.request, urllib.error
 from Bio.PDB import PDBIO, Select
 
 # Scipion em imports
@@ -39,6 +39,15 @@ from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import MMCIFParser, insistentExecution
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 from pwchem import Plugin as pwchemPlugin
+
+URL_TIMEOUT = 30
+URL_MAX_TRIES = 12
+URL_MAX_SLEEP = 10
+CHEMBL_URL = 'https://www.ebi.ac.uk/chembl/api/data'
+CHEMBL_PAGE_SIZE = 1000
+BINDINGDB_URL = 'https://bindingdb.org/rest'
+MODELSERVER_URL = 'https://models.rcsb.org/v1'
+CHAIN_ID_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
 PDB, CHEMBL, BINDINGDB = 0, 1, 2
 RDKIT, OPENBABEL = 0, 1
@@ -497,18 +506,19 @@ class ProtocolLigandsFetching(EMProtocol):
         return list(set(targetIds))
 
     def mapUniprot2SmilesDic(self, uniprot_id):
+        """{BindingDB monomer id: smiles} of the ligands of a uniprot entry."""
         ligDic = {}
-        url = 'https://bindingdb.org/axis2/services/BDBService/getLigandsByUniprot?uniprot={}'.format(uniprot_id)
-        with urllib.request.urlopen(url) as response:
-            fullXML = response.read().decode('utf-8')
-            ligIds = re.findall(r'<bdb:monomerid>\d+</bdb:monomerid>', fullXML)
-            ligIds = [ligId.split('>')[1].split('<')[0] for ligId in ligIds]
+        url = f'{BINDINGDB_URL}/getLigandsByUniprot?uniprot={uniprot_id}&response=application/json'
+        content = self.readUrl(url).decode('utf-8')
+        if not content.strip():
+            return ligDic
 
-            smiles = re.findall(r'<bdb:smiles>.+?</bdb:smiles>', fullXML)
-            smiles = [smi.split('>')[1].split('<')[0].split()[0] for smi in smiles]
+        jDic = json.loads(content)
+        response = jDic.get('getLindsByUniprotResponse') or next(iter(jDic.values()), {})
 
-            for ligId, smi in zip(ligIds, smiles):
-                ligDic[ligId] = smi
+        for affinity in response.get('bdb.affinities', []):
+            # The ids are numbers here, but they are matched against the text map of getDBDMapDic
+            ligDic[str(affinity['bdb.monomerid'])] = affinity['bdb.smile']
 
         return ligDic
 
@@ -549,23 +559,22 @@ class ProtocolLigandsFetching(EMProtocol):
             for targetId in targetIds:
                 self.addRelationToFile('\tChEMBL target', targetId)
 
-                jDic = self.getJDic('ChEMBL', 'activity', targetId, limit=1)
-                nLigs = jDic['page_meta']['total_count']
-                jDic = self.getJDic('ChEMBL', 'activity', targetId, limit=nLigs)
+                actDics = [actDic for actDic in self.getChEMBLActivities(targetId)
+                           if self.checkStructureFilters(actDic, iBase)]
+                molDics = self.getChEMBLMolecules([actDic['molecule_chembl_id'] for actDic in actDics])
 
-                for jLigDic in jDic['activities']:
-                    if self.checkStructureFilters(jLigDic, iBase):
-                        chembl_id = jLigDic['molecule_chembl_id']
-                        jMolDic = self.getJDic('ChEMBL', 'molecule', chembl_id)
-                        if self.checkLigandFilters(jMolDic, iBase):
-                            if chembl_id not in allLigandNames or not self.nonRep.get():
-                                allLigandNames.append(chembl_id)
-                                self.addRelationToFile('\t\tChEMBL compound', chembl_id)
+                for jLigDic in actDics:
+                    chembl_id = jLigDic['molecule_chembl_id']
+                    jMolDic = molDics.get(chembl_id)
+                    if jMolDic and self.checkLigandFilters(jMolDic, iBase):
+                        if chembl_id not in allLigandNames or not self.nonRep.get():
+                            allLigandNames.append(chembl_id)
+                            self.addRelationToFile('\t\tChEMBL compound', chembl_id)
 
-                                if targetId not in ligNames:
-                                    ligNames[targetId] = {chembl_id: jLigDic['canonical_smiles']}
-                                else:
-                                    ligNames[targetId][chembl_id] = jLigDic['canonical_smiles']
+                            if targetId not in ligNames:
+                                ligNames[targetId] = {chembl_id: jLigDic['canonical_smiles']}
+                            else:
+                                ligNames[targetId][chembl_id] = jLigDic['canonical_smiles']
 
         return ligNames
 
@@ -606,24 +615,84 @@ class ProtocolLigandsFetching(EMProtocol):
         self.saveBDBLigands(ligIds)
 
     def savePDBLigands(self, ligNames, alignedFns):
-        # Save ligands
+        """Save each ligand of the entries, asking the RCSB model server for it first"""
         ligandFiles = {}
-        ligIds = []
         for pdbId in ligNames:
-            s = MMCIFParser().get_structure(pdbId, alignedFns[pdbId])
-            io = PDBIO()
-            io.set_structure(s)
             for ligId in ligNames[pdbId]:
-                for residue in s.get_residues():
-                    # Several HETATM residues with same name might be found. Stored in different structROIs
-                    if residue.get_resname() == ligId:
-                        if len(list(residue.get_atoms())) > self.minAtoms.get():
-                            if ligId not in ligIds:
-                                ligandFiles[ligId] = self._getExtraPath(ligId + '.pdb')
-                                io.save(ligandFiles[ligId], ResSelect(residue))
-                                ligIds.append(ligId)
+                # Several HETATM residues with the same name might be found, only one is stored
+                if ligId in ligandFiles:
+                    continue
+
+                oFile = self.downloadLigand(pdbId, ligId)
+                if not oFile:
+                    oFile = self.extractLigand(pdbId, ligId, alignedFns[pdbId])
+
+                if oFile:
+                    ligandFiles[ligId] = oFile
 
         return ligandFiles
+
+    def downloadLigand(self, pdbId, ligId):
+        """The ligand as deposited in the entry, in SDF, from the RCSB model server.
+        Asking for it is better than carving it out of the mmCIF (no bonds guessed)."""
+        url = f'{MODELSERVER_URL}/{pdbId.lower()}/ligand?auth_comp_id={ligId}&encoding=sdf'
+        try:
+            sdfStr = self.readUrl(url).decode('utf-8')
+        except Exception as e:
+            self.addToSummary(f'Ligand {ligId} of {pdbId} could not be downloaded ({e}), it will be '
+                              f'extracted from the structure')
+            return None
+
+        if self.countSDFAtoms(sdfStr) <= self.minAtoms.get():
+            return None
+
+        oFile = self._getExtraPath(ligId + '.sdf')
+        with open(oFile, 'w') as f:
+            f.write(sdfStr)
+
+        return oFile
+
+    @staticmethod
+    def countSDFAtoms(sdfStr):
+        """Number of atoms of the first molecule of an SDF, 0 if it holds none."""
+        lines = sdfStr.splitlines()
+        if len(lines) < 4:
+            return 0
+
+        try:
+            return int(lines[3][:3])
+        except ValueError:
+            return 0
+
+    def extractLigand(self, pdbId, ligId, structFile):
+        """Ligand carved out of the structure of the entry, used when it cannot be downloaded."""
+        struct = MMCIFParser().get_structure(pdbId, structFile)
+        self.shortenChainIds(struct)
+
+        io = PDBIO()
+        io.set_structure(struct)
+        for residue in struct.get_residues():
+            if residue.get_resname() == ligId and len(list(residue.get_atoms())) > self.minAtoms.get():
+                oFile = self._getExtraPath(ligId + '.pdb')
+                io.save(oFile, ResSelect(residue))
+                return oFile
+
+        return None
+
+    @staticmethod
+    def shortenChainIds(struct):
+        """Rename the chain ids that PDB cannot store.
+
+        mmCIF allows chain ids of several characters while PDB keeps a single column for them, so
+        writing a structure read from mmCIF fails outright on ids such as 'AAA'. The id of a chain
+        is meaningless once a single ligand is taken out of it, so they are just renamed."""
+        used = {chain.id for chain in struct.get_chains() if len(chain.id) == 1}
+        for chain in struct.get_chains():
+            if len(chain.id) > 1:
+                free = [char for char in CHAIN_ID_CHARS if char not in used]
+                if free:
+                    chain.id = free[0]
+                    used.add(free[0])
 
     def getSMILigands(self, ligNames):
         ligandSMIs = {}
@@ -808,21 +877,78 @@ class ProtocolLigandsFetching(EMProtocol):
             # Number of atoms not found in jDic. Number of atoms filter present when ligand is parsed
 
         elif iBase == 1:
+            props = jDic['molecules'][0].get('molecule_properties')
+            if not props:
+                # ChEMBL computes no properties for polymers, peptides and excipients
+                self.addToSummary('ChEMBL id {} has no molecular properties, it is discarded'.format(
+                    jDic['molecules'][0].get('molecule_chembl_id')))
+                return False
+
             checks.append(False)
-            if float(jDic['molecules'][0]['molecule_properties']['full_mwt']) >= weight:
+            if float(props['full_mwt']) >= weight:
                 checks[-1] = True
 
             checks.append(False)
-            if 'heavy_atoms' in jDic['molecules'][0]['molecule_properties'] and \
-                        jDic['molecules'][0]['molecule_properties']['heavy_atoms']:
-                numAtoms = int(jDic['molecules'][0]['molecule_properties']['heavy_atoms'])
+            if 'heavy_atoms' in props and props['heavy_atoms']:
+                numAtoms = int(props['heavy_atoms'])
             else:
-                numAtoms = self.countAtoms(jDic['molecules'][0]['molecule_properties']['full_molformula'])
+                numAtoms = self.countAtoms(props['full_molformula'])
 
             if numAtoms >= minAtoms:
                 checks[-1] = True
 
         return all(checks)
+
+    def readUrl(self, url, maxTries=URL_MAX_TRIES):
+        """Read an url, retrying while the server is failing."""
+        for attempt in range(1, maxTries + 1):
+            try:
+                with urllib.request.urlopen(url, timeout=URL_TIMEOUT) as response:
+                    return response.read()
+            except urllib.error.HTTPError as e:
+                if e.code < 500 or attempt == maxTries:
+                    raise
+                lastError = e
+            except OSError as e:
+                if attempt == maxTries:
+                    raise
+                lastError = e
+
+            print(f'Attempt {attempt}/{maxTries} of {url} failed ({lastError}), retrying')
+            time.sleep(min(2 * attempt, URL_MAX_SLEEP))
+
+    def getJsonFromUrl(self, url):
+        """Read a json from an url, retrying while the server is failing"""
+        return json.loads(self.readUrl(url))
+
+    def getChEMBLActivities(self, targetId):
+        """Every activity of a ChEMBL target, asked page by page."""
+        activities, offset = [], 0
+        while True:
+            jDic = self.getJsonFromUrl(f'{CHEMBL_URL}/activity.json?limit={CHEMBL_PAGE_SIZE}&'
+                                       f'offset={offset}&target_chembl_id={targetId}')
+            page = jDic.get('activities', [])
+            activities += page
+            offset += CHEMBL_PAGE_SIZE
+
+            if len(page) < CHEMBL_PAGE_SIZE or offset >= jDic['page_meta']['total_count']:
+                return activities
+
+    def getChEMBLMolecules(self, chemblIds, chunkSize=50):
+        """Molecule entries of several ChEMBL ids, asked in chunks instead of one request each.
+        Every request is a chance for the service to fail, and a target with 38 ligands used to mean
+        38 requests that all had to succeed. Asking them in chunks turns those into one."""
+        molDics, uniqueIds = {}, list(dict.fromkeys(chemblIds))
+        for i in range(0, len(uniqueIds), chunkSize):
+            chunk = uniqueIds[i:i + chunkSize]
+            jDic = self.getJsonFromUrl(f'{CHEMBL_URL}/molecule.json?limit={len(chunk)}&'
+                                       f'molecule_chembl_id__in={",".join(chunk)}')
+
+            for mol in jDic.get('molecules', []):
+                # Kept with the shape of a single molecule response, as checkLigandFilters expects
+                molDics[mol['molecule_chembl_id']] = {'molecules': [mol]}
+
+        return molDics
 
     def getJDic(self, database, data, id, id2=None, limit=-1):
         if database == 'Uniprot':
@@ -846,14 +972,11 @@ class ProtocolLigandsFetching(EMProtocol):
                     url += 'limit=%s&' % limit
                 url += 'molecule_chembl_id=%s' % id
 
-        with urllib.request.urlopen(url) as response:
-            jDic = json.loads(response.read())
-        return jDic
+        return self.getJsonFromUrl(url)
 
     def getDBDSmiles(self, dbid):
         url = 'https://www.bindingdb.org/rwd/bind/chemsearch/marvin/MolStructure.jsp?monomerid={}'.format(dbid)
-        with urllib.request.urlopen(url) as response:
-            fullHTML = response.read().decode('utf-8')
+        fullHTML = self.readUrl(url).decode('utf-8')
 
         smiLine = re.findall(r'<b>SMILES</b> <span class="darkgray">.+?</span>', fullHTML)[0]
         return smiLine.split('"darkgray">')[1].split('<')[0]
@@ -868,9 +991,8 @@ class ProtocolLigandsFetching(EMProtocol):
             url = "https://www.bindingdb.org/rwd/bind/BindingDB_DrugBankID.txt"
 
         if not os.path.exists(mapFile):
-            with urllib.request.urlopen(url) as response:
-                with open(mapFile, 'w') as f:
-                    f.write(response.read().decode('utf-8'))
+            with open(mapFile, 'w') as f:
+                f.write(self.readUrl(url).decode('utf-8'))
 
         with open(mapFile) as f:
             for line in f:
