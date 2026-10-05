@@ -150,6 +150,9 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=True):
+        # Shared with other plugins (e.g. durrantlab): declare it only once per environment
+        if env.hasTarget(cls.getEnvName(MGL_DIC)):
+            return
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
@@ -447,12 +450,7 @@ class Plugin(pwem.Plugin):
     def runMSMS(cls, structModel):
         """ Run MSMS command from a given protocol. """
         from Bio.PDB.ResidueDepth import get_surface
-        envName = Plugin.getEnvName(MGL_DIC)
-        prefix = Plugin.getMGLToolsPrefix(envName=envName)
-        msmsPath = os.path.join(
-            prefix,
-            "MGLToolsPckgs/binaries/msms"
-        )
+        msmsPath = cls.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms')
         structSurface = get_surface(structModel, MSMS=msmsPath)
         return structSurface
 
@@ -491,18 +489,6 @@ class Plugin(pwem.Plugin):
             'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
         }, position=pos)
         return environ
-
-    @classmethod
-    def getMGLToolsPrefix(cls,envName):
-        result = subprocess.run(
-            ["conda", "env", "list"],
-            capture_output=True,
-            text=True
-        )
-        for line in result.stdout.splitlines():
-            if line.startswith(envName):
-                return line.split()[-1]
-        raise RuntimeError(f"Cannot find conda env {envName}")
 
     @classmethod
     def getODDTModelsPath(cls, path=''):
