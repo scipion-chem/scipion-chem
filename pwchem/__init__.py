@@ -150,23 +150,18 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=True):
-        # Shared with other plugins (e.g. durrantlab): declare it only once per environment
-        if env.hasTarget(cls.getEnvName(MGL_DIC)):
+        if env.hasTarget(cls.getEnvName(MGL_DIC)):  # also declared by other plugins (durrantlab)
             return
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-        mglEnvName = cls.getEnvName(MGL_DIC)
-
+        mglEnvName, mglHome = cls.getEnvName(MGL_DIC), cls.getVar(MGL_DIC['home'])
         installer.addCommand(
-            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]}',
-            'MGLTOOLS_ENV_CREATED'
-        ).addCommand(
+            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]} && '
             f'{cls.getEnvActivationCommand(MGL_DIC)} && '
-            f'rm -rf {cls.getVar(MGL_DIC["home"])} && '
-            f'ln -s $CONDA_PREFIX {cls.getVar(MGL_DIC["home"])}',
+            f'rm -rf {mglHome} && ln -s $CONDA_PREFIX {mglHome}',
             'MGLTOOLS_SYMLINK_CREATED'
-        ).addPackage(env,dependencies=['conda'],default=default)
+        ).addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=True):
