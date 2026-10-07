@@ -940,6 +940,61 @@ class ProtGATK(EMProtocol):
     def _quote(value):
         return shlex.quote(str(value))
 
+    def _validateKnownSites(self):
+        """Validate the known-sites VCF selected for BaseRecalibrator."""
+        errors = []
+
+        vcfSet = self.knownSites.get()
+
+        if vcfSet is None:
+            errors.append(
+                'BaseRecalibrator requires a SetOfVCFFiles '
+                'containing known variants.'
+            )
+            return errors
+
+        if vcfSet.getSize() == 0:
+            errors.append(
+                'The selected SetOfVCFFiles is empty.'
+            )
+            return errors
+
+        index = self.vcfIndex.get()
+
+        if (
+                index < 0
+                or index >= vcfSet.getSize()
+        ):
+            errors.append(
+                'VCF index {} is out of range for a '
+                'SetOfVCFFiles containing {} VCF(s).'
+                .format(
+                    index,
+                    vcfSet.getSize()
+                )
+            )
+            return errors
+
+        try:
+            knownSites = self._getKnownSitesFile()
+
+            if not knownSites:
+                errors.append(
+                    'The selected VCFFile does not '
+                    'contain a VCF path.'
+                )
+
+            elif not os.path.isfile(knownSites):
+                errors.append(
+                    'The known-sites VCF does not exist: {}'
+                    .format(knownSites)
+                )
+
+        except RuntimeError as error:
+            errors.append(str(error))
+
+        return errors
+
     def _validate(self):
         errors = []
 
@@ -1005,53 +1060,9 @@ class ProtGATK(EMProtocol):
             )
 
         if self.baseRecalibrator.get():
-            vcfSet = self.knownSites.get()
-
-            if vcfSet is None:
-                errors.append(
-                    'BaseRecalibrator requires a SetOfVCFFiles '
-                    'containing known variants.'
-                )
-
-            elif vcfSet.getSize() == 0:
-                errors.append(
-                    'The selected SetOfVCFFiles is empty.'
-                )
-
-            else:
-                index = self.vcfIndex.get()
-
-                if (
-                    index < 0
-                    or index >= vcfSet.getSize()
-                ):
-                    errors.append(
-                        'VCF index {} is out of range for a '
-                        'SetOfVCFFiles containing {} VCF(s).'
-                        .format(
-                            index,
-                            vcfSet.getSize()
-                        )
-                    )
-
-                else:
-                    try:
-                        knownSites = self._getKnownSitesFile()
-
-                        if not knownSites:
-                            errors.append(
-                                'The selected VCFFile does not '
-                                'contain a VCF path.'
-                            )
-
-                        elif not os.path.isfile(knownSites):
-                            errors.append(
-                                'The known-sites VCF does not exist: {}'
-                                .format(knownSites)
-                            )
-
-                    except RuntimeError as error:
-                        errors.append(str(error))
+            errors.extend(
+                self._validateKnownSites()
+            )
 
         return errors
 

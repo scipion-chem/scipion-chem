@@ -271,6 +271,120 @@ class ProtImportVCF(EMProtocol):
             self.createOutputStep
         )
 
+    def _createVCF(self, vcfData):
+        """Create a VCFFile object from imported VCF data."""
+        scientificName = vcfData.get(
+            'scientificName',
+            ''
+        )
+        assembly = vcfData.get(
+            'assembly',
+            ''
+        )
+        vcfFile = vcfData.get(
+            'vcfFile',
+            ''
+        )
+        indexFile = vcfData.get(
+            'indexFile',
+            ''
+        )
+
+        safeName = (
+            scientificName.strip().replace(' ', '_')
+            if scientificName
+            else 'variants'
+        )
+
+        if assembly:
+            safeName += '_{}'.format(
+                assembly.strip().replace(' ', '_')
+            )
+
+        if vcfFile.endswith('.vcf.gz'):
+            extension = '.vcf.gz'
+        else:
+            extension = os.path.splitext(
+                vcfFile
+            )[1]
+
+        importedVCF = self._getExtraPath(
+            '{}_variants{}'.format(
+                safeName,
+                extension
+            )
+        )
+
+        copyFile(
+            vcfFile,
+            importedVCF
+        )
+
+        vcf = VCFFile(
+            filename=importedVCF
+        )
+
+        if scientificName:
+            vcf.setScientificName(
+                scientificName
+            )
+
+        if assembly:
+            vcf.setAssembly(
+                assembly
+            )
+
+        vcf.setSource(
+            'Imported'
+        )
+
+        vcf.setDatabase(
+            'Local'
+        )
+
+        vcf.setVariantType(
+            'known'
+        )
+
+        vcf.setIsCompressed(
+            importedVCF.endswith('.gz')
+        )
+
+        if indexFile:
+            if indexFile.endswith('.tbi'):
+                importedIndex = importedVCF + '.tbi'
+            elif indexFile.endswith('.csi'):
+                importedIndex = importedVCF + '.csi'
+            else:
+                importedIndex = self._getExtraPath(
+                    '{}_variants{}'.format(
+                        safeName,
+                        os.path.splitext(indexFile)[1]
+                    )
+                )
+
+            copyFile(
+                indexFile,
+                importedIndex
+            )
+
+            vcf.setIndexFile(
+                importedIndex
+            )
+
+        label = scientificName or 'VCF'
+
+        if assembly:
+            label += ' ({})'.format(
+                assembly
+            )
+
+        vcf.setObjLabel(
+            label
+        )
+
+        return vcf
+
     def createOutputStep(self):
         vcfsData = json.loads(
             self.vcfsData.get()
@@ -279,123 +393,16 @@ class ProtImportVCF(EMProtocol):
         outputVCFs = SetOfVCFFiles().create(
             outputPath=self._getPath()
         )
+
         outputVCFs.setObjLabel(
             'Known variants VCFs'
         )
 
         for vcfData in vcfsData:
-            scientificName = vcfData.get(
-                'scientificName',
-                ''
-            )
-            assembly = vcfData.get(
-                'assembly',
-                ''
-            )
-            vcfFile = vcfData.get(
-                'vcfFile',
-                ''
-            )
-            indexFile = vcfData.get(
-                'indexFile',
-                ''
-            )
-
-            safeName = (
-                scientificName.strip().replace(' ', '_')
-                if scientificName
-                else 'variants'
-            )
-
-            if assembly:
-                safeName += '_{}'.format(
-                    assembly.strip().replace(' ', '_')
-                )
-
-            if vcfFile.endswith('.vcf.gz'):
-                extension = '.vcf.gz'
-            else:
-                extension = os.path.splitext(
-                    vcfFile
-                )[1]
-
-            importedVCF = self._getExtraPath(
-                '{}_variants{}'.format(
-                    safeName,
-                    extension
-                )
-            )
-
-            copyFile(
-                vcfFile,
-                importedVCF
-            )
-
-            vcf = VCFFile(
-                filename=importedVCF
-            )
-
-            if scientificName:
-                vcf.setScientificName(
-                    scientificName
-                )
-
-            if assembly:
-                vcf.setAssembly(
-                    assembly
-                )
-
-            vcf.setSource(
-                'Imported'
-            )
-
-            vcf.setDatabase(
-                'Local'
-            )
-
-            vcf.setVariantType(
-                'known'
-            )
-
-            vcf.setIsCompressed(
-                importedVCF.endswith('.gz')
-            )
-
-            if indexFile:
-                if indexFile.endswith('.tbi'):
-                    importedIndex = importedVCF + '.tbi'
-                elif indexFile.endswith('.csi'):
-                    importedIndex = importedVCF + '.csi'
-                else:
-                    importedIndex = self._getExtraPath(
-                        '{}_variants{}'.format(
-                            safeName,
-                            os.path.splitext(indexFile)[1]
-                        )
-                    )
-
-                copyFile(
-                    indexFile,
-                    importedIndex
-                )
-
-                vcf.setIndexFile(
-                    importedIndex
-                )
-
-            label = scientificName or 'VCF'
-
-            if assembly:
-                label += ' ({})'.format(
-                    assembly
-                )
-
-            vcf.setObjLabel(
-                label
-            )
-
             outputVCFs.append(
-                vcf
+                self._createVCF(
+                    vcfData
+                )
             )
 
         self._defineOutputs(

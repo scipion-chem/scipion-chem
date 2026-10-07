@@ -43,7 +43,7 @@ from pwchem.protocols.Sequences.protocol_gatk import ProtGATK
 from pwchem.protocols.Sequences.protocol_import_vcf import ProtImportVCF
 from pwchem.utils.utilsRNA import getCommonSpecies
 
-
+ALL_FILES = ('All files', '*')
 
 class SelectCommonSpeciesWizard(VariableWizard):
     """Wizard to select one or more common species."""
@@ -166,29 +166,22 @@ class SelectItemFromSetWizard(VariableWizard):
         parts = [str(index)]
 
         # Genome / VCF metadata
-        if hasattr(item, 'getScientificName'):
-            value = item.getScientificName()
-            if value:
-                parts.append(str(value))
+        for getterName in (
+                'getScientificName',
+                'getAssembly',
+                'getRelease',
+                'getSource'
+        ):
+            if hasattr(item, getterName):
+                value = getattr(item, getterName)()
 
-        if hasattr(item, 'getAssembly'):
-            value = item.getAssembly()
-            if value:
-                parts.append(str(value))
-
-        if hasattr(item, 'getRelease'):
-            value = item.getRelease()
-            if value:
-                parts.append(str(value))
-
-        if hasattr(item, 'getSource'):
-            value = item.getSource()
-            if value:
-                parts.append(str(value))
+                if value:
+                    parts.append(str(value))
 
         # Generic fallback
         if len(parts) == 1 and hasattr(item, 'getFileName'):
             value = item.getFileName()
+
             if value:
                 parts.append(str(value))
 
@@ -519,7 +512,7 @@ class EditImportEntryDialog(dialog.Dialog):
                 title='Select {}'.format(label),
                 initialdir=initialDir,
                 filetypes=fileTypes or [
-                    ('All files', '*')
+                    ALL_FILES
                 ]
             )
 
@@ -583,10 +576,8 @@ class ImportSequenceFilesWizard(VariableWizard):
                     'FASTA files',
                     '*.fa *.fasta *.fna'
                 ),
-                (
-                    'All files',
-                    '*'
-                )
+                ALL_FILES
+
             ]
         },
         {
@@ -599,10 +590,7 @@ class ImportSequenceFilesWizard(VariableWizard):
                     'GTF files',
                     '*.gtf'
                 ),
-                (
-                    'All files',
-                    '*'
-                )
+                ALL_FILES
             ]
         }
     ]
@@ -628,10 +616,7 @@ class ImportSequenceFilesWizard(VariableWizard):
                     'VCF files',
                     '*.vcf *.vcf.gz'
                 ),
-                (
-                    'All files',
-                    '*'
-                )
+                ALL_FILES
             ]
         },
         {
@@ -644,10 +629,7 @@ class ImportSequenceFilesWizard(VariableWizard):
                     'VCF index files',
                     '*.tbi *.csi *.idx'
                 ),
-                (
-                    'All files',
-                    '*'
-                )
+                ALL_FILES
             ]
         }
     ]

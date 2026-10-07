@@ -575,6 +575,8 @@ class ProtDownloadGenomes(EMProtocol):
         'bacteria',
     )
 
+    SKIPPING_WARNING = 'Skipping {}: {}'
+
     _label = 'download genomes'
 
     # ---------------------------------------------------------------------
@@ -961,7 +963,7 @@ class ProtDownloadGenomes(EMProtocol):
             except Exception as error:
                 genomeInfo['skipReason'] = str(error)
                 self.warning(
-                    "Skipping {}: {}".format(
+                    self.SKIPPING_WARNING.format(
                         genomeInfo['scientificName'], error
                     )
                 )
@@ -1043,18 +1045,14 @@ class ProtDownloadGenomes(EMProtocol):
         locations = []
 
         if preferredDivision is None:
-            if folder == 'fasta':
-                locations.append((
-                    None,
-                    'https://ftp.ensembl.org/pub/release-{}/fasta/{}/dna/'
-                    .format(release, species)
-                ))
-            else:
-                locations.append((
-                    None,
-                    'https://ftp.ensembl.org/pub/release-{}/gtf/{}/'
-                    .format(release, species)
-                ))
+            subfolder = 'fasta/{}/dna/'.format(species) \
+                if folder == 'fasta' else 'gtf/{}/'.format(species)
+
+            locations.append((
+                None,
+                'https://ftp.ensembl.org/pub/release-{}/{}'
+                .format(release, subfolder)
+            ))
 
             divisions = self.ENSEMBL_GENOMES_DIVISIONS
         else:
@@ -1071,6 +1069,7 @@ class ProtDownloadGenomes(EMProtocol):
                     'https://ftp.ebi.ac.uk/ensemblgenomes/pub/{}/current/'
                     'gtf/{}/'
                 ).format(division, species)
+
             locations.append((division, url))
 
         errors = []
@@ -1080,6 +1079,7 @@ class ProtDownloadGenomes(EMProtocol):
                 url,
                 headers={'User-Agent': 'Scipion-Chem'}
             )
+
             try:
                 with urllib.request.urlopen(request, timeout=120) as response:
                     html = response.read().decode()
@@ -1088,6 +1088,7 @@ class ProtDownloadGenomes(EMProtocol):
                 continue
 
             matches = re.findall(r'href="([^"]+)"', html)
+
             candidates = sorted(
                 filename for filename in matches
                 if filename.endswith(suffix)
@@ -1170,10 +1171,26 @@ class ProtDownloadGenomes(EMProtocol):
             except Exception as error:
                 genomeInfo['skipReason'] = str(error)
                 self.warning(
-                    "Skipping {}: {}".format(
+                    self.SKIPPING_WARNING.format(
                         genomeInfo['scientificName'], error
                     )
                 )
+
+    @staticmethod
+    def _readJsonLines(filename):
+        """Read JSON objects from a JSON Lines file."""
+        if not os.path.exists(filename):
+            return []
+
+        reports = []
+
+        with open(filename) as inputFile:
+            for line in inputFile:
+                line = line.strip()
+                if line:
+                    reports.append(json.loads(line))
+
+        return reports
 
     def _getNcbiReferenceAccession(self, taxon):
         """Return the latest NCBI assembly for a taxon.
@@ -1213,13 +1230,7 @@ class ProtDownloadGenomes(EMProtocol):
                 )
                 continue
 
-            reports = []
-            if os.path.exists(outputFile):
-                with open(outputFile) as inputFile:
-                    for line in inputFile:
-                        line = line.strip()
-                        if line:
-                            reports.append(json.loads(line))
+            reports = self._readJsonLines(outputFile)
 
             if reports:
                 allReports = reports
@@ -1234,15 +1245,16 @@ class ProtDownloadGenomes(EMProtocol):
         def getReleaseDate(report):
             assemblyInfo = report.get('assemblyInfo', {})
             return (
-                assemblyInfo.get('releaseDate')
-                or assemblyInfo.get('submissionDate')
-                or ''
+                    assemblyInfo.get('releaseDate')
+                    or assemblyInfo.get('submissionDate')
+                    or ''
             )
 
         latestReport = max(allReports, key=getReleaseDate)
+
         accession = (
-            latestReport.get('accession')
-            or latestReport.get('currentAccession')
+                latestReport.get('accession')
+                or latestReport.get('currentAccession')
         )
 
         if not accession:
@@ -1316,7 +1328,7 @@ class ProtDownloadGenomes(EMProtocol):
                 genomeInfo.pop('fastaFile', None)
                 genomeInfo.pop('gtfFile', None)
                 self.warning(
-                    "Skipping {}: {}".format(
+                    self.SKIPPING_WARNING.format(
                         genomeInfo['scientificName'], error
                     )
                 )
@@ -1386,6 +1398,15 @@ class ProtDownloadGenomes(EMProtocol):
             and not self._canReuseNcbiDownload(genomeInfo)
         ]
 
+    def _extractNcbiPackage(self, zipFile, extractDir):
+        """Extract an NCBI dataset package."""
+        try:
+            with zipfile.ZipFile(zipFile, 'r') as archive:
+                archive.extractall(extractDir)
+        except zipfile.BadZipFile as error:
+            raise RuntimeError(
+                'Invalid NCBI data package: {}'.format(error)
+            )
 
     def _downloadNcbiGenomes(self, genomes):
 
@@ -1451,18 +1472,10 @@ class ProtDownloadGenomes(EMProtocol):
             # Extract NCBI package
             # -------------------------------------------------------------
 
-            try:
-                with zipfile.ZipFile(
-                        zipFile,
-                        'r') as archive:
-
-                    archive.extractall(extractDir)
-
-            except zipfile.BadZipFile as error:
-                raise RuntimeError(
-                    'Invalid NCBI data package: {}'
-                    .format(error)
-                )
+            self._extractNcbiPackage(
+                zipFile,
+                extractDir
+            )
 
             # -------------------------------------------------------------
             # Metadata
@@ -1775,14 +1788,13 @@ class ProtDownloadGenomes(EMProtocol):
         try:
             with urllib.request.urlopen(
                     request,
-                    timeout=120) as response:
-                with open(
-                        compressedFile,
-                        'wb') as output:
-                    shutil.copyfileobj(
-                        response,
-                        output
-                    )
+                    timeout=120) as response, open(
+                compressedFile,
+                'wb') as output:
+                shutil.copyfileobj(
+                    response,
+                    output
+                )
 
         except (
                 urllib.error.URLError,
@@ -1802,15 +1814,14 @@ class ProtDownloadGenomes(EMProtocol):
         with gzip.open(
                 compressedFile,
                 'rb'
-        ) as inputFile:
-            with open(
-                    outputFile,
-                    'wb'
-            ) as output:
-                shutil.copyfileobj(
-                    inputFile,
-                    output
-                )
+        ) as inputFile, open(
+            outputFile,
+            'wb'
+        ) as output:
+            shutil.copyfileobj(
+                inputFile,
+                output
+            )
 
         os.remove(compressedFile)
 

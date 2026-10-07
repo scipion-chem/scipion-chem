@@ -621,6 +621,9 @@ class ProtDownloadVCF(EMProtocol):
     EMPTY_PARAMETER_ERROR = '{} cannot be empty.'
     ENSEMBL_SPECIES = 'Ensembl species'
 
+    VCF_FILENAME = 'variants.vcf.gz'
+    HREF_PATTERN = r'href="([^"]+)"'
+
     _label = 'download vcf'
 
     # =====================================================================
@@ -1457,7 +1460,7 @@ class ProtDownloadVCF(EMProtocol):
 
                 outputVCF = os.path.join(
                     outputDir,
-                    'variants.vcf.gz'
+                    self.VCF_FILENAME
                 )
 
                 self._downloadFile(
@@ -1612,7 +1615,7 @@ class ProtDownloadVCF(EMProtocol):
         )
 
         matches = re.findall(
-            r'href="([^"]+)"',
+            self.HREF_PATTERN,
             html
         )
 
@@ -1674,7 +1677,7 @@ class ProtDownloadVCF(EMProtocol):
 
             availableFiles = set(
                 re.findall(
-                    r'href="([^"]+)"',
+                    self.HREF_PATTERN,
                     directoryHtml
                 )
             )
@@ -1799,7 +1802,7 @@ class ProtDownloadVCF(EMProtocol):
 
         outputVCF = os.path.join(
             outputDir,
-            'variants.vcf.gz'
+             self.VCF_FILENAME
         )
 
         self._downloadFile(
@@ -1862,7 +1865,7 @@ class ProtDownloadVCF(EMProtocol):
 
         outputVCF = os.path.join(
             outputDir,
-            'variants.vcf.gz'
+             self.VCF_FILENAME
         )
 
         self._downloadFile(
@@ -1925,7 +1928,7 @@ class ProtDownloadVCF(EMProtocol):
         )
 
         entries = re.findall(
-            r'href="([^"]+)"',
+            self.HREF_PATTERN,
             html
         )
 
@@ -1977,7 +1980,7 @@ class ProtDownloadVCF(EMProtocol):
 
         files = set(
             re.findall(
-                r'href="([^"]+)"',
+                self.HREF_PATTERN,
                 assemblyHtml
             )
         )
@@ -2024,6 +2027,48 @@ class ProtDownloadVCF(EMProtocol):
             evaAssembly
         )
 
+    def _getEvaAssemblyCandidate(self, speciesUrl, directory):
+        """Return the EVA VCF candidate for an assembly directory."""
+        validatedDirectory = self._validateUrlComponent(
+            directory,
+            'EVA assembly'
+        )
+
+        assemblyUrl = speciesUrl + validatedDirectory + '/'
+
+        assemblyHtml = self._readRemoteDirectory(
+            assemblyUrl
+        )
+
+        files = set(
+            re.findall(
+                self.HREF_PATTERN,
+                assemblyHtml
+            )
+        )
+
+        currentVCFs = sorted(
+            filename
+            for filename in files
+            if filename.endswith('_current_ids.vcf.gz')
+        )
+
+        if not currentVCFs:
+            return None
+
+        filename = currentVCFs[0]
+
+        accession = self._getEvaAccessionFromFilename(
+            filename
+        )
+
+        return {
+            'directory': directory,
+            'filename': filename,
+            'accession': accession,
+            'releaseDate': ''
+        }
+
     def _getLatestEvaAssembly(
             self,
             speciesUrl,
@@ -2044,62 +2089,23 @@ class ProtDownloadVCF(EMProtocol):
         candidates = {}
 
         for directory in directories:
-
             try:
-                validatedDirectory = self._validateUrlComponent(
-                    directory,
-                    'EVA assembly'
+                candidate = self._getEvaAssemblyCandidate(
+                    speciesUrl,
+                    directory
                 )
-
-                assemblyUrl = (
-                    speciesUrl
-                    + validatedDirectory
-                    + '/'
-                )
-
-                assemblyHtml = self._readRemoteDirectory(
-                    assemblyUrl
-                )
-
-                files = set(
-                    re.findall(
-                        r'href="([^"]+)"',
-                        assemblyHtml
-                    )
-                )
-
-                currentVCFs = sorted(
-                    filename
-                    for filename in files
-                    if filename.endswith('_current_ids.vcf.gz')
-                )
-
-                if not currentVCFs:
-                    continue
-
-                filename = currentVCFs[0]
-
-                accession = self._getEvaAccessionFromFilename(
-                    filename
-                )
-
-                key = accession or directory
-
-                # EVA can expose both an assembly-name directory and a GCA
-                # directory pointing to the same VCF. Keep only one.
-                if key not in candidates:
-                    candidates[key] = {
-                        'directory': directory,
-                        'filename': filename,
-                        'accession': accession,
-                        'releaseDate': ''
-                    }
-
-            except (
-                    RuntimeError,
-                    ValueError
-            ):
+            except (RuntimeError, ValueError):
                 continue
+
+            if not candidate:
+                continue
+
+            key = candidate['accession'] or directory
+
+            # EVA can expose both an assembly-name directory and a GCA
+            # directory pointing to the same VCF. Keep only one.
+            if key not in candidates:
+                candidates[key] = candidate
 
         if not candidates:
             raise RuntimeError(
@@ -2111,7 +2117,6 @@ class ProtDownloadVCF(EMProtocol):
             )
 
         for candidate in candidates.values():
-
             accession = candidate.get('accession')
 
             if not accession:
@@ -2155,26 +2160,27 @@ class ProtDownloadVCF(EMProtocol):
                 )
             )
 
+        accession = selected.get('accession')
+        releaseDate = selected.get('releaseDate')
+
+        if accession and releaseDate:
+            assemblyDetails = ' ({}, released {})'.format(
+                accession,
+                releaseDate
+            )
+        elif accession:
+            assemblyDetails = ' ({})'.format(
+                accession
+            )
+        else:
+            assemblyDetails = ''
+
         self.info(
             'Latest EVA assembly selected for {}: {}{}.'
             .format(
                 info['scientificName'],
                 selected['directory'],
-                (
-                    ' ({}, released {})'.format(
-                        selected['accession'],
-                        selected['releaseDate']
-                    )
-                    if selected.get('accession')
-                    and selected.get('releaseDate')
-                    else (
-                        ' ({})'.format(
-                            selected['accession']
-                        )
-                        if selected.get('accession')
-                        else ''
-                    )
-                )
+                assemblyDetails
             )
         )
 
@@ -2333,7 +2339,7 @@ class ProtDownloadVCF(EMProtocol):
         directories = [
             entry.rstrip('/')
             for entry in re.findall(
-                r'href="([^"]+)"',
+                self.HREF_PATTERN,
                 html
             )
             if entry.endswith('/')
@@ -2356,6 +2362,39 @@ class ProtDownloadVCF(EMProtocol):
             )
         )
 
+    def _matchEvaAssemblyName(self, directories, assemblyName):
+        """Match an EVA directory using the assembly name."""
+        if (
+                not assemblyName
+                or str(assemblyName).lower() == 'latest'
+                or self._isNcbiAssemblyAccession(assemblyName)
+        ):
+            return None
+
+        normalisedName = self._normaliseEvaName(
+            assemblyName
+        )
+
+        for directory in directories:
+            if (
+                    self._normaliseEvaName(directory)
+                    == normalisedName
+            ):
+                return directory
+
+        return None
+
+    def _matchEvaExactAccession(self, directories, candidates):
+        """Match an EVA directory using an exact NCBI accession."""
+        for candidate in candidates:
+            candidate = str(candidate).strip()
+
+            for directory in directories:
+                if directory.lower() == candidate.lower():
+                    return directory
+
+        return None
+
     def _matchEvaAssemblyDirectory(
             self,
             directories,
@@ -2375,45 +2414,15 @@ class ProtDownloadVCF(EMProtocol):
 
         # -------------------------------------------------------------
         # 1. Match by assembly name.
-        #
-        # This is the preferred strategy for EVA because directory names
-        # often correspond to assembly names rather than exactly to the
-        # NCBI accession.
-        #
-        # Examples:
-        #   ARS-UCD1.2 -> ARSUCD1.2
-        #   IRGSP-1.0  -> IRGSP1.0
         # -------------------------------------------------------------
 
-        nameCandidates = [
-            candidate
-            for candidate in (
-                assemblyName,
-            )
-            if candidate
-            and str(candidate).lower() != 'latest'
-            and not self._isNcbiAssemblyAccession(
-                candidate
-            )
-        ]
+        directory = self._matchEvaAssemblyName(
+            directories,
+            assemblyName
+        )
 
-        for candidate in nameCandidates:
-
-            normalisedCandidate = (
-                self._normaliseEvaName(
-                    candidate
-                )
-            )
-
-            for directory in directories:
-
-                if (
-                    self._normaliseEvaName(
-                        directory
-                    )
-                    == normalisedCandidate
-                ):
-                    return directory
+        if directory:
+            return directory
 
         # -------------------------------------------------------------
         # 2. Try exact NCBI accession matches.
@@ -2427,25 +2436,19 @@ class ProtDownloadVCF(EMProtocol):
                 assemblyName
             )
             if candidate
-            and str(candidate).lower() != 'latest'
-            and self._isNcbiAssemblyAccession(
+               and str(candidate).lower() != 'latest'
+               and self._isNcbiAssemblyAccession(
                 candidate
             )
         ]
 
-        for candidate in accessionCandidates:
+        directory = self._matchEvaExactAccession(
+            directories,
+            accessionCandidates
+        )
 
-            candidate = str(
-                candidate
-            ).strip()
-
-            for directory in directories:
-
-                if (
-                    directory.lower()
-                    == candidate.lower()
-                ):
-                    return directory
+        if directory:
+            return directory
 
         # -------------------------------------------------------------
         # 3. Try normalised accession matches.
@@ -2459,12 +2462,11 @@ class ProtDownloadVCF(EMProtocol):
         }
 
         for directory in directories:
-
             if (
-                self._normaliseEvaName(
-                    directory
-                )
-                in normalisedCandidates
+                    self._normaliseEvaName(
+                        directory
+                    )
+                    in normalisedCandidates
             ):
                 return directory
 
@@ -2499,9 +2501,7 @@ class ProtDownloadVCF(EMProtocol):
         )
 
         if accessionKeys:
-
             for directory in directories:
-
                 directoryKey = (
                     self._getNcbiAssemblyAccessionKey(
                         directory
@@ -2520,7 +2520,6 @@ class ProtDownloadVCF(EMProtocol):
                 self.EVA_RELEASE
             )
         )
-
 
     @staticmethod
     def _isNcbiAssemblyAccession(
@@ -2703,16 +2702,14 @@ class ProtDownloadVCF(EMProtocol):
             with self._openRemoteRequest(
                     url,
                     timeout=self.DOWNLOAD_TIMEOUT
-            ) as response:
-
-                with open(
-                        outputFile,
-                        'wb'
-                ) as output:
-                    shutil.copyfileobj(
-                        response,
-                        output
-                    )
+            ) as response, open(
+                outputFile,
+                'wb'
+            ) as output:
+                shutil.copyfileobj(
+                    response,
+                    output
+                )
 
         except (
                 urllib.error.URLError,

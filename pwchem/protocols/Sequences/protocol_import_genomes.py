@@ -58,100 +58,109 @@ class ProtImportGenomes(EMProtocol):
             self.createOutputStep
         )
 
+    def _createGenome(self, genomeData):
+        """Create a Genome object from imported genome data."""
+        genome = Genome()
+
+        scientificName = genomeData.get('scientificName', '')
+        assembly = genomeData.get('assembly', '')
+        release = genomeData.get('release', '')
+        fastaFile = genomeData.get('fastaFile', '')
+        gtfFile = genomeData.get('gtfFile', '')
+
+        if scientificName:
+            genome.setScientificName(scientificName)
+
+        if assembly:
+            genome.setAssembly(assembly)
+
+        if release:
+            genome.setRelease(release)
+
+        genome.setSource('Imported')
+
+        # Use the scientific name to create readable and unique filenames.
+        safeName = (
+            scientificName.strip().replace(' ', '_')
+            if scientificName
+            else 'genome'
+        )
+
+        if assembly:
+            safeName += '_{}'.format(
+                assembly.strip().replace(' ', '_')
+            )
+
+        if fastaFile:
+            fastaExt = os.path.splitext(fastaFile)[1]
+
+            importedFasta = self._getExtraPath(
+                '{}_genome{}'.format(
+                    safeName,
+                    fastaExt
+                )
+            )
+
+            copyFile(
+                fastaFile,
+                importedFasta
+            )
+
+            self._createFastaIndex(
+                importedFasta
+            )
+
+            genome.setFastaFile(
+                importedFasta
+            )
+
+        if gtfFile:
+            importedGtf = self._getExtraPath(
+                '{}_annotation.gtf'.format(
+                    safeName
+                )
+            )
+
+            copyFile(
+                gtfFile,
+                importedGtf
+            )
+
+            genome.setGtfFile(
+                importedGtf
+            )
+
+        label = scientificName or 'Genome'
+
+        if assembly:
+            label += ' ({})'.format(
+                assembly
+            )
+
+        genome.setObjLabel(
+            label
+        )
+
+        return genome
+
     def createOutputStep(self):
-        genomesData = json.loads(self.genomesData.get())
+        genomesData = json.loads(
+            self.genomesData.get()
+        )
 
         referenceGenomes = SetOfGenomes().create(
             outputPath=self._getPath()
         )
-        referenceGenomes.setObjLabel('Reference genomes')
+
+        referenceGenomes.setObjLabel(
+            'Reference genomes'
+        )
 
         for genomeData in genomesData:
-            genome = Genome()
-
-            scientificName = genomeData.get('scientificName', '')
-            assembly = genomeData.get('assembly', '')
-            release = genomeData.get('release', '')
-            fastaFile = genomeData.get('fastaFile', '')
-            gtfFile = genomeData.get('gtfFile', '')
-
-            if scientificName:
-                genome.setScientificName(scientificName)
-
-            if assembly:
-                genome.setAssembly(assembly)
-
-            if release:
-                genome.setRelease(release)
-
-            genome.setSource('Imported')
-
-            # Use the scientific name to create readable and unique filenames.
-            safeName = (
-                scientificName.strip().replace(' ', '_')
-                if scientificName
-                else 'genome'
-            )
-
-            if assembly:
-                safeName += '_{}'.format(
-                    assembly.strip().replace(' ', '_')
-                )
-
-            if fastaFile:
-                fastaExt = os.path.splitext(fastaFile)[1]
-
-                importedFasta = self._getExtraPath(
-                    '{}_genome{}'.format(
-                        safeName,
-                        fastaExt
-                    )
-                )
-
-                copyFile(
-                    fastaFile,
-                    importedFasta
-                )
-
-                # Create the FASTA index required by genome browsers
-                # and downstream tools.
-                self._createFastaIndex(
-                    importedFasta
-                )
-
-                genome.setFastaFile(
-                    importedFasta
-                )
-
-            if gtfFile:
-                importedGtf = self._getExtraPath(
-                    '{}_annotation.gtf'.format(
-                        safeName
-                    )
-                )
-
-                copyFile(
-                    gtfFile,
-                    importedGtf
-                )
-
-                genome.setGtfFile(
-                    importedGtf
-                )
-
-            label = scientificName or 'Genome'
-
-            if assembly:
-                label += ' ({})'.format(
-                    assembly
-                )
-
-            genome.setObjLabel(
-                label
-            )
-
             referenceGenomes.append(
-                genome
+                self._createGenome(
+                    genomeData
+                )
             )
 
         self._defineOutputs(
