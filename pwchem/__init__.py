@@ -150,8 +150,6 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def addMGLToolsPackage(cls, env, default=True):
-        if env.hasTarget(cls.getEnvName(MGL_DIC)):  # also declared by other plugins (durrantlab)
-            return
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
