@@ -2069,6 +2069,24 @@ class ProtDownloadVCF(EMProtocol):
             'releaseDate': ''
         }
 
+    def _setEvaCandidateReleaseDates(self, candidates):
+        """Add NCBI release dates to EVA assembly candidates."""
+
+        for candidate in candidates.values():
+            accession = candidate.get('accession')
+
+            if not accession:
+                continue
+
+            try:
+                candidate['releaseDate'] = (
+                    self._getNcbiAssemblyReleaseDate(
+                        accession
+                    )
+                )
+            except RuntimeError:
+                candidate['releaseDate'] = ''
+
     def _getLatestEvaAssembly(
             self,
             speciesUrl,
@@ -2116,20 +2134,7 @@ class ProtDownloadVCF(EMProtocol):
                 )
             )
 
-        for candidate in candidates.values():
-            accession = candidate.get('accession')
-
-            if not accession:
-                continue
-
-            try:
-                candidate['releaseDate'] = (
-                    self._getNcbiAssemblyReleaseDate(
-                        accession
-                    )
-                )
-            except RuntimeError:
-                candidate['releaseDate'] = ''
+        self._setEvaCandidateReleaseDates(candidates)
 
         datedCandidates = [
             candidate
