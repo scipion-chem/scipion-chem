@@ -24,6 +24,7 @@
 
 import os
 import glob
+import shutil
 
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
@@ -36,7 +37,7 @@ from .. import Plugin
 from ..constants import MDTRAJ_DIC, TCL_MD_STR, PML_MD_STR, PML_MD_STR_AMBER, TCL_MD_LIG_STR
 from ..viewers import PyMolViewer, PyMolView, VmdViewPopen, SetOfAtomStructViewer
 from ..objects import MDSystem
-from ..protocols import ProtocolTrajectoryClustering
+from ..protocols import ProtocolTrajectoryClustering, ProtocolMDVideo
 
 _ANAL_RMSD      = 0
 _ANAL_RMSF      = 1
@@ -457,3 +458,14 @@ class TrajClusteringViewer(SetOfAtomStructViewer):
         if matches:
           images['displayImage_{}'.format(suffix)] = (matches[0], title)
     return images
+
+
+class MDVideoViewer(pwviewer.Viewer):
+  """Opens the video produced by ProtocolMDVideo with the default system player."""
+  _label = 'Viewer MD video'
+  _targets = [ProtocolMDVideo]
+
+  def _visualize(self, obj, **kwargs):
+    videoFile = os.path.abspath(obj.outputVideo.getFileName())
+    opener = shutil.which('xdg-open') or shutil.which('open') or 'xdg-open'
+    return [pwviewer.CommandView('{} "{}"'.format(opener, videoFile))]
