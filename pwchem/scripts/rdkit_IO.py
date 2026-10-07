@@ -28,7 +28,7 @@
 '''Script to convert molecule files using the rdkit Chem module in the rdkit-env.
 Mainly used for parsinf mae files (which openbabel is not able to read)'''
 
-import sys, os, argparse, shutil, gzip, threading
+import sys, os, argparse, shutil, gzip, threading, fnmatch, tempfile
 from rdkit import Chem
 from rdkit.Chem import AllChem
 import csv
@@ -62,20 +62,56 @@ def Mol2MolSupplier(file=None,sanitize=True):
     return mols
 
 def decompressFile(inFile):
-    if inFile.endswith('.gz'):
-        newInputFile = inputFile.replace('.gz', '')
-    elif inFile.endswith('gz'):
-        newInputFile = inputFile.replace('gz', '')
+    '''Decompress inFile into a temporary directory and return the path of the decompressed copy.'''
+    baseName = os.path.basename(inFile)
+    if baseName.endswith('.gz'):
+        baseName = baseName[:-len('.gz')]
+    elif baseName.endswith('gz'):
+        baseName = baseName[:-len('gz')]
     else:
         print('Decompress failed for file {}'.format(inFile))
+        return inFile
 
-    with gzip.open(inputFile) as fIn:
+    newInputFile = os.path.join(tempfile.mkdtemp(prefix='rdkitIO_'), baseName)
+    with gzip.open(inFile) as fIn:
         with open(newInputFile, 'wb') as f:
             shutil.copyfileobj(fIn, f)
 
     return newInputFile
 
-def getMolsFromFile(inFile, ext=None, nameKey=None):
+def readMaeMols(inFile, keepHs=False):
+    '''Parse a Maestro file. With keepHs the structure is preserved as it is in the file: (RDKit
+    removes every hydrogen by defaul). Sanitization is tried first and dropped only if it fails'''
+    if not keepHs:
+        return list(Chem.MaeMolSupplier(inFile))
+
+    try:
+        return list(Chem.MaeMolSupplier(inFile, removeHs=False))
+    except Exception as e:
+        print('Sanitization failed for {} ({}), parsing it without sanitizing'.format(inFile, e))
+        return list(Chem.MaeMolSupplier(inFile, sanitize=False, removeHs=False))
+
+def readSmilesMols(inFile, nameKey):
+    '''Parse a smiles file, taking the name from the second column when it is there'''
+    mols = []
+    with open(inFile) as f:
+        for line in f:
+            if not line.strip():
+                continue
+
+            values = line.split()
+            if len(values) >= 2:
+                smi, name = values[0], values[1]
+            else:
+                smi, name = values[0], os.path.basename(os.path.splitext(inFile)[0])
+
+            mol = Chem.MolFromSmiles(smi)
+            if mol:
+                mol.SetProp(nameKey, name)
+                mols.append(mol)
+    return mols
+
+def getMolsFromFile(inFile, ext=None, nameKey=None, keepHs=False):
     '''Parse molecules stored in a file based on extension'''
     if not ext:
         ext = os.path.splitext(inFile)[1][1:]
@@ -85,49 +121,30 @@ def getMolsFromFile(inFile, ext=None, nameKey=None):
 
     if ext == 'maegz' or ext == 'gz':
         inFile = decompressFile(inFile)
+        ext = os.path.splitext(inFile)[1][1:]
 
-    mols = []
-    if ext == 'mae':
-        mols = list(Chem.MaeMolSupplier(inFile))
+    readers = {
+        'mae': lambda: readMaeMols(inFile, keepHs),
+        'smi': lambda: readSmilesMols(inFile, nameKey),
+        'smiles': lambda: readSmilesMols(inFile, nameKey),
+        'mol2': lambda: Mol2MolSupplier(inFile),
+        'sdf': lambda: list(Chem.SDMolSupplier(inFile)),
+        'sd': lambda: list(Chem.SDMolSupplier(inFile)),
+        'pdb': lambda: [Chem.MolFromPDBBlock(block) for block in divideMultiPDB(inFile)],
+    }
 
-    elif ext == 'smi' or ext == 'smiles':
-        with open(inFile) as f:
-            for line in f:
-                if not line.strip():
-                    continue
-
-                values = line.split()
-                if len(values) >= 2:
-                    smi, name = values[0], values[1]
-                else:
-                    smi, name = values[0], os.path.basename(os.path.splitext(inFile)[0])
-                
-                mol = Chem.MolFromSmiles(smi)
-                if mol:
-                    mol.SetProp(nameKey, name)
-                    mols.append(mol)
-
-    elif ext == 'mol2':
-        mols = Mol2MolSupplier(inFile)
-
-    elif ext == 'sdf' or ext == 'sd':
-        mols = list(Chem.SDMolSupplier(inFile))
-
-    elif ext == 'pdb':
-        for pdbBlock in divideMultiPDB(inFile):
-            mols.append(Chem.MolFromPDBBlock(pdbBlock))
-
-    else:
+    if ext not in readers:
         print('Unrecognized format {} for file {}'.format(ext, inFile))
+        return [], nameKey
 
-    return mols, nameKey
+    return readers[ext](), nameKey
 
-def getMolName(mol, nameKey, outBase):
+def getMolName(mol, nameKey, outBase, idx=0):
+    '''Name of the molecule, falling back to outBase plus its position (idx was undefined before)'''
     if mol.HasProp(nameKey):
-        molName = mol.GetProp(nameKey)
-    else:
-        molName = '{}_{}'.format(outBase, i + 1)
-    return molName
+        return mol.GetProp(nameKey)
+
+    return '{}_{}'.format(outBase, idx + 1)
 
 def make3DCoords(mols, mols3dLists, it, errBase):
     '''Optimize the 3D coordinates of a rdkit molecule'''
@@ -150,7 +167,7 @@ def make3DCoords(mols, mols3dLists, it, errBase):
         mols3dLists[it].append(mol2)
     return mols3dLists[it]
 
-def loadInputFiles(inputFile, nameKey):
+def loadInputFiles(inputFile, nameKey, keepHs=False):
     ext = os.path.splitext(inputFile)[1].lower()
 
     if ext == ".txt":
@@ -159,11 +176,104 @@ def loadInputFiles(inputFile, nameKey):
             files = [line.strip() for line in f if line.strip()]
 
         for fpath in files:
-            m, _ = getMolsFromFile(fpath, nameKey=nameKey)
+            m, _ = getMolsFromFile(fpath, nameKey=nameKey, keepHs=keepHs)
             mols.extend(m)
 
         return mols, "_Name"
-    return getMolsFromFile(inputFile, nameKey=nameKey)
+    return getMolsFromFile(inputFile, nameKey=nameKey, keepHs=keepHs)
+
+def globInputFiles(inputDir, pattern):
+    '''Files directly inside inputDir whose name matches pattern.'''
+    inputDir = os.path.realpath(inputDir)
+    if not os.path.isdir(inputDir):
+        print('No such input directory {}'.format(inputDir))
+        return []
+
+    inFiles = []
+    for name in sorted(os.listdir(inputDir)):
+        if name.startswith('.') or not fnmatch.fnmatch(name, pattern):
+            continue
+
+        inFile = os.path.join(inputDir, name)
+        if os.path.isfile(inFile):
+            inFiles.append(inFile)
+
+    return inFiles
+
+def writeSmilesCsv(mols, outDir, outName, outBase, nameKey):
+    '''Write the molecules as a csv of smiles and names'''
+    outFile = os.path.abspath(os.path.join(outDir, '{}.csv'.format(outName or 'molecules')))
+    allRows = []
+    for i, mol in enumerate(mols):
+        if not mol:
+            continue
+
+        try:
+            Chem.SanitizeMol(mol)
+            mol = Chem.RemoveHs(mol)
+        except Exception as e:
+            print('Could not sanitize molecule {}: {}'.format(i + 1, e))
+            continue
+
+        smiles = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+        allRows.append({"smiles": smiles, "name": getMolName(mol, nameKey, outBase, i)})
+
+    with open(outFile, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["smiles", "name"])
+        writer.writeheader()
+        writer.writerows(allRows)
+
+    print("SMILES CSV saved to:", outFile)
+
+def getMolWriter(outFormat):
+    '''Writer class and file extension for the requested output format'''
+    if outFormat in ('smi', 'smiles'):
+        return Chem.SmilesWriter, 'smi'
+
+    if outFormat == 'pdb':
+        return Chem.PDBWriter, 'pdb'
+
+    return Chem.SDWriter, 'sdf'
+
+def writeSingleFile(mols, writter, outFile):
+    '''Write every molecule into one file'''
+    with writter(outFile) as f:
+        for mol in mols:
+            if mol:
+                f.write(mol)
+
+def writeFilePerMol(mols, writter, ext, outDir, outBase, nameKey):
+    '''Write one file per molecule, named after the molecule'''
+    for i, mol in enumerate(mols):
+        if not mol:
+            continue
+
+        molName = getMolName(mol, nameKey, outBase, i).replace('/', '-').replace(' ', '_')
+        outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
+        with writter(outFile) as f:
+            f.write(mol)
+
+def convertFile(inputFile, outFormat, outDir, singleOutFile, outName, outBase,
+                make3d, nameKey, nt, keepHs):
+    '''Convert one molecule file.'''
+    mols, nameKey = loadInputFiles(inputFile, nameKey, keepHs)
+    if not mols:
+        return
+
+    if make3d:
+        mols = performBatchThreading(make3DCoords, mols, nt, cloneItem=False,
+                                     errBase=os.path.join(outDir, 'errors3D'))
+
+    if outFormat in ["smiles_csv", "csv", "smi_csv"]:
+        writeSmilesCsv(mols, outDir, outName, outBase, nameKey)
+        return
+
+    writter, ext = getMolWriter(outFormat)
+    if singleOutFile:
+        outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName.replace(' ', '_'), ext)))
+        writeSingleFile(mols, writter, outFile)
+    else:
+        writeFilePerMol(mols, writter, ext, outDir, outBase, nameKey)
 
 if __name__ == "__main__":
     '''Use: python <scriptName> -i/--inputFilename <mol(s)File> -of/--outputFormat <outputFormat> 
@@ -175,12 +285,18 @@ if __name__ == "__main__":
     If the output directory is not specified, molecule file(s) will be saved in the input file directory
     '''
     parser = argparse.ArgumentParser(description='Handles the IO for molecule files using openbabel')
-    parser.add_argument('-i', '--inputFilename', type=str, help='Input molecule file')
+    parser.add_argument('--multiFiles', default=False, action='store_true', help='Multiple files to convert')
+    parser.add_argument('-iD', '--inputDir', type=str, help='Input molecule files directory if multiFiles')
+    parser.add_argument('-pat', '--pattern', type=str, required=False, default='',
+                        help='Input molecule files pattern if multiFiles')
+    parser.add_argument('-i', '--inputFilename', default='', type=str, help='Input molecule file')
     parser.add_argument('-of', '--outputFormat', type=str, required=False, default='sdf', help='Output format')
     parser.add_argument('-o', '--outputName', type=str, required=False, help='Output name')
     parser.add_argument('-ob', '--outputBase', type=str, required=False, help='Output basename for multiple outputs')
     parser.add_argument('-od', '--outputDir', type=str, required=False, help='Output directory')
     parser.add_argument('--make3D', default=False, action='store_true', help='Optimize 3D coordinates')
+    parser.add_argument('--keepHs', default=False, action='store_true',
+                        help='Keep the hydrogens present in the file (RDKit removes them by default)')
     parser.add_argument('--overWrite', default=False, action='store_true', help='Overwrite output')
     parser.add_argument('--nameKey', default='', type=str, required=False, help='molecule name key in file')
     parser.add_argument('-nt', '--nthreads', default=1, type=int, required=False, help='Number of threads')
@@ -188,7 +304,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     inputFile, outFormat = args.inputFilename, args.outputFormat
     outFormat = outFormat if not outFormat.startswith('.') else outFormat[1:]
-    inFormat = os.path.splitext(inputFile)[1][1:]
 
     if args.outputName:
         singleOutFile, outName = True, os.path.splitext(args.outputName)[0]
@@ -197,73 +312,21 @@ if __name__ == "__main__":
 
     if args.outputDir:
         outDir = args.outputDir
+    elif args.multiFiles:
+        outDir = args.inputDir
     else:
         outDir = os.path.dirname(inputFile)
 
-    overW = args.overWrite
     make3d = args.make3D
     nameKey = args.nameKey
     nt = args.nthreads
 
-    mols, nameKey = loadInputFiles(inputFile, nameKey)
-    if len(mols) > 0:
-        if make3d:
-            mols = performBatchThreading(make3DCoords, mols, nt, cloneItem=False,
-                                         errBase=os.path.join(outDir, 'errors3D'))
-
-        if outFormat in ["smiles_csv", "csv", "smi_csv"]:
-            outFile = os.path.abspath(os.path.join(outDir, '{}.csv'.format(outName or 'molecules')))
-            allRows = []
-            for i, mol in enumerate(mols):
-                if not mol:
-                    continue
-                try:
-                    Chem.SanitizeMol(mol)
-                    mol = Chem.RemoveHs(mol)
-                except:
-                    continue
-                if mol.HasProp(nameKey):
-                    name = mol.GetProp(nameKey)
-                else:
-                    name = '{}_{}'.format(outBase, i + 1)
-                smiles = Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
-                allRows.append({
-                    "smiles": smiles,
-                    "name": name
-                })
-            with open(outFile, "w", newline="") as f:
-                writer = csv.DictWriter(f,fieldnames=["smiles", "name"])
-                writer.writeheader()
-                writer.writerows(allRows)
-            print("SMILES CSV saved to:", outFile)
-            sys.exit(0)
-        else:
-            if outFormat == 'smi' or outFormat == 'smiles':
-                writter, ext = Chem.SmilesWriter, 'smi'
-            elif outFormat == 'pdb':
-                writter, ext = Chem.PDBWriter, 'pdb'
-            else:
-                writter, ext = Chem.SDWriter, 'sdf'
-
-        if singleOutFile:
-            outName = outName.replace(' ', '_')
-            outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(outName, ext)))
-            with writter(outFile) as f:
-                for mol in mols:
-                    if mol:
-                        f.write(mol)
-
-        else:
-            outBase = args.outputBase if args.outputBase else 'molecule'
-            for i, mol in enumerate(mols):
-                if mol:
-                    if mol.HasProp(nameKey):
-                        molName = mol.GetProp(nameKey)
-                    else:
-                        molName = '{}_{}'.format(outBase, i+1)
-                    molName = molName.replace('/', '-').replace(' ', '_')
-                    outFile = os.path.abspath(os.path.join(outDir, '{}.{}'.format(molName, ext)))
-                    with writter(outFile) as f:
-                        f.write(mol)
-
-
+    outBase = args.outputBase if args.outputBase else 'molecule'
+    if args.multiFiles:
+        # One output per input file, named after it, exactly like obabel_IO.py --multiFiles
+        for inFile in globInputFiles(args.inputDir, args.pattern):
+            convertFile(inFile, outFormat, outDir, True, os.path.splitext(os.path.basename(inFile))[0],
+                        outBase, make3d, nameKey, nt, args.keepHs)
+    else:
+        convertFile(inputFile, outFormat, outDir, singleOutFile, outName, outBase,
+                    make3d, nameKey, nt, args.keepHs)

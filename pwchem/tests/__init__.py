@@ -44,6 +44,7 @@ from .tests_import_genomes import *
 from .tests_import_vcf import *
 from .tests_molecular_dynamics import *
 from .tests_picard import *
+from .tests_structROI_voting import *
 from .tests_rnaseq_align import *
 from enum import Enum
 

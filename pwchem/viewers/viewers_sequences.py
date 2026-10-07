@@ -109,6 +109,7 @@ class SequenceAliViewer(pwviewer.Viewer):
 class SequenceGeneralViewer(BaseInteractionViewer):
   """ Protocol viewer to visualize different type of sequence objects
   """
+  _molSetOutput = 'outputSmallMolecules'
   _label = 'Sequence viewer'
   _targets = seqTargets + [SetOfSequencesChem]
   _environments = [pwviewer.DESKTOP_TKINTER]
