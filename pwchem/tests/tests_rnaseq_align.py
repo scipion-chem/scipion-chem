@@ -21,13 +21,65 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # ***************************************************************************
 
+# ***************************************************************************
+# *
+# * Authors:     Laura Pérez Liens (laura.perez@cnb.csic.es)
+# *
+# * This program is free software; you can redistribute it and/or modify
+# * it under the terms of the GNU General Public License as published by
+# * the Free Software Foundation; either version 2 of the License, or
+# * (at your option) any later version.
+# *
+# * This program is distributed in the hope that it will be useful,
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# * GNU General Public License for more details.
+# *
+# * You should have received a copy of the GNU General Public License
+# * along with this program; if not, write to the Free Software
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# * 02111-1307 USA
+# *
+# * All comments concerning this program package may be sent to the
+# * e-mail address 'scipion@cnb.csic.es'
+# ***************************************************************************
+
+# ***************************************************************************
+# *
+# * Authors:     Laura Pérez Liens (laura.perez@cnb.csic.es)
+# *
+# * This program is free software; you can redistribute it and/or modify
+# * it under the terms of the GNU General Public License as published by
+# * the Free Software Foundation; either version 2 of the License, or
+# * (at your option) any later version.
+# *
+# * This program is distributed in the hope that it will be useful,
+# * but WITHOUT ANY WARRANTY; without even the implied warranty of
+# * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# * GNU General Public License for more details.
+# *
+# * You should have received a copy of the GNU General Public License
+# * along with this program; if not, write to the Free Software
+# * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+# * 02111-1307 USA
+# *
+# * All comments concerning this program package may be sent to the
+# * e-mail address 'scipion@cnb.csic.es'
+# ***************************************************************************
 
 import gzip
+import json
 import os
 
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
-from pwchem.protocols import ProtImportFastq, ProtRNASeqAlignment
+from pwchem.protocols import (
+    ProtImportFastq,
+    ProtImportGenomes,
+    ProtRNASeqAlignment
+)
+
+
 N_TEST_READS = 1000
 
 
@@ -257,6 +309,56 @@ class TestRNASeqAlignment(BaseTest):
         )
 
         return fastqObj
+
+    # ---------------------------------------------------------------------
+    # Genome import
+    # ---------------------------------------------------------------------
+
+    def _importGenome(
+            self,
+            fastaFile,
+            gtfFile,
+            scientificName,
+            assembly,
+            release
+    ):
+        """Import a reduced reference genome as a SetOfGenomes."""
+
+        genomesData = [
+            {
+                'scientificName': scientificName,
+                'assembly': assembly,
+                'release': release,
+                'fastaFile': fastaFile,
+                'gtfFile': gtfFile
+            }
+        ]
+
+        protocol = self.newProtocol(
+            ProtImportGenomes,
+            objLabel='Import {} {}'.format(
+                scientificName,
+                assembly
+            ),
+            genomesData=json.dumps(genomesData)
+        )
+
+        self.launchProtocol(protocol)
+
+        self.assertTrue(
+            hasattr(protocol, 'referenceGenomes'),
+            'ProtImportGenomes did not produce referenceGenomes.'
+        )
+
+        genomeSet = protocol.referenceGenomes
+
+        self.assertEqual(
+            genomeSet.getSize(),
+            1
+        )
+
+        return genomeSet
+
     # ---------------------------------------------------------------------
     # Alignment checks
     # ---------------------------------------------------------------------
@@ -412,6 +514,20 @@ class TestRNASeqAlignment(BaseTest):
         )
 
         # -------------------------------------------------------------
+        # Import reference once
+        # -------------------------------------------------------------
+
+        genomeSet = self._importGenome(
+            smallFasta,
+            smallGtf,
+            scientificName,
+            assembly,
+            release
+        )
+
+        genome = next(iter(genomeSet))
+
+        # -------------------------------------------------------------
         # Reduce FASTQ once
         # -------------------------------------------------------------
 
@@ -462,17 +578,7 @@ class TestRNASeqAlignment(BaseTest):
                     alignerName,
                     species
                 ),
-                referenceSource=(
-                    ProtRNASeqAlignment.REFERENCE_FROM_FILES
-                ),
-                manualFasta=smallFasta,
-                manualGtf=smallGtf,
-                manualReferenceName='{} {} {}'.format(
-                    scientificName,
-                    assembly,
-                    release
-                ),
-                manualReferenceSource='Test data',
+                genomeIndex=0,
                 aligner=aligner,
                 rnaStrandness=0,
                 keepIntermediateFiles=False,
@@ -480,7 +586,13 @@ class TestRNASeqAlignment(BaseTest):
                 numberOfMpi=1
             )
 
-            protocol.inputFastq.set(fastqObj)
+            protocol.inputFastq.set(
+                fastqObj
+            )
+
+            protocol.inputGenomes.set(
+                genomeSet
+            )
 
             self.launchProtocol(protocol)
 
@@ -488,8 +600,8 @@ class TestRNASeqAlignment(BaseTest):
                 protocol,
                 alignerName,
                 sampleName,
-                smallFasta,
-                smallGtf
+                genome.getFastaFile(),
+                genome.getGtfFile()
             )
 
     # ---------------------------------------------------------------------

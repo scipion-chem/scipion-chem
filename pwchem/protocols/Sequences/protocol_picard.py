@@ -33,63 +33,171 @@ from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 
-
-
 class ProtPicard(EMProtocol):
     """
     Process BAM alignments using one or more Picard operations.
 
-    The protocol accepts an AlignmentFile object and allows several Picard
-    operations to be applied sequentially to the same BAM file.
+    This protocol accepts an ``AlignmentFile`` and applies selected Picard
+    operations sequentially to the associated BAM file. It is intended for
+    BAM preparation and processing within the RNA-seq workflow.
 
-    Available operations
-    --------------------
+    The following Picard operations are supported:
 
     AddOrReplaceReadGroups
         Adds or replaces read-group metadata in the BAM header. Read groups
         identify the biological sample, sequencing library and sequencing
-        platform. This information is required by several downstream tools,
-        particularly GATK.
+        platform and are required by several downstream tools, particularly
+        GATK.
 
-        The RNA-seq workflow uses fixed values for the technical read-group
-        fields:
+        The protocol uses the following read-group values::
 
             RGID = id
             RGLB = library
             RGPL = ILLUMINA
             RGPU = machine
 
-        RGSM is obtained automatically from the sample name stored in the
-        input AlignmentFile.
+        ``RGSM`` is obtained automatically from the sample name stored in
+        the input ``AlignmentFile``. If no sample name is available,
+        ``sample`` is used.
 
     MarkDuplicates
-        Identifies reads that are likely to be duplicates generated during
-        library preparation or sequencing. Duplicates are marked in the BAM
-        file but are retained.
+        Identifies reads that are likely to represent PCR or optical
+        duplicates.
 
-        A Picard metrics file describing duplicate statistics is also created.
+        Duplicate reads are marked but are not removed from the BAM file.
+        A Picard duplication metrics file is also generated.
 
     ReorderSam
-        Reorders the BAM sequence dictionary and records according to the
-        reference genome stored in the input AlignmentFile.
+        Reorders the BAM according to the sequence dictionary of the
+        reference genome associated with the input ``AlignmentFile``.
 
-        This operation requires the reference FASTA associated with the
-        alignment.
+        This operation requires a valid reference FASTA stored in the
+        alignment metadata.
 
+        In the RNA-seq workflow, this operation can be used after the GATK
+        BAM-processing steps.
+
+
+    ---------------------------------------------------------------------
     Execution order
-    ---------------
+    ---------------------------------------------------------------------
 
-    When more than one operation is selected, operations are always executed
-    in the following order:
+    When several operations are selected, they are always executed in the
+    following order::
 
         AddOrReplaceReadGroups
             -> MarkDuplicates
             -> ReorderSam
 
-    The user selects which operations are enabled, but not their order.
+    Operations that are not selected are skipped while preserving this
+    execution order.
 
-    The final BAM is indexed with samtools and returned as an AlignmentFile.
-    Intermediate BAM files remain inside the protocol working directory.
+    At least one Picard operation must be selected.
+
+
+    ---------------------------------------------------------------------
+    Input
+    ---------------------------------------------------------------------
+
+    inputAlignment : AlignmentFile
+        Input BAM alignment.
+
+        The BAM path is obtained from the ``AlignmentFile`` object.
+
+        The sample name stored in the alignment is used by
+        ``AddOrReplaceReadGroups``.
+
+        The reference FASTA stored in the alignment is used by
+        ``ReorderSam``.
+
+
+    ---------------------------------------------------------------------
+    Output
+    ---------------------------------------------------------------------
+
+    outputAlignment : AlignmentFile
+        Final processed BAM alignment.
+
+        The output object is created by cloning the input
+        ``AlignmentFile`` and updating the BAM and BAM index paths. This
+        preserves the metadata associated with the original alignment.
+
+        The final BAM depends on the last selected Picard operation:
+
+        - ``ReorderSam`` output, when enabled.
+        - Otherwise, ``MarkDuplicates`` output, when enabled.
+        - Otherwise, ``AddOrReplaceReadGroups`` output.
+
+        The final BAM is indexed with samtools and the resulting ``.bai``
+        file is associated with the output ``AlignmentFile``.
+
+        When supported by the ``AlignmentFile`` object, the output is
+        marked as indexed and sorted and the executed Picard commands are
+        stored as command metadata.
+
+
+    ---------------------------------------------------------------------
+    Validation
+    ---------------------------------------------------------------------
+
+    Before execution, the protocol verifies that:
+
+    - An input ``AlignmentFile`` has been provided.
+    - The input BAM exists and is not empty.
+    - At least one Picard operation has been selected.
+    - A valid reference FASTA is available when ``ReorderSam`` is enabled.
+
+
+    ---------------------------------------------------------------------
+    Intermediate files
+    ---------------------------------------------------------------------
+
+    Depending on the selected operations, the protocol can generate:
+
+    add_read_groups.bam
+        BAM generated by ``AddOrReplaceReadGroups``.
+
+    mark_duplicates.bam
+        BAM generated by ``MarkDuplicates``.
+
+    mark_duplicates_metrics.txt
+        Duplication metrics generated by ``MarkDuplicates``.
+
+    reordered.bam
+        BAM generated by ``ReorderSam``.
+
+    picard_commands.txt
+        Internal record of the Picard commands executed by the protocol.
+
+
+    ---------------------------------------------------------------------
+    Requirements
+    ---------------------------------------------------------------------
+
+    The following programs must be available through the RNA-seq
+    environment configured by the Scipion-Chem plugin:
+
+    - Picard
+    - samtools
+
+
+    ---------------------------------------------------------------------
+    Notes
+    ---------------------------------------------------------------------
+
+    - Picard operations are executed in a fixed order.
+
+    - ``MarkDuplicates`` marks duplicate reads but does not remove them.
+
+    - ``ReorderSam`` requires the reference FASTA associated with the
+      input ``AlignmentFile``.
+
+    - Intermediate BAM files remain in the protocol working directory.
+
+    - The final BAM is always indexed with samtools.
+
+    - The output ``AlignmentFile`` preserves the metadata of the input
+      alignment.
     """
 
     _label = 'Picard processing'
@@ -272,7 +380,7 @@ class ProtPicard(EMProtocol):
             'ReorderSam '
             'I={inputBam} '
             'O={outputBam} '
-            'R={referenceFasta} '
+            'SD={referenceFasta} '
             'CREATE_INDEX=false'
         ).format(
             inputBam=self._quote(inputBam),

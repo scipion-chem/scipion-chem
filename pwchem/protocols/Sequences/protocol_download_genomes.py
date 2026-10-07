@@ -41,469 +41,500 @@ from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import Genome, SetOfGenomes
 
 
-class ProtReferenceGenomes(EMProtocol):
+class ProtDownloadGenomes(EMProtocol):
     """
-       Download reference genomes and genome annotations from Ensembl or NCBI.
+    Download reference genomes and genome annotations from Ensembl or NCBI.
 
-       This protocol downloads one or more reference genomes together with
-       their associated genome annotations and creates a ``SetOfGenomes``
-       that can be used as input for downstream genomic and RNA-seq
-       protocols.
+    This protocol downloads one or more reference genomes together with
+    their associated genome annotations and creates a ``SetOfGenomes``
+    that can be used as input for downstream genomic and RNA-seq
+    protocols.
 
-       Two reference genome sources are supported:
+    Two reference genome sources are supported:
 
-       - Ensembl
-       - NCBI
+    - Ensembl
+    - NCBI
 
-       The source is selected before defining the genomes to download. The
-       available parameters for assembly and release selection depend on the
-       selected source.
+    The source is selected before defining the genomes to download. The
+    available parameters for assembly and release selection depend on the
+    selected source.
 
-       Species can be selected from a predefined list of commonly used
-       organisms or entered manually. Multiple genomes can be downloaded in
-       a single protocol execution.
+    Species can be selected from a predefined list of commonly used
+    organisms or entered manually. Multiple genomes can be downloaded in
+    a single protocol execution.
 
-       The protocol always produces a ``SetOfGenomes``, even when only one
-       reference genome is downloaded.
+    The protocol always produces a ``SetOfGenomes``, even when only one
+    reference genome is downloaded.
 
 
-       ---------------------------------------------------------------------
-       Genome source
-       ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    Genome source
+    ---------------------------------------------------------------------
 
-       Ensembl
-           Reference genomes are downloaded directly from the Ensembl FTP
-           server.
+    Ensembl
+        Reference genomes are downloaded from the Ensembl FTP server.
+        When a species is not available in the main Ensembl collection,
+        the protocol automatically searches the corresponding Ensembl
+        Genomes divisions.
 
-           The protocol resolves the requested Ensembl release and genome
-           assembly before constructing the corresponding FASTA and GTF
-           download URLs.
+        The protocol resolves the requested Ensembl release and genome
+        assembly before constructing the corresponding FASTA and GTF
+        download URLs.
 
-           Both the assembly and Ensembl release can be specified explicitly
-           or resolved automatically using ``Latest``.
+        Both the assembly and Ensembl release can be specified explicitly
+        or resolved automatically using ``Latest``.
 
-           Species are provided using their scientific names. The corresponding
-           Ensembl species identifier is resolved automatically by the protocol.
+        Species are provided using their scientific names. The corresponding
+        Ensembl species identifier is resolved automatically by the protocol.
 
-       NCBI
-           Reference genomes are downloaded using the NCBI Datasets command
-           line interface.
+    NCBI
+        Reference genomes are downloaded using the NCBI Datasets command
+        line interface.
 
-           Genome assemblies are identified by their versioned NCBI Assembly
-           accession, for example::
+        Genome assemblies are identified by their versioned NCBI Assembly
+        accession, for example::
 
-               GCF_000001405.40
+            GCF_000001405.40
 
-           or::
+        or::
 
-               GCA_000001405.29
+            GCA_000001405.29
 
-           When ``Latest`` is requested, the protocol queries the available
-           RefSeq assemblies for the selected taxon and selects the most
-           recently released assembly according to the NCBI assembly
-           metadata.
+        When ``Latest`` is requested, the protocol queries the available
+        assemblies for the selected taxon. RefSeq assemblies are preferred;
+        if no exact RefSeq assembly is available, GenBank is used as a
+        fallback. The most recently released assembly is selected according
+        to the NCBI assembly metadata.
 
-           The resolved accession is then used to download the genome data
-           package.
+        The release date is used to identify the latest assembly. The
+        submission date is used as a fallback when a release date is not
+        available.
 
-           Species are provided using their scientific names and used directly
-           as NCBI taxon queries.
+        The resolved accession is then used to download the genome data
+        package.
 
+        Species are provided using their scientific names and used directly
+        as NCBI taxon queries.
 
-       ---------------------------------------------------------------------
-       Genome selection
-       ---------------------------------------------------------------------
 
-       Genomes can be selected using one of two modes:
+    ---------------------------------------------------------------------
+    Genome selection
+    ---------------------------------------------------------------------
 
-       Common genomes
-           Select one or more species from the predefined list of commonly
-           used reference organisms.
+    Genomes can be selected using one of two modes:
 
-           Currently supported common genomes include:
+    Common genomes
+        Select one or more species from the predefined list of commonly
+        used reference organisms.
 
-           - Homo sapiens
-           - Mus musculus
-           - Rattus norvegicus
-           - Danio rerio
-           - Drosophila melanogaster
-           - Caenorhabditis elegans
-           - Saccharomyces cerevisiae
-           - Arabidopsis thaliana
+        Currently supported common genomes include:
 
-           Common species information is shared across genomic protocols and
-           includes provider-specific identifiers and the default reference
-           assembly when available.
+        - Homo sapiens
+        - Mus musculus
+        - Rattus norvegicus
+        - Danio rerio
+        - Drosophila melanogaster
+        - Caenorhabditis elegans
+        - Saccharomyces cerevisiae
+        - Arabidopsis thaliana
 
-       Custom genomes
-           Enter one or more species manually using their scientific names.
+        Common species information is shared across genomic protocols and
+        includes provider-specific identifiers and the default reference
+        assembly when available.
 
-           Multiple species can be separated by semicolons or commas.
+    Custom genomes
+        Enter one or more species manually using their scientific names.
 
-           For example::
+        Multiple species can be separated by semicolons or commas.
 
-               Bos taurus;Oryza sativa
+        For example::
 
-           or::
+            Bos taurus;Oryza sativa
 
-               Bos taurus,Oryza sativa
+        or::
 
-           Provider-specific species identifiers are resolved automatically
-           for Ensembl and NCBI.
+            Bos taurus,Oryza sativa
 
-           Duplicate species entries are automatically removed while
-           preserving their original order.
+        Provider-specific species identifiers are resolved automatically
+        for Ensembl and NCBI.
 
+        Duplicate species entries are automatically removed while
+        preserving their original order.
 
-       ---------------------------------------------------------------------
-       Ensembl assembly selection
-       ---------------------------------------------------------------------
 
-       For Ensembl genomes, the ``assemblies`` parameter determines which
-       genome assembly is downloaded.
+    ---------------------------------------------------------------------
+    Ensembl assembly selection
+    ---------------------------------------------------------------------
 
-       ``Latest``
-           Automatically resolves the assembly.
+    For Ensembl genomes, the ``assemblies`` parameter determines which
+    genome assembly is downloaded.
 
-           For genomes included in the common genome list, the predefined
-           reference assembly is used.
+    ``Latest``
+        Automatically resolves the assembly.
 
-           For custom genomes, the current assembly is obtained through the
-           Ensembl REST API.
+        For genomes included in the common genome list, the predefined
+        reference assembly is used.
 
-       Explicit assembly
-           An assembly can be specified manually, for example::
+        For custom genomes, the current assembly is obtained through the
+        Ensembl REST API.
 
-               GRCh38
+    Explicit assembly
+        An assembly can be specified manually, for example::
 
-           When multiple genomes are selected, a single assembly value is
-           applied to every genome.
+            GRCh38
 
-           Alternatively, one assembly per genome can be provided::
+        When multiple genomes are selected, a single assembly value is
+        applied to every genome.
 
-               GRCh38;GRCm39
+        Alternatively, one assembly per genome can be provided::
 
+            GRCh38;GRCm39
 
-       ---------------------------------------------------------------------
-       Ensembl release selection
-       ---------------------------------------------------------------------
 
-       The ``releases`` parameter determines the Ensembl release used for
-       downloading the reference files.
+    ---------------------------------------------------------------------
+    Ensembl release selection
+    ---------------------------------------------------------------------
 
-       ``Latest``
-           The most recent available Ensembl release is obtained through the
-           Ensembl REST API.
+    The ``releases`` parameter determines the Ensembl release used for
+    downloading the reference files.
 
-       Explicit release
-           A positive integer can be provided, for example::
+    ``Latest``
+        The most recent available Ensembl release is obtained through the
+        Ensembl REST API.
 
-               116
+    Explicit release
+        A positive integer can be provided, for example::
 
-           A single release value can be applied to all selected genomes.
+            116
 
-           Alternatively, one release can be specified per genome::
+        A single release value can be applied to all selected genomes.
 
-               116;116
+        Alternatively, one release can be specified per genome::
 
+            116;116
 
-       ---------------------------------------------------------------------
-       NCBI assembly selection
-       ---------------------------------------------------------------------
 
-       For NCBI genomes, the ``ncbiAssemblies`` parameter determines the
-       assembly to download.
+    ---------------------------------------------------------------------
+    NCBI assembly selection
+    ---------------------------------------------------------------------
 
-       ``Latest``
-           The protocol queries NCBI Datasets for RefSeq assemblies matching
-           each selected taxon exactly.
+    For NCBI genomes, the ``ncbiAssemblies`` parameter determines the
+    assembly to download.
 
-           If several assemblies are returned for a taxon, the protocol
-           compares their release dates and selects the most recently
-           released assembly.
+    ``Latest``
+        The protocol queries NCBI Datasets for assemblies matching each
+        selected taxon exactly.
 
-           The submission date is used as a fallback when a release date is
-           not available.
+        RefSeq assemblies are preferred. If no exact RefSeq assembly is
+        available for a taxon, GenBank assemblies are queried as a fallback.
 
-           This resolution is performed independently for every selected
-           species.
+        If several assemblies are returned, the protocol compares their
+        release dates and selects the most recently released assembly.
 
-           The corresponding versioned NCBI Assembly accession is stored and
-           subsequently used for downloading the genome.
+        The submission date is used as a fallback when a release date is
+        not available.
 
-       Explicit accession
-           A specific versioned NCBI Assembly accession can be provided.
+        This resolution is performed independently for every selected
+        species.
 
-           Supported accession formats are::
+        The corresponding versioned NCBI Assembly accession is stored and
+        subsequently used for downloading the genome.
 
-               GCF_<accession>.<version>
-               GCA_<accession>.<version>
+    Explicit accession
+        A specific versioned NCBI Assembly accession can be provided.
 
-           For example::
+        Supported accession formats are::
 
-               GCF_000001405.40
+            GCF_<accession>.<version>
+            GCA_<accession>.<version>
 
-           When multiple genomes are selected, a single value can be applied
-           to every genome or one accession can be provided per genome::
+        For example::
 
-               GCF_000001405.40;GCF_000001635.27
+            GCF_000001405.40
 
+        When multiple genomes are selected, a single value can be applied
+        to every genome or one accession can be provided per genome::
 
-       ---------------------------------------------------------------------
-       Genome FASTA
-       ---------------------------------------------------------------------
+            GCF_000001405.40;GCF_000001635.27
 
-       The genomic nucleotide sequence is always downloaded.
 
-       For Ensembl, the protocol searches the corresponding release
-       directory for a file ending in::
+    ---------------------------------------------------------------------
+    Genome FASTA
+    ---------------------------------------------------------------------
 
-           .dna.toplevel.fa.gz
+    The genomic nucleotide sequence is always downloaded.
 
-       The downloaded file is automatically decompressed before being stored
-       in the output ``Genome`` object.
+    For Ensembl, the protocol searches the corresponding release
+    directory for a file ending in::
 
-       For NCBI, the genome FASTA is retrieved from the NCBI Datasets package
-       corresponding to the resolved assembly accession.
+        .dna.toplevel.fa.gz
 
+    If the species is not available in the main Ensembl collection, the
+    protocol searches the appropriate Ensembl Genomes divisions using
+    their current release tree.
 
-       ---------------------------------------------------------------------
-       Genome annotation
-       ---------------------------------------------------------------------
+    The downloaded file is automatically decompressed before being stored
+    in the output ``Genome`` object.
 
-       Genome annotations can optionally be downloaded using the
-       ``downloadAnnotation`` parameter.
+    For NCBI, the genome FASTA is retrieved from the NCBI Datasets package
+    corresponding to the resolved assembly accession.
 
-       When enabled:
 
-       Ensembl
-           The protocol downloads the GTF annotation associated with the
-           selected Ensembl release.
+    ---------------------------------------------------------------------
+    Genome annotation
+    ---------------------------------------------------------------------
 
-       NCBI
-           The GTF annotation included in the NCBI genome data package is
-           downloaded.
+    Genome annotations can optionally be downloaded using the
+    ``downloadAnnotation`` parameter.
 
-       The resulting GTF path is stored in the corresponding ``Genome``
-       object.
+    When enabled:
 
-       When annotation download is disabled, only the reference genome FASTA
-       is downloaded.
+    Ensembl
+        The protocol downloads the GTF annotation associated with the
+        selected Ensembl release or Ensembl Genomes collection.
 
+    NCBI
+        The protocol downloads the GTF annotation included in the NCBI
+        genome data package when available.
 
-       ---------------------------------------------------------------------
-       Existing files and overwrite behaviour
-       ---------------------------------------------------------------------
+        If NCBI does not provide a GTF annotation for the selected
+        assembly, the reference genome is still created without an
+        annotation file.
 
-       By default, existing downloaded files are reused whenever possible.
+    The resulting GTF path is stored in the corresponding ``Genome``
+    object.
 
-       If ``overwrite`` is enabled, existing files and intermediate download
-       directories are removed and the requested genome files are downloaded
-       again.
+    When annotation download is disabled, only the reference genome FASTA
+    is downloaded.
 
-       This behaviour allows interrupted or previously completed protocol
-       executions to avoid unnecessary downloads.
 
+    ---------------------------------------------------------------------
+    Existing files and overwrite behaviour
+    ---------------------------------------------------------------------
 
-       ---------------------------------------------------------------------
-       Input parameters
-       ---------------------------------------------------------------------
+    By default, existing downloaded files are reused whenever possible.
 
-       source : Enum
-           Database used to obtain the reference genomes.
+    If ``overwrite`` is enabled, existing files and intermediate download
+    directories are removed and the requested genome files are downloaded
+    again.
 
-           Available values:
+    This behaviour allows interrupted or previously completed protocol
+    executions to avoid unnecessary downloads.
 
-           - Ensembl
-           - NCBI
 
-       genomeSelection : Enum
-           Method used to select species.
+    ---------------------------------------------------------------------
+    Input parameters
+    ---------------------------------------------------------------------
 
-           Available values:
+    source : Enum
+        Database used to obtain the reference genomes.
 
-           - Common genomes
-           - Custom genomes
+        Available values:
 
-       commonSpecies: str
-           One or more species selected from the predefined common species
-           list.
+        - Ensembl
+        - NCBI
 
-           The selected values are scientific species names.
+    genomeSelection : Enum
+        Method used to select species.
 
-           Only available when ``genomeSelection`` is set to
-           ``Common species`.
+        Available values:
 
-       customSpecies : str
-           One or more manually specified species using their scientific
-           names.
+        - Common genomes
+        - Custom genomes
 
-           Multiple species can be separated by semicolons or commas.
+    commonSpecies : str
+        One or more species selected from the predefined common species
+        list.
 
-           Examples::
+        The selected values are scientific species names.
 
-               Bos taurus
-               Bos taurus;Oryza sativa
+        Only available when ``genomeSelection`` is set to
+        ``Common genomes``.
 
-           Only available when ``genomeSelection`` is set to
-           ``Custom genomes``.
+    customSpecies : str
+        One or more manually specified species using their scientific
+        names.
 
-       assemblies : str
-           Ensembl assembly or assemblies.
+        Multiple species can be separated by semicolons or commas.
 
-           Use ``Latest`` for automatic resolution or provide explicit
-           assembly names.
+        Examples::
 
-           A single value is propagated to all selected genomes. Multiple
-           values can be provided when one assembly is required per genome.
+            Bos taurus
+            Bos taurus;Oryza sativa
 
-           Only available when the selected source is Ensembl.
+        Only available when ``genomeSelection`` is set to
+        ``Custom genomes``.
 
-       releases : str
-           Ensembl release or releases.
+    assemblies : str
+        Ensembl assembly or assemblies.
 
-           Use ``Latest`` for automatic resolution or provide positive
-           integer release numbers.
+        Use ``Latest`` for automatic resolution or provide explicit
+        assembly names.
 
-           A single value is propagated to all selected genomes. Multiple
-           values can be provided when one release is required per genome.
+        A single value is propagated to all selected genomes. Multiple
+        values can be provided when one assembly is required per genome.
 
-           Only available when the selected source is Ensembl.
+        Only available when the selected source is Ensembl.
 
-       ncbiAssemblies : str
-           NCBI assembly selection.
+    releases : str
+        Ensembl release or releases.
 
-           Use ``Latest`` to select the most recently released RefSeq
-           assembly independently for each selected species, or provide a
-           versioned ``GCF_`` or ``GCA_`` accession.
+        Use ``Latest`` for automatic resolution or provide positive
+        integer release numbers.
 
-           A single value is propagated to all selected genomes. Multiple
-           values can be provided when one accession is required per genome.
+        A single value is propagated to all selected genomes. Multiple
+        values can be provided when one release is required per genome.
 
-           Only available when the selected source is NCBI.
+        Only available when the selected source is Ensembl.
 
-       downloadAnnotation : bool
-           If True, download the GTF genome annotation in addition to the
-           genome FASTA.
+    ncbiAssemblies : str
+        NCBI assembly selection.
 
-       overwrite : bool
-           If True, existing genome files are removed and downloaded again.
+        Use ``Latest`` to select the most recently released assembly
+        independently for each selected species. RefSeq is preferred,
+        with GenBank used as a fallback when necessary.
 
+        Alternatively, provide a versioned ``GCF_`` or ``GCA_`` accession.
 
-       ---------------------------------------------------------------------
-       Output
-       ---------------------------------------------------------------------
+        A single value is propagated to all selected genomes. Multiple
+        values can be provided when one accession is required per genome.
 
-       referenceGenomes : SetOfGenomes
-           Set containing all downloaded reference genomes.
+        Only available when the selected source is NCBI.
 
-           A ``SetOfGenomes`` is always generated, independently of whether
-           one or multiple genomes were selected.
+    downloadAnnotation : bool
+        If True, download the GTF genome annotation in addition to the
+        genome FASTA when an annotation is available.
 
-           Each ``Genome`` object contains, when available:
+    overwrite : bool
+        If True, existing genome files are removed and downloaded again.
 
-           - Scientific name.
-           - Genome assembly.
-           - Data source.
-           - Release or version identifier.
-           - Genome FASTA file.
-           - GTF annotation file.
-           - Ensembl species identifier for Ensembl genomes.
 
-           For Ensembl genomes, ``release`` corresponds to the Ensembl
-           release number.
+    ---------------------------------------------------------------------
+    Output
+    ---------------------------------------------------------------------
 
-           For NCBI genomes, ``release`` stores the resolved versioned NCBI
-           Assembly accession.
+    referenceGenomes : SetOfGenomes
+        Set containing all successfully downloaded reference genomes.
 
+        A ``SetOfGenomes`` is always generated, independently of whether
+        one or multiple genomes were selected.
 
-       ---------------------------------------------------------------------
-       Workflow
-       ---------------------------------------------------------------------
+        Each ``Genome`` object contains, when available:
 
-       The protocol is executed in three main steps:
+        - Scientific name.
+        - Genome assembly.
+        - Data source.
+        - Release or version identifier.
+        - Genome FASTA file.
+        - GTF annotation file.
+        - Ensembl species identifier for Ensembl genomes.
 
-       1. Resolve genomes
+        For Ensembl genomes, ``release`` corresponds to the Ensembl
+        release number or the current Ensembl Genomes collection when the
+        fallback is used.
 
-          The selected scientific species names, assemblies and releases are
-          interpreted and converted into source-specific genome metadata.
+        For NCBI genomes, ``release`` stores the resolved versioned NCBI
+        Assembly accession.
 
-          Provider-specific species identifiers are resolved automatically.
 
-          Each selected species is represented independently.
+    ---------------------------------------------------------------------
+    Workflow
+    ---------------------------------------------------------------------
 
-          For ``Latest`` selections, the corresponding remote database is
-          queried to resolve the current release or assembly.
+    The protocol is executed in three main steps:
 
-       2. Download genomes
+    1. Resolve genomes
 
-          Genome FASTA files and, optionally, GTF annotations are downloaded
-          independently for each selected species from Ensembl or NCBI.
+       The selected scientific species names, assemblies and releases are
+       interpreted and converted into source-specific genome metadata.
 
-          Compressed Ensembl files are automatically decompressed.
+       Provider-specific species identifiers are resolved automatically.
 
-          NCBI data packages are extracted and the relevant files are copied
-          to the protocol output directory.
+       Each selected species is represented independently.
 
-       3. Create output
+       For ``Latest`` selections, the corresponding remote database is
+       queried to resolve the current release or assembly.
 
-          Downloaded genome metadata and file paths are converted into
-          individual ``Genome`` objects and stored in the final
-          ``SetOfGenomes``.
+    2. Download genomes
 
+       Genome FASTA files and, optionally, GTF annotations are downloaded
+       independently for each selected species from Ensembl or NCBI.
 
-       ---------------------------------------------------------------------
-       Requirements
-       ---------------------------------------------------------------------
+       For Ensembl, species unavailable in the main collection are searched
+       in the Ensembl Genomes divisions.
 
-       Ensembl downloads require:
+       Compressed Ensembl files are automatically decompressed.
 
-       - Internet access to the Ensembl REST API.
-       - Internet access to the Ensembl FTP server.
+       NCBI data packages are extracted and the relevant files are copied
+       to the protocol output directory.
 
-       NCBI downloads require:
+    3. Create output
 
-       - Internet access to NCBI.
-       - NCBI Datasets CLI (``datasets``).
+       Downloaded genome metadata and file paths are converted into
+       individual ``Genome`` objects and stored in the final
+       ``SetOfGenomes``.
 
-       Required command-line programs must be available through the RNA-seq
-       environment configured by the Scipion-Chem plugin.
+       Species that could not be resolved or downloaded are skipped and
+       are not included in the output set.
 
 
-       ---------------------------------------------------------------------
-       Notes
-       ---------------------------------------------------------------------
+    ---------------------------------------------------------------------
+    Requirements
+    ---------------------------------------------------------------------
 
-       - Multiple genomes can be downloaded in a single protocol execution.
+    Ensembl downloads require:
 
-       - Species are specified using scientific names.
+    - Internet access to the Ensembl REST API.
+    - Internet access to the Ensembl and Ensembl Genomes FTP servers.
 
-       - Species values can be separated by semicolons or commas.
+    NCBI downloads require:
 
-       - Provider-specific species identifiers are resolved automatically
-         for Ensembl and NCBI.
+    - Internet access to NCBI.
+    - NCBI Datasets CLI (``datasets``).
 
-       - Duplicate species are removed while preserving their original order.
+    Required command-line programs must be available through the RNA-seq
+    environment configured by the Scipion-Chem plugin.
 
-       - A single assembly or release parameter is automatically propagated
-         to all selected genomes.
 
-       - When multiple assembly or release values are provided, the number
-         of values must match the number of selected genomes.
+    ---------------------------------------------------------------------
+    Notes
+    ---------------------------------------------------------------------
 
-       - For NCBI ``Latest``, the most recently released RefSeq assembly is
-         resolved independently for each selected taxon.
+    - Multiple genomes can be downloaded in a single protocol execution.
 
-       - NCBI assembly accessions must include their version number.
+    - Species are specified using scientific names.
 
-       - Genome information is persisted internally in ``genomes.json``
-         between protocol steps.
+    - Species values can be separated by semicolons or commas.
 
-       - Each selected species generates an independent ``Genome`` object.
+    - Provider-specific species identifiers are resolved automatically
+      for Ensembl and NCBI.
 
-       - The protocol always returns a ``SetOfGenomes`` to provide a
-         consistent output type for downstream Scipion protocols.
-       """
+    - Duplicate species are removed while preserving their original order.
+
+    - A single assembly or release parameter is automatically propagated
+      to all selected genomes.
+
+    - When multiple assembly or release values are provided, the number
+      of values must match the number of selected genomes.
+
+    - For NCBI ``Latest``, the most recently released assembly is resolved
+      independently for each selected taxon, preferring RefSeq and using
+      GenBank as a fallback.
+
+    - NCBI assembly accessions must include their version number.
+
+    - Genome information is persisted internally in ``genomes.json``
+      between protocol steps.
+
+    - Each successfully downloaded species generates an independent
+      ``Genome`` object.
+
+    - Species that cannot be resolved or downloaded are skipped without
+      aborting the complete multi-species protocol.
+
+    - The protocol always returns a ``SetOfGenomes`` to provide a
+      consistent output type for downstream Scipion protocols.
+    """
 
     # ---------------------------------------------------------------------
     # Sources
@@ -534,7 +565,17 @@ class ProtReferenceGenomes(EMProtocol):
         '?content-type=application/json'
     )
 
-    _label = 'reference genomes'
+    # Ensembl Genomes divisions are used as a fallback when a species is not
+    # hosted in the main Ensembl FTP tree (for example, plant species).
+    ENSEMBL_GENOMES_DIVISIONS = (
+        'plants',
+        'metazoa',
+        'fungi',
+        'protists',
+        'bacteria',
+    )
+
+    _label = 'download genomes'
 
     # ---------------------------------------------------------------------
     # Parameters
@@ -897,26 +938,33 @@ class ProtReferenceGenomes(EMProtocol):
     # =====================================================================
 
     def _resolveEnsemblGenomes(self, genomes):
+        """Resolve Ensembl metadata independently for every selected species.
 
+        A species that cannot be resolved is marked as skipped instead of
+        aborting the complete multi-species protocol.
+        """
         latestRelease = None
 
         for genomeInfo in genomes:
+            try:
+                releaseValue = genomeInfo['release']
 
-            releaseValue = genomeInfo['release']
+                if releaseValue.lower() == 'latest':
+                    if latestRelease is None:
+                        latestRelease = self._getLatestEnsemblRelease()
+                    genomeInfo['release'] = str(latestRelease)
 
-            if releaseValue.lower() == 'latest':
-
-                if latestRelease is None:
-                    latestRelease = (
-                        self._getLatestEnsemblRelease()
+                genomeInfo['assembly'] = self._resolveAssembly(
+                    genomeInfo['assembly'],
+                    genomeInfo
+                )
+            except Exception as error:
+                genomeInfo['skipReason'] = str(error)
+                self.warning(
+                    "Skipping {}: {}".format(
+                        genomeInfo['scientificName'], error
                     )
-
-                genomeInfo['release'] = str(latestRelease)
-
-            genomeInfo['assembly'] = self._resolveAssembly(
-                genomeInfo['assembly'],
-                genomeInfo
-            )
+                )
 
     def _getLatestEnsemblRelease(self):
 
@@ -984,147 +1032,125 @@ class ProtReferenceGenomes(EMProtocol):
             release,
             species,
             folder,
-            suffix):
+            suffix,
+            preferredDivision=None):
+        """Find an Ensembl file, falling back to Ensembl Genomes divisions.
 
-        if folder == 'fasta':
-            url = (
-                'https://ftp.ensembl.org/pub/release-{}/'
-                'fasta/{}/dna/'
-            ).format(
-                release,
-                species
-            )
+        Main Ensembl uses release-N directories. Ensembl Genomes has its own
+        release numbering, so the fallback deliberately uses the ``current``
+        tree instead of reusing the main Ensembl release number.
+        """
+        locations = []
 
+        if preferredDivision is None:
+            if folder == 'fasta':
+                locations.append((
+                    None,
+                    'https://ftp.ensembl.org/pub/release-{}/fasta/{}/dna/'
+                    .format(release, species)
+                ))
+            else:
+                locations.append((
+                    None,
+                    'https://ftp.ensembl.org/pub/release-{}/gtf/{}/'
+                    .format(release, species)
+                ))
+
+            divisions = self.ENSEMBL_GENOMES_DIVISIONS
         else:
-            url = (
-                'https://ftp.ensembl.org/pub/release-{}/'
-                'gtf/{}/'
-            ).format(
-                release,
-                species
+            divisions = (preferredDivision,)
+
+        for division in divisions:
+            if folder == 'fasta':
+                url = (
+                    'https://ftp.ebi.ac.uk/ensemblgenomes/pub/{}/current/'
+                    'fasta/{}/dna/'
+                ).format(division, species)
+            else:
+                url = (
+                    'https://ftp.ebi.ac.uk/ensemblgenomes/pub/{}/current/'
+                    'gtf/{}/'
+                ).format(division, species)
+            locations.append((division, url))
+
+        errors = []
+
+        for division, url in locations:
+            request = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'Scipion-Chem'}
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    html = response.read().decode()
+            except (urllib.error.URLError, TimeoutError) as error:
+                errors.append('{}: {}'.format(url, error))
+                continue
+
+            matches = re.findall(r'href="([^"]+)"', html)
+            candidates = sorted(
+                filename for filename in matches
+                if filename.endswith(suffix)
             )
 
-        request = urllib.request.Request(
-            url,
-            headers={
-                'User-Agent': 'Scipion-Chem'
-            }
+            if not candidates:
+                errors.append(
+                    "{}: no file ending with '{}'".format(url, suffix)
+                )
+                continue
+
+            if len(candidates) > 1:
+                self.info(
+                    "Multiple Ensembl files found for '{}'. Using '{}'."
+                    .format(suffix, candidates[0])
+                )
+
+            return candidates[0], url, division
+
+        raise RuntimeError(
+            "No Ensembl file ending with '{}' was found for {}. Checked "
+            "main Ensembl and Ensembl Genomes. Details: {}"
+            .format(suffix, species, ' | '.join(errors))
         )
-
-        try:
-            with urllib.request.urlopen(
-                    request,
-                    timeout=120) as response:
-
-                html = response.read().decode()
-
-        except (
-            urllib.error.URLError,
-            TimeoutError
-        ) as error:
-
-            raise RuntimeError(
-                'Cannot access Ensembl directory:\n{}\n\n{}'
-                .format(
-                    url,
-                    error
-                )
-            )
-
-        matches = re.findall(
-            r'href="([^"]+)"',
-            html
-        )
-
-        candidates = [
-            filename
-            for filename in matches
-            if filename.endswith(suffix)
-        ]
-
-        if not candidates:
-            raise RuntimeError(
-                "No file ending with '{}' found in\n{}"
-                .format(
-                    suffix,
-                    url
-                )
-            )
-
-        candidates = sorted(candidates)
-
-        if len(candidates) > 1:
-            self.info(
-                "Multiple Ensembl files found for '{}'. "
-                "Using '{}'.".format(
-                    suffix,
-                    candidates[0]
-                )
-            )
-
-        return candidates[0]
 
     def _buildEnsemblDownloadUrls(self, genomeInfo):
-
         release = self._validateEnsemblUrlComponent(
-            genomeInfo['release'],
-            'release'
+            genomeInfo['release'], 'release'
         )
-
         species = self._validateEnsemblUrlComponent(
-            genomeInfo['ensemblName'],
-            'species'
+            genomeInfo['ensemblName'], 'species'
         )
 
-        fastaName = self._findEnsemblFile(
+        fastaName, fastaDir, division = self._findEnsemblFile(
             release,
             species,
             'fasta',
             '.dna.toplevel.fa.gz'
         )
-
         fastaName = self._validateEnsemblUrlComponent(
-            fastaName,
-            'FASTA filename'
+            fastaName, 'FASTA filename'
         )
+        fastaUrl = fastaDir + fastaName
 
-        base = (
-            'https://ftp.ensembl.org/pub/release-{}'
-            .format(release)
-        )
-
-        fastaUrl = (
-            '{}/fasta/{}/dna/{}'
-            .format(
-                base,
-                species,
-                fastaName
-            )
-        )
+        genomeInfo['ensemblDivision'] = division or 'main'
+        if division is not None:
+            # The Ensembl Genomes release series differs from main Ensembl.
+            # ``current`` accurately describes the tree used for this download.
+            genomeInfo['release'] = 'current'
 
         gtfUrl = None
-
         if self.downloadAnnotation.get():
-            gtfName = self._findEnsemblFile(
+            gtfName, gtfDir, _ = self._findEnsemblFile(
                 release,
                 species,
                 'gtf',
-                '.gtf.gz'
+                '.gtf.gz',
+                preferredDivision=division
             )
-
             gtfName = self._validateEnsemblUrlComponent(
-                gtfName,
-                'GTF filename'
+                gtfName, 'GTF filename'
             )
-
-            gtfUrl = (
-                '{}/gtf/{}/{}'
-                .format(
-                    base,
-                    species,
-                    gtfName
-                )
-            )
+            gtfUrl = gtfDir + gtfName
 
         return fastaUrl, gtfUrl
 
@@ -1133,90 +1159,96 @@ class ProtReferenceGenomes(EMProtocol):
     # =====================================================================
 
     def _resolveNcbiGenomes(self, genomes):
-        """Resolve NCBI assembly accessions before downloading."""
-
+        """Resolve NCBI assemblies independently for every selected species."""
         for genomeInfo in genomes:
-            if genomeInfo.get('accession') is None:
-                genomeInfo['accession'] = (
-                    self._getNcbiReferenceAccession(
-                        genomeInfo['ncbiTaxon']
+            if genomeInfo.get('accession') is not None:
+                continue
+            try:
+                genomeInfo['accession'] = self._getNcbiReferenceAccession(
+                    genomeInfo['ncbiTaxon']
+                )
+            except Exception as error:
+                genomeInfo['skipReason'] = str(error)
+                self.warning(
+                    "Skipping {}: {}".format(
+                        genomeInfo['scientificName'], error
                     )
                 )
 
     def _getNcbiReferenceAccession(self, taxon):
-        """Return the latest current NCBI RefSeq assembly accession for a taxon."""
+        """Return the latest NCBI assembly for a taxon.
 
-        outputFile = self._getTmpPath(
-            '{}_ncbi_summary.jsonl'.format(
-                self._safeName(taxon)
-            )
-        )
+        RefSeq is preferred. If no exact RefSeq assembly exists, GenBank is
+        queried so species represented only by a GCA accession are supported.
+        """
+        allReports = []
 
-        arguments = (
-            'summary genome taxon "{}" '
-            '--assembly-source RefSeq '
-            '--tax-exact-match '
-            '--as-json-lines '
-            '> "{}"'
-        ).format(
-            taxon,
-            outputFile
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            arguments,
-            RNASEQ_DIC,
-            'datasets'
-        )
-
-        if not os.path.exists(outputFile):
-            raise RuntimeError(
-                'NCBI Datasets did not generate a genome summary for {}.'
-                .format(taxon)
+        for source in ('RefSeq', 'GenBank'):
+            outputFile = self._getTmpPath(
+                '{}_{}_ncbi_summary.jsonl'.format(
+                    self._safeName(taxon), source.lower()
+                )
             )
 
-        reports = []
+            if os.path.exists(outputFile):
+                os.remove(outputFile)
 
-        with open(outputFile) as inputFile:
-            for line in inputFile:
-                line = line.strip()
+            arguments = (
+                'summary genome taxon "{}" '
+                '--assembly-source {} '
+                '--tax-exact-match '
+                '--as-json-lines '
+                '> "{}"'
+            ).format(taxon, source, outputFile)
 
-                if line:
-                    reports.append(
-                        json.loads(line)
+            try:
+                Plugin.runCondaCommand(
+                    self, arguments, RNASEQ_DIC, 'datasets'
+                )
+            except Exception as error:
+                self.warning(
+                    'NCBI {} lookup failed for {}: {}'.format(
+                        source, taxon, error
                     )
+                )
+                continue
 
-        if not reports:
+            reports = []
+            if os.path.exists(outputFile):
+                with open(outputFile) as inputFile:
+                    for line in inputFile:
+                        line = line.strip()
+                        if line:
+                            reports.append(json.loads(line))
+
+            if reports:
+                allReports = reports
+                break
+
+        if not allReports:
             raise RuntimeError(
-                'NCBI does not provide a current RefSeq assembly for {}.'
-                .format(taxon)
+                'NCBI does not provide an exact RefSeq or GenBank assembly '
+                'for {}.'.format(taxon)
             )
 
         def getReleaseDate(report):
             assemblyInfo = report.get('assemblyInfo', {})
-
             return (
-                    assemblyInfo.get('releaseDate')
-                    or assemblyInfo.get('submissionDate')
-                    or ''
+                assemblyInfo.get('releaseDate')
+                or assemblyInfo.get('submissionDate')
+                or ''
             )
 
-        latestReport = max(
-            reports,
-            key=getReleaseDate
-        )
-
+        latestReport = max(allReports, key=getReleaseDate)
         accession = (
-                latestReport.get('accession')
-                or latestReport.get('currentAccession')
+            latestReport.get('accession')
+            or latestReport.get('currentAccession')
         )
 
         if not accession:
             raise RuntimeError(
                 'The latest NCBI genome assembly for {} does not contain '
-                'an assembly accession.'
-                .format(taxon)
+                'an assembly accession.'.format(taxon)
             )
 
         return accession
@@ -1241,66 +1273,53 @@ class ProtReferenceGenomes(EMProtocol):
     # ---------------------------------------------------------------------
 
     def _downloadEnsemblGenomes(self, genomes):
-
         for genomeInfo in genomes:
+            if genomeInfo.get('skipReason'):
+                continue
 
-            outputDir = self._getExtraPath(
-                '{}_{}_release-{}'.format(
-                    genomeInfo['ensemblName'],
-                    genomeInfo['assembly'],
-                    genomeInfo['release']
+            try:
+                # Resolve URLs before creating the final directory because a
+                # fallback to Ensembl Genomes may update the release metadata.
+                fastaUrl, gtfUrl = self._buildEnsemblDownloadUrls(genomeInfo)
+
+                outputDir = self._getExtraPath(
+                    '{}_{}_release-{}'.format(
+                        genomeInfo['ensemblName'],
+                        genomeInfo['assembly'],
+                        genomeInfo['release']
+                    )
                 )
-            )
+                os.makedirs(outputDir, exist_ok=True)
 
-            os.makedirs(
-                outputDir,
-                exist_ok=True
-            )
-
-            fastaUrl, gtfUrl = self._buildEnsemblDownloadUrls(
-                genomeInfo
-            )
-
-            #FASTA
-            fastaGz = os.path.join(
-                outputDir,
-                'genome.fa.gz'
-            )
-
-            fastaFile = os.path.join(
-                outputDir,
-                'genome.fa'
-            )
-
-            self._downloadAndUncompress(
-                url=fastaUrl,
-                compressedFile=fastaGz,
-                outputFile=fastaFile
-            )
-
-            genomeInfo['fastaFile'] = fastaFile
-            genomeInfo['gtfFile'] = None
-
-            # GTF
-            if self.downloadAnnotation.get():
-
-                gtfGz = os.path.join(
-                    outputDir,
-                    'annotation.gtf.gz'
-                )
-
-                gtfFile = os.path.join(
-                    outputDir,
-                    'annotation.gtf'
-                )
-
+                fastaGz = os.path.join(outputDir, 'genome.fa.gz')
+                fastaFile = os.path.join(outputDir, 'genome.fa')
                 self._downloadAndUncompress(
-                    url=gtfUrl,
-                    compressedFile=gtfGz,
-                    outputFile=gtfFile
+                    url=fastaUrl,
+                    compressedFile=fastaGz,
+                    outputFile=fastaFile
                 )
+                genomeInfo['fastaFile'] = fastaFile
+                genomeInfo['gtfFile'] = None
 
-                genomeInfo['gtfFile'] = gtfFile
+                if self.downloadAnnotation.get():
+                    gtfGz = os.path.join(outputDir, 'annotation.gtf.gz')
+                    gtfFile = os.path.join(outputDir, 'annotation.gtf')
+                    self._downloadAndUncompress(
+                        url=gtfUrl,
+                        compressedFile=gtfGz,
+                        outputFile=gtfFile
+                    )
+                    genomeInfo['gtfFile'] = gtfFile
+
+            except Exception as error:
+                genomeInfo['skipReason'] = str(error)
+                genomeInfo.pop('fastaFile', None)
+                genomeInfo.pop('gtfFile', None)
+                self.warning(
+                    "Skipping {}: {}".format(
+                        genomeInfo['scientificName'], error
+                    )
+                )
 
     # ---------------------------------------------------------------------
     # NCBI download
@@ -1362,7 +1381,9 @@ class ProtReferenceGenomes(EMProtocol):
         return [
             genomeInfo
             for genomeInfo in genomes
-            if not self._canReuseNcbiDownload(genomeInfo)
+            if not genomeInfo.get('skipReason')
+            and genomeInfo.get('accession')
+            and not self._canReuseNcbiDownload(genomeInfo)
         ]
 
 
@@ -1519,23 +1540,34 @@ class ProtReferenceGenomes(EMProtocol):
             gtfFile = None
 
             if self.downloadAnnotation.get():
-                gtfSource = self._findNcbiPackageFile(
-                    extractDir,
-                    ('.gtf',),
-                    'GTF annotation'
-                )
-
-                gtfFile = os.path.join(
-                    outputDir,
-                    '{}_genomic.gtf'.format(
-                        accession
+                try:
+                    gtfSource = self._findNcbiPackageFile(
+                        extractDir,
+                        ('.gtf',),
+                        'GTF annotation'
                     )
-                )
 
-                shutil.copy2(
-                    gtfSource,
-                    gtfFile
-                )
+                    gtfFile = os.path.join(
+                        outputDir,
+                        '{}_genomic.gtf'.format(
+                            accession
+                        )
+                    )
+
+                    shutil.copy2(
+                        gtfSource,
+                        gtfFile
+                    )
+
+                except RuntimeError:
+                    self.warning(
+                        'NCBI does not provide a GTF annotation for {} ({}). '
+                        'The reference genome will be created without annotation.'
+                        .format(
+                            scientificName,
+                            accession
+                        )
+                    )
 
             # -------------------------------------------------------------
             # Store resolved metadata
@@ -1890,6 +1922,14 @@ class ProtReferenceGenomes(EMProtocol):
 
         for genomeInfo in genomesInfo:
 
+            fastaFile = genomeInfo.get('fastaFile')
+            if (
+                genomeInfo.get('skipReason')
+                or not fastaFile
+                or not os.path.exists(fastaFile)
+            ):
+                continue
+
             genome = Genome()
 
             genome.setScientificName(
@@ -2107,50 +2147,53 @@ class ProtReferenceGenomes(EMProtocol):
     # =====================================================================
 
     def _summary(self):
+        summary = []
 
-        if not hasattr(
-                self,
-                'referenceGenomes'):
-
-            return [
-                'No reference genomes have been downloaded.'
-            ]
-
-        summary = [
-            'Downloaded reference genomes: {}'
-            .format(
-                self.referenceGenomes.getSize()
+        if hasattr(self, 'referenceGenomes'):
+            summary.append(
+                'Downloaded reference genomes: {}'.format(
+                    self.referenceGenomes.getSize()
+                )
             )
+
+            for genome in self.referenceGenomes:
+                if genome.getSource() == 'Ensembl':
+                    text = '{} ({}, Ensembl release {})'.format(
+                        genome.getScientificName(),
+                        genome.getAssembly(),
+                        genome.getRelease()
+                    )
+                else:
+                    text = '{} ({}, NCBI accession {})'.format(
+                        genome.getScientificName(),
+                        genome.getAssembly(),
+                        genome.getRelease()
+                    )
+
+                if genome.hasGtfFile():
+                    text += ' + GTF'
+                summary.append(text)
+        else:
+            summary.append('No reference genomes have been downloaded.')
+
+        try:
+            genomesInfo = self._readGenomeInfo()
+        except Exception:
+            genomesInfo = []
+
+        skipped = [
+            genomeInfo for genomeInfo in genomesInfo
+            if genomeInfo.get('skipReason')
         ]
-
-        for genome in self.referenceGenomes:
-
-            if genome.getSource() == 'Ensembl':
-
-                text = (
-                    '{} ({}, Ensembl release {})'
-                    .format(
-                        genome.getScientificName(),
-                        genome.getAssembly(),
-                        genome.getRelease()
+        if skipped:
+            summary.append('Skipped species: {}'.format(len(skipped)))
+            for genomeInfo in skipped:
+                summary.append(
+                    '{}: {}'.format(
+                        genomeInfo.get('scientificName', 'Unknown species'),
+                        genomeInfo['skipReason']
                     )
                 )
-
-            else:
-
-                text = (
-                    '{} ({}, NCBI accession {})'
-                    .format(
-                        genome.getScientificName(),
-                        genome.getAssembly(),
-                        genome.getRelease()
-                    )
-                )
-
-            if genome.hasGtfFile():
-                text += ' + GTF'
-
-            summary.append(text)
 
         return summary
 

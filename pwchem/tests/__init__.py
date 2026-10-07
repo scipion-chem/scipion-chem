@@ -35,11 +35,16 @@ from .tests_pharmacophores import *
 from .tests_general import *
 from .tests_databases import *
 from .tests_epitopes import *
-from .tests_fastq import *
-from .tests_reference_genomes import *
+from .tests_download_genomes import *
+from .tests_download_vcf import *
+from .tests_fastp import *
+from .tests_gatk import *
+from .tests_import_fastq import *
+from .tests_import_genomes import *
+from .tests_import_vcf import *
 from .tests_molecular_dynamics import *
+from .tests_picard import *
 from .tests_rnaseq_align import *
-
 from enum import Enum
 
 class DataSetMDSystem(Enum):
@@ -55,16 +60,20 @@ DataSet(name='mdSystem', folder='mdSystem', files={el.name: el.value for el in D
 class DataSetGenomics(Enum):
     # Human
     humanDir = 'human'
-    humanGtfFile = 'human/Homo_sapiens.GRCh38.116.gtf'
-    humanGenomeFile = 'human/Homo_sapiens.GRCh38.dna.primary_assembly.fa'
+    humanGtfFile = 'human/Homo_sapiens.GRCh38.116.chr1.gtf'
+    humanGenomeFile = 'human/Homo_sapiens.GRCh38.chr1.fa'
+    humanVcfFile = 'human/Homo_sapiens.GRCh38.116.chr1.clinically_associated.vcf.gz'
+    humanVcfIndex = 'human/Homo_sapiens.GRCh38.116.chr1.clinically_associated.vcf.gz.csi'
     humanFastqR1 = 'human/SRR390728_1.fastq.gz'
     humanFastqR2 = 'human/SRR390728_2.fastq.gz'
 
     # Mouse
     mouseDir = 'mouse'
-    mouseGtfFile = 'mouse/Mus_musculus.GRCm39.116.gtf'
-    mouseGenomeFile = 'mouse/Mus_musculus.GRCm39.dna.primary_assembly.fa'
+    mouseGtfFile = 'mouse/Mus_musculus.GRCm39.116.chr1.gtf'
+    mouseGenomeFile = 'mouse/Mus_musculus.GRCm39.chr1.fa'
+    mouseVcfFile = 'mouse/Mus_musculus.GRCm39.116.chr1.vcf.gz'
+    mouseVcfIndex = 'mouse/Mus_musculus.GRCm39.116.chr1.vcf.gz.csi'
     mouseFastq = 'mouse/SRR1552445.fastq.gz'
 
 
-DataSet(name='genomics',folder='genomics',files={el.name: el.value for el in DataSetGenomics})
+DataSet(name='genomics', folder='genomics', files={el.name: el.value for el in DataSetGenomics})
