@@ -26,6 +26,7 @@
 import json
 import os
 import re
+import shlex
 import shutil
 import urllib.error
 import urllib.request
@@ -97,8 +98,8 @@ class ProtDownloadVCF(EMProtocol):
         phenotype or somatic-specific data are excluded when possible in
         order to select a general known-variation VCF.
 
-        If a Tabix index (``.tbi``) is available for the selected VCF, it
-        is downloaded together with the VCF.
+        If a remote ``.tbi`` or ``.csi`` index is available, it is downloaded.
+        Otherwise a local ``.csi`` index is generated.
 
     NCBI
         NCBI dbSNP is used as the primary source when a VCF is available
@@ -126,8 +127,8 @@ class ProtDownloadVCF(EMProtocol):
         with the selected species and assembly from the configured EVA
         release.
 
-        If a CSI index (``.csi``) is available, it is downloaded together
-        with the VCF.
+        If a remote index is available, it is downloaded. Otherwise
+        a local ``.csi`` index is generated.
 
         For ``Latest`` non-human requests, the protocol inspects the
         assemblies actually available in EVA. Assembly accessions embedded
@@ -292,8 +293,8 @@ class ProtDownloadVCF(EMProtocol):
 
         The index path is stored in the corresponding ``VCFFile`` object.
 
-        The absence of a remote index does not prevent creation of the
-        VCF output.
+        When no remote index is available, bcftools generates a local
+        ``.csi`` index (the VCF must be BGZF-compressed and sorted).
 
 
     ---------------------------------------------------------------------
@@ -524,8 +525,8 @@ class ProtDownloadVCF(EMProtocol):
     - EVA assembly matching can account for equivalent GCF/GCA accessions
       and version differences sharing the same stable assembly identifier.
 
-    - Remote VCF indexes are downloaded when available. Their absence does
-      not prevent creation of the VCF output.
+    - Remote VCF indexes are downloaded when available. Otherwise a local
+      ``.csi`` index is generated with bcftools.
 
     - VCF information is persisted internally in ``vcfs.json`` between
       protocol steps.
@@ -1468,16 +1469,10 @@ class ProtDownloadVCF(EMProtocol):
                     outputVCF
                 )
 
-                indexUrl = vcfUrl + '.tbi'
-                indexFile = outputVCF + '.tbi'
-
-                if self._remoteFileExists(indexUrl):
-                    self._downloadFile(
-                        indexUrl,
-                        indexFile
-                    )
-                else:
-                    indexFile = None
+                indexFile = self._ensureVCFIndex(
+                    outputVCF,
+                    vcfUrl
+                )
 
                 info['vcfFile'] = outputVCF
                 info['indexFile'] = indexFile
@@ -1811,16 +1806,12 @@ class ProtDownloadVCF(EMProtocol):
             outputVCF
         )
 
-        indexFile = None
-
-        if indexName in availableFiles:
-            indexFile = outputVCF + '.tbi'
-
-            self._downloadFile(
-                self.NCBI_DBSNP_VCF_URL
-                + indexName,
-                indexFile
-            )
+        indexFile = self._ensureVCFIndex(
+            outputVCF,
+            self.NCBI_DBSNP_VCF_URL + filename,
+            availableFiles=availableFiles,
+            remoteFilename=filename
+        )
 
         info['requestedSource'] = 'NCBI'
         info['source'] = 'NCBI'
@@ -1873,15 +1864,12 @@ class ProtDownloadVCF(EMProtocol):
             outputVCF
         )
 
-        indexFile = None
-
-        if indexName:
-            indexFile = outputVCF + '.csi'
-
-            self._downloadFile(
-                baseUrl + indexName,
-                indexFile
-            )
+        indexFile = self._ensureVCFIndex(
+            outputVCF,
+            baseUrl + filename,
+            availableFiles={indexName} if indexName else set(),
+            remoteFilename=filename
+        )
 
         info['requestedSource'] = 'NCBI'
         info['source'] = 'EVA'
@@ -2795,6 +2783,79 @@ class ProtDownloadVCF(EMProtocol):
                 ValueError
         ):
             return False
+
+    def _ensureVCFIndex(
+            self,
+            vcfFile,
+            vcfUrl,
+            availableFiles=None,
+            remoteFilename=None
+    ):
+        """Reuse/download a VCF index or create a CSI index locally.
+
+        A remote TBI is preferred for compatibility with downstream tools.
+        When the source has no index, bcftools creates a CSI index.
+        """
+        if remoteFilename is None:
+            remoteFilename = vcfUrl.rsplit('/', 1)[-1]
+
+        # An overwritten VCF must not retain an index from an older file.
+        if self.overwrite.get():
+            for extension in ('.tbi', '.csi'):
+                indexPath = vcfFile + extension
+                if os.path.isfile(indexPath):
+                    os.remove(indexPath)
+        else:
+            for extension in ('.tbi', '.csi'):
+                indexPath = vcfFile + extension
+                if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
+                    return indexPath
+
+        for extension in ('.tbi', '.csi'):
+            indexName = remoteFilename + extension
+            indexUrl = vcfUrl + extension
+            if availableFiles is not None:
+                exists = indexName in availableFiles
+            else:
+                exists = self._remoteFileExists(indexUrl)
+
+            if not exists:
+                continue
+
+            indexPath = vcfFile + extension
+            try:
+                self._downloadFile(indexUrl, indexPath)
+                if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
+                    return indexPath
+            except RuntimeError as error:
+                self.warning(
+                    'Could not download VCF index {}: {}. Trying another '
+                    'index or generating one locally.'.format(indexUrl, error)
+                )
+
+        self.info('No remote VCF index available. Generating CSI index.')
+        arguments = 'index -f -c {}'.format(shlex.quote(vcfFile))
+        try:
+            Plugin.runCondaCommand(
+                self,
+                arguments,
+                RNASEQ_DIC,
+                'bcftools'
+            )
+        except Exception as error:
+            raise RuntimeError(
+                'Could not generate a VCF index for {}. Ensure bcftools '
+                'is installed and the VCF is BGZF-compressed and sorted: {}'
+                .format(vcfFile, error)
+            ) from error
+
+        indexPath = vcfFile + '.csi'
+        if not os.path.isfile(indexPath) or os.path.getsize(indexPath) == 0:
+            raise RuntimeError(
+                'bcftools did not create the expected VCF index: {}'
+                .format(indexPath)
+            )
+        return indexPath
 
     # =====================================================================
     # JSON utilities

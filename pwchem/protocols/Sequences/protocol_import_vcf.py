@@ -26,11 +26,14 @@
 
 import json
 import os
+import shlex
 
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
+from pwchem import Plugin
+from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import VCFFile, SetOfVCFFiles
 
 
@@ -46,9 +49,9 @@ class ProtImportVCF(EMProtocol):
     Each imported file is represented by an independent ``VCFFile`` object
     containing the VCF path and the available variant metadata.
 
-    An existing VCF index can optionally be imported together with each
-    VCF file. The protocol supports Tabix (``.tbi``), CSI (``.csi``), and
-    other index files.
+    Existing indexes (.tbi, .csi, .idx) can be imported. If no index is
+    specified, the protocol looks for a neighboring index and, if needed,
+    creates one for supported VCF formats.
 
 
     ---------------------------------------------------------------------
@@ -155,8 +158,10 @@ class ProtImportVCF(EMProtocol):
     The resulting index path is stored in the corresponding ``VCFFile``
     object.
 
-    The protocol does not generate a new VCF index when no index file is
-    provided.
+    If no index is supplied, the protocol checks for a neighboring index.
+    If none exists, it generates a .tbi index for BGZF-compressed .vcf.gz
+    using bcftools, or an .idx index for plain .vcf using GATK.
+    The input VCF is never modified.
 
 
     ---------------------------------------------------------------------
@@ -178,7 +183,7 @@ class ProtImportVCF(EMProtocol):
         - Database set to ``Local``.
         - Variant type set to ``known``.
         - Compression status.
-        - VCF index path, when provided.
+        - VCF index path (imported or generated).
 
         Each object is labelled using the scientific name and genome
         assembly when available.
@@ -199,8 +204,8 @@ class ProtImportVCF(EMProtocol):
 
     4. Create a ``VCFFile`` object and assign the available metadata.
 
-    5. If an index file is provided, copy it into the protocol output
-       directory and associate it with the ``VCFFile``.
+    5. Copy an existing index (explicit or adjacent) or generate one,
+       then associate it with the ``VCFFile``.
 
     6. Add the resulting ``VCFFile`` to the output ``SetOfVCFFiles``.
 
@@ -242,12 +247,13 @@ class ProtImportVCF(EMProtocol):
 
     - Scientific name and genome assembly metadata are optional.
 
-    - VCF index files are optional.
+    - VCF index files are optional inputs; missing indexes are generated.
 
     - Existing ``.tbi`` and ``.csi`` indexes are associated directly with
       the copied VCF using the standard VCF index naming convention.
 
-    - The protocol does not create an index when one is not provided.
+    - Index generation requires bcftools (.vcf.gz) or GATK (.vcf) in
+      the RNASEQ_DIC environment. BGZF VCFs must be sorted.
 
     - The protocol always returns a ``SetOfVCFFiles`` to provide a
       consistent output type for downstream Scipion protocols.
@@ -350,27 +356,12 @@ class ProtImportVCF(EMProtocol):
             importedVCF.endswith('.gz')
         )
 
-        if indexFile:
-            if indexFile.endswith('.tbi'):
-                importedIndex = importedVCF + '.tbi'
-            elif indexFile.endswith('.csi'):
-                importedIndex = importedVCF + '.csi'
-            else:
-                importedIndex = self._getExtraPath(
-                    '{}_variants{}'.format(
-                        safeName,
-                        os.path.splitext(indexFile)[1]
-                    )
-                )
-
-            copyFile(
-                indexFile,
-                importedIndex
-            )
-
-            vcf.setIndexFile(
-                importedIndex
-            )
+        importedIndex = self._ensureVCFIndex(
+            vcfFile,
+            importedVCF,
+            indexFile
+        )
+        vcf.setIndexFile(importedIndex)
 
         label = scientificName or 'VCF'
 
@@ -384,6 +375,60 @@ class ProtImportVCF(EMProtocol):
         )
 
         return vcf
+
+    def _ensureVCFIndex(self, sourceVCF, importedVCF, indexFile):
+        """Copy a supplied/adjacent index, or create one for the copied VCF."""
+        if not indexFile:
+            # Reuse an adjacent index instead of generating a second one.
+            for suffix in ('.tbi', '.csi', '.idx'):
+                candidate = sourceVCF + suffix
+                if os.path.isfile(candidate):
+                    indexFile = candidate
+                    break
+
+        if indexFile:
+            suffix = os.path.splitext(indexFile)[1].lower()
+            if suffix in ('.tbi', '.csi', '.idx'):
+                importedIndex = importedVCF + suffix
+            else:
+                importedIndex = os.path.join(
+                    os.path.dirname(importedVCF),
+                    os.path.basename(importedVCF) + suffix
+                )
+            copyFile(indexFile, importedIndex)
+            return importedIndex
+
+        # Reuse an existing index beside the imported VCF if present.
+        for suffix in ('.tbi', '.csi', '.idx'):
+            candidate = importedVCF + suffix
+            if os.path.isfile(candidate):
+                return candidate
+
+        if importedVCF.endswith('.vcf.gz'):
+            # bcftools requires a sorted, BGZF-compressed VCF.
+            args = 'index -f -t {}'.format(shlex.quote(importedVCF))
+            expectedIndex = importedVCF + '.tbi'
+            program = 'bcftools'
+        elif importedVCF.endswith('.vcf'):
+            args = 'IndexFeatureFile -I {}'.format(
+                shlex.quote(importedVCF)
+            )
+            expectedIndex = importedVCF + '.idx'
+            program = 'gatk'
+        else:
+            raise RuntimeError(
+                'Cannot index unsupported VCF format: {}'.format(importedVCF)
+            )
+
+        Plugin.runCondaCommand(self, args, RNASEQ_DIC, program)
+
+        if not os.path.isfile(expectedIndex):
+            raise RuntimeError(
+                'Index was not generated for {} (expected {}).'.format(
+                    importedVCF, expectedIndex
+                )
+            )
+        return expectedIndex
 
     def createOutputStep(self):
         vcfsData = json.loads(

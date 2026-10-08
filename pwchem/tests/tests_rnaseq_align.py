@@ -91,28 +91,15 @@ class TestRNASeqAlignment(BaseTest):
         setupTestProject(cls)
 
         cls.dataset = DataSet.getDataSet('genomics')
-
         # Mouse
-        cls.mouseFastq = cls.dataset.getFile(
-            'mouse/SRR1552445.fastq.gz'
-        )
-        cls.mouseGenomeFile = cls.dataset.getFile(
-            'mouse/Mus_musculus.GRCm39.dna.primary_assembly.fa'
-        )
-        cls.mouseGtfFile = cls.dataset.getFile(
-            'mouse/Mus_musculus.GRCm39.116.gtf'
-        )
+        cls.mouseFastq = cls.dataset.getFile('mouseFastq')
+        cls.mouseGenomeFile = cls.dataset.getFile('mouseGenomeFile')
+        cls.mouseGtfFile = cls.dataset.getFile('mouseGtfFile')
 
         # Human
-        cls.humanFastq = cls.dataset.getFile(
-            'human/SRR390728_1.fastq.gz'
-        )
-        cls.humanGenomeFile = cls.dataset.getFile(
-            'human/Homo_sapiens.GRCh38.dna.primary_assembly.fa'
-        )
-        cls.humanGtfFile = cls.dataset.getFile(
-            'human/Homo_sapiens.GRCh38.116.gtf'
-        )
+        cls.humanFastq = cls.dataset.getFile('humanFastqR1')
+        cls.humanGenomeFile = cls.dataset.getFile('humanGenomeFile')
+        cls.humanGtfFile = cls.dataset.getFile('humanGtfFile')
 
     # ---------------------------------------------------------------------
     # File helpers
@@ -163,114 +150,6 @@ class TestRNASeqAlignment(BaseTest):
             )
 
         return outputFastq
-
-    def _createChromosomeReference(
-            self,
-            fastaFile,
-            gtfFile,
-            species
-    ):
-        """
-        Create a reduced reference containing one chromosome.
-
-        The first sequence found in the FASTA file is selected. The
-        corresponding sequence is written to a new FASTA file and the
-        GTF annotation is filtered to retain only entries belonging to
-        that sequence.
-        """
-        outputFasta = self.getOutputPath(
-            '{}_test.fa'.format(species)
-        )
-        outputGtf = self.getOutputPath(
-            '{}_test.gtf'.format(species)
-        )
-
-        chromosome = None
-
-        # -------------------------------------------------------------
-        # Reduce FASTA
-        # -------------------------------------------------------------
-
-        with self._openTextFile(fastaFile) as inputFile, \
-                open(outputFasta, 'w') as outputFile:
-
-            for line in inputFile:
-
-                if line.startswith('>'):
-                    currentChromosome = line[1:].split()[0]
-
-                    if chromosome is None:
-                        chromosome = currentChromosome
-
-                    elif currentChromosome != chromosome:
-                        break
-
-                outputFile.write(line)
-
-        if chromosome is None:
-            raise RuntimeError(
-                'No sequence was found in FASTA file: {}'.format(
-                    fastaFile
-                )
-            )
-
-        if not os.path.isfile(outputFasta):
-            raise RuntimeError(
-                'Reduced FASTA was not created: {}'.format(
-                    outputFasta
-                )
-            )
-
-        if os.path.getsize(outputFasta) == 0:
-            raise RuntimeError(
-                'Reduced FASTA is empty: {}'.format(
-                    outputFasta
-                )
-            )
-
-        # -------------------------------------------------------------
-        # Reduce GTF
-        # -------------------------------------------------------------
-
-        featureCount = 0
-
-        with self._openTextFile(gtfFile) as inputFile, \
-                open(outputGtf, 'w') as outputFile:
-
-            for line in inputFile:
-
-                if line.startswith('#'):
-                    outputFile.write(line)
-                    continue
-
-                fields = line.rstrip().split('\t')
-
-                if len(fields) < 9:
-                    continue
-
-                if fields[0] == chromosome:
-                    outputFile.write(line)
-                    featureCount += 1
-
-        if not os.path.isfile(outputGtf):
-            raise RuntimeError(
-                'Reduced GTF was not created: {}'.format(
-                    outputGtf
-                )
-            )
-
-        if featureCount == 0:
-            raise RuntimeError(
-                'No GTF annotations were found for sequence "{}".'
-                .format(chromosome)
-            )
-
-        print(
-            'Using {} sequence "{}" as reduced reference.'
-            .format(species, chromosome)
-        )
-
-        return outputFasta, outputGtf
 
     # ---------------------------------------------------------------------
     # FASTQ import
@@ -496,37 +375,22 @@ class TestRNASeqAlignment(BaseTest):
             release
     ):
         """
-        Test STAR and HISAT2 using the same reduced dataset.
+        Test STAR and HISAT2 using the same test dataset.
 
-        The reference is reduced to one chromosome and the FASTQ to
-        N_TEST_READS reads. Both reduced inputs are generated only once
-        and reused for STAR and HISAT2.
+        The reference genome already contains one chromosome. The FASTQ
+        is reduced to N_TEST_READS reads and reused for STAR and HISAT2.
         """
-
-        # -------------------------------------------------------------
-        # Reduce reference once
-        # -------------------------------------------------------------
-
-        smallFasta, smallGtf = self._createChromosomeReference(
-            fastaFile,
-            gtfFile,
-            species
-        )
-
         # -------------------------------------------------------------
         # Import reference once
         # -------------------------------------------------------------
 
         genomeSet = self._importGenome(
-            smallFasta,
-            smallGtf,
+            fastaFile,
+            gtfFile,
             scientificName,
             assembly,
             release
         )
-
-        genome = next(iter(genomeSet))
-
         # -------------------------------------------------------------
         # Reduce FASTQ once
         # -------------------------------------------------------------

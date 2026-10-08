@@ -114,24 +114,14 @@ class TestImportGenomes(BaseTest):
     def setUpClass(cls):
         setupTestProject(cls)
 
-        cls.dataset = DataSet.getDataSet(
-            'genomics'
-        )
+        cls.dataset = DataSet.getDataSet('genomics')
 
-        cls.humanFasta = cls.dataset.getFile(
-            'human/Homo_sapiens.GRCh38.dna.primary_assembly.fa'
-        )
-        cls.humanGtf = cls.dataset.getFile(
-            'human/Homo_sapiens.GRCh38.116.gtf'
-        )
+        cls.humanFasta = cls.dataset.getFile('humanGenomeFile')
+        cls.humanGtf = cls.dataset.getFile('humanGtfFile')
 
-        cls.mouseFasta = cls.dataset.getFile(
-            'mouse/Mus_musculus.GRCm39.dna.primary_assembly.fa'
-        )
-        cls.mouseGtf = cls.dataset.getFile(
-            'mouse/Mus_musculus.GRCm39.116.gtf'
-        )
-
+        cls.mouseFasta = cls.dataset.getFile('mouseGenomeFile')
+        cls.mouseGtf = cls.dataset.getFile('mouseGtfFile')
+        
     def testImportMultipleGenomes(self):
         """Import human and mouse reference genomes."""
         print(

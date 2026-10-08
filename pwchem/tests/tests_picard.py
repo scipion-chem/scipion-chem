@@ -45,19 +45,9 @@ class TestPicard(BaseTest):
         setupTestProject(cls)
 
         cls.dataset = DataSet.getDataSet('genomics')
-
-        cls.fastqFile = cls.dataset.getFile(
-            'mouse/SRR1552445.fastq.gz'
-        )
-
-        cls.genomeFile = cls.dataset.getFile(
-            'mouse/Mus_musculus.GRCm39.dna.primary_assembly.fa'
-        )
-
-        cls.gtfFile = cls.dataset.getFile(
-            'mouse/Mus_musculus.GRCm39.116.gtf'
-        )
-
+        cls.fastqFile = cls.dataset.getFile('mouseFastq')
+        cls.genomeFile = cls.dataset.getFile('mouseGenomeFile')
+        cls.gtfFile = cls.dataset.getFile('mouseGtfFile')
     # ---------------------------------------------------------------------
     # Input preparation
     # ---------------------------------------------------------------------
@@ -99,84 +89,9 @@ class TestPicard(BaseTest):
 
         return outputFastq
 
-    def _createChromosomeReference(self):
-        """Create a reduced reference containing one chromosome."""
-        outputFasta = self.getOutputPath(
-            'mouse_picard_test.fa'
-        )
-        outputGtf = self.getOutputPath(
-            'mouse_picard_test.gtf'
-        )
-
-        chromosome = None
-
-        with self._openTextFile(self.genomeFile) as inputFile, \
-                open(outputFasta, 'w') as outputFile:
-
-            for line in inputFile:
-
-                if line.startswith('>'):
-                    currentChromosome = line[1:].split()[0]
-
-                    if chromosome is None:
-                        chromosome = currentChromosome
-
-                    elif currentChromosome != chromosome:
-                        break
-
-                outputFile.write(line)
-
-        self.assertIsNotNone(
-            chromosome,
-            'No sequence was found in the reference FASTA.'
-        )
-
-        featureCount = 0
-
-        with self._openTextFile(self.gtfFile) as inputFile, \
-                open(outputGtf, 'w') as outputFile:
-
-            for line in inputFile:
-
-                if line.startswith('#'):
-                    outputFile.write(line)
-                    continue
-
-                fields = line.rstrip().split('\t')
-
-                if len(fields) < 9:
-                    continue
-
-                if fields[0] == chromosome:
-                    outputFile.write(line)
-                    featureCount += 1
-
-        self.assertTrue(
-            os.path.isfile(outputFasta),
-            'Reduced FASTA was not created.'
-        )
-
-        self.assertGreater(
-            os.path.getsize(outputFasta),
-            0,
-            'Reduced FASTA is empty.'
-        )
-
-        self.assertGreater(
-            featureCount,
-            0,
-            'Reduced GTF does not contain annotations.'
-        )
-
-        return outputFasta, outputGtf
-
     def _createInputAlignment(self):
         """Create a small STAR alignment to use as Picard input."""
         smallFastq = self._createSmallFastq()
-
-        referenceFasta, referenceGtf = (
-            self._createChromosomeReference()
-        )
 
         sampleName = 'mouse_picard_test'
 
@@ -211,8 +126,8 @@ class TestPicard(BaseTest):
                 'scientificName': 'Mus musculus',
                 'assembly': 'GRCm39',
                 'release': '116',
-                'fastaFile': referenceFasta,
-                'gtfFile': referenceGtf
+                'fastaFile': self.genomeFile,
+                'gtfFile': self.gtfFile
             }
         ]
 

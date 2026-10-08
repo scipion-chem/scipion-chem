@@ -1,3 +1,4 @@
+
 # **************************************************************************
 # *
 # * Authors:    Laura Pérez Liens (laura.perez@cnb.csic.es)
@@ -152,7 +153,8 @@ class ProtGATK(EMProtocol):
         When ``BaseRecalibrator`` is enabled, the selected known-sites VCF
         must be indexed.
 
-        Existing ``.idx``, ``.tbi`` and ``.csi`` indexes are accepted.
+        Existing ``.idx`` and ``.tbi`` indexes are accepted. A ``.csi``
+        index alone triggers an attempt to create a GATK-compatible index.
 
         If no compatible index is found, the protocol attempts to generate
         one using GATK ``IndexFeatureFile``.
@@ -339,7 +341,8 @@ class ProtGATK(EMProtocol):
     - Only one VCF from the input ``SetOfVCFFiles`` is used in each
       protocol execution.
 
-    - Existing ``.idx``, ``.tbi`` and ``.csi`` VCF indexes are accepted.
+    - Existing ``.idx`` and ``.tbi`` VCF indexes are accepted. A lone
+      ``.csi`` index is not considered sufficient for GATK.
 
     - Missing FASTA indexes, sequence dictionaries and VCF feature indexes
       are generated automatically when required.
@@ -853,10 +856,10 @@ class ProtGATK(EMProtocol):
             )
 
     def _ensureFeatureIndex(self, featureFile):
+        """Ensure a GATK-compatible feature index exists for the VCF."""
         possibleIndexes = [
             featureFile + '.idx',
-            featureFile + '.tbi',
-            featureFile + '.csi'
+            featureFile + '.tbi'
         ]
 
         if any(
@@ -881,8 +884,8 @@ class ProtGATK(EMProtocol):
             for indexFile in possibleIndexes
         ):
             raise RuntimeError(
-                'Known-sites VCF index was not created for: {}'
-                .format(featureFile)
+                'GATK-compatible known-sites VCF index was not created '
+                'for: {}'.format(featureFile)
             )
 
     # -------------------------------------------------------
