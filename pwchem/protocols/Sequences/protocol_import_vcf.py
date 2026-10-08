@@ -259,6 +259,8 @@ class ProtImportVCF(EMProtocol):
       consistent output type for downstream Scipion protocols.
     """
 
+    VCF_GZ_EXTENSION = '.vcf.gz'
+
     _label = 'import vcf'
 
     def _defineParams(self, form):
@@ -307,8 +309,8 @@ class ProtImportVCF(EMProtocol):
                 assembly.strip().replace(' ', '_')
             )
 
-        if vcfFile.endswith('.vcf.gz'):
-            extension = '.vcf.gz'
+        if vcfFile.endswith(VCF_GZ _EXTENSION):
+            extension = VCF_GZ _EXTENSION
         else:
             extension = os.path.splitext(
                 vcfFile
@@ -376,18 +378,23 @@ class ProtImportVCF(EMProtocol):
 
         return vcf
 
+    def _findAdjacentVCFIndex(self, vcfFile):
+        """Return an adjacent VCF index if available."""
+        for suffix in ('.tbi', '.csi', '.idx'):
+            candidate = vcfFile + suffix
+            if os.path.isfile(candidate):
+                return candidate
+
+        return None
+
     def _ensureVCFIndex(self, sourceVCF, importedVCF, indexFile):
         """Copy a supplied/adjacent index, or create one for the copied VCF."""
         if not indexFile:
-            # Reuse an adjacent index instead of generating a second one.
-            for suffix in ('.tbi', '.csi', '.idx'):
-                candidate = sourceVCF + suffix
-                if os.path.isfile(candidate):
-                    indexFile = candidate
-                    break
+            indexFile = self._findAdjacentVCFIndex(sourceVCF)
 
         if indexFile:
             suffix = os.path.splitext(indexFile)[1].lower()
+
             if suffix in ('.tbi', '.csi', '.idx'):
                 importedIndex = importedVCF + suffix
             else:
@@ -395,39 +402,52 @@ class ProtImportVCF(EMProtocol):
                     os.path.dirname(importedVCF),
                     os.path.basename(importedVCF) + suffix
                 )
+
             copyFile(indexFile, importedIndex)
             return importedIndex
 
         # Reuse an existing index beside the imported VCF if present.
-        for suffix in ('.tbi', '.csi', '.idx'):
-            candidate = importedVCF + suffix
-            if os.path.isfile(candidate):
-                return candidate
+        existingIndex = self._findAdjacentVCFIndex(importedVCF)
+        if existingIndex:
+            return existingIndex
 
-        if importedVCF.endswith('.vcf.gz'):
+        if importedVCF.endswith(VCF_GZ_EXTENSION):
             # bcftools requires a sorted, BGZF-compressed VCF.
-            args = 'index -f -t {}'.format(shlex.quote(importedVCF))
+            args = 'index -f -t {}'.format(
+                shlex.quote(importedVCF)
+            )
             expectedIndex = importedVCF + '.tbi'
             program = 'bcftools'
+
         elif importedVCF.endswith('.vcf'):
             args = 'IndexFeatureFile -I {}'.format(
                 shlex.quote(importedVCF)
             )
             expectedIndex = importedVCF + '.idx'
             program = 'gatk'
+
         else:
             raise RuntimeError(
-                'Cannot index unsupported VCF format: {}'.format(importedVCF)
+                'Cannot index unsupported VCF format: {}'.format(
+                    importedVCF
+                )
             )
 
-        Plugin.runCondaCommand(self, args, RNASEQ_DIC, program)
+        Plugin.runCondaCommand(
+            self,
+            args,
+            RNASEQ_DIC,
+            program
+        )
 
         if not os.path.isfile(expectedIndex):
             raise RuntimeError(
                 'Index was not generated for {} (expected {}).'.format(
-                    importedVCF, expectedIndex
+                    importedVCF,
+                    expectedIndex
                 )
             )
+
         return expectedIndex
 
     def createOutputStep(self):

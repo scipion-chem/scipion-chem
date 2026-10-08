@@ -2784,36 +2784,34 @@ class ProtDownloadVCF(EMProtocol):
         ):
             return False
 
-    def _ensureVCFIndex(
+    def _removeLocalVCFIndexes(self, vcfFile):
+        """Remove any existing local VCF indexes."""
+        for extension in ('.tbi', '.csi'):
+            indexPath = vcfFile + extension
+            if os.path.isfile(indexPath):
+                os.remove(indexPath)
+
+    def _getLocalVCFIndex(self, vcfFile):
+        """Return an existing valid local VCF index, if available."""
+        for extension in ('.tbi', '.csi'):
+            indexPath = vcfFile + extension
+            if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
+                return indexPath
+
+        return None
+
+    def _downloadVCFIndex(
             self,
             vcfFile,
             vcfUrl,
-            availableFiles=None,
-            remoteFilename=None
+            remoteFilename,
+            availableFiles=None
     ):
-        """Reuse/download a VCF index or create a CSI index locally.
-
-        A remote TBI is preferred for compatibility with downstream tools.
-        When the source has no index, bcftools creates a CSI index.
-        """
-        if remoteFilename is None:
-            remoteFilename = vcfUrl.rsplit('/', 1)[-1]
-
-        # An overwritten VCF must not retain an index from an older file.
-        if self.overwrite.get():
-            for extension in ('.tbi', '.csi'):
-                indexPath = vcfFile + extension
-                if os.path.isfile(indexPath):
-                    os.remove(indexPath)
-        else:
-            for extension in ('.tbi', '.csi'):
-                indexPath = vcfFile + extension
-                if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
-                    return indexPath
-
+        """Download a remote VCF index, if available."""
         for extension in ('.tbi', '.csi'):
             indexName = remoteFilename + extension
             indexUrl = vcfUrl + extension
+
             if availableFiles is not None:
                 exists = indexName in availableFiles
             else:
@@ -2823,18 +2821,27 @@ class ProtDownloadVCF(EMProtocol):
                 continue
 
             indexPath = vcfFile + extension
+
             try:
                 self._downloadFile(indexUrl, indexPath)
+
                 if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
                     return indexPath
+
             except RuntimeError as error:
                 self.warning(
                     'Could not download VCF index {}: {}. Trying another '
                     'index or generating one locally.'.format(indexUrl, error)
                 )
 
+        return None
+
+    def _createLocalVCFIndex(self, vcfFile):
+        """Create a CSI index locally using bcftools."""
         self.info('No remote VCF index available. Generating CSI index.')
+
         arguments = 'index -f -c {}'.format(shlex.quote(vcfFile))
+
         try:
             Plugin.runCondaCommand(
                 self,
@@ -2850,12 +2857,48 @@ class ProtDownloadVCF(EMProtocol):
             ) from error
 
         indexPath = vcfFile + '.csi'
+
         if not os.path.isfile(indexPath) or os.path.getsize(indexPath) == 0:
             raise RuntimeError(
                 'bcftools did not create the expected VCF index: {}'
                 .format(indexPath)
             )
+
         return indexPath
+
+    def _ensureVCFIndex(
+            self,
+            vcfFile,
+            vcfUrl,
+            availableFiles=None,
+            remoteFilename=None
+    ):
+        """Reuse/download a VCF index or create a CSI index locally.
+
+        A remote TBI is preferred for compatibility with downstream tools.
+        When the source has no index, bcftools creates a CSI index.
+        """
+        if remoteFilename is None:
+            remoteFilename = vcfUrl.rsplit('/', 1)[-1]
+
+        if self.overwrite.get():
+            self._removeLocalVCFIndexes(vcfFile)
+        else:
+            indexPath = self._getLocalVCFIndex(vcfFile)
+            if indexPath is not None:
+                return indexPath
+
+        indexPath = self._downloadVCFIndex(
+            vcfFile,
+            vcfUrl,
+            remoteFilename,
+            availableFiles
+        )
+
+        if indexPath is not None:
+            return indexPath
+
+        return self._createLocalVCFIndex(vcfFile)
 
     # =====================================================================
     # JSON utilities
