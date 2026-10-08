@@ -376,16 +376,29 @@ class ProtPicard(EMProtocol):
                 'Reference FASTA does not exist: {}'.format(referenceFasta)
             )
 
+        # ReorderSam expects a sequence dictionary, not the FASTA itself.
+        referenceDict = os.path.splitext(referenceFasta)[0] + '.dict'
+        if not os.path.isfile(referenceDict):
+            referenceDict = self._getExtraPath('reference.dict')
+            dictArgs = 'CreateSequenceDictionary R={} O={}'.format(
+                self._quote(referenceFasta), self._quote(referenceDict)
+            )
+            Plugin.runCondaCommand(self, dictArgs, RNASEQ_DIC, 'picard')
+            self._appendCommand(self.PICARD_COMMAND.format(dictArgs))
+
+        if not os.path.isfile(referenceDict) or os.path.getsize(referenceDict) == 0:
+            raise RuntimeError('Reference sequence dictionary was not created: {}'.format(referenceDict))
+
         args = (
             'ReorderSam '
             'I={inputBam} '
             'O={outputBam} '
-            'SD={referenceFasta} '
+            'SD={referenceDict} '
             'CREATE_INDEX=false'
         ).format(
             inputBam=self._quote(inputBam),
             outputBam=self._quote(outputBam),
-            referenceFasta=self._quote(referenceFasta)
+            referenceDict=self._quote(referenceDict)
         )
 
         Plugin.runCondaCommand(

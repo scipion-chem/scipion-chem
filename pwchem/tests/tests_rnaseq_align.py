@@ -391,6 +391,9 @@ class TestRNASeqAlignment(BaseTest):
             assembly,
             release
         )
+
+        genome = genomeSet.getFirstItem()
+
         # -------------------------------------------------------------
         # Reduce FASTQ once
         # -------------------------------------------------------------

@@ -309,8 +309,8 @@ class ProtImportVCF(EMProtocol):
                 assembly.strip().replace(' ', '_')
             )
 
-        if vcfFile.endswith(VCF_GZ _EXTENSION):
-            extension = VCF_GZ _EXTENSION
+        if vcfFile.endswith(VCF_GZ_EXTENSION):
+            extension = VCF_GZ_EXTENSION
         else:
             extension = os.path.splitext(
                 vcfFile
