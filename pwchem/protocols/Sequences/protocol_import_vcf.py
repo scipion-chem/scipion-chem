@@ -309,8 +309,8 @@ class ProtImportVCF(EMProtocol):
                 assembly.strip().replace(' ', '_')
             )
 
-        if vcfFile.endswith(VCF_GZ_EXTENSION):
-            extension = VCF_GZ_EXTENSION
+        if vcfFile.endswith(self.VCF_GZ_EXTENSION):
+            extension = self.VCF_GZ_EXTENSION
         else:
             extension = os.path.splitext(
                 vcfFile
@@ -411,7 +411,7 @@ class ProtImportVCF(EMProtocol):
         if existingIndex:
             return existingIndex
 
-        if importedVCF.endswith(VCF_GZ_EXTENSION):
+        if importedVCF.endswith(self.VCF_GZ_EXTENSION):
             # bcftools requires a sorted, BGZF-compressed VCF.
             args = 'index -f -t {}'.format(
                 shlex.quote(importedVCF)
