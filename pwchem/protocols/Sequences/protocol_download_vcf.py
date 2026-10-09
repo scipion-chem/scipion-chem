@@ -1049,13 +1049,17 @@ class ProtDownloadVCF(EMProtocol):
                 if info['release'].lower() == 'latest':
 
                     if latestRelease is None:
-                        latestRelease = (
-                            self._getLatestEnsemblRelease()
-                        )
+                        try:
+                            latestRelease = self._getLatestEnsemblRelease()
+                        except RuntimeError as error:
+                            self.warning(
+                                'Could not resolve latest Ensembl release: {}. '
+                                'Trying Ensembl Genomes current directories.'
+                                .format(error)
+                            )
+                            latestRelease = 'current'
 
-                    info['release'] = str(
-                        latestRelease
-                    )
+                    info['release'] = str(latestRelease)
 
                 info['assembly'] = (
                     self._resolveEnsemblAssembly(
@@ -1514,28 +1518,34 @@ class ProtDownloadVCF(EMProtocol):
             'Ensembl release'
         )
 
-        mainUrl = (
-            '{}release-{}/variation/vcf/{}/'
-        ).format(
-            self.ENSEMBL_FTP_BASE_URL,
-            release,
-            ensemblName
-        )
+        mainError = None
 
-        try:
-            filename = self._findVCFInRemoteDirectory(
-                mainUrl,
-                info['scientificName']
+        # The main Ensembl FTP requires a numbered release. When REST is
+        # unavailable, use the Ensembl Genomes "current" directories instead.
+        if release != 'current':
+            mainUrl = (
+                '{}release-{}/variation/vcf/{}/'
+            ).format(
+                self.ENSEMBL_FTP_BASE_URL,
+                release,
+                ensemblName
             )
-            return filename, mainUrl, 'Ensembl Variation'
 
-        except RuntimeError as mainError:
-            self.info(
-                'No usable VCF found for {} in Ensembl main. '
-                'Trying Ensembl Genomes.'.format(
+            try:
+                filename = self._findVCFInRemoteDirectory(
+                    mainUrl,
                     info['scientificName']
                 )
-            )
+                return filename, mainUrl, 'Ensembl Variation'
+
+            except RuntimeError as error:
+                mainError = error
+                self.info(
+                    'No usable VCF found for {} in Ensembl main. '
+                    'Trying Ensembl Genomes.'.format(
+                        info['scientificName']
+                    )
+                )
 
         genomesResult = self._findEnsemblGenomesVCF(
             info
