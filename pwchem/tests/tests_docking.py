@@ -456,11 +456,11 @@ class TestRankDockingScore(TestScoreDocking):
             print('No docking plugins found installed. Try installing AutoDock')
 
 class TestFragmentOccupancy(TestExtractLigand):
-    def _runFragmentOccupancy(self, inputProt):
-        protOcc = self.newProtocol(ProtChemFragmentOccupancy, aggregation=2, interactionScore=True)
+    def _runFragmentOccupancy(self, inputProt, refProt, **kwargs):
+        protOcc = self.newProtocol(ProtChemFragmentOccupancy, **kwargs)
         protOcc.inputSmallMolecules.set(inputProt)
         protOcc.inputSmallMolecules.setExtended('outputSmallMolecules')
-        protOcc.referenceMolecules.set(inputProt)
+        protOcc.referenceMolecules.set(refProt)
         protOcc.referenceMolecules.setExtended('outputSmallMolecules')
 
         self.launchProtocol(protOcc)
@@ -471,7 +471,7 @@ class TestFragmentOccupancy(TestExtractLigand):
         self._waitOutput(protExtract, 'outputSmallMolecules')
 
         # Each ligand is its own reference: after self-alignment, max occupancy and interaction recovery are 1
-        protOcc = self._runFragmentOccupancy(protExtract)
+        protOcc = self._runFragmentOccupancy(protExtract, protExtract, aggregation=2, interactionScore=True)
         outMols = getattr(protOcc, 'outputSmallMolecules', None)
         assertHandle(self.assertIsNotNone, outMols, cwd=protOcc.getWorkingDir())
         for mol in outMols:

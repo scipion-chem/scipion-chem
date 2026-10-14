@@ -28,7 +28,7 @@
 """
 Score docked poses by how much of a set of reference fragments' occupancy they reproduce.
 """
-import csv, json
+import csv, json, glob
 
 from pwem.convert import cifToPdb
 from pyworkflow.object import Float, String
@@ -36,7 +36,7 @@ from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
-from pwchem.utils import os
+from pwchem.utils import os, makeSubsets
 from pwchem import Plugin, RDKIT_DIC
 
 AGG = ['union', 'mean', 'max', 'count']
@@ -157,6 +157,7 @@ Notes
   from the aggregate
 """
     _label = 'fragment occupancy scoring'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -218,34 +219,64 @@ Notes
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.scoreStep)
-        self._insertFunctionStep(self.createOutputStep)
+        oStep = self._insertFunctionStep(self.organizeInputStep)
+        rStep = self._insertFunctionStep(self.convertStep, self.getRefsDir(), prerequisites=[oStep])
 
-    def scoreStep(self):
-        """Write the manifest the geometry script consumes and run it in the RDKit env."""
+        sSteps = []
+        for it in range(self.getNBatches()):
+            cStep = self._insertFunctionStep(self.convertStep, self.getBatchDir(it), prerequisites=[oStep])
+            sSteps.append(self._insertFunctionStep(self.scoreStep, it, prerequisites=[rStep, cStep]))
+        self._insertFunctionStep(self.createOutputStep, prerequisites=sSteps)
+
+    def organizeInputStep(self):
+        """Stage the files that need conversion (CIF, Maestro) in the references / batch directories,
+        so each directory is converted with a single call by convertStep."""
         inSet, refSet = self.inputSmallMolecules.get(), self.referenceMolecules.get()
-        poses = [{'objId': mol.getObjId(), 'molName': mol.getMolName(),
-                  'poseFile': self.getPdbFile(mol.getPoseFile() or mol.getFileName())} for mol in inSet]
-        refs = [{'molName': mol.getMolName(), 'molFile': self.getPdbFile(mol.getPoseFile() or mol.getFileName()),
-                 'proteinFile': self.getPdbFile(mol.getProteinFile() or refSet.getProteinFile())} for mol in refSet]
+        names = {}
+        refs = [{'molName': mol.getMolName(),
+                 'molFile': self.stageFile(mol.getPoseFile() or mol.getFileName(), self.getRefsDir(), names),
+                 'proteinFile': self.stageFile(mol.getProteinFile() or refSet.getProteinFile(), self.getRefsDir(), names)}
+                for mol in refSet]
+        receptor = self.stageFile(inSet.getProteinFile(), self.getRefsDir(), names)
+
+        batches = []
+        for it, subset in enumerate(makeSubsets(inSet, self.getNBatches())):
+            names = {}
+            batches.append([{'objId': mol.getObjId(), 'molName': mol.getMolName(),
+                             'poseFile': self.stageFile(mol.getPoseFile() or mol.getFileName(), self.getBatchDir(it), names)}
+                            for mol in subset])
+
+        with open(self.getInputsFile(), 'w') as f:
+            json.dump({'refs': refs, 'receptor': receptor, 'batches': batches}, f)
+
+    def convertStep(self, inDir):
+        """CIF to PDB with pwem, Maestro (Glide output) to PDB with RDKit in a single call for the directory"""
+        if not os.path.exists(inDir):
+            return
+        for cifFile in glob.glob(os.path.join(inDir, '*.cif')):
+            cifToPdb(cifFile, os.path.splitext(cifFile)[0] + '.pdb')
+        if glob.glob(os.path.join(inDir, '*.mae*')):
+            args = f' --multiFiles -iD "{inDir}" --pattern "*.mae*" -of pdb --keepHs --outputDir "{inDir}"'
+            Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=inDir)
+
+    def scoreStep(self, it):
+        """Write the manifest of the batch and run the geometry script in the RDKit env."""
+        with open(self.getInputsFile()) as f:
+            inputs = json.load(f)
 
         manifest = {
-            'poses': poses, 'refs': refs, 'receptor': self.getPdbFile(inSet.getProteinFile()),
+            'poses': inputs['batches'][it], 'refs': inputs['refs'], 'receptor': inputs['receptor'],
             'cutoff': self.cutoff.get(), 'aggregation': AGG[self.aggregation.get()],
             'coverageThreshold': self.coverageThreshold.get(),
             'assumeSameFrame': self.assumeSameFrame.get(), 'placeInAllChains': self.placeInAllChains.get(),
             'includeHydrogens': self.includeHydrogens.get(), 'exclude': self.getExcluded(),
             'minCaPairs': MIN_CA_PAIRS,
             'interactions': self.interactionScore.get(),
-            'outCsv': os.path.abspath(self.getScoresFile()),
-            'alignReport': os.path.abspath(self.getAlignFile()),
+            'outCsv': self.getBatchScoresFile(it),
+            # The alignment is the same in every batch
+            'alignReport': os.path.abspath(self.getAlignFile()) if it == 0 else None,
         }
-        if os.path.exists(self.getMaeDir()):
-            # Maestro files (Glide output), staged by getPdbFile, to PDB with RDKit in a single call
-            args = f' --multiFiles -iD "{self.getMaeDir()}" --pattern "*" -of pdb --keepHs --outputDir "{self.getMaeDir()}"'
-            Plugin.runScript(self, 'rdkit_IO.py', args, env=RDKIT_DIC, cwd=self.getMaeDir())
-
-        manifestFile = os.path.abspath(self._getExtraPath('manifest.json'))
+        manifestFile = os.path.abspath(self._getExtraPath('manifest_{}.json'.format(it)))
         with open(manifestFile, 'w') as f:
             json.dump(manifest, f)
 
@@ -253,10 +284,15 @@ Notes
                          cwd=self._getExtraPath())
 
     def createOutputStep(self):
-        scores = {}
-        with open(self.getScoresFile()) as f:
-            for row in csv.DictReader(f):
-                scores[int(row.pop('objId'))] = row
+        rows = []
+        for it in range(self.getNBatches()):
+            with open(self.getBatchScoresFile(it)) as f:
+                rows += list(csv.DictReader(f))
+        with open(self.getScoresFile(), 'w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader()
+            w.writerows(rows)
+        scores = {int(row.pop('objId')): row for row in rows}
 
         attr = '_fragOcc'
         inSet = self.inputSmallMolecules.get()
@@ -325,27 +361,37 @@ Notes
     def getExcluded(self):
         return [x.strip() for x in self.excludeReferences.get().split(',') if x.strip()]
 
-    def getMaeDir(self):
-        return os.path.abspath(self._getTmpPath('maestro'))
+    def getInputsFile(self):
+        return os.path.abspath(self._getExtraPath('inputs.json'))
 
-    def getPdbFile(self, inFile):
-        """The geometry script cannot read CIF or Maestro (proteins or molecules). CIF is converted to PDB here,
-        Maestro is staged in getMaeDir and converted with RDKit by scoreStep. Returns the PDB to use."""
+    def getRefsDir(self):
+        return os.path.abspath(self._getTmpPath('references'))
+
+    def getBatchDir(self, it):
+        return os.path.abspath(self._getTmpPath('batch_{}'.format(it)))
+
+    def getBatchScoresFile(self, it):
+        return os.path.abspath(self._getExtraPath('scores_{}.csv'.format(it)))
+
+    def getNBatches(self):
+        """One batch per thread: each batch costs a single conda activation"""
+        return max(1, min(self.numberOfThreads.get() - 1, len(self.inputSmallMolecules.get())))
+
+    def stageFile(self, inFile, outDir, names):
+        """The geometry script cannot read CIF or Maestro: they are linked in outDir (named after their basename,
+        names keeps them unique in the directory) for convertStep and the future PDB path is returned."""
         if not inFile:
             return None
         inFile = os.path.abspath(inFile)
-        base, ext = os.path.splitext(inFile)
-        # Named after the full path: different inputs may share a basename
-        uniqueName = base.strip('/').replace('/', '_')
-        if ext.lower() == '.cif':
-            pdbFile = os.path.abspath(self._getTmpPath(uniqueName + '.pdb'))
-            if not os.path.exists(pdbFile):
-                cifToPdb(inFile, pdbFile)
-            return pdbFile
-        if ext.lower() in ('.mae', '.maegz'):
-            os.makedirs(self.getMaeDir(), exist_ok=True)
-            maeFile = os.path.join(self.getMaeDir(), uniqueName + ext)
-            if not os.path.exists(maeFile):
-                os.symlink(inFile, maeFile)
-            return os.path.join(self.getMaeDir(), uniqueName + '.pdb')
-        return inFile
+        base, ext = os.path.splitext(os.path.basename(inFile))
+        if ext.lower() not in ('.cif', '.mae', '.maegz'):
+            return inFile
+
+        if inFile not in names:
+            name, i = base, 1
+            while name in names.values():
+                name, i = '{}_{}'.format(base, i), i + 1
+            names[inFile] = name
+            os.makedirs(outDir, exist_ok=True)
+            os.symlink(inFile, os.path.join(outDir, name + ext))
+        return os.path.join(outDir, names[inFile] + '.pdb')

@@ -184,7 +184,7 @@ def main(manifestFile):
         row += [round(aggregate(agg, recs, aggNames, unionRec, thr), 4)] + [round(recs[n], 4) for n in refNames]
       w.writerow(row)
 
-  if align:
+  if align and man['alignReport']:
     with open(man['alignReport'], 'w', newline='') as f:
       w = csv.writer(f)
       w.writerow(['fragment', 'receptorChain', 'nCalpha', 'rmsd'])
