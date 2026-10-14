@@ -37,28 +37,17 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from scriptUtils import *
 
 def Mol2MolSupplier(file=None,sanitize=True):
-    mols=[]
+    mols = []
     with open(file, 'r') as f:
-        line =f.readline()
-        while not f.tell() == os.fstat(f.fileno()).st_size:
-            if line.startswith("@<TRIPOS>MOLECULE"):
-                mol = []
-                mol.append(line)
-                line = f.readline()
-                while not line.startswith("@<TRIPOS>MOLECULE"):
-                    mol.append(line)
-                    line = f.readline()
-                    if f.tell() == os.fstat(f.fileno()).st_size:
-                        mol.append(line)
-                        break
-                mol[-1] = mol[-1].rstrip() # removes blank line at file end
-                block = "".join(mol)
-                m=Chem.MolFromMol2Block(block, sanitize=sanitize)
-            if m:
-                mols.append(m)
-            else:
-                print('Error parsing mol2 file {} with RDKit. Mol2 format is sometimes tricky to parse, use Corina '
-                      'typing for RDKit'.format(file))
+        # [1:] drops anything before the first molecule (e.g. PyMOL's "# created with ..." comment)
+        blocks = f.read().split("@<TRIPOS>MOLECULE")[1:]
+    for b in blocks:
+        m = Chem.MolFromMol2Block("@<TRIPOS>MOLECULE" + b.rstrip(), sanitize=sanitize)
+        if m:
+            mols.append(m)
+        else:
+            print('Error parsing mol2 file {} with RDKit. Mol2 format is sometimes tricky to parse, use Corina '
+                  'typing for RDKit'.format(file))
     return mols
 
 def decompressFile(inFile):
@@ -83,13 +72,21 @@ def readMaeMols(inFile, keepHs=False):
     '''Parse a Maestro file. With keepHs the structure is preserved as it is in the file: (RDKit
     removes every hydrogen by defaul). Sanitization is tried first and dropped only if it fails'''
     if not keepHs:
-        return list(Chem.MaeMolSupplier(inFile))
+        mols = list(Chem.MaeMolSupplier(inFile))
+    else:
+        try:
+            mols = list(Chem.MaeMolSupplier(inFile, removeHs=False))
+        except Exception as e:
+            print('Sanitization failed for {} ({}), parsing it without sanitizing'.format(inFile, e))
+            mols = list(Chem.MaeMolSupplier(inFile, sanitize=False, removeHs=False))
 
-    try:
-        return list(Chem.MaeMolSupplier(inFile, removeHs=False))
-    except Exception as e:
-        print('Sanitization failed for {} ({}), parsing it without sanitizing'.format(inFile, e))
-        return list(Chem.MaeMolSupplier(inFile, sanitize=False, removeHs=False))
+    # Maestro pads residue names to 4 characters ("ASN "), which shifts every later PDB column when written
+    for mol in mols:
+        for atom in (mol.GetAtoms() if mol else []):
+            info = atom.GetPDBResidueInfo()
+            if info:
+                info.SetResidueName(info.GetResidueName().strip())
+    return mols
 
 def readSmilesMols(inFile, nameKey):
     '''Parse a smiles file, taking the name from the second column when it is there'''
