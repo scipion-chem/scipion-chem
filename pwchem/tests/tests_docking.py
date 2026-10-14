@@ -455,6 +455,29 @@ class TestRankDockingScore(TestScoreDocking):
         else:
             print('No docking plugins found installed. Try installing AutoDock')
 
+class TestFragmentOccupancy(TestExtractLigand):
+    def _runFragmentOccupancy(self, inputProt):
+        protOcc = self.newProtocol(ProtChemFragmentOccupancy, aggregation=2, interactionScore=True)
+        protOcc.inputSmallMolecules.set(inputProt)
+        protOcc.inputSmallMolecules.setExtended('outputSmallMolecules')
+        protOcc.referenceMolecules.set(inputProt)
+        protOcc.referenceMolecules.setExtended('outputSmallMolecules')
+
+        self.launchProtocol(protOcc)
+        return protOcc
+
+    def test(self):
+        protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
+        self._waitOutput(protExtract, 'outputSmallMolecules')
+
+        # Each ligand is its own reference: after self-alignment, max occupancy and interaction recovery are 1
+        protOcc = self._runFragmentOccupancy(protExtract)
+        outMols = getattr(protOcc, 'outputSmallMolecules', None)
+        assertHandle(self.assertIsNotNone, outMols, cwd=protOcc.getWorkingDir())
+        for mol in outMols:
+            assertHandle(self.assertAlmostEqual, mol._fragOcc.get(), 1.0, cwd=protOcc.getWorkingDir())
+            assertHandle(self.assertAlmostEqual, mol._fragOccInt.get(), 1.0, cwd=protOcc.getWorkingDir())
+
 class TestMapLigandContacts(TestExtractLigand):
     @classmethod
     def _runDefineContacts(cls, inputProt):

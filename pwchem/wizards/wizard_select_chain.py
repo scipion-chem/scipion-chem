@@ -779,6 +779,18 @@ class SelectMultiMolWizard(SelectMultiElementWizard):
   def getListOfElements(self, protocol, seqSet):
     return ['All'] + seqSet.getInteractMolNames()
 
+class SelectMultiMolNameWizard(SelectMultiElementWizard):
+  """Lists the molecule names in a SetOfSmallMolecules and choose several"""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def getListOfElements(self, protocol, molSet):
+    return [mol.getMolName() for mol in molSet] if molSet is not None else []
+
+SelectMultiMolNameWizard().addTarget(protocol=ProtChemFragmentOccupancy,
+                                     targets=['excludeReferences'],
+                                     inputs=['referenceMolecules'],
+                                     outputs=['excludeReferences'])
+
 class SelectScoreWizard(SelectElementWizard):
     """List the available scores in a SetOfSequences and choose one"""
     _targets, _inputs, _outputs = [], {}, {}
