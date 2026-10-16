@@ -153,17 +153,13 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(MGL_DIC['name'], packageHome=cls.getVar(MGL_DIC['home']), packageVersion=MGL_DIC['version'])
 
-        mglEnvName = cls.getEnvName(MGL_DIC)
-
+        mglEnvName, mglHome = cls.getEnvName(MGL_DIC), cls.getVar(MGL_DIC['home'])
         installer.addCommand(
-            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]}',
-            'MGLTOOLS_ENV_CREATED'
-        ).addCommand(
+            f'conda create -y -n {mglEnvName} -c conda-forge -c bioconda mgltools={MGL_DIC["version"]} && '
             f'{cls.getEnvActivationCommand(MGL_DIC)} && '
-            f'rm -rf {cls.getVar(MGL_DIC["home"])} && '
-            f'ln -s $CONDA_PREFIX {cls.getVar(MGL_DIC["home"])}',
+            f'rm -rf {mglHome} && ln -s $CONDA_PREFIX {mglHome}',
             'MGLTOOLS_SYMLINK_CREATED'
-        ).addPackage(env,dependencies=['conda'],default=default)
+        ).addPackage(env, dependencies=['conda'], default=default)
 
     @classmethod
     def addJChemPaintPackage(cls, env, default=True):
@@ -447,12 +443,7 @@ class Plugin(pwem.Plugin):
     def runMSMS(cls, structModel):
         """ Run MSMS command from a given protocol. """
         from Bio.PDB.ResidueDepth import get_surface
-        envName = Plugin.getEnvName(MGL_DIC)
-        prefix = Plugin.getMGLToolsPrefix(envName=envName)
-        msmsPath = os.path.join(
-            prefix,
-            "MGLToolsPckgs/binaries/msms"
-        )
+        msmsPath = cls.getProgramHome(MGL_DIC, 'MGLToolsPckgs/binaries/msms')
         structSurface = get_surface(structModel, MSMS=msmsPath)
         return structSurface
 
@@ -491,18 +482,6 @@ class Plugin(pwem.Plugin):
             'PATH': cls.getProgramHome(programDic=MGL_DIC, path='bin')
         }, position=pos)
         return environ
-
-    @classmethod
-    def getMGLToolsPrefix(cls,envName):
-        result = subprocess.run(
-            ["conda", "env", "list"],
-            capture_output=True,
-            text=True
-        )
-        for line in result.stdout.splitlines():
-            if line.startswith(envName):
-                return line.split()[-1]
-        raise RuntimeError(f"Cannot find conda env {envName}")
 
     @classmethod
     def getODDTModelsPath(cls, path=''):
