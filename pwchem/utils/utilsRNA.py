@@ -27,6 +27,7 @@
 import gzip, os, re
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
+from pwchem.utils import assertHandle
 
 def openFastq(fn):
   """Open plain or gzip-compressed FASTQ files."""
@@ -238,3 +239,34 @@ def parseCustomSpecies(speciesText):
     ]
 
     return list(dict.fromkeys(species))
+
+
+def assertOutputExists(test, protocol, output):
+    """Check that the protocol generated an output object."""
+    assertHandle(
+        test.assertIsNotNone,
+        output,
+        cwd=protocol.getWorkingDir()
+    )
+
+
+def assertGenomeFiles(test, protocol, genome, expectGtf=True):
+    """Check that the genome files exist."""
+    assertHandle(
+        test.assertTrue,
+        os.path.exists(genome.getFastaFile()),
+        cwd=protocol.getWorkingDir()
+    )
+
+    if expectGtf:
+        assertHandle(
+            test.assertTrue,
+            genome.hasGtfFile(),
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            test.assertTrue,
+            os.path.exists(genome.getGtfFile()),
+            cwd=protocol.getWorkingDir()
+        )
