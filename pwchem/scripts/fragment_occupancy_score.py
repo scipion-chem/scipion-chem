@@ -22,7 +22,8 @@ def readMol(path):
   if ext in ('.sdf', '.mol'):
     return next((m for m in Chem.SDMolSupplier(path, removeHs=False, sanitize=False) if m is not None), None)
   if ext == '.mol2':
-    return Chem.MolFromMol2File(path, removeHs=False, sanitize=False)
+    # Only coordinates and elements are used: skip the substructure cleanup
+    return Chem.MolFromMol2File(path, removeHs=False, sanitize=False, cleanupSubstructures=False)
   if ext == '.pdb':
     return Chem.MolFromPDBFile(path, removeHs=False, sanitize=False)
 
