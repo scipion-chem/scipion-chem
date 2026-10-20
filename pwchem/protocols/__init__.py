@@ -101,6 +101,7 @@ from pwchem.protocols.Sequences.protocol_gatk import ProtGATK
 from pwchem.protocols.Sequences.protocol_download_vcf import ProtDownloadVCF
 from pwchem.protocols.Sequences.protocol_import_genomes import ProtImportGenomes
 from pwchem.protocols.Sequences.protocol_import_vcf import ProtImportVCF
+from pwchem.protocols.Sequences.protocol_gatk_mutect2 import ProtGATKMutect2
 
 # Databases protocols
 from pwchem.protocols.Databases.protocol_import_setOfDatabaseIDs import ProtChemImportSetOfDatabaseIDs
