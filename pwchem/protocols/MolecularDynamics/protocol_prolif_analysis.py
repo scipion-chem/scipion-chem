@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, json
+import os, json, shutil
 import pickle as pkl
 
 from pyworkflow.protocol import params
@@ -150,7 +150,11 @@ class ProtocolProlif(EMProtocol):
         inputSystem = self.inputMDSystem.get()
         trajFile = inputSystem.getTrajectoryFile()
         topoFile = inputSystem.getTopologyFile()
+        gmxTopArgs = ''
         if topoFile.lower().endswith(('.top', '.tpr')):
+            if topoFile.lower().endswith('.top'):
+                # Bonds are read from the .top; the .gro (no bonds) is the fallback if it cannot be read
+                gmxTopArgs = self.getGromacsTopArgs(inputSystem)
             topoFile = inputSystem.getSystemFile() # needed for gromacs topology
         outputPath = self._getExtraPath()
         outputName = inputSystem.getSystemName()
@@ -159,12 +163,47 @@ class ProtocolProlif(EMProtocol):
         else:
             ligName = 'LIG'
         args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName} -l {ligName} -f {self.frameNum.get()}'
+        args += gmxTopArgs
         if self.getEnumText('type') == 'Water bridges':
             args += ' -wb'
 
         args += ' 2>&1'
 
         pwchemPlugin.runScript(self, 'prolif_analysis.py', args, env=MDTRAJ_DIC, wait=False)
+
+    def getGromacsTopArgs(self, inputSystem):
+        '''Script arguments to read the bonds from a GROMACS topology: a copy of the .top together with the files it
+        #includes by relative path (e.g. the ligand itp, missing next to the .top of older runs) and the directory of
+        the force fields shipped with GROMACS'''
+        topFile = os.path.abspath(inputSystem.getTopologyFile())
+        workDir = os.path.abspath(self._getExtraPath('topology'))
+        os.makedirs(workDir, exist_ok=True)
+        shutil.copy(topFile, workDir)
+
+        searchDirs = [os.path.dirname(topFile)]
+        if inputSystem.getLigTopologyFile():
+            searchDirs.append(os.path.dirname(os.path.abspath(inputSystem.getLigTopologyFile())))
+        for incFile in self.getRelativeIncludes(topFile):
+            for sDir in searchDirs:
+                if os.path.isfile(os.path.join(sDir, incFile)):
+                    os.makedirs(os.path.dirname(os.path.join(workDir, incFile)), exist_ok=True)
+                    shutil.copy(os.path.join(sDir, incFile), os.path.join(workDir, incFile))
+                    break
+
+        args = f' --gmxTop {os.path.join(workDir, os.path.basename(topFile))}'
+        gmxTopDir = self.getGromacsTopDir()
+        if gmxTopDir:
+            args += f' --includeDir {gmxTopDir}'
+        return args
+
+    @staticmethod
+    def getGromacsTopDir():
+        '''Force fields directory of the GROMACS installed by the gromacs plugin, if any'''
+        try:
+            from gromacs import Plugin as gromacsPlugin
+            return gromacsPlugin.getTopDir()
+        except Exception:
+            return ''
 
     def createOutputStep(self):
         inputSystem = self.inputMDSystem.get()
@@ -185,3 +224,13 @@ class ProtocolProlif(EMProtocol):
             summary.append(f'Fingerprint frequency: every {self.frameNum.get()} frames')
         return summary
 
+    def getRelativeIncludes(self, topFile):
+        '''Files #included by relative path in a GROMACS topology'''
+        includes = []
+        with open(topFile) as f:
+            for line in f:
+                if line.strip().startswith('#include'):
+                    incFile = line.split('"')[1] if '"' in line else line.split()[1]
+                    if not os.path.isabs(incFile):
+                        includes.append(incFile)
+        return includes

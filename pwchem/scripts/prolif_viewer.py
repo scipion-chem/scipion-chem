@@ -13,6 +13,8 @@ if __name__ == "__main__":
     parser.add_argument('pkl_path', type=str, help='Path to the _fingerprint.pkl file')
     parser.add_argument('--mode', choices=['barcode', 'network', 'matrix'], default='barcode',
                         help='Choose to show the barcode plot or the interactive network')
+    parser.add_argument('--threshold', type=float, default=30,
+                        help='Network: minimum percentage of frames an interaction must be present in to be shown')
 
     args = parser.parse_args()
     fp_path = args.pkl_path
@@ -21,6 +23,19 @@ if __name__ == "__main__":
     if args.mode == "network":
         # Derive the HTML path from the pkl path
         network_html = fp_path.replace('_fingerprint.pkl', '_network.html')
+        lig_pkl = fp_path.replace('_fingerprint.pkl', '_ligand.pkl')
+
+        if os.path.exists(lig_pkl):
+            # Redraw the network with the requested threshold
+            with open(fp_path, 'rb') as f:
+                fp = pkl.load(f)
+            with open(lig_pkl, 'rb') as f:
+                lig_mol = pkl.load(f)
+            network_html = fp_path.replace('_fingerprint.pkl', f'_network_{args.threshold:g}pct.html')
+            fp.plot_lignetwork(lig_mol, threshold=args.threshold / 100).save(network_html)
+        else:
+            print(f"{lig_pkl} not found (analysis run before it was saved): showing the network precomputed "
+                  f"with the default 30% threshold. Re-run the ProLIF analysis to choose the threshold.")
 
         if os.path.exists(network_html):
             print(f"Opening interactive network: {network_html}")
