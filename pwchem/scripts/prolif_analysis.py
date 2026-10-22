@@ -55,17 +55,23 @@ def loadUniverse(topoFile, trjFile, gmxTop=None, includeDir=None):
     return u
 
 def saveResults(fp, ligMol, outPath, prefix):
+    projectDir = os.path.realpath(os.getcwd()) + os.sep
+    noInterFile = os.path.realpath(os.path.join(outPath, 'no_interactions.txt'))
+    ligFile = os.path.realpath(os.path.join(outPath, f"{prefix}_ligand.pkl"))
+    if not (noInterFile.startswith(projectDir) and ligFile.startswith(projectDir)):
+        raise ValueError(f'Output {os.path.join(outPath, prefix)} is outside the project directory {projectDir}')
+
     df = fp.to_dataframe()
     if df.empty:
         print("!!! WARNING: No interactions were detected.")
         # Create a dummy text file so Scipion knows the job 'finished'
-        with open(os.path.join(outPath, 'no_interactions.txt'), 'w') as f:
+        with open(noInterFile, 'w') as f:
             f.write("ProLIF analysis finished but found 0 interactions.")
         return
 
     # Save Fingerprint, and the ligand needed to redraw the interaction network with another threshold
     fp.to_pickle(os.path.join(outPath, f"{prefix}_fingerprint.pkl"))
-    with open(os.path.join(outPath, f"{prefix}_ligand.pkl"), 'wb') as f:
+    with open(ligFile, 'wb') as f:
         pickle.dump(ligMol, f)
     df.to_csv(os.path.join(outPath, f'{prefix}_interactions.csv'), index=False)
 

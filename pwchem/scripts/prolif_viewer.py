@@ -8,6 +8,8 @@ import pandas as pd
 import seaborn as sns
 from rdkit import DataStructs
 
+FP_SUFFIX = '_fingerprint.pkl'
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='View ProLIF analysis results.')
     parser.add_argument('pkl_path', type=str, help='Path to the _fingerprint.pkl file')
@@ -17,13 +19,17 @@ if __name__ == "__main__":
                         help='Network: minimum percentage of frames an interaction must be present in to be shown')
 
     args = parser.parse_args()
-    fp_path = args.pkl_path
+    project_dir = os.path.realpath(os.getcwd()) + os.sep
+    fp_path = os.path.realpath(args.pkl_path)
+    if not fp_path.startswith(project_dir):
+        print(f"Error: {args.pkl_path} is outside the project directory {project_dir}")
+        sys.exit(1)
 
     # --- Mode: Network ---
     if args.mode == "network":
         # Derive the HTML path from the pkl path
-        network_html = fp_path.replace('_fingerprint.pkl', '_network.html')
-        lig_pkl = fp_path.replace('_fingerprint.pkl', '_ligand.pkl')
+        network_html = fp_path.replace(FP_SUFFIX, '_network.html')
+        lig_pkl = fp_path.replace(FP_SUFFIX, '_ligand.pkl')
 
         if os.path.exists(lig_pkl):
             # Redraw the network with the requested threshold
@@ -31,7 +37,7 @@ if __name__ == "__main__":
                 fp = pkl.load(f)
             with open(lig_pkl, 'rb') as f:
                 lig_mol = pkl.load(f)
-            network_html = fp_path.replace('_fingerprint.pkl', f'_network_{args.threshold:g}pct.html')
+            network_html = fp_path.replace(FP_SUFFIX, f'_network_{args.threshold:g}pct.html')
             fp.plot_lignetwork(lig_mol, threshold=args.threshold / 100).save(network_html)
         else:
             print(f"{lig_pkl} not found (analysis run before it was saved): showing the network precomputed "
@@ -52,7 +58,7 @@ if __name__ == "__main__":
             print(f"Error: Pickle file not found at {fp_path}")
             sys.exit(1)
 
-        barcode_png = fp_path.replace('_fingerprint.pkl', '_barcode.png')
+        barcode_png = fp_path.replace(FP_SUFFIX, '_barcode.png')
 
         with open(fp_path, 'rb') as f:
             fp = pkl.load(f)
