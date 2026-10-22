@@ -26,6 +26,7 @@
 # **************************************************************************
 
 import argparse
+import pickle
 import MDAnalysis as mda
 import prolif as plf
 import matplotlib.pyplot as plt
@@ -34,17 +35,44 @@ import pandas as pd
 import seaborn as sns
 from rdkit import DataStructs
 
+def loadUniverse(topoFile, trjFile, gmxTop=None, includeDir=None):
+    '''Universe of the system, with the bonds ProLIF needs to perceive the chemistry (H-bonds, aromaticity...):
+    read from the GROMACS topology when given and readable, otherwise guessed from the coordinates'''
+    trjKwargs = {'format': 'NCDF'} if os.path.splitext(trjFile)[1].lower() == '.netcdf' else {}
+    if gmxTop:
+        try:
+            topKwargs = {'include_dir': includeDir} if includeDir else {}
+            u = mda.Universe(gmxTop, trjFile, topology_format='ITP', infer_system=True, **topKwargs, **trjKwargs)
+            print(f'Bonds read from the GROMACS topology {gmxTop}')
+            return u
+        except Exception as e:
+            print(f'Could not read the GROMACS topology ({type(e).__name__}: {e})')
+
+    u = mda.Universe(topoFile, trjFile, **trjKwargs)
+    if not hasattr(u.atoms, 'bonds') or len(u.atoms.bonds) == 0:
+        print(f'{topoFile} has no bonds: guessing them from the atom distances')
+        u.guess_TopologyAttrs(to_guess=['elements', 'bonds'])
+    return u
+
 def saveResults(fp, ligMol, outPath, prefix):
+    projectDir = os.path.realpath(os.getcwd()) + os.sep
+    noInterFile = os.path.realpath(os.path.join(outPath, 'no_interactions.txt'))
+    ligFile = os.path.realpath(os.path.join(outPath, f"{prefix}_ligand.pkl"))
+    if not (noInterFile.startswith(projectDir) and ligFile.startswith(projectDir)):
+        raise ValueError(f'Output {os.path.join(outPath, prefix)} is outside the project directory {projectDir}')
+
     df = fp.to_dataframe()
     if df.empty:
         print("!!! WARNING: No interactions were detected.")
         # Create a dummy text file so Scipion knows the job 'finished'
-        with open(os.path.join(outPath, 'no_interactions.txt'), 'w') as f:
+        with open(noInterFile, 'w') as f:
             f.write("ProLIF analysis finished but found 0 interactions.")
         return
 
-    # Save Fingerprint
+    # Save Fingerprint, and the ligand needed to redraw the interaction network with another threshold
     fp.to_pickle(os.path.join(outPath, f"{prefix}_fingerprint.pkl"))
+    with open(ligFile, 'wb') as f:
+        pickle.dump(ligMol, f)
     df.to_csv(os.path.join(outPath, f'{prefix}_interactions.csv'), index=False)
 
     # Save Barcode
@@ -100,16 +128,16 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--outputName', type=str, help='Output name')
     parser.add_argument('-wb', default=False, action='store_true', help='Run a water bridges analysis')
     parser.add_argument('-f', '--frameNum', type=int, help='Frame number', default=10)
+    parser.add_argument('--gmxTop', type=str, default=None,
+                        help='GROMACS topology (.top) to read the bonds from (the -i file is used if it fails)')
+    parser.add_argument('--includeDir', type=str, default=None,
+                        help='Directory of the GROMACS force fields #included by the .top')
 
     args = parser.parse_args()
     topoFile, outPath, trjFile, ligName, outName, frameNum = (
         args.inputFilename, args.outpuPath, args.inputTraj, args.ligandName, args.outputName, args.frameNum)
 
-    _, extension = os.path.splitext(trjFile)
-    if extension.lower() == '.netcdf':
-        u = mda.Universe(topoFile, trjFile, format='NCDF')
-    else:
-        u = mda.Universe(topoFile, trjFile)
+    u = loadUniverse(topoFile, trjFile, args.gmxTop, args.includeDir)
     u.guess_TopologyAttrs(to_guess=['elements'])
 
     ligSelection = u.select_atoms(f"resname {ligName}")
@@ -122,7 +150,7 @@ if __name__ == "__main__":
         fp.run(u.trajectory[::frameNum], ligSelection, protSelection)
 
     else:
-        water_names = "WAT HOH SPC TIP3 T3P TIP4"
+        water_names = "WAT HOH SOL SPC TIP3 T3P TIP4"
         water_selection = u.select_atoms(
             f"resname {water_names} and byres around 8.0 (group ligand or group pocket)",
             ligand=ligSelection,
