@@ -22,8 +22,7 @@ if __name__ == "__main__":
     project_dir = os.path.realpath(os.getcwd()) + os.sep
     fp_path = os.path.realpath(args.pkl_path)
     if not fp_path.startswith(project_dir):
-        print(f"Error: {args.pkl_path} is outside the project directory {project_dir}")
-        sys.exit(1)
+        raise ValueError(f"{args.pkl_path} is outside the project directory {project_dir}")
 
     # --- Mode: Network ---
     if args.mode == "network":
