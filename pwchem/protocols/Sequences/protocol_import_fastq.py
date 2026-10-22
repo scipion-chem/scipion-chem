@@ -36,68 +36,188 @@ class ProtImportFastq(EMProtocol):
     """
     Import FASTQ files from RNA sequencing experiments.
 
-    This protocol imports single-end or paired-end FASTQ files into Scipion
-    and generates a FastqFile object for downstream processing.
+    This protocol imports single-end or paired-end FASTQ files into
+    Scipion and creates a ``FastqFile`` object that can be used as input
+    for downstream RNA-seq protocols.
 
-    Basic FASTQ metadata, including sequencing type, number of reads and mean
-    read length, are extracted from the input FASTQ file(s) and stored in the
-    output object for downstream analysis.
+    Basic sequencing metadata are calculated directly from the input
+    FASTQ file(s), including the number of reads and mean read length.
+    Optionally, FastQC can be executed to generate quality-control reports.
 
-    Optionally, FastQC can be executed to assess read quality and generate
-    HTML reports.
+    The original FASTQ files are referenced by the output object and are
+    not copied or modified by the protocol.
 
-    ----------------------------
+
+    ---------------------------------------------------------------------
     Input parameters
-    ----------------------------
+    ---------------------------------------------------------------------
 
     sampleName : str, optional
-        Identifier assigned to the sample.
+        Name used to identify the sample.
+
+        If no name is provided, it is inferred automatically from the
+        first FASTQ filename. Common FASTQ extensions and read suffixes
+        such as ``_R1``, ``_R2``, ``_1`` and ``_2`` are removed when
+        generating the default sample name.
 
     isPaired : bool
-        If True, the input is treated as paired-end data and two FASTQ files
-        are required.
+        Defines whether the sequencing dataset is single-end or paired-end.
+
+        If True, both read 1 and read 2 FASTQ files must be provided.
 
     inputFastq1 : file
-        FASTQ file corresponding to read 1 or single-end data.
+        FASTQ file containing read 1 for paired-end data or the reads for
+        single-end data.
+
+        Supported extensions are::
+
+            .fastq
+            .fq
+            .fastq.gz
+            .fq.gz
 
     inputFastq2 : file, optional
-        FASTQ file corresponding to read 2. Only required for paired-end data.
+        FASTQ file containing read 2.
+
+        This parameter is required only when ``isPaired`` is enabled.
+
+        Supported extensions are the same as for ``inputFastq1``.
 
     runFastqc : bool
-        If True, FastQC is executed and quality control reports are generated.
+        If True, FastQC is executed on the imported FASTQ file(s).
 
-    ----------------------------
+        For single-end data, one FastQC report is generated.
+
+        For paired-end data, independent FastQC reports are generated for
+        read 1 and read 2.
+
+
+    ---------------------------------------------------------------------
     Output
-    ----------------------------
+    ---------------------------------------------------------------------
 
     outputFastq : FastqFile
-        Imported FASTQ dataset ready for downstream analysis.
+        Imported FASTQ dataset.
 
         The output object contains:
 
         - FASTQ file path(s).
         - Sample name.
         - Sequencing type (single-end or paired-end).
+        - FASTQ format information.
+        - Presence of quality scores.
+        - Compression status.
         - Number of reads.
         - Mean read length.
-        - FastQC HTML report, if generated.
-        - FastQC HTML reports for read 1 and read 2, if paired-end.
+        - FastQC HTML report(s), when requested.
 
-    ----------------------------
+        The output references the original input FASTQ files; the sequence
+        data are not copied or modified during import.
+
+
+    ---------------------------------------------------------------------
+    FASTQ metadata
+    ---------------------------------------------------------------------
+
+    Number of reads
+        The number of sequencing reads is calculated directly from the
+        input FASTQ file.
+
+        For paired-end datasets, read 1 and read 2 must contain the same
+        number of reads.
+
+    Read length
+        The mean read length is calculated directly from the FASTQ data.
+
+        For single-end datasets, the mean read length of the input file is
+        stored.
+
+        For paired-end datasets, the mean read lengths of read 1 and read 2
+        are calculated independently and their mean value is stored in the
+        output ``FastqFile``.
+
+    Compression
+        Single-end data are marked as compressed when the input filename
+        ends in ``.gz``.
+
+        Paired-end data are marked as compressed only when both input
+        FASTQ files are compressed.
+
+
+    ---------------------------------------------------------------------
+    Workflow
+    ---------------------------------------------------------------------
+
+    The protocol performs the following steps:
+
+    1. Read the input FASTQ file and calculate the number of reads and
+       mean read length.
+
+    2. Determine the sample name from the user-provided value or infer it
+       from the FASTQ filename.
+
+    3. For paired-end datasets, calculate the statistics of read 2 and
+       verify that both files contain the same number of reads.
+
+    4. If requested, execute FastQC on the input FASTQ file(s).
+
+    5. Create a ``FastqFile`` containing the input paths, sequencing
+       metadata and available quality-control reports.
+
+
+    ---------------------------------------------------------------------
+    Validation
+    ---------------------------------------------------------------------
+
+    Before execution, the protocol verifies that:
+
+    - A read 1 FASTQ file has been provided.
+    - Input files use a supported FASTQ extension.
+    - Read 2 is provided for paired-end datasets.
+    - Read 1 and read 2 are different files for paired-end datasets.
+
+    During import, paired-end datasets are additionally checked to ensure
+    that read 1 and read 2 contain the same number of reads.
+
+
+    ---------------------------------------------------------------------
+    Requirements
+    ---------------------------------------------------------------------
+
+    FastQC must be available through the RNA-seq environment configured by
+    the Scipion-Chem plugin when ``runFastqc`` is enabled.
+
+
+    ---------------------------------------------------------------------
     Notes
-    ----------------------------
+    ---------------------------------------------------------------------
 
-    - FastQC must be installed through the plugin binaries.
-    - Number of reads and mean read length are calculated directly from the
-      input FASTQ file(s).
-    - For paired-end datasets, read counts are validated to ensure that read 1
-      and read 2 contain the same number of reads.
-    - The reported read length corresponds to the mean read length. For paired-end
-      datasets, the mean value from read 1 and read 2 is stored.
-    - Generated HTML reports are stored as attributes of the output FastqFile
-      object.
+    - Both single-end and paired-end FASTQ datasets are supported.
+
+    - Compressed and uncompressed FASTQ files are supported.
+
+    - Supported extensions are ``.fastq``, ``.fq``, ``.fastq.gz`` and
+      ``.fq.gz``.
+
+    - The input FASTQ files are not copied or modified.
+
+    - If no sample name is provided, it is inferred from the first FASTQ
+      filename.
+
+    - Number of reads and mean read length are calculated directly from
+      the FASTQ file(s).
+
+    - Paired-end FASTQ files must contain the same number of reads.
+
+    - For paired-end datasets, the stored read length corresponds to the
+      mean of the R1 and R2 mean read lengths.
+
+    - FastQC is optional and does not modify the imported sequencing data.
+
+    - Generated FastQC HTML reports are stored as attributes of the output
+      ``FastqFile`` object.
     """
-
+    
     _label = 'import fastq'
 
     def _defineParams(self, form):
