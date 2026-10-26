@@ -203,8 +203,30 @@ class MDSystemPViewer(pwviewer.ProtocolViewer):
                        label='Display MDTraj analysis: ',
                        help='Run and display the selected analysis.')
 
-        if self.getMDSystem().getLigandID():
+        if self.hasLigand():
             self._defineLigandParams(form)
+
+    def hasLigand(self):
+        """Whether the system contains a ligand. The ligand ID alone is not enough: MDSystem defaults it to
+        "LIG" even for systems without ligand"""
+        system = self.getMDSystem()
+        ligID = system.getLigandID()
+        if not ligID:
+            return False
+        return system.hasLig() or self.structureHasResidue(system.getSystemFile(), ligID)
+
+    @staticmethod
+    def structureHasResidue(strFile, resname):
+        """Whether a .gro / .pdb structure file contains a residue with that name"""
+        ext = os.path.splitext(strFile or '')[1].lower()
+        if ext not in ['.gro', '.pdb'] or not os.path.exists(strFile):
+            return False
+        start, end = (5, 10) if ext == '.gro' else (17, 21)
+        with open(strFile) as f:
+            for line in f:
+                if (ext == '.gro' or line.startswith(('ATOM', 'HETATM'))) and line[start:end].strip() == resname:
+                    return True
+        return False
 
     def _defineLigandParams(self, form):
         """Receptor-ligand interactions section: ligand-specific trajectory
