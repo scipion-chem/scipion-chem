@@ -1086,6 +1086,10 @@ def relabelAtomsPDB(atomFile, i='', atomType=''):
           atomName = sLine[2]
           atomSymbol = removeNumberFromStr(atomName)
 
+          # OpenBabel writes '*' as element for the atom types it does not know
+          if sLine[12] in ['', '*']:
+            sLine[12] = atomSymbol
+
           if atomSymbol not in atomCount:
             atomCount[atomSymbol] = 0
           atomCount[atomSymbol] += 1
