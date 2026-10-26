@@ -34,6 +34,7 @@ from pyworkflow.protocol import params
 from pwchem import Plugin
 from pwchem.constants import RDKIT_DIC
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_shape_distance import ProtocolShapeDistances
+from pwem.convert.atom_struct import cifToPdb
 
 scriptName = 'fingerprint_similarity.py'
 
@@ -172,16 +173,21 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
 
     # --------------------------- UTILS functions -----------------------------------
     def writeParamsFile(self, it):
-        paramsPath = os.path.abspath(self._getExtraPath(f'inputParams_{it}.txt'))
+        paramsPath = os.path.abspath(
+            self._getExtraPath(f'inputParams_{it}.txt')
+        )
+
         molFiles = self.getInputMolFiles(it)
+        molFiles = [self.convertCifToPdb(molFile) for molFile in molFiles]
+
+        referenceFile = self.convertCifToPdb(self.getRefFile())
 
         with open(paramsPath, 'w') as f:
             f.write(f'outputPath: results_{it}.tsv\n')
-            f.write('referenceFile: {}\n'.format(self.getRefFile()))
-            f.write('ligandFiles: {}\n'.format(' '.join(molFiles)))
-
-            f.write('fingerprint: {}\n'.format(self.getEnumText('fpChoice')))
-            f.write('coefficient: {}\n'.format(self.getEnumText('coefChoice')))
+            f.write(f'referenceFile: {referenceFile}\n')
+            f.write(f'ligandFiles: {" ".join(molFiles)}\n')
+            f.write(f'fingerprint: {self.getEnumText("fpChoice")}\n')
+            f.write(f'coefficient: {self.getEnumText("coefChoice")}\n')
 
         return paramsPath
 
@@ -191,4 +197,17 @@ class ProtocolFingerprintDistance(ProtocolShapeDistances):
 
     def getCoefficient(self):
         return self.getEnumText('coefChoice')
+
+    def convertCifToPdb(self, inpFile):
+        if not inpFile.endswith('.cif'):
+            return inpFile
+
+        inpPDBFile = self._getExtraPath(
+            os.path.basename(inpFile)[:-4] + '.pdb'
+        )
+
+        if not os.path.exists(inpPDBFile):
+            cifToPdb(inpFile, inpPDBFile)
+
+        return os.path.abspath(inpPDBFile)
 
