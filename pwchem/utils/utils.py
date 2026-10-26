@@ -68,6 +68,27 @@ SEED_RANDOM = '''get_seeded_random()
 def checkNormalResidues(sequence):
   return all([res in RESIDUES1TO3 for res in sequence])
 
+def parseResidueIndexes(idxStr):
+  """Parse a residue index string into the list of residue numbers it defines.
+  Accepts single indexes, ranges and any comma-separated combination of them,
+  so "12-18", "12,15,20" and "12-18,25" are all valid."""
+  idxs = []
+  for part in str(idxStr).split(','):
+    lims = part.strip().split('-')
+    idxs += list(range(int(lims[0]), int(lims[-1]) + 1))
+  return idxs
+
+def groupResidueIndexes(idxs):
+  """Inverse of parseResidueIndexes: write a sorted list of residue numbers as the
+  shortest equivalent string, collapsing consecutive runs into ranges."""
+  groups = []
+  for idx in sorted(set(idxs)):
+    if groups and idx == groups[-1][-1] + 1:
+      groups[-1].append(idx)
+    else:
+      groups.append([idx])
+  return ','.join([str(g[0]) if len(g) == 1 else f'{g[0]}-{g[-1]}' for g in groups])
+
 ################# Generic function utils #####################
 def insistentExecution(func, *args, maxTimes=5, sleepTime=0, verbose=False):
   """
