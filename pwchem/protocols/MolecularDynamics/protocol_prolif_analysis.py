@@ -162,7 +162,8 @@ class ProtocolProlif(EMProtocol):
             ligName =  inputSystem.getLigandID()
         else:
             ligName = 'LIG'
-        args = f'-i {topoFile} -t {trajFile} -o {outputPath} -n {outputName} -l {ligName} -f {self.frameNum.get()}'
+        args = (f'-i {os.path.abspath(topoFile)} -t {os.path.abspath(trajFile)} -o'
+                f' {os.path.abspath(outputPath)} -n {outputName} -l {ligName} -f {self.frameNum.get()}')
         args += gmxTopArgs
         if self.getEnumText('type') == 'Water bridges':
             args += ' -wb'
