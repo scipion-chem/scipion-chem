@@ -328,20 +328,24 @@ class ProtImportVCF(EMProtocol):
         if not entries:
             raise ValueError('At least one VCF must be configured.')
 
-        vcfs = []
-        for index, entry in enumerate(entries, start=1):
-            if not isinstance(entry, dict):
-                raise ValueError('VCF {} must be a JSON object.'.format(index))
-            vcf = {}
-            for field in ('scientificName', 'assembly', 'vcfFile', 'indexFile'):
-                value = entry.get(field)
-                if value is None:
-                    value = ''
-                if not isinstance(value, str) or '\x00' in value:
-                    raise ValueError('VCF {}: {} must be text.'.format(index, field))
-                vcf[field] = (os.path.abspath(value) if value else '') if field.endswith('File') else value.strip()
-            vcfs.append(vcf)
-        return vcfs
+        return [self._normalizeVCFEntry(entry, index) for index, entry in enumerate(entries, start=1)]
+
+    @classmethod
+    def _normalizeVCFEntry(cls, entry, index):
+        if not isinstance(entry, dict):
+            raise ValueError('VCF {} must be a JSON object.'.format(index))
+        fields = ('scientificName', 'assembly', 'vcfFile', 'indexFile')
+        return {field: cls._normalizeVCFValue(entry.get(field), field, index) for field in fields}
+
+    @staticmethod
+    def _normalizeVCFValue(value, field, index):
+        if value is None:
+            value = ''
+        if not isinstance(value, str) or '\x00' in value:
+            raise ValueError('VCF {}: {} must be text.'.format(index, field))
+        if field.endswith('File'):
+            return os.path.abspath(value) if value else ''
+        return value.strip()
 
     @staticmethod
     def _getVCFStem(vcfData):
@@ -380,8 +384,8 @@ class ProtImportVCF(EMProtocol):
         suffix = os.path.splitext(indexFile)[1].lower()
         signature = {'.tbi': b'TBI\x01', '.csi': b'CSI\x01', '.idx': b'TIDX'}.get(suffix)
         return (suffix in self._indexSuffixes(vcfFile)
-                and GATKPreparationMixin._isCurrentIndex(indexFile, vcfFile)
-                and GATKPreparationMixin._hasIndexSignature(indexFile, signature))
+                and GATKPreparationMixin.isCurrentIndex(indexFile, vcfFile)
+                and GATKPreparationMixin.hasIndexSignature(indexFile, signature))
 
     def _findAdjacentVCFIndex(self, vcfFile):
         for suffix in self._indexSuffixes(vcfFile):
@@ -459,21 +463,25 @@ class ProtImportVCF(EMProtocol):
             if not supported:
                 errors.append(prefix + 'VCF must use .vcf or .vcf.gz extension.')
             for field, label in (('vcfFile', 'VCF'), ('indexFile', 'index')):
-                filename = vcfData[field]
-                if not filename:
-                    continue
-                try:
-                    if not os.path.isfile(filename):
-                        errors.append('{}{} file does not exist: {}'.format(prefix, label, filename))
-                    elif os.path.getsize(filename) == 0:
-                        errors.append('{}{} file is empty: {}'.format(prefix, label, filename))
-                    elif field == 'vcfFile' and supported:
-                        GATKPreparationMixin._readVCFContigs(filename)
-                    elif field == 'indexFile':
-                        if os.path.splitext(filename)[1].lower() not in self._indexSuffixes(path):
-                            errors.append(prefix + 'Index extension is incompatible with the VCF format.')
-                except (OSError, EOFError, UnicodeError, RuntimeError, zlib.error) as error:
-                    errors.append(prefix + str(error))
+                errors.extend(self._validateVcfFile(vcfData[field], field, label, path, supported, prefix))
+        return errors
+
+    def _validateVcfFile(self, filename, field, label, path, supported, prefix):
+        if not filename:
+            return []
+        errors = []
+        try:
+            if not os.path.isfile(filename):
+                errors.append('{}{} file does not exist: {}'.format(prefix, label, filename))
+            elif os.path.getsize(filename) == 0:
+                errors.append('{}{} file is empty: {}'.format(prefix, label, filename))
+            elif field == 'vcfFile' and supported:
+                GATKPreparationMixin.readVCFContigs(filename)
+            elif field == 'indexFile':
+                if os.path.splitext(filename)[1].lower() not in self._indexSuffixes(path):
+                    errors.append(prefix + 'Index extension is incompatible with the VCF format.')
+        except (OSError, EOFError, UnicodeError, RuntimeError, zlib.error) as error:
+            errors.append(prefix + str(error))
         return errors
 
     def _validate(self):

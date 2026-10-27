@@ -246,6 +246,8 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
       alignment.
     """
 
+    CREATE_INDEX_OPTION = 'CREATE_INDEX=false'
+
     _label = 'Picard processing'
 
     # -------------------------------------------------------
@@ -329,38 +331,41 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
         if errors:
             raise RuntimeError('Invalid Picard inputs: ' + '; '.join(errors))
         os.makedirs(self._getExtraPath(), exist_ok=True)
-        with open(self._getCommandFile(), 'w'):
-            pass
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
         bam = self.inputAlignment.get().getFileName()
-        self._runTool('samtools', ['quickcheck', '-v', bam])
+        self.runTool('samtools', ['quickcheck', '-v', bam])
         header = self._getExtraPath('input.header.sam')
-        self._runTool('samtools', ['view', '-H', '-o', header, bam])
-        contigs, groups, sortOrder = self._readSamHeader(header)
+        self.runTool('samtools', ['view', '-H', '-o', header, bam])
+        contigs, groups, sortOrder = self.readSamHeader(header)
         if not self.addReadGroups.get():
-            if sortOrder != 'coordinate':
-                raise RuntimeError('Input BAM must declare coordinate sorting when '
-                                   'AddOrReplaceReadGroups is disabled.')
-            ids = [group.get('ID', '').strip() for group in groups]
-            if any(not groupId for groupId in ids) or len(ids) != len(set(ids)):
-                raise RuntimeError('Input BAM contains empty or duplicate read-group IDs.')
-            if self.markDuplicates.get() and not groups:
-                raise RuntimeError('MarkDuplicates requires read groups. Enable AddOrReplaceReadGroups '
-                                   'or supply a BAM with existing read groups.')
+            self._checkExistingReadGroups(groups, sortOrder)
         if self.reorderBam.get():
-            reference = self._prepareReference(self._getReferenceFasta(self.inputAlignment.get()))
+            reference = self.prepareReference(self.getReferenceFasta(self.inputAlignment.get()))
             for name, length in contigs.items():
                 if reference.get(name) != length:
                     raise RuntimeError('Input BAM sequence {} (length {}) is absent from the reference '
                                        'or has a different length.'.format(name, length))
 
-    def _ensureSequenceDictionary(self, referenceFasta):
+    def _checkExistingReadGroups(self, groups, sortOrder):
+        if sortOrder != 'coordinate':
+            raise RuntimeError('Input BAM must declare coordinate sorting when '
+                               'AddOrReplaceReadGroups is disabled.')
+        ids = [group.get('ID', '').strip() for group in groups]
+        if any(not groupId for groupId in ids) or len(ids) != len(set(ids)):
+            raise RuntimeError('Input BAM contains empty or duplicate read-group IDs.')
+        if self.markDuplicates.get() and not groups:
+            raise RuntimeError('MarkDuplicates requires read groups. Enable AddOrReplaceReadGroups '
+                               'or supply a BAM with existing read groups.')
+
+    def ensureSequenceDictionary(self, referenceFasta):
         """Use Picard for reference preparation without requiring GATK."""
-        dictionary = self._getSequenceDictionaryPath(referenceFasta)
-        if self._isCurrentIndex(dictionary, referenceFasta) and self._validSequenceDictionary(dictionary):
+        dictionary = self.getSequenceDictionaryPath(referenceFasta)
+        if self.isCurrentIndex(dictionary, referenceFasta) and self.validSequenceDictionary(dictionary):
             return
-        self._removeIndex(dictionary)
-        self._runTool('picard', ['CreateSequenceDictionary', 'R=' + referenceFasta, 'O=' + dictionary])
-        if not self._validSequenceDictionary(dictionary):
+        self.removeIndex(dictionary)
+        self.runTool('picard', ['CreateSequenceDictionary', 'R=' + referenceFasta, 'O=' + dictionary])
+        if not self.validSequenceDictionary(dictionary):
             raise RuntimeError('Picard did not create a valid sequence dictionary: {}'.format(dictionary))
 
     # -------------------------------------------------------
@@ -368,35 +373,35 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
     # -------------------------------------------------------
 
     def _runPicard(self, arguments, outputBam):
-        self._clearBamOutput(outputBam)
-        self._runTool('picard', arguments)
-        self._validateBamFile(outputBam)
+        self.clearBamOutput(outputBam)
+        self.runTool('picard', arguments)
+        self.validateBamFile(outputBam)
 
     def addReadGroupsStep(self):
         alignment = self.inputAlignment.get()
         self._runPicard([
             'AddOrReplaceReadGroups', 'I=' + alignment.getFileName(),
-            'O=' + self._getAddReadGroupsBam(), 'SO=coordinate', 'CREATE_INDEX=false',
+            'O=' + self._getAddReadGroupsBam(), 'SO=coordinate', self.CREATE_INDEX_OPTION,
             'RGID=id', 'RGLB=library', 'RGPL=ILLUMINA', 'RGPU=machine',
             'RGSM=' + self._getInputSampleName(alignment)
         ], self._getAddReadGroupsBam())
 
     def markDuplicatesStep(self):
         metrics = self._getMarkDuplicatesMetricsFile()
-        self._removeIndex(metrics)
+        self.removeIndex(metrics)
         self._runPicard([
             'MarkDuplicates', 'I=' + self._getInputForMarkDuplicates(),
             'O=' + self._getMarkDuplicatesBam(), 'M=' + metrics,
-            'REMOVE_DUPLICATES=false', 'CREATE_INDEX=false', 'VALIDATION_STRINGENCY=SILENT'
+            'REMOVE_DUPLICATES=false', self.CREATE_INDEX_OPTION, 'VALIDATION_STRINGENCY=SILENT'
         ], self._getMarkDuplicatesBam())
-        self._checkNonempty(metrics, 'Picard duplication metrics')
+        self.checkNonempty(metrics, 'Picard duplication metrics')
 
     def reorderBamStep(self):
-        dictionary = self._getSequenceDictionaryPath(self._getPreparedReference())
-        self._checkNonempty(dictionary, 'Reference sequence dictionary')
+        dictionary = self.getSequenceDictionaryPath(self.getPreparedReference())
+        self.checkNonempty(dictionary, 'Reference sequence dictionary')
         self._runPicard([
             'ReorderSam', 'I=' + self._getInputForReorderSam(),
-            'O=' + self._getReorderedBam(), 'SD=' + dictionary, 'CREATE_INDEX=false'
+            'O=' + self._getReorderedBam(), 'SD=' + dictionary, self.CREATE_INDEX_OPTION
         ], self._getReorderedBam())
 
     # -------------------------------------------------------
@@ -404,13 +409,13 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
     # -------------------------------------------------------
 
     def indexFinalBamStep(self):
-        self._ensureBamIndex(self._getFinalBam())
+        self.ensureBamIndex(self._getFinalBam())
 
     def createOutputStep(self):
         finalBam = self._getFinalBam()
         finalBai = finalBam + '.bai'
-        self._validateBamFile(finalBam)
-        if not self._isCurrentIndex(finalBai, finalBam) or not self._hasIndexSignature(finalBai, b'BAI\x01'):
+        self.validateBamFile(finalBam)
+        if not self.isCurrentIndex(finalBai, finalBam) or not self.hasIndexSignature(finalBai, b'BAI\x01'):
             raise RuntimeError('Final BAM index is missing, outdated or invalid: {}'.format(finalBai))
         alignment = self.inputAlignment.get()
         output = alignment.clone()
@@ -418,7 +423,7 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
         output.setIndexFile(finalBai)
         output.setIsIndexed(True)
         output.setIsSorted(True)
-        output.setCommand(self._readCommandHistory())
+        output.setCommand(self.readCommandHistory())
         if self.addReadGroups.get():
             output.setSampleName(self._getInputSampleName(alignment))
         self._defineOutputs(outputAlignment=output)
@@ -473,7 +478,7 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
         if alignment is None:
             return ['An input AlignmentFile object is required.']
         try:
-            self._validateBamFile(alignment.getFileName())
+            self.validateBamFile(alignment.getFileName())
         except RuntimeError as error:
             errors.append(str(error))
         if alignment.getFormat() != 'BAM':
@@ -482,7 +487,7 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
             errors.append('Select at least one Picard operation.')
         if self.reorderBam.get():
             try:
-                self._checkNonempty(self._getReferenceFasta(alignment), 'Reference FASTA')
+                self.checkNonempty(self.getReferenceFasta(alignment), 'Reference FASTA')
             except RuntimeError as error:
                 errors.append(str(error))
         if self.addReadGroups.get():

@@ -320,6 +320,7 @@ class ProtRNASeqAlignment(EMProtocol):
     # Constants
     # -------------------------------------------------------
 
+    INDEX_MANIFEST = 'index_inputs.json'
     ALIGN_STAR = 0
     ALIGN_HISAT2 = 1
     ALIGNER_CONDITION = 'aligner == %d'
@@ -592,15 +593,15 @@ class ProtRNASeqAlignment(EMProtocol):
         if not all(self._isNonemptyFile(path) for path in indexFiles):
             args = [
                 '--runMode genomeGenerate',
-                '--genomeDir {}'.format(self._quote(indexDir)),
-                '--genomeFastaFiles {}'.format(self._quote(referenceInfo['fastaFile'])),
+                '--genomeDir {}'.format(self.quote(indexDir)),
+                '--genomeFastaFiles {}'.format(self.quote(referenceInfo['fastaFile'])),
                 '--runThreadN {}'.format(self.numberOfThreads.get())
             ]
 
             gtfFile = referenceInfo.get('gtfFile')
             if gtfFile:
                 args.extend([
-                    '--sjdbGTFfile {}'.format(self._quote(gtfFile)),
+                    '--sjdbGTFfile {}'.format(self.quote(gtfFile)),
                     '--sjdbOverhang {}'.format(self._getStarSjdbOverhang())
                 ])
 
@@ -610,7 +611,7 @@ class ProtRNASeqAlignment(EMProtocol):
 
             if not all(self._isNonemptyFile(path) for path in indexFiles):
                 raise RuntimeError('STAR genome index was not created in: {}'.format(indexDir))
-            self._writeJson(os.path.join(indexDir, 'index_inputs.json'), manifest)
+            self._writeJson(os.path.join(indexDir, self.INDEX_MANIFEST), manifest)
         else:
             command = 'Existing STAR index: {}'.format(indexDir)
 
@@ -629,8 +630,8 @@ class ProtRNASeqAlignment(EMProtocol):
 
         if not self._hasHisat2Index(indexPrefix):
             args = '{} {} --threads {}'.format(
-                self._quote(referenceInfo['fastaFile']),
-                self._quote(indexPrefix),
+                self.quote(referenceInfo['fastaFile']),
+                self.quote(indexPrefix),
                 self.numberOfThreads.get()
             )
             command = 'hisat2-build {}'.format(args)
@@ -641,7 +642,7 @@ class ProtRNASeqAlignment(EMProtocol):
                 raise RuntimeError(
                     'HISAT2 genome index was not created with prefix: {}'.format(indexPrefix)
                 )
-            self._writeJson(os.path.join(indexDir, 'index_inputs.json'), manifest)
+            self._writeJson(os.path.join(indexDir, self.INDEX_MANIFEST), manifest)
         else:
             command = 'Existing HISAT2 index: {}'.format(indexPrefix)
 
@@ -663,7 +664,7 @@ class ProtRNASeqAlignment(EMProtocol):
                 manifest[field] = [os.path.realpath(path), info.st_size, info.st_mtime_ns]
         if star and referenceInfo.get('gtfFile'):
             manifest['sjdbOverhang'] = self._getStarSjdbOverhang()
-        manifestPath = os.path.join(indexDir, 'index_inputs.json')
+        manifestPath = os.path.join(indexDir, self.INDEX_MANIFEST)
         try:
             previous = self._readJson(manifestPath)
         except (OSError, ValueError):
@@ -727,17 +728,17 @@ class ProtRNASeqAlignment(EMProtocol):
         fastqObj = self.inputFastq.get()
         outputPrefix = self._getExtraPath('star_')
 
-        readFiles = [self._quote(fastqObj.getFileName())]
+        readFiles = [self.quote(fastqObj.getFileName())]
 
         if fastqObj.isPaired():
-            readFiles.append(self._quote(fastqObj.getFileName2()))
+            readFiles.append(self.quote(fastqObj.getFileName2()))
 
         args = [
-            '--genomeDir {}'.format(self._quote(indexInfo['indexPath'])),
+            '--genomeDir {}'.format(self.quote(indexInfo['indexPath'])),
             '--readFilesIn {}'.format(' '.join(readFiles)),
             '--runThreadN {}'.format(self.numberOfThreads.get()),
             '--outSAMtype BAM SortedByCoordinate',
-            '--outFileNamePrefix {}'.format(self._quote(outputPrefix))
+            '--outFileNamePrefix {}'.format(self.quote(outputPrefix))
         ]
 
         args.extend(self._getStarAlignmentOptions())
@@ -749,7 +750,7 @@ class ProtRNASeqAlignment(EMProtocol):
 
         Plugin.runCondaCommand(self, ' '.join(args), RNASEQ_DIC, 'STAR')
 
-        bamFile = self._getExtraPath('star_Aligned.sortedByCoord.out.bam')
+        bamFile = self._getAlignmentBam()
         logFile = self._getExtraPath('star_Log.final.out')
         baiFile = bamFile + '.bai'
 
@@ -769,14 +770,14 @@ class ProtRNASeqAlignment(EMProtocol):
     def _alignWithHisat2(self, indexInfo):
         fastqObj = self.inputFastq.get()
 
-        bamFile = self._getExtraPath('hisat2_alignment.sorted.bam')
+        bamFile = self._getAlignmentBam()
         baiFile = bamFile + '.bai'
         logFile = self._getExtraPath('hisat2_alignment.log')
 
         threads = self.numberOfThreads.get()
 
         hisatArgs = [
-            '-x {}'.format(self._quote(indexInfo['indexPath'])),
+            '-x {}'.format(self.quote(indexInfo['indexPath'])),
             '-p {}'.format(threads)
         ]
 
@@ -789,20 +790,20 @@ class ProtRNASeqAlignment(EMProtocol):
 
         if fastqObj.isPaired():
             hisatArgs.extend([
-                '-1 {}'.format(self._quote(fastqObj.getFileName())),
-                '-2 {}'.format(self._quote(fastqObj.getFileName2()))
+                '-1 {}'.format(self.quote(fastqObj.getFileName())),
+                '-2 {}'.format(self.quote(fastqObj.getFileName2()))
             ])
         else:
-            hisatArgs.append('-U {}'.format(self._quote(fastqObj.getFileName())))
+            hisatArgs.append('-U {}'.format(self.quote(fastqObj.getFileName())))
 
         pipelineArgs = (
             '{hisat} 2> {log} | '
             'samtools sort -@ {threads} -o {bam}'
         ).format(
             hisat=' '.join(hisatArgs),
-            log=self._quote(logFile),
+            log=self.quote(logFile),
             threads=threads,
-            bam=self._quote(bamFile)
+            bam=self.quote(bamFile)
         )
 
         pipeline = 'hisat2 {}'.format(pipelineArgs)
@@ -829,17 +830,17 @@ class ProtRNASeqAlignment(EMProtocol):
         self._validateAlignmentFile(bamFile)
         if os.path.lexists(baiFile):
             os.remove(baiFile)
-        Plugin.runCondaCommand(self, 'quickcheck -v ' + self._quote(bamFile), RNASEQ_DIC, 'samtools')
+        Plugin.runCondaCommand(self, 'quickcheck -v ' + self.quote(bamFile), RNASEQ_DIC, 'samtools')
 
         Plugin.runCondaCommand(
             self,
-            'index -@ {} {}'.format(self.numberOfThreads.get(), self._quote(bamFile)),
+            'index -@ {} {}'.format(self.numberOfThreads.get(), self.quote(bamFile)),
             RNASEQ_DIC,
             'samtools'
         )
 
-        if (not GATKPreparationMixin._isCurrentIndex(baiFile, bamFile)
-                or not GATKPreparationMixin._hasIndexSignature(baiFile, b'BAI\x01')):
+        if (not GATKPreparationMixin.isCurrentIndex(baiFile, bamFile)
+                or not GATKPreparationMixin.hasIndexSignature(baiFile, b'BAI\x01')):
             raise RuntimeError('A valid BAM index was not created: {}'.format(baiFile))
 
     def _getHisat2Strandness(self):
@@ -868,15 +869,19 @@ class ProtRNASeqAlignment(EMProtocol):
 
     def parseStatisticsStep(self):
         alignmentInfo = self._readJson(self._getAlignmentInfoFile())
+        bamFile = self._getAlignmentBam()
+        aligner = 'STAR' if self.aligner.get() == self.ALIGN_STAR else 'HISAT2'
+        if (not isinstance(alignmentInfo, dict)
+                or alignmentInfo.get('alignmentFile') != bamFile
+                or alignmentInfo.get('aligner') != aligner):
+            raise RuntimeError('Alignment metadata does not match the expected protocol output.')
 
-        if alignmentInfo['aligner'] == 'STAR':
+        if self.aligner.get() == self.ALIGN_STAR:
             statistics = self._parseStarStatistics()
         else:
             statistics = self._parseHisat2Statistics()
 
-        statistics = self._completeStatisticsWithSamtools(
-            alignmentInfo['alignmentFile'], statistics
-        )
+        statistics = self._completeStatisticsWithSamtools(statistics)
 
         alignmentInfo['statistics'] = statistics
 
@@ -966,22 +971,25 @@ class ProtRNASeqAlignment(EMProtocol):
             'unmappedRate': self._percentage(unmappedReads, totalReads)
         }
 
-    def _completeStatisticsWithSamtools(self, bamFile, statistics):
+    def _completeStatisticsWithSamtools(self, statistics):
         """
         Use samtools flagstat as a fallback for total and mapped reads.
 
         STAR and HISAT2 count paired-end records differently in their logs,
         so the aligner log remains the primary source. flagstat is used only
-        when a value could not be parsed.
+        when a value could not be parsed. The BAM path is derived from the
+        selected aligner, never from the persisted JSON metadata.
         """
+        bamFile = os.path.abspath(self._getAlignmentBam())
+        self._validateAlignmentFile(bamFile)
         flagstatFile = self._getExtraPath('alignment_flagstat.txt')
 
         Plugin.runCondaCommand(
             self,
-            'flagstat -@ {} {} > {}'.format(
+            'flagstat -@ {} -- {} > {}'.format(
                 self.numberOfThreads.get(),
-                self._quote(bamFile),
-                self._quote(flagstatFile)
+                self.quote(bamFile),
+                self.quote(flagstatFile)
             ),
             RNASEQ_DIC,
             'samtools'
@@ -1164,6 +1172,15 @@ class ProtRNASeqAlignment(EMProtocol):
     def _getIndexInfoFile(self):
         return self._getExtraPath('index_info.json')
 
+    def _getAlignmentBam(self):
+        if self.aligner.get() == self.ALIGN_STAR:
+            filename = 'star_Aligned.sortedByCoord.out.bam'
+        elif self.aligner.get() == self.ALIGN_HISAT2:
+            filename = 'hisat2_alignment.sorted.bam'
+        else:
+            raise RuntimeError('Invalid RNA-seq aligner selection.')
+        return self._getExtraPath(filename)
+
     def _getAlignmentInfoFile(self):
         return self._getExtraPath('alignment_info.json')
 
@@ -1178,7 +1195,7 @@ class ProtRNASeqAlignment(EMProtocol):
             return json.load(inputFile)
 
     @staticmethod
-    def _quote(value):
+    def quote(value):
         return shlex.quote(str(value))
 
     @staticmethod
@@ -1206,13 +1223,7 @@ class ProtRNASeqAlignment(EMProtocol):
         files = [fastq.getFileName()]
         if fastq.isPaired():
             files.append(fastq.getFileName2())
-        for number, path in enumerate(files, start=1):
-            if not path or not os.path.isfile(path):
-                errors.append('Input FASTQ read {} is missing: {}'.format(number, path))
-            elif os.path.getsize(path) == 0:
-                errors.append('Input FASTQ read {} is empty: {}'.format(number, path))
-        if fastq.getFormat() != 'FASTQ' or not fastq.hasQuality():
-            errors.append('Input must be FASTQ with quality scores.')
+        self._validateFastqFiles(fastq, files, errors)
         if len(files) == 2 and all(path and os.path.isfile(path) for path in files):
             if os.path.samefile(*files):
                 errors.append('Paired-end reads must use different FASTQ files.')
@@ -1220,6 +1231,16 @@ class ProtRNASeqAlignment(EMProtocol):
                 errors.append('Paired FASTQ files must use the same compression mode.')
         if files[0] and fastq.isCompressed() != files[0].endswith('.gz'):
             errors.append('FASTQ compression metadata do not match the read 1 extension.')
+
+    @staticmethod
+    def _validateFastqFiles(fastq, files, errors):
+        for number, path in enumerate(files, start=1):
+            if not path or not os.path.isfile(path):
+                errors.append('Input FASTQ read {} is missing: {}'.format(number, path))
+            elif os.path.getsize(path) == 0:
+                errors.append('Input FASTQ read {} is empty: {}'.format(number, path))
+        if fastq.getFormat() != 'FASTQ' or not fastq.hasQuality():
+            errors.append('Input must be FASTQ with quality scores.')
 
     def _validateReference(self, errors):
         try:

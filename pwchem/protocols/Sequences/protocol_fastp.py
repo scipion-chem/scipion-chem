@@ -352,44 +352,12 @@ class ProtFastpFilter(EMProtocol):
         inputFiles = [inputFastq.getFileName()]
         if isPaired:
             inputFiles.append(inputFastq.getFileName2())
-        for path in (out1, out2, reportHtml, reportJson):
-            if path and any(os.path.abspath(path) == os.path.abspath(source)
-                            or (os.path.exists(path) and os.path.samefile(path, source)) for source in inputFiles):
-                raise RuntimeError('fastp output would overwrite an input file: {}'.format(path))
-        for path in (out1, out2, reportHtml, reportJson):
-            if path and os.path.lexists(path):
-                os.remove(path)
+        self._prepareFastpOutputFiles(inputFiles, (out1, out2, reportHtml, reportJson))
         arguments = ' '.join(shlex.quote(str(value)) for value in args)
         Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'fastp')
 
         outputFiles = [out1, out2] if isPaired else [out1]
-        for path in outputFiles:
-            if not os.path.isfile(path):
-                raise RuntimeError(f'fastp did not generate the expected FASTQ: {path}')
-        for path in (reportHtml, reportJson):
-            if not os.path.isfile(path) or os.path.getsize(path) == 0:
-                raise RuntimeError(f'fastp report is missing or empty: {path}')
-
-        numReads, readLength = getFastqStats(out1)
-        if isPaired:
-            numReads2, readLength2 = getFastqStats(out2)
-            if numReads != numReads2:
-                raise RuntimeError('Filtered paired FASTQ files have different numbers of reads: '
-                                   f'R1={numReads} R2={numReads2}')
-            readLength = int(round((readLength + readLength2) / 2))
-
-        try:
-            with open(reportJson) as handle:
-                report = json.load(handle)
-            reportedReads = report['summary']['after_filtering']['total_reads']
-            if type(reportedReads) is not int or reportedReads < 0:
-                raise ValueError('Invalid total_reads value')
-        except (OSError, ValueError, KeyError, TypeError) as error:
-            raise RuntimeError(f'Invalid fastp JSON report: {reportJson}') from error
-        expectedReads = numReads * (2 if isPaired else 1)
-        if reportedReads != expectedReads:
-            raise RuntimeError('Filtered FASTQ read count does not match the fastp report: '
-                               f'files={expectedReads}, report={reportedReads}')
+        numReads, readLength = self._readFastpOutputStats(outputFiles, reportHtml, reportJson)
 
         outputFastq = FastqFile()
         outputFastq.setFileName(out1)
@@ -406,6 +374,49 @@ class ProtFastpFilter(EMProtocol):
         outputFastq.setFastpJson(reportJson)
         return outputFastq
 
+    @staticmethod
+    def _prepareFastpOutputFiles(inputFiles, outputPaths):
+        for path in outputPaths:
+            if path and any(os.path.abspath(path) == os.path.abspath(source)
+                            or (os.path.exists(path) and os.path.samefile(path, source)) for source in inputFiles):
+                raise RuntimeError('fastp output would overwrite an input file: {}'.format(path))
+        for path in outputPaths:
+            if path and os.path.lexists(path):
+                os.remove(path)
+
+    def _readFastpOutputStats(self, outputFiles, reportHtml, reportJson):
+        for path in outputFiles:
+            if not os.path.isfile(path):
+                raise RuntimeError(f'fastp did not generate the expected FASTQ: {path}')
+        for path in (reportHtml, reportJson):
+            if not os.path.isfile(path) or os.path.getsize(path) == 0:
+                raise RuntimeError(f'fastp report is missing or empty: {path}')
+
+        numReads, readLength = getFastqStats(outputFiles[0])
+        if len(outputFiles) == 2:
+            numReads2, readLength2 = getFastqStats(outputFiles[1])
+            if numReads != numReads2:
+                raise RuntimeError('Filtered paired FASTQ files have different numbers of reads: '
+                                   f'R1={numReads} R2={numReads2}')
+            readLength = int(round((readLength + readLength2) / 2))
+
+        self._validateFastpReadCount(reportJson, numReads * len(outputFiles))
+        return numReads, readLength
+
+    @staticmethod
+    def _validateFastpReadCount(reportJson, expectedReads):
+        try:
+            with open(reportJson) as handle:
+                report = json.load(handle)
+            reportedReads = report['summary']['after_filtering']['total_reads']
+            if type(reportedReads) is not int or reportedReads < 0:
+                raise ValueError('Invalid total_reads value')
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise RuntimeError(f'Invalid fastp JSON report: {reportJson}') from error
+        if reportedReads != expectedReads:
+            raise RuntimeError('Filtered FASTQ read count does not match the fastp report: '
+                               f'files={expectedReads}, report={reportedReads}')
+
     def _runFastqc(self, outputFastq):
         if not outputFastq.supportsFastQC():
             raise RuntimeError(
@@ -421,11 +432,16 @@ class ProtFastpFilter(EMProtocol):
         return runFastqc(self, fastqFiles)
 
     def _validate(self):
-        errors = []
         inputFastq = self.inputFastq.get()
         if inputFastq is None:
             return ['An input FASTQ object is required.']
+        errors = self._validateInputFastq(inputFastq)
+        errors.extend(self._validateFilterParams())
+        return errors
 
+    @staticmethod
+    def _validateInputFastq(inputFastq):
+        errors = []
         files = [('Read 1', inputFastq.getFileName())]
         if inputFastq.isPaired():
             files.append(('Read 2', inputFastq.getFileName2()))
@@ -440,6 +456,10 @@ class ProtFastpFilter(EMProtocol):
         if inputFastq.getFormat() != 'FASTQ' or not inputFastq.hasQuality():
             errors.append('Input must be FASTQ with quality scores.')
 
+        return errors
+
+    def _validateFilterParams(self):
+        errors = []
         if self.lengthRequired.get() < 0:
             errors.append('Minimum read length must be greater than or equal to 0.')
         for value, label, maximum in (
@@ -459,17 +479,16 @@ class ProtFastpFilter(EMProtocol):
 
         inputFastq = self.inputFastq.get()
 
-        summary.append('FASTQ filtering with fastp')
-        summary.append(f'Minimum read length: {self.lengthRequired.get()}')
-        summary.append(f'Threads: {self.numberOfThreads.get()}')
-        summary.append(f'Qualified quality phred: {self.qualifiedQualityPhred.get()}')
-        summary.append(f'Unqualified percent limit: {self.unqualifiedPercentLimit.get()}')
-        summary.append(f'N base limit: {self.nBaseLimit.get()}')
-        summary.append(f'Average quality: {self.averageQual.get()}')
-        summary.append(
-            f'Adapter trimming: '
-            f'{"disabled" if self.disableAdapterTrimming.get() else "enabled"}'
-        )
+        summary.extend([
+            'FASTQ filtering with fastp',
+            f'Minimum read length: {self.lengthRequired.get()}',
+            f'Threads: {self.numberOfThreads.get()}',
+            f'Qualified quality phred: {self.qualifiedQualityPhred.get()}',
+            f'Unqualified percent limit: {self.unqualifiedPercentLimit.get()}',
+            f'N base limit: {self.nBaseLimit.get()}',
+            f'Average quality: {self.averageQual.get()}',
+            f"Adapter trimming: {('disabled' if self.disableAdapterTrimming.get() else 'enabled')}",
+        ])
 
         if inputFastq:
             summary.append(f'Input: {inputFastq.getFileName()}')
@@ -496,17 +515,19 @@ class ProtFastpFilter(EMProtocol):
 
             summary.append(f'Output number of reads: {outputFastq.getNumReads()}')
 
-        if not self.runFastqc.get():
-            fastqcStatus = 'not requested'
-        elif not hasattr(self, 'outputFastq'):
-            fastqcStatus = 'pending'
-        elif self.outputFastq.getNumReads() == 0:
-            fastqcStatus = 'skipped (no reads passed filtering)'
-        else:
-            fastqcStatus = 'executed'
+        fastqcStatus = self._getFastqcStatus()
         summary.append(f'FastQC: {fastqcStatus}')
 
         return summary
+
+    def _getFastqcStatus(self):
+        if not self.runFastqc.get():
+            return 'not requested'
+        if not hasattr(self, 'outputFastq'):
+            return 'pending'
+        if self.outputFastq.getNumReads() == 0:
+            return 'skipped (no reads passed filtering)'
+        return 'executed'
 
     def _methods(self):
         if not hasattr(self, 'outputFastq'):

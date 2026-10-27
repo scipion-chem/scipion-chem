@@ -90,14 +90,29 @@ class ProtBCFToolsIsec(GATKPreparationMixin, EMProtocol):
                 errors.append('VCF {} must be an existing file.'.format(index))
         if errors:
             return errors
+        errors.extend(self._validateMetadata(inputs))
+        errors.extend(self._validateContigs(inputs))
+        if self.selection.get() not in range(len(self.FILES)):
+            errors.append('Invalid VCF partition.')
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
+        return errors
+
+    @staticmethod
+    def _validateMetadata(inputs):
+        errors = []
         for getter, label in [('getScientificName', 'species'), ('getAssembly', 'assembly')]:
             a, b = [getattr(obj, getter)() for obj in inputs]
             if getter == 'getScientificName':
                 a, b = [(value or '').strip().lower().replace('_', ' ') for value in (a, b)]
             if a and b and a != b:
                 errors.append('VCF {} metadata differ.'.format(label))
+        return errors
+
+    def _validateContigs(self, inputs):
+        errors = []
         try:
-            a, b = [self._readVCFContigs(obj.getFileName()) for obj in inputs]
+            a, b = [self.readVCFContigs(obj.getFileName()) for obj in inputs]
             for name in a.keys() & b.keys():
                 if a[name] and b[name] and a[name] != b[name]:
                     errors.append('Different lengths for contig {}.'.format(name))
@@ -105,10 +120,6 @@ class ProtBCFToolsIsec(GATKPreparationMixin, EMProtocol):
                 errors.append('VCFs have no declared contigs in common.')
         except (OSError, ValueError, RuntimeError, EOFError) as error:
             errors.append(str(error))
-        if self.selection.get() not in range(len(self.FILES)):
-            errors.append('Invalid VCF partition.')
-        if self.numberOfThreads.get() < 1:
-            errors.append('At least one thread is required.')
         return errors
 
     def compareStep(self):
@@ -116,20 +127,20 @@ class ProtBCFToolsIsec(GATKPreparationMixin, EMProtocol):
         errors = self._validate()
         if errors:
             raise RuntimeError('; '.join(errors))
-        with open(self._getCommandFile(), 'w'):
-            pass
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
         with tempfile.TemporaryDirectory(prefix='isec_', dir=self._getExtraPath()) as work:
             paths = []
             for index, obj in enumerate([self.inputFirst.get(), self.inputSecond.get()]):
                 target = os.path.join(work, 'input{}.vcf.gz'.format(index + 1))
-                self._runTool('bcftools', ['sort', '-Oz', '-o', target, obj.getFileName()])
-                self._runTool('bcftools', ['index', '--csi', '--threads',
+                self.runTool('bcftools', ['sort', '-Oz', '-o', target, obj.getFileName()])
+                self.runTool('bcftools', ['index', '--csi', '--threads',
                                           self.numberOfThreads.get(), target])
                 paths.append(target)
             result = os.path.join(work, 'partitions')
-            self._runTool('bcftools', ['isec', '--collapse', 'none', '-Ov', '-p', result] + paths)
+            self.runTool('bcftools', ['isec', '--collapse', 'none', '-Ov', '-p', result] + paths)
             for filename in self.FILES:
-                self._readVCFContigs(os.path.join(result, filename))
+                self.readVCFContigs(os.path.join(result, filename))
             destination = self._getExtraPath('partitions')
             if os.path.isdir(destination):
                 shutil.rmtree(destination)

@@ -651,7 +651,8 @@ class ProtDownloadVCF(EMProtocol):
     EMPTY_PARAMETER_ERROR = '{} cannot be empty.'
     ENSEMBL_SPECIES = 'Ensembl species'
 
-    VCF_FILENAME = 'variants.vcf.gz'
+    VCF_GZ_SUFFIX = '.vcf.gz'
+    VCF_FILENAME = 'variants' + VCF_GZ_SUFFIX
     HREF_PATTERN = r'href="([^"]+)"'
 
     _label = 'download vcf'
@@ -1353,7 +1354,7 @@ class ProtDownloadVCF(EMProtocol):
 
         matches = re.findall(self.HREF_PATTERN, html)
 
-        candidates = [filename for filename in matches if filename.endswith('.vcf.gz')]
+        candidates = [filename for filename in matches if filename.endswith(self.VCF_GZ_SUFFIX)]
 
         if not candidates:
             raise RuntimeError('No VCF files found in remote directory: {}'.format(url))
@@ -1373,7 +1374,7 @@ class ProtDownloadVCF(EMProtocol):
         if len(candidates) > 1:
             speciesName = scientificName.lower().replace(' ', '_')
             combined = [name for name in candidates
-                        if name.lower() == speciesName + '.vcf.gz'
+                        if name.lower() == speciesName + self.VCF_GZ_SUFFIX
                         or re.search(r'(?:^|[._-])(?:all|toplevel|whole_genome)[._-]', name.lower())]
             if len(combined) != 1:
                 raise RuntimeError('Multiple VCFs found for {} in {}. Cannot select a complete '
@@ -1960,7 +1961,7 @@ class ProtDownloadVCF(EMProtocol):
                 raise RuntimeError('Downloaded file is empty: {}'.format(url))
             if expectedSize is not None and os.path.getsize(partialFile) != int(expectedSize):
                 raise RuntimeError('Incomplete download: {}'.format(url))
-            if outputFile.endswith('.vcf.gz'):
+            if outputFile.endswith(self.VCF_GZ_SUFFIX):
                 self._validateVCFHeader(partialFile)
                 self._removeLocalVCFIndexes(outputFile)
             os.replace(partialFile, outputFile)
@@ -1970,10 +1971,10 @@ class ProtDownloadVCF(EMProtocol):
             if os.path.exists(partialFile):
                 os.remove(partialFile)
 
-    @staticmethod
-    def _validateVCFHeader(filename):
+    @classmethod
+    def _validateVCFHeader(cls, filename):
         try:
-            GATKPreparationMixin._readVCFContigs(filename, compressed=True)
+            GATKPreparationMixin.readVCFContigs(filename, compressed=True)
         except (OSError, EOFError, UnicodeError, zlib.error) as error:
             raise RuntimeError('Invalid compressed VCF: {}'.format(filename)) from error
         assemblies = set()
@@ -1982,21 +1983,28 @@ class ProtDownloadVCF(EMProtocol):
                 raise RuntimeError('Downloaded file is not a VCF: {}'.format(filename))
             for line in handle:
                 if line.startswith('##'):
-                    match = re.search(r'(?:^|,)assembly=([^,>]+)', line)
-                    if match:
-                        assemblies.add(match.group(1).strip('"'))
-                    elif line.startswith('##assembly='):
-                        assemblies.add(line.partition('=')[2].strip())
-                    elif line.startswith('##reference=') and '.dna.' in line:
-                        name = line.strip().rsplit('/', 1)[-1].split('.dna.', 1)[0]
-                        if '.' in name:
-                            assemblies.add(name.split('.', 1)[1])
+                    assembly = cls._getVCFAssembly(line)
+                    if assembly is not None:
+                        assemblies.add(assembly)
                     continue
                 columns = line.rstrip().split('\t')
                 if columns[:8] == ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO']:
                     return assemblies
                 break
         raise RuntimeError('VCF column header is missing or invalid: {}'.format(filename))
+
+    @staticmethod
+    def _getVCFAssembly(line):
+        match = re.search(r'(?:^|,)assembly=([^,>]+)', line)
+        if match:
+            return match.group(1).strip('"')
+        if line.startswith('##assembly='):
+            return line.partition('=')[2].strip()
+        if line.startswith('##reference=') and '.dna.' in line:
+            name = line.strip().rsplit('/', 1)[-1].split('.dna.', 1)[0]
+            if '.' in name:
+                return name.split('.', 1)[1]
+        return None
 
     @classmethod
     def _readRemoteDirectory(cls, url):
@@ -2033,7 +2041,7 @@ class ProtDownloadVCF(EMProtocol):
         if not path:
             return False
         signature = {'.tbi': b'TBI\x01', '.csi': b'CSI\x01'}.get(os.path.splitext(path)[1])
-        return signature is not None and GATKPreparationMixin._hasIndexSignature(path, signature)
+        return signature is not None and GATKPreparationMixin.hasIndexSignature(path, signature)
 
     def _removeLocalVCFIndexes(self, vcfFile):
         """Remove any existing local VCF indexes."""

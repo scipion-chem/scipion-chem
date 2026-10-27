@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, FileParam, PointerParam, StringParam
 
 from pwchem.objects import RNASeqExpression
-from pwchem.utils.utilsRNA import GATKPreparationMixin
+from pwchem.utils.utilsRNA import GATKPreparationMixin, checkGtfAnnotation
 
 
 class ProtCufflinks(GATKPreparationMixin, EMProtocol):
@@ -156,6 +156,7 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
     _label = 'Cufflinks / Cuffdiff'
     CUFFLINKS = 0
     CUFFDIFF = 1
+    CUFFDIFF_CONDITION = 'mode == {}'.format(CUFFDIFF)
     MODES = ['Cufflinks (one sample)', 'Cuffdiff (two samples)']
     LIBRARY_TYPES = ['fr-unstranded', 'fr-firststrand', 'fr-secondstrand']
 
@@ -166,15 +167,15 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
         form.addParam('inputAlignment', PointerParam, pointerClass='AlignmentFile',
                       label='First alignment:', help='Prepared coordinate-sorted BAM.')
         form.addParam('inputComparison', PointerParam, pointerClass='AlignmentFile',
-                      condition='mode == 1', label='Comparison alignment:',
+                      condition=self.CUFFDIFF_CONDITION, label='Comparison alignment:',
                       help='Second BAM for Cuffdiff; one BAM per condition.')
         form.addParam('annotationFile', FileParam, default='', allowsNull=True,
                       label='Annotation GTF:',
                       help='Optional override. Otherwise use the first alignment reference GTF.')
         form.addSection(label='Expression options')
-        form.addParam('firstLabel', StringParam, default='tumor', condition='mode == 1',
+        form.addParam('firstLabel', StringParam, default='tumor', condition=self.CUFFDIFF_CONDITION,
                       label='First condition label:')
-        form.addParam('secondLabel', StringParam, default='normal', condition='mode == 1',
+        form.addParam('secondLabel', StringParam, default='normal', condition=self.CUFFDIFF_CONDITION,
                       label='Second condition label:')
         form.addParam('libraryType', EnumParam, default=0, choices=self.LIBRARY_TYPES,
                       label='Library type:')
@@ -220,16 +221,16 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
         if errors:
             raise RuntimeError('Invalid expression inputs: ' + '; '.join(errors))
         os.makedirs(self._getExtraPath(), exist_ok=True)
-        with open(self._getCommandFile(), 'w'):
-            pass
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
         firstContigs = None
         for index, alignment in enumerate(self._getAlignments()):
             bam = self._getAlignmentPath(index)
-            self._stageFile(alignment.getFileName(), bam)
-            self._runTool('samtools', ['quickcheck', '-v', bam])
+            self.stageFile(alignment.getFileName(), bam)
+            self.runTool('samtools', ['quickcheck', '-v', bam])
             header = bam + '.header.sam'
-            self._runTool('samtools', ['view', '-H', '-o', header, bam])
-            contigs, _, order = self._readSamHeader(header)
+            self.runTool('samtools', ['view', '-H', '-o', header, bam])
+            contigs, _, order = self.readSamHeader(header)
             if order != 'coordinate':
                 raise RuntimeError('Sample {} BAM must declare coordinate sorting.'.format(index + 1))
             if firstContigs is None:
@@ -237,37 +238,11 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
             elif list(firstContigs.items()) != list(contigs.items()):
                 raise RuntimeError('Cuffdiff BAMs must use the same sequence names, lengths and order.')
         annotation = self._getAnnotationPath()
-        self._stageFile(self._getAnnotation(), annotation)
+        self.stageFile(self._getAnnotation(), annotation)
         self._checkAnnotation(annotation, firstContigs)
 
     def _checkAnnotation(self, path, contigs):
-        sharedFeatures = 0
-        extraContigs = set()
-        with open(path) as handle:
-            for number, line in enumerate(handle, start=1):
-                if not line.strip() or line.startswith('#'):
-                    continue
-                fields = line.rstrip('\r\n').split('\t')
-                if len(fields) != 9:
-                    raise RuntimeError('GTF line {} must contain nine tab-separated columns.'.format(number))
-                try:
-                    start, end = int(fields[3]), int(fields[4])
-                    if start < 1 or end < start:
-                        raise ValueError
-                except ValueError as error:
-                    raise RuntimeError('Invalid GTF coordinates at line {}.'.format(number)) from error
-                name = fields[0]
-                if name not in contigs:
-                    extraContigs.add(name)
-                    continue
-                if end > contigs[name]:
-                    raise RuntimeError('GTF line {} exceeds BAM sequence {} length.'.format(number, name))
-                if fields[2] in ('exon', 'CDS', 'UTR', 'five_prime_utr', 'three_prime_utr'):
-                    if not re.search(r'(?:^|;)\s*transcript_id\s+"[^"\n]+"', fields[8]):
-                        raise RuntimeError('GTF transcript feature lacks transcript_id at line {}.'.format(number))
-                    sharedFeatures += 1
-        if not sharedFeatures:
-            raise RuntimeError('GTF has no transcript features on the BAM reference sequences.')
+        extraContigs = checkGtfAnnotation(path, contigs)
         if extraContigs:
             self.warning('GTF contains {} sequence(s) absent from the BAM dictionary.'.format(len(extraContigs)))
 
@@ -282,7 +257,7 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
                                   self._getAlignmentPath(0), self._getAlignmentPath(1)])
             else:
                 arguments.extend(['-g', self._getAnnotationPath(), self._getAlignmentPath(0)])
-            self._runTool(program, arguments)
+            self.runTool(program, arguments)
             self._checkOutputs(runDir)
             target = self._getOutputDir()
             if os.path.isdir(target):
@@ -291,7 +266,7 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
 
     @staticmethod
     def _checkTable(path, required):
-        GATKPreparationMixin._checkNonempty(path, 'Expression table')
+        GATKPreparationMixin.checkNonempty(path, 'Expression table')
         with open(path) as handle:
             columns = handle.readline().rstrip('\r\n').split('\t')
         if len(columns) != len(set(columns)) or not set(required).issubset(columns):
@@ -326,7 +301,7 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
         output.setReferenceFasta(first.getReferenceFasta())
         output.setScientificName(first.getReferenceScientificName())
         output.setAssembly(first.getReferenceAssembly())
-        output.setCommand(self._readCommandHistory())
+        output.setCommand(self.readCommandHistory())
         if self.mode.get() == self.CUFFDIFF:
             output.setComparisonSample(self.inputComparison.get().getSampleName())
             firstLabel, secondLabel = self._getLabels()
@@ -347,6 +322,18 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
         if self.mode.get() not in (self.CUFFLINKS, self.CUFFDIFF):
             errors.append('Select a valid expression mode.')
         alignments = self._getAlignments()
+        errors.extend(self._validateAlignments(alignments))
+        errors.extend(self._validateAnnotation())
+        if self.mode.get() == self.CUFFDIFF:
+            errors.extend(self._validateCuffdiff(alignments))
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
+        if self.libraryType.get() not in range(len(self.LIBRARY_TYPES)):
+            errors.append('Select a valid library type.')
+        return errors
+
+    def _validateAlignments(self, alignments):
+        errors = []
         for index, alignment in enumerate(alignments, start=1):
             if alignment is None:
                 errors.append('Sample {} AlignmentFile is required.'.format(index))
@@ -354,41 +341,49 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
             if alignment.getFormat() != 'BAM':
                 errors.append('Sample {} alignment must be BAM.'.format(index))
             try:
-                self._checkNonempty(alignment.getFileName(), 'Sample {} BAM'.format(index))
+                self.checkNonempty(alignment.getFileName(), 'Sample {} BAM'.format(index))
                 if alignment.getReferenceFasta():
-                    self._checkNonempty(alignment.getReferenceFasta(), 'Sample {} reference'.format(index))
+                    self.checkNonempty(alignment.getReferenceFasta(), 'Sample {} reference'.format(index))
             except RuntimeError as error:
                 errors.append(str(error))
+        return errors
+
+    def _validateAnnotation(self):
+        errors = []
         try:
             annotation = self._getAnnotation()
-            self._checkNonempty(annotation, 'Annotation GTF')
+            self.checkNonempty(annotation, 'Annotation GTF')
             with open(annotation, 'rb') as handle:
                 if annotation.lower().endswith('.gz') or handle.read(2) == b'\x1f\x8b':
                     errors.append('Annotation GTF must be uncompressed.')
         except (RuntimeError, OSError) as error:
             errors.append(str(error))
-        if self.mode.get() == self.CUFFDIFF:
-            labels = self._getLabels()
-            if any(not re.fullmatch(r'[A-Za-z0-9_.-]+', label) for label in labels) or labels[0] == labels[1]:
-                errors.append('Cuffdiff labels must be distinct, non-empty identifiers.')
-            if ',' in self._getExtraPath('inputs'):
-                errors.append('Cuffdiff working paths cannot contain commas (reserved for replicate lists).')
-            if all(alignment is not None for alignment in alignments):
-                first, second = alignments
-                paths = [alignment.getFileName() for alignment in alignments]
-                if all(path and os.path.isfile(path) for path in paths) and os.path.samefile(*paths):
-                    errors.append('Cuffdiff requires different BAM files, including aliases.')
-                refs = [alignment.getReferenceFasta() for alignment in alignments]
-                if all(path and os.path.isfile(path) for path in refs) and not os.path.samefile(*refs):
-                    errors.append('Cuffdiff BAMs must identify the same reference FASTA file.')
-                for getter in ('getReferenceScientificName', 'getReferenceAssembly'):
-                    values = [getattr(alignment, getter)() for alignment in alignments]
-                    if all(values) and values[0] != values[1]:
-                        errors.append('Cuffdiff reference metadata disagree: {}.'.format(getter))
-        if self.numberOfThreads.get() < 1:
-            errors.append('At least one thread is required.')
-        if self.libraryType.get() not in range(len(self.LIBRARY_TYPES)):
-            errors.append('Select a valid library type.')
+        return errors
+
+    def _validateCuffdiff(self, alignments):
+        errors = []
+        labels = self._getLabels()
+        if any(not re.fullmatch(r'[A-Za-z0-9_.-]+', label) for label in labels) or labels[0] == labels[1]:
+            errors.append('Cuffdiff labels must be distinct, non-empty identifiers.')
+        if ',' in self._getExtraPath('inputs'):
+            errors.append('Cuffdiff working paths cannot contain commas (reserved for replicate lists).')
+        if all(alignment is not None for alignment in alignments):
+            errors.extend(self._validateComparisonReferences(alignments))
+        return errors
+
+    @staticmethod
+    def _validateComparisonReferences(alignments):
+        errors = []
+        paths = [alignment.getFileName() for alignment in alignments]
+        if all(path and os.path.isfile(path) for path in paths) and os.path.samefile(*paths):
+            errors.append('Cuffdiff requires different BAM files, including aliases.')
+        refs = [alignment.getReferenceFasta() for alignment in alignments]
+        if all(path and os.path.isfile(path) for path in refs) and not os.path.samefile(*refs):
+            errors.append('Cuffdiff BAMs must identify the same reference FASTA file.')
+        for getter in ('getReferenceScientificName', 'getReferenceAssembly'):
+            values = [getattr(alignment, getter)() for alignment in alignments]
+            if all(values) and values[0] != values[1]:
+                errors.append('Cuffdiff reference metadata disagree: {}.'.format(getter))
         return errors
 
     def _summary(self):

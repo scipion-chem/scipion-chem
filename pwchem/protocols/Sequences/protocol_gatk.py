@@ -524,14 +524,14 @@ class ProtGATK(GATKPreparationMixin, EMProtocol):
         if errors:
             raise RuntimeError('Invalid GATK inputs: ' + '; '.join(errors))
         os.makedirs(self._getExtraPath(), exist_ok=True)
-        with open(self._getCommandFile(), 'w'):
-            pass
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
         alignment = self.inputAlignment.get()
-        contigs = self._prepareReference(self._getReferenceFasta(alignment))
-        self._prepareAlignment(alignment, self._getPreparedBam(), contigs, 'Input BAM',
+        contigs = self.prepareReference(self.getReferenceFasta(alignment))
+        self.prepareAlignment(alignment, self._getPreparedBam(), contigs, 'Input BAM',
                                requireReadGroups=self.baseRecalibrator.get())
         if self.baseRecalibrator.get():
-            self._prepareVCF(self._getSelectedVCF(), self._getPreparedKnownSites(),
+            self.prepareVCF(self._getSelectedVCF(), self._getPreparedKnownSites(),
                              contigs, 'Known-sites VCF')
 
     # -------------------------------------------------------
@@ -540,56 +540,56 @@ class ProtGATK(GATKPreparationMixin, EMProtocol):
 
     def splitNCigarReadsStep(self):
         inputBam = self._getPreparedBam()
-        self._validateBamFile(inputBam)
-        self._clearBamOutput(self._getSplitBam())
-        self._runTool('gatk', ['SplitNCigarReads', '-R', self._getPreparedReference(),
+        self.validateBamFile(inputBam)
+        self.clearBamOutput(self._getSplitBam())
+        self.runTool('gatk', ['SplitNCigarReads', '-R', self.getPreparedReference(),
                                '-I', inputBam, '-O', self._getSplitBam()])
-        self._validateBamFile(self._getSplitBam())
+        self.validateBamFile(self._getSplitBam())
 
     def baseRecalibratorStep(self):
         inputBam = self._getInputAfterSplit()
-        self._validateBamFile(inputBam)
-        self._ensureBamIndex(inputBam)
-        self._removeIndex(self._getRecalibrationTable())
-        self._runTool('gatk', ['BaseRecalibrator', '-R', self._getPreparedReference(),
+        self.validateBamFile(inputBam)
+        self.ensureBamIndex(inputBam)
+        self.removeIndex(self._getRecalibrationTable())
+        self.runTool('gatk', ['BaseRecalibrator', '-R', self.getPreparedReference(),
                                '-I', inputBam, '--known-sites', self._getPreparedKnownSites(),
                                '-O', self._getRecalibrationTable()])
-        self._checkNonempty(self._getRecalibrationTable(), 'Recalibration table')
+        self.checkNonempty(self._getRecalibrationTable(), 'Recalibration table')
 
     def applyBQSRStep(self):
         inputBam = self._getInputAfterSplit()
-        self._validateBamFile(inputBam)
-        self._checkNonempty(self._getRecalibrationTable(), 'Recalibration table')
-        self._clearBamOutput(self._getBqsrBam())
-        self._runTool('gatk', ['ApplyBQSR', '-R', self._getPreparedReference(),
+        self.validateBamFile(inputBam)
+        self.checkNonempty(self._getRecalibrationTable(), 'Recalibration table')
+        self.clearBamOutput(self._getBqsrBam())
+        self.runTool('gatk', ['ApplyBQSR', '-R', self.getPreparedReference(),
                                '-I', inputBam, '--bqsr-recal-file', self._getRecalibrationTable(),
                                '-O', self._getBqsrBam()])
-        self._validateBamFile(self._getBqsrBam())
+        self.validateBamFile(self._getBqsrBam())
 
     # -------------------------------------------------------
     # Final BAM
     # -------------------------------------------------------
 
     def indexFinalBamStep(self):
-        self._ensureBamIndex(self._getFinalBam())
+        self.ensureBamIndex(self._getFinalBam())
 
     def createOutputStep(self):
         inputAlignment = self.inputAlignment.get()
 
         finalBam = self._getFinalBam()
         finalBai = finalBam + '.bai'
-        self._validateBamFile(finalBam)
-        if not self._isCurrentIndex(finalBai, finalBam) or not self._hasIndexSignature(finalBai, b'BAI\x01'):
+        self.validateBamFile(finalBam)
+        if not self.isCurrentIndex(finalBai, finalBam) or not self.hasIndexSignature(finalBai, b'BAI\x01'):
             raise RuntimeError('Final BAM index is missing, outdated or invalid: {}'.format(finalBai))
 
         outputAlignment = inputAlignment.clone()
         outputAlignment.setFileName(finalBam)
-        outputAlignment.setReferenceFasta(self._getPreparedReference())
+        outputAlignment.setReferenceFasta(self.getPreparedReference())
         outputAlignment.setIndexFile(finalBai)
         outputAlignment.setIsIndexed(True)
 
         outputAlignment.setIsSorted(True)
-        outputAlignment.setCommand(self._readCommandHistory())
+        outputAlignment.setCommand(self.readCommandHistory())
 
         self._defineOutputs(outputAlignment=outputAlignment)
 
@@ -684,11 +684,11 @@ class ProtGATK(GATKPreparationMixin, EMProtocol):
         return self._getExtraPath('inputs', 'alignment.bam')
 
     def _getPreparedKnownSites(self):
-        return self._getLocalVCFPath(self._getKnownSitesFile(), 'known_sites')
+        return self.getLocalVCFPath(self._getKnownSitesFile(), 'known_sites')
 
     def _validateKnownSites(self):
         try:
-            self._checkNonempty(self._getKnownSitesFile(), 'Known-sites VCF')
+            self.checkNonempty(self._getKnownSitesFile(), 'Known-sites VCF')
         except RuntimeError as error:
             return [str(error)]
         return []
@@ -703,7 +703,7 @@ class ProtGATK(GATKPreparationMixin, EMProtocol):
             return errors
 
         try:
-            self._validateBamFile(alignment.getFileName())
+            self.validateBamFile(alignment.getFileName())
         except RuntimeError as error:
             errors.append(str(error))
         if alignment.getFormat() != 'BAM':
@@ -719,9 +719,9 @@ class ProtGATK(GATKPreparationMixin, EMProtocol):
         ):
             errors.append('ApplyBQSR requires BaseRecalibrator to be selected.')
 
-        referenceFasta = self._getReferenceFasta(alignment)
+        referenceFasta = self.getReferenceFasta(alignment)
         try:
-            self._checkNonempty(referenceFasta, 'Reference FASTA')
+            self.checkNonempty(referenceFasta, 'Reference FASTA')
         except RuntimeError as error:
             errors.append(str(error))
         if self.numberOfThreads.get() < 1:

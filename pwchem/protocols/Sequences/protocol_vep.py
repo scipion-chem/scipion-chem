@@ -88,17 +88,7 @@ class ProtVEP(GATKPreparationMixin, EMProtocol):
     def _validate(self):
         errors = []
         obj = self.inputVCF.get()
-        if obj is None or not obj.getFileName() or not os.path.isfile(obj.getFileName()):
-            errors.append('An existing input VCF is required.')
-        else:
-            try:
-                self._readVCFContigs(obj.getFileName())
-            except (OSError, RuntimeError, ValueError, EOFError) as error:
-                errors.append(str(error))
-            if obj.getAssembly() and obj.getAssembly() != self.assembly.get():
-                errors.append('VCF and VEP assemblies differ.')
-            if obj.getScientificName() and obj.getScientificName().lower().replace(' ', '_') != self.species.get():
-                errors.append('VCF and VEP species differ.')
+        self._validateVcf(obj, errors)
         species, assembly = self.species.get() or '', self.assembly.get() or ''
         if not re.fullmatch(r'[a-z][a-z0-9_]+', species) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', assembly):
             errors.append('Use an Ensembl species name and a valid assembly name.')
@@ -110,27 +100,39 @@ class ProtVEP(GATKPreparationMixin, EMProtocol):
             errors.append('Cache release and thread count must be positive.')
         return errors
 
+    def _validateVcf(self, obj, errors):
+        if obj is None or not obj.getFileName() or not os.path.isfile(obj.getFileName()):
+            errors.append('An existing input VCF is required.')
+        else:
+            try:
+                self.readVCFContigs(obj.getFileName())
+            except (OSError, RuntimeError, ValueError, EOFError) as error:
+                errors.append(str(error))
+            if obj.getAssembly() and obj.getAssembly() != self.assembly.get():
+                errors.append('VCF and VEP assemblies differ.')
+            if obj.getScientificName() and obj.getScientificName().lower().replace(' ', '_') != self.species.get():
+                errors.append('VCF and VEP species differ.')
+
     def annotateStep(self):
         os.makedirs(self._getExtraPath(), exist_ok=True)
         errors = self._validate()
         if errors:
             raise RuntimeError('; '.join(errors))
-        with open(self._getCommandFile(), 'w'):
-            pass
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
         with tempfile.TemporaryDirectory(prefix='vep_', dir=self._getExtraPath()) as work:
             raw = os.path.join(work, 'all.tsv')
-            self._runTool('vep', ['--input_file', self.inputVCF.get().getFileName(),
+            self.runTool('vep', ['--input_file', self.inputVCF.get().getFileName(),
                 '--output_file', raw, '--format', 'vcf', '--tab', '--cache', '--offline',
                 '--dir_cache', os.path.abspath(self.cacheDirectory.get()),
                 '--cache_version', self.cacheVersion.get(), '--species', self.species.get(),
                 '--assembly', self.assembly.get(), '--uniprot', '--protein', '--symbol',
                 '--transcript_version', '--tsl', '--fork', self.numberOfThreads.get(),
                 '--no_stats', '--force_overwrite'])
-            for _ in iterVepRows(raw):
-                pass
+            sum(1 for _ in iterVepRows(raw))
             selected = os.path.join(work, 'missense.tsv')
             if self.selectMissense.get():
-                self._runTool('filter_vep', ['-i', raw, '-o', selected,
+                self.runTool('filter_vep', ['-i', raw, '-o', selected,
                     '--filter', 'Consequence is missense_variant', '--force_overwrite'])
                 for row in iterVepRows(selected):
                     if 'missense_variant' not in row['Consequence'].replace('&', ',').split(','):
@@ -145,7 +147,7 @@ class ProtVEP(GATKPreparationMixin, EMProtocol):
         raw = VariantAnnotation(filename=self._getExtraPath('annotation', 'all.tsv'),
             scientificName=obj.getScientificName() or self.species.get().replace('_', ' ').capitalize(),
             assembly=self.assembly.get(), cacheVersion=self.cacheVersion.get(),
-            command=self._readCommandHistory())
+            command=self.readCommandHistory())
         selected = raw.clone()
         if self.selectMissense.get():
             selected.setFileName(self._getExtraPath('annotation', 'missense.tsv'))

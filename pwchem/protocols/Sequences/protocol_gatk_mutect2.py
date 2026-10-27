@@ -434,41 +434,44 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         if errors:
             raise RuntimeError('Invalid Mutect2 inputs: ' + '; '.join(errors))
         os.makedirs(self._getExtraPath(), exist_ok=True)
-        with open(self._getCommandFile(), 'w'):
-            pass
-        self._removeIndex(self._getSamplesFile())
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
+        self.removeIndex(self._getSamplesFile())
         tumor = self.inputTumor.get()
-        contigs = self._prepareReference(self._getReferenceFasta(tumor))
-        tumorSamples = self._prepareAlignment(tumor, self._getAlignmentPath('tumor'), contigs,
+        contigs = self.prepareReference(self.getReferenceFasta(tumor))
+        tumorSamples = self.prepareAlignment(tumor, self._getAlignmentPath('tumor'), contigs,
                                               'Tumor BAM', requireReadGroups=True)
         if len(tumorSamples) != 1:
             raise RuntimeError('Tumor BAM must contain exactly one SM sample.')
         samples = {'tumor': next(iter(tumorSamples)), 'normal': None}
         if self.useNormal.get():
-            normalSamples = self._prepareAlignment(
-                self.inputNormal.get(), self._getAlignmentPath('normal'), contigs,
-                'Normal BAM', requireReadGroups=True
-            )
-            if len(normalSamples) != 1:
-                raise RuntimeError('Normal BAM must contain exactly one SM sample.')
-            normalSample = next(iter(normalSamples))
-            requested = (self.normalSample.get() or '').strip()
-            if requested and requested != normalSample:
-                raise RuntimeError('Normal sample {} does not match BAM SM {}.'.format(requested, normalSample))
-            if normalSample == samples['tumor']:
-                raise RuntimeError('Tumor and normal BAMs must have distinct SM sample names.')
-            samples['normal'] = normalSample
+            samples['normal'] = self._prepareNormalSample(contigs, samples['tumor'])
 
         for enabled, pointer, index, stem, option in self._resourceInputs():
             if enabled.get():
                 vcf = self._getSelectedResource(pointer, index)
-                path = self._getLocalVCFPath(vcf.getFileName(), stem)
-                self._prepareVCF(vcf, path, contigs, stem,
+                path = self.getLocalVCFPath(vcf.getFileName(), stem)
+                self.prepareVCF(vcf, path, contigs, stem,
                                  validateHeader=self._validateGermlineAF if stem == 'germline' else None)
         filename = self._getSamplesFile()
         with open(filename + '.part', 'w') as handle:
             json.dump(samples, handle, indent=2, sort_keys=True)
         os.replace(filename + '.part', filename)
+
+    def _prepareNormalSample(self, contigs, tumorSample):
+        normalSamples = self.prepareAlignment(
+            self.inputNormal.get(), self._getAlignmentPath('normal'), contigs,
+            'Normal BAM', requireReadGroups=True
+        )
+        if len(normalSamples) != 1:
+            raise RuntimeError('Normal BAM must contain exactly one SM sample.')
+        normalSample = next(iter(normalSamples))
+        requested = (self.normalSample.get() or '').strip()
+        if requested and requested != normalSample:
+            raise RuntimeError('Normal sample {} does not match BAM SM {}.'.format(requested, normalSample))
+        if normalSample == tumorSample:
+            raise RuntimeError('Tumor and normal BAMs must have distinct SM sample names.')
+        return normalSample
 
     def _resourceInputs(self):
         return [
@@ -488,7 +491,7 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
             raise RuntimeError('VCF index {} is out of range (size {}).'.format(index, vcfSet.getSize()))
         for position, vcf in enumerate(vcfSet):
             if position == index:
-                GATKPreparationMixin._checkNonempty(vcf.getFileName(), 'Selected resource VCF')
+                GATKPreparationMixin.checkNonempty(vcf.getFileName(), 'Selected resource VCF')
                 return vcf
         raise RuntimeError('Unable to retrieve the selected resource VCF.')
 
@@ -497,8 +500,8 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         opener = gzip.open if path.endswith('.gz') else open
         with opener(path, 'rt') as handle:
             for line in handle:
-                if line.startswith('##INFO=<') and re.search(r'(?:<|,)ID=AF(?:,|>)', line):
-                    if not re.search(r',Number=A(?:,|>)', line) or not re.search(r',Type=Float(?:,|>)', line):
+                if line.startswith('##INFO=<') and re.search(r'[<,]ID=AF[,>]', line):
+                    if not re.search(r',Number=A[,>]', line) or not re.search(r',Type=Float[,>]', line):
                         raise RuntimeError('Germline INFO/AF must declare Number=A and Type=Float.')
                     return
                 if line.startswith('#CHROM'):
@@ -511,10 +514,10 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
     # -------------------------------------------------------
 
     def mutect2Step(self):
-        self._clearVCFOutput(self._getUnfilteredVcf())
-        self._removeIndex(self._getStatsFile())
+        self.clearVCFOutput(self._getUnfilteredVcf())
+        self.removeIndex(self._getStatsFile())
         args = [
-            'Mutect2', '-R', self._getPreparedReference(),
+            'Mutect2', '-R', self.getPreparedReference(),
             '-I', self._getAlignmentPath('tumor'), '-O', self._getUnfilteredVcf(),
             '--native-pair-hmm-threads', self.numberOfThreads.get(),
             '--create-output-variant-index', 'true'
@@ -529,17 +532,17 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         for enabled, pointer, index, stem, option in self._resourceInputs():
             if enabled.get():
                 vcf = self._getSelectedResource(pointer, index)
-                args.extend([option, self._getLocalVCFPath(vcf.getFileName(), stem)])
+                args.extend([option, self.getLocalVCFPath(vcf.getFileName(), stem)])
         self._runGatk(args)
         self._checkOutputVCF(self._getUnfilteredVcf())
         if self.filterCalls.get():
-            self._checkNonempty(self._getStatsFile(), 'Mutect2 statistics')
+            self.checkNonempty(self._getStatsFile(), 'Mutect2 statistics')
 
     def filterMutectCallsStep(self):
-        self._checkNonempty(self._getStatsFile(), 'Mutect2 statistics')
-        self._clearVCFOutput(self._getFilteredVcf())
+        self.checkNonempty(self._getStatsFile(), 'Mutect2 statistics')
+        self.clearVCFOutput(self._getFilteredVcf())
         self._runGatk([
-            'FilterMutectCalls', '-R', self._getPreparedReference(),
+            'FilterMutectCalls', '-R', self.getPreparedReference(),
             '-V', self._getUnfilteredVcf(), '--stats', self._getStatsFile(),
             '-O', self._getFilteredVcf(), '--create-output-variant-index', 'true'
         ])
@@ -553,9 +556,9 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
             sources.append(self._getFilteredVcf())
         for source in sources:
             target = self._getSelectedVcf(source)
-            self._clearVCFOutput(target)
+            self.clearVCFOutput(target)
             self._runGatk([
-                'SelectVariants', '-R', self._getPreparedReference(),
+                'SelectVariants', '-R', self.getPreparedReference(),
                 '-V', source, '--select-type-to-include', variantType,
                 '-O', target, '--create-output-variant-index', 'true'
             ])
@@ -568,8 +571,8 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         return source[:-len('.vcf.gz')] + '_' + suffix + '.vcf.gz'
 
     def _checkOutputVCF(self, path):
-        self._checkNonempty(path, 'Mutect2 VCF')
-        self._readVCFContigs(path)
+        self.checkNonempty(path, 'Mutect2 VCF')
+        self.readVCFContigs(path)
         with gzip.open(path, 'rt') as handle:
             for line in handle:
                 if line.startswith('#CHROM\t'):
@@ -580,7 +583,7 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         expected = {sample for sample in self._readSamples().values() if sample is not None}
         if len(samples) != len(expected) or set(samples) != expected:
             raise RuntimeError('VCF samples {} do not match input samples {}.'.format(samples, sorted(expected)))
-        self._ensureFeatureIndex(path)
+        self.ensureFeatureIndex(path)
 
     # -------------------------------------------------------
     # Outputs and metadata
@@ -606,7 +609,7 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         samples = self._readSamples()
         vcf = VCFFile(filename=path)
         vcf.setIndexFile(path + '.tbi')
-        vcf.setReferenceFasta(self._getPreparedReference())
+        vcf.setReferenceFasta(self.getPreparedReference())
         vcf.setIsCompressed(True)
         vcf.setScientificName(tumor.getReferenceScientificName())
         vcf.setAssembly(tumor.getReferenceAssembly())
@@ -645,7 +648,7 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
         return self._getExtraPath('gatk_mutect2_commands.txt')
 
     def _runGatk(self, arguments):
-        self._runTool('gatk', arguments)
+        self.runTool('gatk', arguments)
 
     # -------------------------------------------------------
     # Validation, summary and methods
@@ -663,35 +666,41 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
                 errors.append('A normal AlignmentFile is required.')
             else:
                 alignments.append(('Normal', normal))
+        self._validateMutectAlignments(alignments, errors)
+        if len(alignments) == 2:
+            self._validateMatchedPair(tumor, alignments[1][1], errors)
+        self._validateResources(errors)
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
+        if self.variantType.get() not in range(len(self.VARIANT_TYPES)):
+            errors.append('Select a valid variant type.')
+        return errors
+
+    def _validateMutectAlignments(self, alignments, errors):
         for label, alignment in alignments:
             try:
-                self._checkNonempty(alignment.getFileName(), label + ' BAM')
-                self._checkNonempty(self._getReferenceFasta(alignment), label + ' reference FASTA')
+                self.checkNonempty(alignment.getFileName(), label + ' BAM')
+                self.checkNonempty(self.getReferenceFasta(alignment), label + ' reference FASTA')
             except RuntimeError as error:
                 errors.append(str(error))
             if alignment.getFormat() != 'BAM':
                 errors.append(label + ' alignment must be BAM.')
-        if len(alignments) == 2:
-            normal = alignments[1][1]
-            tumorBam, normalBam = tumor.getFileName(), normal.getFileName()
-            tumorRef, normalRef = self._getReferenceFasta(tumor), self._getReferenceFasta(normal)
-            if all(path and os.path.isfile(path) for path in (tumorBam, normalBam)):
-                if os.path.samefile(tumorBam, normalBam):
-                    errors.append('Tumor and normal must be different BAM files, including aliases.')
-            if all(path and os.path.isfile(path) for path in (tumorRef, normalRef)):
-                if not os.path.samefile(tumorRef, normalRef):
-                    errors.append('Tumor and normal must refer to the same reference FASTA file.')
+
+    def _validateMatchedPair(self, tumor, normal, errors):
+        tumorBam, normalBam = tumor.getFileName(), normal.getFileName()
+        tumorRef, normalRef = self.getReferenceFasta(tumor), self.getReferenceFasta(normal)
+        if all(path and os.path.isfile(path) for path in (tumorBam, normalBam)) and os.path.samefile(tumorBam, normalBam):
+            errors.append('Tumor and normal must be different BAM files, including aliases.')
+        if all(path and os.path.isfile(path) for path in (tumorRef, normalRef)) and not os.path.samefile(tumorRef, normalRef):
+            errors.append('Tumor and normal must refer to the same reference FASTA file.')
+
+    def _validateResources(self, errors):
         for enabled, pointer, index, stem, option in self._resourceInputs():
             if enabled.get():
                 try:
                     self._getSelectedResource(pointer, index)
                 except RuntimeError as error:
                     errors.append('{} resource: {}'.format(stem, error))
-        if self.numberOfThreads.get() < 1:
-            errors.append('At least one thread is required.')
-        if self.variantType.get() not in range(len(self.VARIANT_TYPES)):
-            errors.append('Select a valid variant type.')
-        return errors
 
     def _summary(self):
         summary = [

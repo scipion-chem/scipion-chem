@@ -62,7 +62,7 @@ class TestVEP(unittest.TestCase):
         self.protocol.inputVCF.set(VCFFile(filename=path, scientificName='Homo sapiens', assembly='GRCh38'))
         self.commands = []
 
-    def _runTool(self, program, args):
+    def runTool(self, program, args):
         self.commands.append((program, args))
         output = args[args.index('--output_file') + 1] if program == 'vep' else args[args.index('-o') + 1]
         with open(output, 'w') as handle:
@@ -73,7 +73,7 @@ class TestVEP(unittest.TestCase):
 
     def testOfflineAndMissenseCommands(self):
         self.assertEqual(self.protocol._validate(), [])
-        with patch.object(self.protocol, '_runTool', side_effect=self._runTool):
+        with patch.object(self.protocol, 'runTool', side_effect=self.runTool):
             self.protocol.annotateStep()
         self.assertEqual([item[0] for item in self.commands], ['vep', 'filter_vep'])
         args = self.commands[0][1]
@@ -89,7 +89,7 @@ class TestVEP(unittest.TestCase):
 
     def testWithoutSelection(self):
         self.protocol.selectMissense.set(False)
-        with patch.object(self.protocol, '_runTool', side_effect=self._runTool):
+        with patch.object(self.protocol, 'runTool', side_effect=self.runTool):
             self.protocol.annotateStep()
         self.assertEqual(len(self.commands), 1)
         self.assertEqual(len(list(iterVepRows(self.protocol._getExtraPath('annotation', 'all.tsv')))), 2)
@@ -115,12 +115,12 @@ class TestVEP(unittest.TestCase):
                 list(iterVepRows(path))
 
     def testFailedRerunRetainsPreviousResults(self):
-        with patch.object(self.protocol, '_runTool', side_effect=self._runTool):
+        with patch.object(self.protocol, 'runTool', side_effect=self.runTool):
             self.protocol.annotateStep()
         path = self.protocol._getExtraPath('annotation', 'all.tsv')
         with open(path) as handle:
             original = handle.read()
-        with patch.object(self.protocol, '_runTool', side_effect=RuntimeError('Tool failed')):
+        with patch.object(self.protocol, 'runTool', side_effect=RuntimeError('Tool failed')):
             with self.assertRaises(RuntimeError):
                 self.protocol.annotateStep()
         with open(path) as handle:
@@ -141,7 +141,7 @@ class TestVEP(unittest.TestCase):
         def run(program, args):
             subprocess.run([tools[program]] + [str(arg) for arg in args], check=True,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        with patch.object(self.protocol, '_runTool', side_effect=run):
+        with patch.object(self.protocol, 'runTool', side_effect=run):
             self.protocol.annotateStep()
         list(iterVepRows(self.protocol._getExtraPath('annotation', 'all.tsv')))
         for row in iterVepRows(self.protocol._getExtraPath('annotation', 'missense.tsv')):

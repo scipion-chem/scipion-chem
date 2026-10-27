@@ -139,23 +139,27 @@ class ProtImportGenomes(EMProtocol):
         if not entries:
             raise ValueError('At least one genome must be configured.')
 
-        genomes = []
-        for index, entry in enumerate(entries, start=1):
-            if not isinstance(entry, dict):
-                raise ValueError('Genome {} must be a JSON object.'.format(index))
-            genome = {}
-            for field in ('scientificName', 'assembly', 'release', 'fastaFile', 'gtfFile'):
-                value = entry.get(field)
-                if value is None:
-                    value = ''
-                if field == 'release' and type(value) is int:
-                    value = str(value)
-                if not isinstance(value, str) or '\x00' in value:
-                    raise ValueError('Genome {}: {} must be text{}.'.format(
-                        index, field, ' or an integer' if field == 'release' else ''))
-                genome[field] = (os.path.abspath(value) if value else '') if field.endswith('File') else value.strip()
-            genomes.append(genome)
-        return genomes
+        return [self._normalizeGenomeEntry(entry, index) for index, entry in enumerate(entries, start=1)]
+
+    @classmethod
+    def _normalizeGenomeEntry(cls, entry, index):
+        if not isinstance(entry, dict):
+            raise ValueError('Genome {} must be a JSON object.'.format(index))
+        fields = ('scientificName', 'assembly', 'release', 'fastaFile', 'gtfFile')
+        return {field: cls._normalizeGenomeValue(entry.get(field), field, index) for field in fields}
+
+    @staticmethod
+    def _normalizeGenomeValue(value, field, index):
+        if value is None:
+            value = ''
+        if field == 'release' and type(value) is int:
+            value = str(value)
+        if not isinstance(value, str) or '\x00' in value:
+            raise ValueError('Genome {}: {} must be text{}.'.format(
+                index, field, ' or an integer' if field == 'release' else ''))
+        if field.endswith('File'):
+            return os.path.abspath(value) if value else ''
+        return value.strip()
 
     @staticmethod
     def _getGenomeStem(genomeData):
@@ -225,40 +229,44 @@ class ProtImportGenomes(EMProtocol):
             os.remove(fastaIndex)
         Plugin.runCondaCommand(self, 'faidx ' + shlex.quote(fastaFile), RNASEQ_DIC, 'samtools')
         try:
-            GATKPreparationMixin._readFastaIndex(fastaIndex)
+            GATKPreparationMixin.readFastaIndex(fastaIndex)
         except (OSError, ValueError) as error:
             raise RuntimeError('samtools did not create a valid FASTA index: {}'.format(fastaIndex)) from error
 
-    @staticmethod
-    def _validateFiles(genomesData):
+    @classmethod
+    def _validateFiles(cls, genomesData):
         errors = []
         for index, genomeData in enumerate(genomesData, start=1):
             for field, label in (('fastaFile', 'FASTA'), ('gtfFile', 'GTF')):
-                path = genomeData[field]
                 prefix = 'Genome {}: {}'.format(index, label)
-                if not path:
-                    if field == 'fastaFile':
-                        errors.append(prefix + ' file is required.')
-                    continue
-                try:
-                    if not os.path.isfile(path):
-                        errors.append('{} file does not exist: {}'.format(prefix, path))
-                        continue
-                    if os.path.getsize(path) == 0:
-                        errors.append('{} file is empty: {}'.format(prefix, path))
-                        continue
-                    with open(path, 'rb') as handle:
-                        signature = handle.read(2)
-                        if signature == b'\x1f\x8b' or path.lower().endswith('.gz'):
-                            errors.append('{} must be uncompressed: {}'.format(prefix, path))
-                        elif field == 'fastaFile':
-                            handle.seek(0)
-                            header = handle.readline().rstrip(b'\r\n')
-                            if not header.startswith(b'>') or not header[1:].strip():
-                                errors.append('{} has an invalid FASTA header: {}'.format(prefix, path))
-                except OSError as error:
-                    errors.append('{} file could not be read: {}'.format(prefix, error))
+                errors.extend(cls._validateGenomeFile(genomeData[field], prefix, field == 'fastaFile'))
         return errors
+
+    @classmethod
+    def _validateGenomeFile(cls, path, prefix, isFasta):
+        if not path:
+            return [prefix + ' file is required.'] if isFasta else []
+        try:
+            if not os.path.isfile(path):
+                return ['{} file does not exist: {}'.format(prefix, path)]
+            if os.path.getsize(path) == 0:
+                return ['{} file is empty: {}'.format(prefix, path)]
+            return cls._validateGenomeHeader(path, prefix, isFasta)
+        except OSError as error:
+            return ['{} file could not be read: {}'.format(prefix, error)]
+
+    @staticmethod
+    def _validateGenomeHeader(path, prefix, isFasta):
+        with open(path, 'rb') as handle:
+            signature = handle.read(2)
+            if signature == b'\x1f\x8b' or path.lower().endswith('.gz'):
+                return ['{} must be uncompressed: {}'.format(prefix, path)]
+            if isFasta:
+                handle.seek(0)
+                header = handle.readline().rstrip(b'\r\n')
+                if not header.startswith(b'>') or not header[1:].strip():
+                    return ['{} has an invalid FASTA header: {}'.format(prefix, path)]
+        return []
 
     def _validate(self):
         try:

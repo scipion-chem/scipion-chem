@@ -335,25 +335,29 @@ class ProtImportFastq(EMProtocol):
     def _validate(self):
         errors = []
         files = self._getInputFiles()
-        validExtensions = ('.fastq', '.fq', '.fastq.gz', '.fq.gz')
         for number, path in enumerate(files, start=1):
-            label = 'Read {}'.format(number)
-            if not path:
-                errors.append('{} is required{}.'.format(
-                    label, ' for paired-end data' if number == 2 else ''))
-                continue
-            if not path.endswith(validExtensions):
-                errors.append('{} must be a FASTQ file.'.format(label))
-            if not os.path.isfile(path):
-                errors.append('{} file does not exist: {}'.format(label, path))
-            elif os.path.getsize(path) == 0:
-                errors.append('{} file is empty: {}'.format(label, path))
+            errors.extend(self._validateReadFile(number, path))
 
         if len(files) == 2 and all(files):
             if all(os.path.isfile(path) for path in files) and os.path.samefile(*files):
                 errors.append('Read 1 and read 2 must be different files.')
             if files[0].endswith('.gz') != files[1].endswith('.gz'):
                 errors.append('Paired FASTQ files must use the same compression mode.')
+        return errors
+
+    @staticmethod
+    def _validateReadFile(number, path):
+        errors = []
+        validExtensions = ('.fastq', '.fq', '.fastq.gz', '.fq.gz')
+        label = 'Read {}'.format(number)
+        if not path:
+            return ['{} is required{}.'.format(label, ' for paired-end data' if number == 2 else '')]
+        if not path.endswith(validExtensions):
+            errors.append('{} must be a FASTQ file.'.format(label))
+        if not os.path.isfile(path):
+            errors.append('{} file does not exist: {}'.format(label, path))
+        elif os.path.getsize(path) == 0:
+            errors.append('{} file is empty: {}'.format(label, path))
         return errors
 
     def _summary(self):

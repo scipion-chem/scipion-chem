@@ -106,7 +106,7 @@ class TestBCFToolsIsec(unittest.TestCase):
         for obj in self.inputs:
             with open(obj.getFileName(), 'rb') as handle:
                 originals.append(handle.read())
-        with patch.object(self.protocol, '_runTool', side_effect=run):
+        with patch.object(self.protocol, 'runTool', side_effect=run):
             self.protocol.compareStep()
         for obj, original in zip(self.inputs, originals):
             with open(obj.getFileName(), 'rb') as handle:

@@ -42,6 +42,9 @@ from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import Genome, SetOfGenomes
 
 
+PARTIAL_FILE_SUFFIX = '.part'
+
+
 class ProtDownloadGenomes(EMProtocol):
     """
     Download reference genomes and genome annotations from Ensembl or NCBI.
@@ -938,6 +941,23 @@ class ProtDownloadGenomes(EMProtocol):
 
         return assembly
 
+    def _getEnsemblLocations(self, release, species, folder, preferredDivision):
+        subfolder = 'fasta/{}/dna/'.format(species) if folder == 'fasta' else 'gtf/{}/'.format(species)
+        locations = []
+        if preferredDivision in (None, 'main'):
+            locations.append((
+                None,
+                'https://ftp.ensembl.org/pub/release-{}/{}'.format(release, subfolder)
+            ))
+            divisions = self.ENSEMBL_GENOMES_DIVISIONS if preferredDivision is None else ()
+        else:
+            divisions = (preferredDivision,)
+        locations.extend(
+            (division, 'https://ftp.ebi.ac.uk/ensemblgenomes/pub/{}/current/{}'.format(division, subfolder))
+            for division in divisions
+        )
+        return locations
+
     def _findEnsemblFile(
             self,
             release,
@@ -951,34 +971,7 @@ class ProtDownloadGenomes(EMProtocol):
         release numbering, so the fallback deliberately uses the ``current``
         tree instead of reusing the main Ensembl release number.
         """
-        locations = []
-
-        if preferredDivision in (None, 'main'):
-            subfolder = 'fasta/{}/dna/'.format(species) \
-                if folder == 'fasta' else 'gtf/{}/'.format(species)
-
-            locations.append((
-                None,
-                'https://ftp.ensembl.org/pub/release-{}/{}'.format(release, subfolder)
-            ))
-
-            divisions = self.ENSEMBL_GENOMES_DIVISIONS if preferredDivision is None else ()
-        else:
-            divisions = (preferredDivision,)
-
-        for division in divisions:
-            if folder == 'fasta':
-                url = (
-                    'https://ftp.ebi.ac.uk/ensemblgenomes/pub/{}/current/'
-                    'fasta/{}/dna/'
-                ).format(division, species)
-            else:
-                url = (
-                    'https://ftp.ebi.ac.uk/ensemblgenomes/pub/{}/current/'
-                    'gtf/{}/'
-                ).format(division, species)
-
-            locations.append((division, url))
+        locations = self._getEnsemblLocations(release, species, folder, preferredDivision)
 
         errors = []
 
@@ -1370,7 +1363,7 @@ class ProtDownloadGenomes(EMProtocol):
 
     @staticmethod
     def _copyPackageFile(source, target):
-        partialFile = target + '.part'
+        partialFile = target + PARTIAL_FILE_SUFFIX
         try:
             shutil.copy2(source, partialFile)
             os.replace(partialFile, target)
@@ -1464,19 +1457,17 @@ class ProtDownloadGenomes(EMProtocol):
         if not self.overwrite.get() and self._isNonemptyFile(outputFile):
             return
 
-        partialFile = outputFile + '.part'
+        partialFile = outputFile + PARTIAL_FILE_SUFFIX
         request = urllib.request.Request(url, headers={'User-Agent': 'Scipion-Chem'})
         try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                with open(compressedFile, 'wb') as output:
-                    shutil.copyfileobj(response, output)
-            with gzip.open(compressedFile, 'rb') as inputFile:
-                with open(partialFile, 'wb') as output:
-                    shutil.copyfileobj(inputFile, output)
+            with urllib.request.urlopen(request, timeout=120) as response, open(compressedFile, 'wb') as output:
+                shutil.copyfileobj(response, output)
+            with gzip.open(compressedFile, 'rb') as inputFile, open(partialFile, 'wb') as output:
+                shutil.copyfileobj(inputFile, output)
             if not self._isNonemptyFile(partialFile):
                 raise RuntimeError('Downloaded file is empty: {}'.format(url))
             os.replace(partialFile, outputFile)
-        except (OSError, EOFError, urllib.error.URLError) as error:
+        except (OSError, EOFError) as error:
             raise RuntimeError('Could not download or decompress {}: {}'.format(url, error)) from error
         finally:
             for path in (compressedFile, partialFile):
@@ -1521,7 +1512,7 @@ class ProtDownloadGenomes(EMProtocol):
 
     def _writeGenomeInfo(self, genomes):
         filename = self._getGenomeInfoFile()
-        partialFile = filename + '.part'
+        partialFile = filename + PARTIAL_FILE_SUFFIX
         with open(partialFile, 'w') as outputFile:
             json.dump(genomes, outputFile, indent=2, sort_keys=True)
         os.replace(partialFile, filename)

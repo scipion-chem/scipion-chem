@@ -113,13 +113,17 @@ class ProtVEPToAminoacids(EMProtocol):
         if expression is None or not expression.getFileName() or not os.path.isfile(expression.getFileName()):
             errors.append('An existing Cufflinks/Cuffdiff expression table is required.')
         elif obj is not None:
-            for getter in ('getScientificName', 'getAssembly'):
-                a, b = getattr(obj, getter)(), getattr(expression, getter)()
-                if getter == 'getScientificName':
-                    a, b = [(value or '').strip().lower().replace('_', ' ') for value in (a, b)]
-                if a and b and a != b:
-                    errors.append('Annotation and expression reference metadata differ.')
+            self._validateExpressionReference(obj, expression, errors)
         return errors
+
+    @staticmethod
+    def _validateExpressionReference(obj, expression, errors):
+        for getter in ('getScientificName', 'getAssembly'):
+            a, b = getattr(obj, getter)(), getattr(expression, getter)()
+            if getter == 'getScientificName':
+                a, b = [(value or '').strip().lower().replace('_', ' ') for value in (a, b)]
+            if a and b and a != b:
+                errors.append('Annotation and expression reference metadata differ.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep(self.convertStep)

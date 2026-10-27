@@ -643,6 +643,28 @@ class ImportSequenceFilesWizard(VariableWizard):
         }
     ]
 
+    @classmethod
+    def parseImportEntries(cls, rawData, fields):
+        data = json.loads(rawData) if rawData else []
+        if not isinstance(data, list) or any(not isinstance(item, dict) for item in data):
+            raise ValueError('Configuration must be a JSON list of objects.')
+        return [cls.normalizeImportEntry(item, fields) for item in data]
+
+    @staticmethod
+    def normalizeImportEntry(item, fields):
+        entry = dict(item)
+        for field in fields:
+            name = field['name']
+            value = entry.get(name)
+            if value is None:
+                value = ''
+            if name == 'release' and type(value) is int:
+                value = str(value)
+            if not isinstance(value, str):
+                raise ValueError('{} must be text.'.format(field['label']))
+            entry[name] = value
+        return ImportEntry.fromDict(entry)
+
     def show(self, form, *params):
         protocol = form.protocol
 
@@ -679,23 +701,7 @@ class ImportSequenceFilesWizard(VariableWizard):
         ).get()
 
         try:
-            data = json.loads(rawData) if rawData else []
-            if not isinstance(data, list) or any(not isinstance(item, dict) for item in data):
-                raise ValueError('Configuration must be a JSON list of objects.')
-            entries = []
-            for item in data:
-                entry = dict(item)
-                for field in fields:
-                    name = field['name']
-                    value = entry.get(name)
-                    if value is None:
-                        value = ''
-                    if name == 'release' and type(value) is int:
-                        value = str(value)
-                    if not isinstance(value, str):
-                        raise ValueError('{} must be text.'.format(field['label']))
-                    entry[name] = value
-                entries.append(ImportEntry.fromDict(entry))
+            entries = self.parseImportEntries(rawData, fields)
         except (TypeError, ValueError) as error:
             dialog.showError(title, 'Cannot edit the current configuration: {}'.format(error), form.root)
             return

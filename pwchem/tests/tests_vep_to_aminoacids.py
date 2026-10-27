@@ -223,8 +223,9 @@ class TestVEPToAminoacids(unittest.TestCase):
     def testDownloadFailureStopsWithoutStalePeptide(self):
         session = Mock()
         session.get.side_effect = requests.Timeout('timed out')
+        cache = os.path.join(self.work.name, 'cache')
         with patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'download failed'):
-            fetchUniParcSequence(ACCESSION, os.path.join(self.work.name, 'cache'), session)
+            fetchUniParcSequence(ACCESSION, cache, session)
         self.assertEqual(session.get.call_count, 3)
 
     def testRejectWrongOrMultipleHTTPRecords(self):
@@ -232,8 +233,9 @@ class TestVEPToAminoacids(unittest.TestCase):
                       '>{}\nAAAA\n>UPI0000000002\nAAAA\n'.format(ACCESSION)):
             session = Mock()
             session.get.return_value = Mock(status_code=200, text=fasta)
+            cache = os.path.join(self.work.name, 'cache')
             with self.subTest(fasta=fasta), self.assertRaises(RuntimeError):
-                fetchUniParcSequence(ACCESSION, os.path.join(self.work.name, 'cache'), session)
+                fetchUniParcSequence(ACCESSION, cache, session)
 
     def testLocalSourceRemainsUnchanged(self):
         with open(self.fasta) as handle:
@@ -264,7 +266,8 @@ class TestVEPToAminoacids(unittest.TestCase):
         session = Mock()
         response = Mock(status_code=503)
         session.get.return_value = response
+        cache = os.path.join(self.work.name, 'cache')
         with patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'HTTP 503'):
-            fetchUniParcSequence(ACCESSION, os.path.join(self.work.name, 'cache'), session)
+            fetchUniParcSequence(ACCESSION, cache, session)
         self.assertEqual(session.get.call_count, 3)
         self.assertEqual(response.close.call_count, 3)
