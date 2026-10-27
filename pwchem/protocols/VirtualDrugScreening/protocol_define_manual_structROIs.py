@@ -256,9 +256,8 @@ class ProtDefineStructROIs(EMProtocol):
                        help='Specify the chain of the residue of interest')
         group.addParam('resPosition', params.StringParam, condition='origin=={}'.format(RESIDUES),
                        allowsNull=False, label='Residues of interest',
-                       help='Specify the residue to define a region of interest.\n'
-                            'You can either select a single residue or a range '
-                            '(it will take into account the first and last residues selected)')
+                       help='Specify the residues to define a region of interest.\n'
+                            'Use the wizard to select one or severl residue.')
 
         group.addParam('extLig', params.BooleanParam, default=True, condition='origin=={}'.format(LIGANDS),
                        label='Input is a external molecule? ',
@@ -524,15 +523,14 @@ class ProtDefineStructROIs(EMProtocol):
 
         elif roiKey == 'Residues:':
             chainId, resIdxs = jDic['chain'], jDic['index']
-            idxs = [int(resIdxs.split('-')[0]), int(resIdxs.split('-')[1])]
-            for resId in range(idxs[0], idxs[1] + 1):
+            for resId in parseResidueIndexes(resIdxs):
                 try:
                     residue = self.structModel[chainId][resId]
                 except KeyError:
                     print(f'{resId} not in chain {chainId}')
-                    
-                atoms = residue.get_atoms()
-                for a in atoms:
+                    continue
+
+                for a in residue.get_atoms():
                   oCoords.append(list(a.get_coord()))
 
         elif roiKey == 'Ligand:':

@@ -45,7 +45,8 @@ from pwem.objects import AtomStruct, Sequence, Pointer
 from pwchem.protocols import *
 
 from pwchem.viewers.viewers_sequences import SequenceAliView
-from pwchem.utils import RESIDUES1TO3, runOpenBabel, natural_sort, parseAtomStruct, relabelAtomsPDB
+from pwchem.utils import RESIDUES1TO3, RESIDUES3TO1, groupResidueIndexes, runOpenBabel, natural_sort, \
+  parseAtomStruct, relabelAtomsPDB
 from pwchem.utils.utilsFasta import pairwiseAlign, calculateIdentity
 
 from pwchem.viewers.viewer_smallMols import SmallMoleculesViewer
@@ -432,7 +433,56 @@ SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
                               outputs=['chain_name'])
 
 
-SelectResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
+class SelectMultiResidueWizardQT(SelectResidueWizardQT):
+  """Select any set of residues of a chain, contiguous in the sequence or not, so residues
+  that are only close in the 3D structure can still define a single ROI."""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def show(self, form, *params):
+    inputParams, outputParam = self.getInputOutput(form)
+    protocol = form.protocol
+    inputObj = getattr(protocol, inputParams[0]).get()
+    # Raw sequence objects have no associated chain
+    chainStr = getattr(protocol, inputParams[1]).get() if len(inputParams) > 1 else None
+    finalResiduesList = self.getResidues(form, inputObj, chainStr)
+
+    provider = ListTreeProviderString(finalResiduesList)
+    dlg = dialog.ListDialog(form.root, "Chain residues", provider,
+                            "Select the residues of interest (residue number, residue name).\n"
+                            "Use ctrl/shift-click to select several: they do not need to be "
+                            "contiguous in the sequence")
+    if not dlg.values:
+      return
+
+    resDics = sorted([json.loads(v.get()) for v in dlg.values], key=lambda rD: rD['index'])
+    form.setVar(outputParam[0], self.formatSelection(resDics, chainStr))
+
+  def formatSelection(self, resDics, chainStr):
+    """Write the selected residues as the protocol expects them. Overwrite it in subclasses
+    needing another syntax (e.g. vina's "A:12,A:15" flexible residues)."""
+    idxStr = groupResidueIndexes([rD['index'] for rD in resDics])
+    resStr = ''.join([RESIDUES3TO1.get(rD['residue'], 'X') for rD in resDics])
+    return '{"index": "%s", "residues": "%s"}' % (idxStr, resStr)
+
+  @staticmethod
+  def getChainId(chainStr, default='A'):
+    try:
+      return json.loads(chainStr)['chain'].upper().strip()
+    except (TypeError, ValueError, KeyError, AttributeError):
+      return default
+
+
+class SelectSpecificResiduesWizardQT(SelectMultiResidueWizardQT):
+  """Same selection, written as the "chain:residueNumber" list used for the flexible
+  residues of vina-like dockings (e.g. "A:12,A:15")."""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def formatSelection(self, resDics, chainStr):
+    chainId = self.getChainId(chainStr)
+    return ','.join(['{}:{}'.format(chainId, rD['index']) for rD in resDics])
+
+
+SelectMultiResidueWizardQT().addTarget(protocol=ProtDefineStructROIs,
                                 targets=['resPosition'],
                                 inputs=['inputAtomStruct', 'chain_name'],
                                 outputs=['resPosition'])
