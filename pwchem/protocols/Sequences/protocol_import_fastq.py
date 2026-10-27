@@ -45,7 +45,8 @@ class ProtImportFastq(EMProtocol):
     Optionally, FastQC can be executed to generate quality-control reports.
 
     The original FASTQ files are referenced by the output object and are
-    not copied or modified by the protocol.
+    not copied or modified by the protocol. Paths stored in the output are
+    absolute, so downstream protocols can access them from their working directories.
 
 
     ---------------------------------------------------------------------
@@ -58,7 +59,8 @@ class ProtImportFastq(EMProtocol):
         If no name is provided, it is inferred automatically from the
         first FASTQ filename. Common FASTQ extensions and read suffixes
         such as ``_R1``, ``_R2``, ``_1`` and ``_2`` are removed when
-        generating the default sample name.
+        generating the default sample name. If this removes the entire
+        name, ``sample`` is used as a fallback.
 
     isPaired : bool
         Defines whether the sequencing dataset is single-end or paired-end.
@@ -124,7 +126,8 @@ class ProtImportFastq(EMProtocol):
         input FASTQ file.
 
         For paired-end datasets, read 1 and read 2 must contain the same
-        number of reads.
+        number of reads. The stored count is the number of read pairs,
+        rather than the sum of reads in both files.
 
     Read length
         The mean read length is calculated directly from the FASTQ data.
@@ -134,14 +137,18 @@ class ProtImportFastq(EMProtocol):
 
         For paired-end datasets, the mean read lengths of read 1 and read 2
         are calculated independently and their mean value is stored in the
-        output ``FastqFile``.
+        output ``FastqFile``. Each file mean and the final pair mean are
+        rounded to the nearest integer using Python rounding.
 
     Compression
         Single-end data are marked as compressed when the input filename
         ends in ``.gz``.
 
         Paired-end data are marked as compressed only when both input
-        FASTQ files are compressed.
+        FASTQ files are compressed. Both mates must use the same compression
+        mode, because downstream STAR alignment uses one reader for both files.
+        Compression is inferred from the extension; the file contents are read
+        during import to detect unreadable or invalid gzip data.
 
 
     ---------------------------------------------------------------------
@@ -150,14 +157,14 @@ class ProtImportFastq(EMProtocol):
 
     The protocol performs the following steps:
 
-    1. Read the input FASTQ file and calculate the number of reads and
-       mean read length.
+    1. Validate input paths, extensions and paired-end file compatibility.
 
-    2. Determine the sample name from the user-provided value or infer it
-       from the FASTQ filename.
+    2. Read each input FASTQ in streaming mode and calculate its number
+       of reads and mean read length. For paired-end data, verify matching
+       counts and calculate the mean of the two rounded read lengths.
 
-    3. For paired-end datasets, calculate the statistics of read 2 and
-       verify that both files contain the same number of reads.
+    3. Determine the sample name from the user-provided value or infer it
+       from the first FASTQ filename, using ``sample`` if no name remains.
 
     4. If requested, execute FastQC on the input FASTQ file(s).
 
@@ -173,11 +180,22 @@ class ProtImportFastq(EMProtocol):
 
     - A read 1 FASTQ file has been provided.
     - Input files use a supported FASTQ extension.
+    - Each input is an existing, non-empty regular file.
     - Read 2 is provided for paired-end datasets.
-    - Read 1 and read 2 are different files for paired-end datasets.
+    - Read 1 and read 2 are different files, including symbolic and hard links.
+    - Paired-end inputs use the same compression mode.
 
     During import, paired-end datasets are additionally checked to ensure
-    that read 1 and read 2 contain the same number of reads.
+    that read 1 and read 2 contain the same number of reads. FASTQ records
+    are read in streaming mode and must have four lines, with an @ header,
+    a + separator and matching sequence/quality lengths. Empty read sets,
+    truncated records and unreadable compressed data stop execution before
+    an output is published. Wrapped FASTQ records are not supported.
+
+    Matching counts do not establish that read identifiers correspond or
+    that the mates are in the same order; the input pair must already be
+    synchronized. When FastQC is enabled, input filenames must produce
+    distinct report names, even when located in separate directories.
 
 
     ---------------------------------------------------------------------
@@ -217,7 +235,7 @@ class ProtImportFastq(EMProtocol):
     - Generated FastQC HTML reports are stored as attributes of the output
       ``FastqFile`` object.
     """
-    
+
     _label = 'import fastq'
 
     def _defineParams(self, form):
@@ -251,45 +269,45 @@ class ProtImportFastq(EMProtocol):
     def _insertAllSteps(self):
         self._insertFunctionStep(self.importStep)
 
-    def importStep(self):
-        fn1 = self.inputFastq1.get()
-        numReads, readLength = getFastqStats(fn1)
+    def _getInputFiles(self):
+        files = [self.inputFastq1.get()]
+        if self.isPaired.get():
+            files.append(self.inputFastq2.get())
+        return [os.path.abspath(path) if path else '' for path in files]
 
+    def importStep(self):
+        errors = self._validate()
+        if errors:
+            raise RuntimeError('Invalid FASTQ inputs: ' + '; '.join(errors))
+
+        files = self._getInputFiles()
+        stats = [getFastqStats(path) for path in files]
+        for path, (numReads, _) in zip(files, stats):
+            if numReads == 0:
+                raise RuntimeError('FASTQ contains no reads: {}'.format(path))
+        numReads, readLength = stats[0]
+        if len(stats) == 2:
+            numReads2, readLength2 = stats[1]
+            if numReads != numReads2:
+                raise RuntimeError('Paired FASTQ files have different number of reads: '
+                                   'R1={} R2={}'.format(numReads, numReads2))
+            readLength = int(round((readLength + readLength2) / 2))
+
+        sampleName = (self.sampleName.get() or '').strip() or self._getDefaultSampleName(files[0])
         fastq = FastqFile()
-        fastq.setFileName(fn1)
+        fastq.setFileName(files[0])
+        fastq.setSampleName(sampleName)
         fastq.setIsPaired(self.isPaired.get())
-        fastq.setIsCompressed(fn1.endswith('.gz'))
+        fastq.setIsCompressed(files[0].endswith('.gz'))
         fastq.setFormat('FASTQ')
         fastq.setHasQuality(True)
         fastq.setNumReads(numReads)
         fastq.setReadLength(readLength)
-
-        sample = self.sampleName.get()
-        sampleName = sample.strip() if sample and sample.strip() else \
-            self._getDefaultSampleName(fn1)
-        fastq.setSampleName(sampleName)
-
-        if self.isPaired.get():
-            fn2 = self.inputFastq2.get()
-            numReads2, readLength2 = getFastqStats(fn2)
-
-            if numReads != numReads2:
-                raise RuntimeError(
-                    'Paired FASTQ files have different number of reads: '
-                    'R1={} R2={}'.format(numReads, numReads2)
-                )
-
-            fastq.setFileName2(fn2)
-            fastq.setIsCompressed(
-                fn1.endswith('.gz') and fn2.endswith('.gz')
-            )
-
-            readLength = int(round((readLength + readLength2) / 2))
-            fastq.setReadLength(readLength)
+        if len(files) == 2:
+            fastq.setFileName2(files[1])
 
         if self.runFastqc.get():
             htmlFiles = self._runFastqc()
-
             if self.isPaired.get():
                 fastq.setFastqcHtmlR1(htmlFiles[0])
                 fastq.setFastqcHtmlR2(htmlFiles[1])
@@ -299,64 +317,58 @@ class ProtImportFastq(EMProtocol):
         self._defineOutputs(outputFastq=fastq)
 
     def _runFastqc(self):
-        fastqFiles = [self.inputFastq1.get()]
+        return runFastqc(self, self._getInputFiles())
 
-        if self.isPaired.get():
-            fastqFiles.append(self.inputFastq2.get())
-
-        return runFastqc(self, fastqFiles)
-
-    def _getDefaultSampleName(self, fn):
+    @staticmethod
+    def _getDefaultSampleName(fn):
         sampleName = os.path.basename(fn)
-
-        for ext in ['.fastq.gz', '.fq.gz', '.fastq', '.fq']:
-            if sampleName.endswith(ext):
-                sampleName = sampleName[:-len(ext)]
+        for extension in ('.fastq.gz', '.fq.gz', '.fastq', '.fq'):
+            if sampleName.endswith(extension):
+                sampleName = sampleName[:-len(extension)]
                 break
-
-        for suffix in ['_R1', '_R2', '_1', '_2', '.R1', '.R2', '.1', '.2']:
+        for suffix in ('_R1', '_R2', '_1', '_2', '.R1', '.R2', '.1', '.2'):
             if sampleName.endswith(suffix):
                 sampleName = sampleName[:-len(suffix)]
                 break
-
-        return sampleName
+        return sampleName or 'sample'
 
     def _validate(self):
         errors = []
-        validExt = ('.fastq', '.fq', '.fastq.gz', '.fq.gz')
+        files = self._getInputFiles()
+        validExtensions = ('.fastq', '.fq', '.fastq.gz', '.fq.gz')
+        for number, path in enumerate(files, start=1):
+            label = 'Read {}'.format(number)
+            if not path:
+                errors.append('{} is required{}.'.format(
+                    label, ' for paired-end data' if number == 2 else ''))
+                continue
+            if not path.endswith(validExtensions):
+                errors.append('{} must be a FASTQ file.'.format(label))
+            if not os.path.isfile(path):
+                errors.append('{} file does not exist: {}'.format(label, path))
+            elif os.path.getsize(path) == 0:
+                errors.append('{} file is empty: {}'.format(label, path))
 
-        fn1 = self.inputFastq1.get()
-
-        if not fn1:
-            errors.append('Read 1 is required.')
-        elif not fn1.endswith(validExt):
-            errors.append('Read 1 must be a FASTQ file.')
-
-        if self.isPaired.get():
-            fn2 = self.inputFastq2.get()
-
-            if not fn2:
-                errors.append('Read 2 is required for paired-end data.')
-            elif not fn2.endswith(validExt):
-                errors.append('Read 2 must be a FASTQ file.')
-            elif fn1 == fn2:
+        if len(files) == 2 and all(files):
+            if all(os.path.isfile(path) for path in files) and os.path.samefile(*files):
                 errors.append('Read 1 and read 2 must be different files.')
-
+            if files[0].endswith('.gz') != files[1].endswith('.gz'):
+                errors.append('Paired FASTQ files must use the same compression mode.')
         return errors
 
     def _summary(self):
-        summary = []
-
         if not hasattr(self, 'outputFastq'):
             return ['Output FASTQ not available yet.']
 
         fastq = self.outputFastq
 
-        summary.append('Format: FASTQ')
-        summary.append('Quality scores: yes')
-        summary.append(f'Sample name: {fastq.getSampleName()}')
-        summary.append(f'Read 1: {fastq.getFileName()}')
-        summary.append(f'Number of reads: {fastq.getNumReads()}')
+        summary = [
+            'Format: FASTQ',
+            'Quality scores: yes',
+            f'Sample name: {fastq.getSampleName()}',
+            f'Read 1: {fastq.getFileName()}',
+            f'Number of reads: {fastq.getNumReads()}'
+        ]
 
         if fastq.getReadLength() > 0:
             summary.append(
@@ -376,21 +388,14 @@ class ProtImportFastq(EMProtocol):
         return summary
 
     def _methods(self):
-        methods = []
-
-        if self.isPaired.get():
-            methods.append('A paired-end FASTQ dataset was imported.')
-        else:
-            methods.append('A single-end FASTQ dataset was imported.')
-
-        sample = self.sampleName.get()
-        fn1 = self.inputFastq1.get()
-        sampleName = sample.strip() if sample and sample.strip() else \
-            self._getDefaultSampleName(fn1)
-
-        methods.append(f'Sample name: {sampleName}.')
-
+        if not hasattr(self, 'outputFastq'):
+            return []
+        fastq = self.outputFastq
+        sequencingType = 'paired-end' if fastq.isPaired() else 'single-end'
+        methods = [
+            'A {} FASTQ dataset was imported.'.format(sequencingType),
+            'Sample name: {}.'.format(fastq.getSampleName())
+        ]
         if self.runFastqc.get():
             methods.append('FastQC quality control was performed.')
-
         return methods

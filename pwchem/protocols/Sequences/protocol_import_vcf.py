@@ -26,7 +26,9 @@
 
 import json
 import os
+import re
 import shlex
+import zlib
 
 from pyworkflow.utils.path import copyFile
 from pyworkflow.protocol import params
@@ -35,6 +37,7 @@ from pwem.protocols import EMProtocol
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import VCFFile, SetOfVCFFiles
+from pwchem.utils.utilsRNA import GATKPreparationMixin
 
 
 class ProtImportVCF(EMProtocol):
@@ -59,7 +62,10 @@ class ProtImportVCF(EMProtocol):
     ---------------------------------------------------------------------
 
     vcfsData : str
-        JSON configuration describing the VCF files to import.
+        JSON list describing the VCF files to import. At least one entry
+        is required, and every entry must be an object. Metadata and paths
+        must be strings; optional fields can be omitted or set to null.
+        Relative paths are resolved against the execution working directory.
 
         Each entry can contain the following fields:
 
@@ -82,13 +88,16 @@ class ProtImportVCF(EMProtocol):
         vcfFile
             Path to the local VCF file to import.
 
-            This field is required.
+            This field is required. Supported extensions are ``.vcf`` and
+            ``.vcf.gz``. Compressed inputs must use BGZF, as required for
+            genomic indexing; ordinary gzip is rejected.
 
         indexFile
             Optional path to an existing VCF index.
 
-            Tabix (``.tbi``) and CSI (``.csi``) indexes are explicitly
-            supported. Other index extensions are preserved when imported.
+            BGZF VCFs accept Tabix (``.tbi``) or CSI (``.csi``) indexes.
+            Plain VCFs accept Tribble (``.idx``) indexes. Other extensions
+            and incompatible VCF/index combinations are rejected.
 
         The ``vcfsData`` parameter is normally configured through the
         corresponding Scipion wizard rather than edited manually.
@@ -101,7 +110,10 @@ class ProtImportVCF(EMProtocol):
     Each configured VCF file is copied into the protocol output directory.
 
     Imported files are renamed using the scientific name and, when
-    available, the genome assembly.
+    available, the genome assembly. Metadata are trimmed, and characters
+    unsuitable for filenames, including path separators, are replaced by
+    underscores. Missing names use ``variants``. Numeric suffixes keep
+    entries with identical or equivalent names from overwriting each other.
 
     For example, a VCF configured as::
 
@@ -113,7 +125,9 @@ class ProtImportVCF(EMProtocol):
         Mus_musculus_GRCm39_variants
 
     The original VCF extension is preserved. Compressed ``.vcf.gz`` files
-    therefore remain compressed after import.
+    therefore remain compressed after import. The original VCF and index
+    files are read without modification; downstream objects reference the
+    local copies rather than depending on the source paths.
 
     Each imported VCF is represented by a ``VCFFile`` object with the
     following metadata:
@@ -152,16 +166,30 @@ class ProtImportVCF(EMProtocol):
 
         <imported_vcf>.csi
 
-    Other index extensions are preserved and stored using the generated
-    VCF base name.
+    Tribble indexes (``.idx``) are stored as ``<imported_vcf>.idx``
+    beside a plain VCF. Index types are not converted during copying.
 
     The resulting index path is stored in the corresponding ``VCFFile``
     object.
 
-    If no index is supplied, the protocol checks for a neighboring index.
-    If none exists, it generates a .tbi index for BGZF-compressed .vcf.gz
-    using bcftools, or an .idx index for plain .vcf using GATK.
-    The input VCF is never modified.
+    A supplied index must exist and be non-empty. A compatible index is
+    reused only when it is at least as recent as the source VCF and its
+    binary signature matches the expected index format. An unusable supplied
+    index generates a warning, then neighboring compatible indexes are tried.
+    For BGZF VCFs, Tabix is preferred to CSI when both are usable.
+
+    If no usable index is available, the protocol generates a .tbi index for
+    BGZF-compressed .vcf.gz using bcftools, or an .idx index for plain .vcf
+    using GATK. Previously imported local indexes are removed before copying
+    or generating the new index, so they cannot mask a failed execution or
+    remain associated with a replaced VCF. Generated signatures are checked
+    before publication. The input VCF is never modified.
+
+    Signature and timestamp checks do not inspect every index entry or prove
+    that a supplied index belongs to this exact VCF. The user must provide
+    correctly paired source files. In particular, a CSI index remains CSI;
+    GATK preprocessing can generate a local Tribble/Tabix index when it
+    requires a different index type.
 
 
     ---------------------------------------------------------------------
@@ -216,13 +244,23 @@ class ProtImportVCF(EMProtocol):
 
     Before execution, the protocol verifies that:
 
-    - The VCF configuration can be parsed.
+    - The VCF configuration is a JSON list of objects with valid field types.
     - At least one VCF has been configured.
     - Every configured entry contains a VCF file.
-    - Every VCF file exists.
-    - Every specified index file exists.
+    - Every VCF file exists, is non-empty and has a supported extension.
+    - Compressed VCFs have a valid initial BGZF block.
+    - A VCF version declaration and valid column header are present.
+    - Declared contig names and sample names are not duplicated.
+    - Every specified index exists, is non-empty and has a compatible suffix.
 
     Scientific name, genome assembly and VCF index are optional.
+
+    Header checks reuse the same routines as GATK input preparation. They
+    accept sites-only VCFs and valid headers without variant records; they
+    do not scan all variants, verify REF alleles against a FASTA or establish
+    assembly compatibility. Index generation retains the external tools'
+    validation, including ordering requirements. No reference FASTA is
+    required for this import protocol.
 
 
     ---------------------------------------------------------------------
@@ -235,12 +273,15 @@ class ProtImportVCF(EMProtocol):
 
     - The original VCF files are not modified.
 
-    - Both compressed and uncompressed VCF files can be imported.
+    - Both BGZF-compressed and uncompressed VCF files can be imported.
 
     - ``.vcf.gz`` extensions are preserved when generating the imported
       filename.
 
-    - Imported VCF files are classified as known variants.
+    - Imported VCF files are classified as known variants. This metadata
+      label does not certify their suitability as BQSR known sites, a
+      Mutect2 germline population resource or a panel of normals. Those
+      uses require appropriately prepared biological resources.
 
     - The source of imported VCF objects is stored as ``Imported`` and
       their database as ``Local``.
@@ -275,261 +316,168 @@ class ProtImportVCF(EMProtocol):
         )
 
     def _insertAllSteps(self):
-        self._insertFunctionStep(
-            self.createOutputStep
-        )
+        self._insertFunctionStep(self.createOutputStep)
 
-    def _createVCF(self, vcfData):
-        """Create a VCFFile object from imported VCF data."""
-        scientificName = vcfData.get(
-            'scientificName',
-            ''
-        )
-        assembly = vcfData.get(
-            'assembly',
-            ''
-        )
-        vcfFile = vcfData.get(
-            'vcfFile',
-            ''
-        )
-        indexFile = vcfData.get(
-            'indexFile',
-            ''
-        )
+    def _getVCFsData(self):
+        try:
+            entries = json.loads(self.vcfsData.get())
+        except (TypeError, ValueError) as error:
+            raise ValueError('Invalid VCF configuration: expected a JSON list.') from error
+        if not isinstance(entries, list):
+            raise ValueError('VCF configuration must be a JSON list.')
+        if not entries:
+            raise ValueError('At least one VCF must be configured.')
 
-        safeName = (
-            scientificName.strip().replace(' ', '_')
-            if scientificName
-            else 'variants'
-        )
+        vcfs = []
+        for index, entry in enumerate(entries, start=1):
+            if not isinstance(entry, dict):
+                raise ValueError('VCF {} must be a JSON object.'.format(index))
+            vcf = {}
+            for field in ('scientificName', 'assembly', 'vcfFile', 'indexFile'):
+                value = entry.get(field)
+                if value is None:
+                    value = ''
+                if not isinstance(value, str) or '\x00' in value:
+                    raise ValueError('VCF {}: {} must be text.'.format(index, field))
+                vcf[field] = (os.path.abspath(value) if value else '') if field.endswith('File') else value.strip()
+            vcfs.append(vcf)
+        return vcfs
 
-        if assembly:
-            safeName += '_{}'.format(
-                assembly.strip().replace(' ', '_')
-            )
+    @staticmethod
+    def _getVCFStem(vcfData):
+        parts = [vcfData['scientificName'] or 'variants', vcfData['assembly']]
+        name = '_'.join(part for part in parts if part)
+        return re.sub(r'[^\w.-]+', '_', name).strip('._-') or 'variants'
 
-        if vcfFile.endswith(self.VCF_GZ_EXTENSION):
-            extension = self.VCF_GZ_EXTENSION
-        else:
-            extension = os.path.splitext(
-                vcfFile
-            )[1]
+    def _createVCF(self, vcfData, safeName):
+        source = vcfData['vcfFile']
+        extension = self.VCF_GZ_EXTENSION if source.endswith(self.VCF_GZ_EXTENSION) else '.vcf'
+        importedVCF = self._getExtraPath(safeName + '_variants' + extension)
+        copyFile(source, importedVCF)
+        importedIndex = self._ensureVCFIndex(source, importedVCF, vcfData['indexFile'])
 
-        importedVCF = self._getExtraPath(
-            '{}_variants{}'.format(
-                safeName,
-                extension
-            )
-        )
-
-        copyFile(
-            vcfFile,
-            importedVCF
-        )
-
-        vcf = VCFFile(
-            filename=importedVCF
-        )
-
-        if scientificName:
-            vcf.setScientificName(
-                scientificName
-            )
-
-        if assembly:
-            vcf.setAssembly(
-                assembly
-            )
-
-        vcf.setSource(
-            'Imported'
-        )
-
-        vcf.setDatabase(
-            'Local'
-        )
-
-        vcf.setVariantType(
-            'known'
-        )
-
-        vcf.setIsCompressed(
-            importedVCF.endswith('.gz')
-        )
-
-        importedIndex = self._ensureVCFIndex(
-            vcfFile,
-            importedVCF,
-            indexFile
-        )
+        vcf = VCFFile(filename=importedVCF)
+        if vcfData['scientificName']:
+            vcf.setScientificName(vcfData['scientificName'])
+        if vcfData['assembly']:
+            vcf.setAssembly(vcfData['assembly'])
+        vcf.setSource('Imported')
+        vcf.setDatabase('Local')
+        vcf.setVariantType('known')
+        vcf.setIsCompressed(extension == self.VCF_GZ_EXTENSION)
         vcf.setIndexFile(importedIndex)
-
-        label = scientificName or 'VCF'
-
-        if assembly:
-            label += ' ({})'.format(
-                assembly
-            )
-
-        vcf.setObjLabel(
-            label
-        )
-
+        label = vcfData['scientificName'] or 'VCF'
+        if vcfData['assembly']:
+            label += ' ({})'.format(vcfData['assembly'])
+        vcf.setObjLabel(label)
         return vcf
 
-    def _findAdjacentVCFIndex(self, vcfFile):
-        """Return an adjacent VCF index if available."""
-        for suffix in ('.tbi', '.csi', '.idx'):
-            candidate = vcfFile + suffix
-            if os.path.isfile(candidate):
-                return candidate
+    @staticmethod
+    def _indexSuffixes(vcfFile):
+        return ('.tbi', '.csi') if vcfFile.endswith('.gz') else ('.idx',)
 
+    def _isUsableIndex(self, indexFile, vcfFile):
+        suffix = os.path.splitext(indexFile)[1].lower()
+        signature = {'.tbi': b'TBI\x01', '.csi': b'CSI\x01', '.idx': b'TIDX'}.get(suffix)
+        return (suffix in self._indexSuffixes(vcfFile)
+                and GATKPreparationMixin._isCurrentIndex(indexFile, vcfFile)
+                and GATKPreparationMixin._hasIndexSignature(indexFile, signature))
+
+    def _findAdjacentVCFIndex(self, vcfFile):
+        for suffix in self._indexSuffixes(vcfFile):
+            candidate = vcfFile + suffix
+            if self._isUsableIndex(candidate, vcfFile):
+                return candidate
         return None
 
     def _ensureVCFIndex(self, sourceVCF, importedVCF, indexFile):
-        """Copy a supplied/adjacent index, or create one for the copied VCF."""
+        """Copy a usable source index or generate one for the current local VCF."""
+        for suffix in ('.tbi', '.csi', '.idx'):
+            path = importedVCF + suffix
+            if os.path.lexists(path):
+                os.remove(path)
+        if indexFile and not self._isUsableIndex(indexFile, sourceVCF):
+            self.warning('Ignoring a stale or invalid VCF index: {}'.format(indexFile))
+            indexFile = ''
         if not indexFile:
             indexFile = self._findAdjacentVCFIndex(sourceVCF)
-
         if indexFile:
-            suffix = os.path.splitext(indexFile)[1].lower()
-
-            if suffix in ('.tbi', '.csi', '.idx'):
-                importedIndex = importedVCF + suffix
-            else:
-                importedIndex = os.path.join(
-                    os.path.dirname(importedVCF),
-                    os.path.basename(importedVCF) + suffix
-                )
-
+            importedIndex = importedVCF + os.path.splitext(indexFile)[1].lower()
             copyFile(indexFile, importedIndex)
             return importedIndex
 
-        # Reuse an existing index beside the imported VCF if present.
-        existingIndex = self._findAdjacentVCFIndex(importedVCF)
-        if existingIndex:
-            return existingIndex
-
         if importedVCF.endswith(self.VCF_GZ_EXTENSION):
-            # bcftools requires a sorted, BGZF-compressed VCF.
-            args = 'index -f -t {}'.format(
-                shlex.quote(importedVCF)
-            )
+            args = 'index -f -t ' + shlex.quote(importedVCF)
             expectedIndex = importedVCF + '.tbi'
             program = 'bcftools'
-
-        elif importedVCF.endswith('.vcf'):
-            args = 'IndexFeatureFile -I {}'.format(
-                shlex.quote(importedVCF)
-            )
+        else:
+            args = 'IndexFeatureFile -I ' + shlex.quote(importedVCF)
             expectedIndex = importedVCF + '.idx'
             program = 'gatk'
-
-        else:
-            raise RuntimeError(
-                'Cannot index unsupported VCF format: {}'.format(
-                    importedVCF
-                )
-            )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            program
-        )
-
-        if not os.path.isfile(expectedIndex):
-            raise RuntimeError(
-                'Index was not generated for {} (expected {}).'.format(
-                    importedVCF,
-                    expectedIndex
-                )
-            )
-
+        Plugin.runCondaCommand(self, args, RNASEQ_DIC, program)
+        if not self._isUsableIndex(expectedIndex, importedVCF):
+            raise RuntimeError('A valid index was not generated for {} (expected {}).'.format(
+                importedVCF, expectedIndex))
         return expectedIndex
 
     def createOutputStep(self):
-        vcfsData = json.loads(
-            self.vcfsData.get()
-        )
+        try:
+            vcfsData = self._getVCFsData()
+        except ValueError as error:
+            raise RuntimeError(str(error)) from error
+        errors = self._validateFiles(vcfsData)
+        if errors:
+            raise RuntimeError('Invalid VCF inputs: ' + '; '.join(errors))
 
-        outputVCFs = SetOfVCFFiles().create(
-            outputPath=self._getPath()
-        )
+        os.makedirs(self._getExtraPath(), exist_ok=True)
+        outputVCFs = SetOfVCFFiles().create(outputPath=self._getPath())
+        outputVCFs.setObjLabel('Known variants VCFs')
+        usedNames = set()
+        try:
+            for vcfData in vcfsData:
+                stem = self._getVCFStem(vcfData)
+                safeName, suffix = stem, 2
+                while safeName.casefold() in usedNames:
+                    safeName = '{}_{}'.format(stem, suffix)
+                    suffix += 1
+                usedNames.add(safeName.casefold())
+                outputVCFs.append(self._createVCF(vcfData, safeName))
+            self._defineOutputs(outputVCFs=outputVCFs)
+        except Exception:
+            outputVCFs.close()
+            raise
 
-        outputVCFs.setObjLabel(
-            'Known variants VCFs'
-        )
-
-        for vcfData in vcfsData:
-            outputVCFs.append(
-                self._createVCF(
-                    vcfData
-                )
-            )
-
-        self._defineOutputs(
-            outputVCFs=outputVCFs
-        )
+    def _validateFiles(self, vcfsData):
+        errors = []
+        for index, vcfData in enumerate(vcfsData, start=1):
+            prefix = 'VCF {}: '.format(index)
+            path = vcfData['vcfFile']
+            if not path:
+                errors.append(prefix + 'VCF file is required.')
+                continue
+            supported = path.endswith(('.vcf', self.VCF_GZ_EXTENSION))
+            if not supported:
+                errors.append(prefix + 'VCF must use .vcf or .vcf.gz extension.')
+            for field, label in (('vcfFile', 'VCF'), ('indexFile', 'index')):
+                filename = vcfData[field]
+                if not filename:
+                    continue
+                try:
+                    if not os.path.isfile(filename):
+                        errors.append('{}{} file does not exist: {}'.format(prefix, label, filename))
+                    elif os.path.getsize(filename) == 0:
+                        errors.append('{}{} file is empty: {}'.format(prefix, label, filename))
+                    elif field == 'vcfFile' and supported:
+                        GATKPreparationMixin._readVCFContigs(filename)
+                    elif field == 'indexFile':
+                        if os.path.splitext(filename)[1].lower() not in self._indexSuffixes(path):
+                            errors.append(prefix + 'Index extension is incompatible with the VCF format.')
+                except (OSError, EOFError, UnicodeError, RuntimeError, zlib.error) as error:
+                    errors.append(prefix + str(error))
+        return errors
 
     def _validate(self):
-        errors = []
-
         try:
-            vcfsData = json.loads(
-                self.vcfsData.get()
-            )
-        except (TypeError, ValueError):
-            return [
-                'Invalid VCF configuration.'
-            ]
-
-        if not vcfsData:
-            errors.append(
-                'At least one VCF must be configured.'
-            )
-            return errors
-
-        for index, vcfData in enumerate(
-            vcfsData,
-            start=1
-        ):
-            vcfFile = vcfData.get(
-                'vcfFile',
-                ''
-            )
-
-            if not vcfFile:
-                errors.append(
-                    'VCF {}: VCF file is required.'.format(
-                        index
-                    )
-                )
-
-            elif not os.path.isfile(vcfFile):
-                errors.append(
-                    'VCF {}: VCF file does not exist: {}'.format(
-                        index,
-                        vcfFile
-                    )
-                )
-
-            indexFile = vcfData.get(
-                'indexFile',
-                ''
-            )
-
-            if (
-                indexFile
-                and not os.path.isfile(indexFile)
-            ):
-                errors.append(
-                    'VCF {}: index file does not exist: {}'.format(
-                        index,
-                        indexFile
-                    )
-                )
-
-        return errors
+            return self._validateFiles(self._getVCFsData())
+        except ValueError as error:
+            return [str(error)]

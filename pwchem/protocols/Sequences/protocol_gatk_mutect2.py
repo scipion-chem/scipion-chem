@@ -25,32 +25,311 @@
 # *
 # **************************************************************************
 
+import gzip
+import json
 import os
-import shlex
+import re
 
 from pyworkflow.protocol.params import (
-    BooleanParam, IntParam, PointerParam, StringParam
+    BooleanParam, EnumParam, IntParam, PointerParam, StringParam
 )
 from pwem.protocols import EMProtocol
 
-from pwchem import Plugin
-from pwchem.constants import RNASEQ_DIC
+from pwchem.utils.utilsRNA import GATKPreparationMixin
 from pwchem.objects import VCFFile
 
 
-class ProtGATKMutect2(EMProtocol):
-    """Call candidate somatic variants with GATK Mutect2.
+class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
+    """
+    Call candidate somatic SNVs and indels using GATK Mutect2.
 
-    Supports tumor-only and tumor-normal calling. Optionally applies
-    FilterMutectCalls. Input alignments must refer to the same reference
-    assembly and contain valid sample names in their read groups.
+    This protocol accepts a tumor ``AlignmentFile`` and optionally a
+    matched normal alignment. The reference genome FASTA is obtained from
+    the tumor alignment metadata. Results are stored as ``VCFFile`` objects.
 
-    The output VCF contains candidate somatic variants, not necessarily
-    confirmed somatic mutations. Additional filtering and validation may
-    be required, especially for RNA-seq and tumor-only analyses.
+    Calling can be supported by a germline resource and a panel of normals.
+    ``FilterMutectCalls`` is disabled by default, matching the reference script. The reported variant types
+    can be restricted to SNVs or insertions/deletions after calling and
+    optional filtering.
+
+
+    ---------------------------------------------------------------------
+    Calling modes
+    ---------------------------------------------------------------------
+
+    Tumor-only
+        Calls candidate variants using the tumor BAM without a matched
+        normal. This is the default mode. Distinguishing somatic variants
+        from inherited variants requires particular care in this mode.
+
+    Tumor-normal
+        Uses tumor and matched normal BAMs from the same individual.
+        Enable ``useNormal`` and provide ``inputNormal``. Each BAM must contain
+        exactly one sample, identified by its ``SM`` read-group tags, and tumor
+        and normal sample names must differ. Multiple read groups for the same
+        sample are supported; their IDs must be unique within each BAM.
+
+        ``normalSample`` is optional: when empty, the single normal SM name is
+        detected automatically. An explicit value must match the header exactly.
+
+        Both alignments must refer to the same reference FASTA file, allowing
+        symbolic links and hard links. The two BAMs must be different files;
+        path aliases cannot be used to supply the tumor as its own normal.
+
+
+    ---------------------------------------------------------------------
+    RNA-seq calling options and reference-script reproduction
+    ---------------------------------------------------------------------
+
+    disableMateOnSameContigFilter : bool, default True
+        Adds the following arguments, matching the reference RNA-seq script::
+
+            --disable-read-filter MateOnSameContigOrNoMappedMateReadFilter
+
+        This disables that individual mate-placement filter, rather than all
+        default GATK read filters. Disable the parameter to retain the tool's
+        default read-filter configuration.
+
+    dontUseSoftClippedBases : bool, default True
+        Adds ``--dont-use-soft-clipped-bases`` as in the reference script.
+        Disable the parameter to allow the default handling of soft-clipped bases.
+
+    To reproduce the calling stage of the script, retain both options above,
+    select ``SNVs and indels`` and leave ``filterCalls`` disabled (the default). Germline resource
+    and panel of normals remain disabled unless additional resources are wanted.
+    For tumor-normal calling, provide both prepared BAMs and their actual SM
+    names; the normal is not required to be literally named ``normal``.
+
+    ``FilterMutectCalls`` can be enabled explicitly as an optional extension
+    to the script. It annotates filters without producing a PASS-only VCF.
+    This protocol covers somatic calling; expression analysis, VCF intersections,
+    VEP annotation and peptide generation belong to separate workflow stages.
+    GATK versions differ from the original script, so identical settings do not
+    guarantee byte-identical outputs.
+
+
+    ---------------------------------------------------------------------
+    Variant selection and filtering
+    ---------------------------------------------------------------------
+
+    variantType
+        Selects which variant records are published in both output VCFs:
+
+        - ``SNVs and indels``: retains all Mutect2 calls (default), including
+          mixed records and multi-nucleotide substitutions if present.
+        - ``SNVs only``: retains records classified as ``SNP`` by GATK.
+        - ``Indels only``: retains records classified as ``INDEL`` by GATK.
+
+        Exclusive modes use GATK ``SelectVariants``. Selection operates on
+        complete VCF records rather than individual alternative alleles.
+        Mixed records and multi-nucleotide substitutions are excluded from
+        both exclusive modes.
+
+        Mutect2 always performs variant calling before this selection.
+
+    filterCalls
+        Runs ``FilterMutectCalls`` on the complete Mutect2 call set before
+        selecting variant types. Disabled by default.
+
+        Variants that fail filtering remain in the VCF with ``FILTER``
+        annotations. The protocol does not produce a PASS-only VCF.
+
+
+    ---------------------------------------------------------------------
+    Input
+    ---------------------------------------------------------------------
+
+    inputTumor : AlignmentFile
+        Tumor BAM prepared for variant calling, with valid sample names in
+        its read groups and an existing reference FASTA in its metadata.
+        The BAM and reference must exist and be non-empty. Required indexes
+        are copied or generated locally; input directories need not be writable.
+        The BAM must already be coordinate-sorted and prepared for somatic calling;
+        this protocol does not mark duplicates, split N CIGARs or perform BQSR.
+
+    inputNormal : AlignmentFile, optional
+        Matched normal BAM, required when ``useNormal`` is enabled.
+
+    germlineVCFs : SetOfVCFFiles, optional
+        Germline population resource used when ``useGermlineResource`` is
+        enabled. Select one VCF using the zero-based ``germlineIndex``.
+        The resource must be suitable for Mutect2, including the population
+        allele-frequency annotations it expects, and match the assembly.
+        Its header must declare INFO/AF with Number=A and Type=Float. This
+        checks the declaration, not every annotation value or population quality.
+        A dbSNP/known-sites VCF used for BQSR is not automatically suitable.
+
+    ponVCFs : SetOfVCFFiles, optional
+        Panel of normals used when ``usePanelOfNormals`` is enabled.
+        Select one VCF using the zero-based ``ponIndex``. This must be a
+        panel prepared for somatic calling, rather than an arbitrary VCF
+        from a single normal sample, and must match the reference assembly.
+
+
+    ---------------------------------------------------------------------
+    Execution order
+    ---------------------------------------------------------------------
+
+    The protocol executes the following steps::
+
+        Prepare reference and optional resource indexes
+            -> Mutect2
+            -> FilterMutectCalls (optional)
+            -> SelectVariants (SNVs-only or indels-only modes)
+            -> Create output VCFFile objects
+
+    Reference, tumor, normal and resource inputs are linked into the protocol
+    working directory. Preparation shares the same routines as GATK preprocessing,
+    avoiding duplicated index and sequence-dictionary handling.
+
+    Missing, stale, empty or structurally invalid reference ``.fai`` and ``.dict``
+    files are regenerated with samtools ``faidx`` and GATK ``CreateSequenceDictionary``.
+    Their sequence names, lengths and order must agree. BAM indexes accept both
+    file.bam.bai and file.bai naming conventions; unusable BAI files are regenerated
+    locally with samtools. Input BAMs undergo samtools quickcheck and header checks.
+
+    Plain resource VCFs require a Tribble ``.idx``; BGZF resource VCFs require a
+    tabix ``.tbi``. A lone ``.csi`` triggers GATK ``IndexFeatureFile``. Ordinary
+    gzip is rejected because it is not suitable for tabix indexing. Source files
+    and source indexes are not modified.
+
+
+    ---------------------------------------------------------------------
+    Output
+    ---------------------------------------------------------------------
+
+    outputUnfilteredVCF : VCFFile
+        Mutect2 calls before ``FilterMutectCalls``, restricted to the
+        selected variant types when an exclusive mode is used.
+
+    outputVCF : VCFFile
+        Calls annotated by ``FilterMutectCalls`` when filtering is enabled,
+        restricted to the selected variant types. When filtering is
+        disabled, this is a clone of ``outputUnfilteredVCF`` and refers to
+        the same file.
+
+    Both outputs store the prepared reference FASTA, tabix index, compression
+    status, actual tumor/normal sample names, GATK/Mutect2 provenance, selected
+    variant type and whether FilterMutectCalls was applied. The filtering flag
+    means filters were annotated, not that only passing variants were retained.
+
+    Scientific name and assembly are copied from structured tumor reference
+    metadata when available. RNA-seq alignment now records these fields and
+    Picard/GATK preserve them through cloning. Older alignments without structured
+    reference metadata leave these fields unset rather than inferring them from
+    filenames or resource databases.
+
+    Output VCF headers and sample names are checked and a compatible index is
+    ensured before publication. A VCF with a valid header and no variant records
+    is a valid result. Source relations link both outputs to input alignments
+    and enabled VCF resources.
+
+
+    ---------------------------------------------------------------------
+    Validation
+    ---------------------------------------------------------------------
+
+    Before execution, the protocol verifies that:
+
+    - A tumor alignment is provided and its BAM exists and is not empty.
+    - The tumor alignment contains an existing reference FASTA.
+    - When matched-normal mode is enabled, the normal BAM exists and is
+      not empty, its path differs from the tumor BAM path, its reference
+      resolves to the same FASTA file. Sample-name checks occur during preparation.
+    - Each enabled resource contains a non-empty ``SetOfVCFFiles``, its
+      selection index is in range and the selected VCF exists and is non-empty.
+    - A positive thread count and a valid variant-type choice are selected.
+
+    During preparation, BAM read groups and sample identities are inspected.
+    Sequence names, lengths and order must agree with the reference dictionary.
+    Resource VCF contig declarations are compared to the reference when present;
+    mismatched shared lengths or no common sequence names stop execution. Extra
+    resource contigs generate a warning and remain subject to GATK validation.
+    Missing VCF contig declarations generate a compatibility warning.
+
+    These checks do not certify biological pairing, panel-of-normals construction,
+    reference sequence identity or the quality of germline allele frequencies.
+    Index signature, timestamp and header checks do not replace complete file
+    validation. Mutect2/FilterMutectCalls retain their own validation checks.
+
+
+    ---------------------------------------------------------------------
+    Intermediate files
+    ---------------------------------------------------------------------
+
+    mutect2_unfiltered.vcf.gz
+        Complete Mutect2 call set before filtering or type selection.
+
+    mutect2_unfiltered.vcf.gz.stats
+        Mutect2 statistics used by ``FilterMutectCalls``. Checked for existence
+        and non-empty content and passed explicitly through ``--stats`` when
+        filtering is enabled. Type selection never replaces this complete call set.
+
+    mutect2_filtered.vcf.gz
+        Complete call set annotated by ``FilterMutectCalls``, when enabled.
+
+    mutect2_unfiltered_snvs.vcf.gz / mutect2_unfiltered_indels.vcf.gz
+        Type-selected unfiltered calls, generated in the exclusive modes.
+
+    mutect2_filtered_snvs.vcf.gz / mutect2_filtered_indels.vcf.gz
+        Type-selected filtered calls, generated when filtering and an
+        exclusive mode are enabled.
+
+    gatk_mutect2_commands.txt
+        Internal record of GATK and samtools commands executed by the protocol.
+
+    Previously generated VCFs, indexes and statistics at the output paths
+    are removed before the corresponding tool runs, preventing stale files
+    from hiding a missing result. Input resources are not removed.
+
+    mutect2_samples.json
+        Actual SM names detected from tumor and optional normal BAM headers,
+        persisted atomically for subsequent steps.
+
+    reference/reference.fa, reference/reference.fa.fai, reference/reference.dict
+        Local reference link, FASTA index and sequence dictionary.
+
+    inputs/tumor.bam, inputs/normal.bam
+        Local alignment links with their prepared indexes and extracted headers.
+
+    inputs/germline.vcf[.gz], inputs/pon.vcf[.gz]
+        Local links to enabled resources and their prepared GATK-compatible indexes.
+
+
+    ---------------------------------------------------------------------
+    Requirements
+    ---------------------------------------------------------------------
+
+    The following programs must be available through the RNA-seq
+    environment configured by the Scipion-Chem plugin:
+
+    - GATK
+    - samtools
+
+    The protocol working directory must be writable. Reference, alignment and
+    resource directories only require read access. Reference FASTA must be
+    uncompressed; resource VCFs can be plain or BGZF-compressed.
+
+
+    ---------------------------------------------------------------------
+    Notes
+    ---------------------------------------------------------------------
+
+    - Outputs contain candidate somatic variants, not confirmed mutations.
+    - RNA-seq analysis requires appropriate alignment preparation and
+      interpretation of expression, RNA editing and alignment artifacts.
+    - Additional evaluation is especially relevant for tumor-only analyses.
+    - This protocol does not estimate contamination or learn an orientation
+      bias model for use by ``FilterMutectCalls``.
+    - Structural variant, copy-number and gene-fusion calling and functional
+      consequence annotation are outside the scope of this protocol.
+    - Complete call sets remain available in the working directory when
+      type-selected VCFs are published as outputs.
     """
 
     _label = 'GATK Mutect2'
+
+    VARIANT_TYPES = ['SNVs and indels', 'SNVs only', 'Indels only']
 
     def _defineParams(self, form):
         form.addSection(label='Input')
@@ -70,10 +349,10 @@ class ProtGATKMutect2(EMProtocol):
             help='Matched normal BAM with the same reference assembly.'
         )
         form.addParam(
-            'normalSample', StringParam, default='',
+            'normalSample', StringParam, default='', allowsNull=True,
             condition='useNormal', label='Normal sample name:',
-            help='Sample name (SM) from the normal BAM read groups. '
-                 'Must match the BAM header exactly.'
+            help='Optional SM name from the normal BAM header. Leave empty to detect '
+                 'its single sample automatically. An explicit value must match exactly.'
         )
 
         form.addSection(label='Optional resources')
@@ -104,11 +383,35 @@ class ProtGATKMutect2(EMProtocol):
             help='Zero-based index of the PoN in the VCF set.'
         )
 
+        form.addSection(label='RNA-seq calling options')
+        form.addParam(
+            'disableMateOnSameContigFilter', BooleanParam, default=True,
+            label='Disable same-contig mate filter:',
+            help='Pass --disable-read-filter MateOnSameContigOrNoMappedMateReadFilter, '
+                 'as in the reference RNA-seq script.'
+        )
+        form.addParam(
+            'dontUseSoftClippedBases', BooleanParam, default=True,
+            label='Exclude soft-clipped bases:',
+            help='Pass --dont-use-soft-clipped-bases, as in the reference RNA-seq script.'
+        )
+
         form.addSection(label='Variant filtering')
         form.addParam(
-            'filterCalls', BooleanParam, default=True,
+            'variantType', EnumParam, default=0,
+            choices=self.VARIANT_TYPES, label='Variant types:',
+            help='Select the variants reported in the output VCFs. '
+                 'Selection is applied after calling and optional filtering. '
+                 'SNVs only keeps GATK SNP records; indels only keeps INDEL '
+                 'records. Mixed and multi-nucleotide substitution records '
+                 'are excluded in either exclusive mode. SNVs and indels '
+                 'retains all Mutect2 calls.'
+        )
+        form.addParam(
+            'filterCalls', BooleanParam, default=False,
             label='Run FilterMutectCalls:',
-            help='Apply GATK FilterMutectCalls to Mutect2 calls. '
+            help='Optional filtering, disabled by default to match the reference script. '
+                 'Apply GATK FilterMutectCalls to Mutect2 calls. '
                  'Variants failing filters remain in the VCF with FILTER tags.'
         )
         form.addParallelSection(threads=4, mpi=1)
@@ -118,89 +421,216 @@ class ProtGATKMutect2(EMProtocol):
         self._insertFunctionStep(self.mutect2Step)
         if self.filterCalls.get():
             self._insertFunctionStep(self.filterMutectCallsStep)
+        if self.variantType.get() != 0:
+            self._insertFunctionStep(self.selectVariantTypesStep)
         self._insertFunctionStep(self.createOutputStep)
 
-    def prepareInputsStep(self):
-        tumor = self.inputTumor.get()
-        reference = self._getReferenceFasta(tumor)
-        self._ensureFastaIndex(reference)
-        self._ensureSequenceDictionary(reference)
+    # -------------------------------------------------------
+    # Input preparation
+    # -------------------------------------------------------
 
-        if self.useGermlineResource.get():
-            self._ensureFeatureIndex(
-                self._getSelectedVcfPath(self.germlineVCFs, self.germlineIndex)
+    def prepareInputsStep(self):
+        errors = self._validate()
+        if errors:
+            raise RuntimeError('Invalid Mutect2 inputs: ' + '; '.join(errors))
+        os.makedirs(self._getExtraPath(), exist_ok=True)
+        with open(self._getCommandFile(), 'w'):
+            pass
+        self._removeIndex(self._getSamplesFile())
+        tumor = self.inputTumor.get()
+        contigs = self._prepareReference(self._getReferenceFasta(tumor))
+        tumorSamples = self._prepareAlignment(tumor, self._getAlignmentPath('tumor'), contigs,
+                                              'Tumor BAM', requireReadGroups=True)
+        if len(tumorSamples) != 1:
+            raise RuntimeError('Tumor BAM must contain exactly one SM sample.')
+        samples = {'tumor': next(iter(tumorSamples)), 'normal': None}
+        if self.useNormal.get():
+            normalSamples = self._prepareAlignment(
+                self.inputNormal.get(), self._getAlignmentPath('normal'), contigs,
+                'Normal BAM', requireReadGroups=True
             )
-        if self.usePanelOfNormals.get():
-            self._ensureFeatureIndex(
-                self._getSelectedVcfPath(self.ponVCFs, self.ponIndex)
-            )
+            if len(normalSamples) != 1:
+                raise RuntimeError('Normal BAM must contain exactly one SM sample.')
+            normalSample = next(iter(normalSamples))
+            requested = (self.normalSample.get() or '').strip()
+            if requested and requested != normalSample:
+                raise RuntimeError('Normal sample {} does not match BAM SM {}.'.format(requested, normalSample))
+            if normalSample == samples['tumor']:
+                raise RuntimeError('Tumor and normal BAMs must have distinct SM sample names.')
+            samples['normal'] = normalSample
+
+        for enabled, pointer, index, stem, option in self._resourceInputs():
+            if enabled.get():
+                vcf = self._getSelectedResource(pointer, index)
+                path = self._getLocalVCFPath(vcf.getFileName(), stem)
+                self._prepareVCF(vcf, path, contigs, stem,
+                                 validateHeader=self._validateGermlineAF if stem == 'germline' else None)
+        filename = self._getSamplesFile()
+        with open(filename + '.part', 'w') as handle:
+            json.dump(samples, handle, indent=2, sort_keys=True)
+        os.replace(filename + '.part', filename)
+
+    def _resourceInputs(self):
+        return [
+            (self.useGermlineResource, self.germlineVCFs, self.germlineIndex,
+             'germline', '--germline-resource'),
+            (self.usePanelOfNormals, self.ponVCFs, self.ponIndex,
+             'pon', '--panel-of-normals')
+        ]
+
+    @staticmethod
+    def _getSelectedResource(pointer, indexParam):
+        vcfSet = pointer.get()
+        if vcfSet is None or vcfSet.getSize() == 0:
+            raise RuntimeError('A non-empty SetOfVCFFiles is required.')
+        index = indexParam.get()
+        if index is None or index < 0 or index >= vcfSet.getSize():
+            raise RuntimeError('VCF index {} is out of range (size {}).'.format(index, vcfSet.getSize()))
+        for position, vcf in enumerate(vcfSet):
+            if position == index:
+                GATKPreparationMixin._checkNonempty(vcf.getFileName(), 'Selected resource VCF')
+                return vcf
+        raise RuntimeError('Unable to retrieve the selected resource VCF.')
+
+    @staticmethod
+    def _validateGermlineAF(path):
+        opener = gzip.open if path.endswith('.gz') else open
+        with opener(path, 'rt') as handle:
+            for line in handle:
+                if line.startswith('##INFO=<') and re.search(r'(?:<|,)ID=AF(?:,|>)', line):
+                    if not re.search(r',Number=A(?:,|>)', line) or not re.search(r',Type=Float(?:,|>)', line):
+                        raise RuntimeError('Germline INFO/AF must declare Number=A and Type=Float.')
+                    return
+                if line.startswith('#CHROM'):
+                    break
+        raise RuntimeError('Germline resource must declare INFO/AF population allele frequencies; '
+                           'an arbitrary known-sites VCF is insufficient.')
+
+    # -------------------------------------------------------
+    # Calling, filtering and type selection
+    # -------------------------------------------------------
 
     def mutect2Step(self):
-        tumor = self.inputTumor.get()
-        reference = self._getReferenceFasta(tumor)
+        self._clearVCFOutput(self._getUnfilteredVcf())
+        self._removeIndex(self._getStatsFile())
         args = [
-            'Mutect2', '-R', reference,
-            '-I', tumor.getFileName(),
-            '-O', self._getUnfilteredVcf(),
-            '--native-pair-hmm-threads', str(self.numberOfThreads.get())
+            'Mutect2', '-R', self._getPreparedReference(),
+            '-I', self._getAlignmentPath('tumor'), '-O', self._getUnfilteredVcf(),
+            '--native-pair-hmm-threads', self.numberOfThreads.get(),
+            '--create-output-variant-index', 'true'
         ]
         if self.useNormal.get():
-            args += ['-I', self.inputNormal.get().getFileName(),
-                     '-normal', self.normalSample.get().strip()]
-        if self.useGermlineResource.get():
-            args += ['--germline-resource', self._getSelectedVcfPath(
-                self.germlineVCFs, self.germlineIndex)]
-        if self.usePanelOfNormals.get():
-            args += ['--panel-of-normals', self._getSelectedVcfPath(
-                self.ponVCFs, self.ponIndex)]
-
+            args.extend(['-I', self._getAlignmentPath('normal'),
+                         '-normal', self._readSamples()['normal']])
+        if self.disableMateOnSameContigFilter.get():
+            args.extend(['--disable-read-filter', 'MateOnSameContigOrNoMappedMateReadFilter'])
+        if self.dontUseSoftClippedBases.get():
+            args.append('--dont-use-soft-clipped-bases')
+        for enabled, pointer, index, stem, option in self._resourceInputs():
+            if enabled.get():
+                vcf = self._getSelectedResource(pointer, index)
+                args.extend([option, self._getLocalVCFPath(vcf.getFileName(), stem)])
         self._runGatk(args)
-        self._checkNonempty(self._getUnfilteredVcf(), 'Mutect2 VCF')
+        self._checkOutputVCF(self._getUnfilteredVcf())
         if self.filterCalls.get():
             self._checkNonempty(self._getStatsFile(), 'Mutect2 statistics')
 
     def filterMutectCallsStep(self):
-        args = [
-            'FilterMutectCalls', '-R',
-            self._getReferenceFasta(self.inputTumor.get()),
-            '-V', self._getUnfilteredVcf(),
-            '-O', self._getFilteredVcf()
-        ]
-        self._runGatk(args)
-        self._checkNonempty(self._getFilteredVcf(), 'Filtered Mutect2 VCF')
+        self._checkNonempty(self._getStatsFile(), 'Mutect2 statistics')
+        self._clearVCFOutput(self._getFilteredVcf())
+        self._runGatk([
+            'FilterMutectCalls', '-R', self._getPreparedReference(),
+            '-V', self._getUnfilteredVcf(), '--stats', self._getStatsFile(),
+            '-O', self._getFilteredVcf(), '--create-output-variant-index', 'true'
+        ])
+        self._checkOutputVCF(self._getFilteredVcf())
+
+    def selectVariantTypesStep(self):
+        """Select full VCF record types after optional filtering."""
+        variantType = {1: 'SNP', 2: 'INDEL'}[self.variantType.get()]
+        sources = [self._getUnfilteredVcf()]
+        if self.filterCalls.get():
+            sources.append(self._getFilteredVcf())
+        for source in sources:
+            target = self._getSelectedVcf(source)
+            self._clearVCFOutput(target)
+            self._runGatk([
+                'SelectVariants', '-R', self._getPreparedReference(),
+                '-V', source, '--select-type-to-include', variantType,
+                '-O', target, '--create-output-variant-index', 'true'
+            ])
+            self._checkOutputVCF(target)
+
+    def _getSelectedVcf(self, source):
+        if self.variantType.get() == 0:
+            return source
+        suffix = {1: 'snvs', 2: 'indels'}[self.variantType.get()]
+        return source[:-len('.vcf.gz')] + '_' + suffix + '.vcf.gz'
+
+    def _checkOutputVCF(self, path):
+        self._checkNonempty(path, 'Mutect2 VCF')
+        self._readVCFContigs(path)
+        with gzip.open(path, 'rt') as handle:
+            for line in handle:
+                if line.startswith('#CHROM\t'):
+                    samples = line.rstrip().split('\t')[9:]
+                    break
+            else:
+                raise RuntimeError('Mutect2 VCF has no sample header: {}'.format(path))
+        expected = {sample for sample in self._readSamples().values() if sample is not None}
+        if len(samples) != len(expected) or set(samples) != expected:
+            raise RuntimeError('VCF samples {} do not match input samples {}.'.format(samples, sorted(expected)))
+        self._ensureFeatureIndex(path)
+
+    # -------------------------------------------------------
+    # Outputs and metadata
+    # -------------------------------------------------------
 
     def createOutputStep(self):
-        tumor = self.inputTumor.get()
-        reference = self._getReferenceFasta(tumor)
-        unfiltered = self._makeVcf(self._getUnfilteredVcf(), reference)
-        outputs = {'outputUnfilteredVCF': unfiltered}
-        if self.filterCalls.get():
-            filtered = self._makeVcf(self._getFilteredVcf(), reference)
-            outputs['outputVCF'] = filtered
-        else:
-            outputs['outputVCF'] = unfiltered.clone()
-
+        unfiltered = self._makeVcf(self._getSelectedVcf(self._getUnfilteredVcf()), filteringApplied=False)
+        filtered = (self._makeVcf(self._getSelectedVcf(self._getFilteredVcf()), filteringApplied=True)
+                    if self.filterCalls.get() else unfiltered.clone())
+        outputs = {'outputUnfilteredVCF': unfiltered, 'outputVCF': filtered}
         self._defineOutputs(**outputs)
+        inputs = [self.inputTumor]
+        if self.useNormal.get():
+            inputs.append(self.inputNormal)
+        inputs.extend(pointer for enabled, pointer, index, stem, option in self._resourceInputs() if enabled.get())
         for output in outputs.values():
-            self._defineSourceRelation(self.inputTumor, output)
-            if self.useNormal.get():
-                self._defineSourceRelation(self.inputNormal, output)
-            if self.useGermlineResource.get():
-                self._defineSourceRelation(self.germlineVCFs, output)
-            if self.usePanelOfNormals.get():
-                self._defineSourceRelation(self.ponVCFs, output)
+            for pointer in inputs:
+                self._defineSourceRelation(pointer, output)
 
-    @staticmethod
-    def _makeVcf(path, reference):
-        vcf = VCFFile()
-        vcf.setFileName(path)
-        index = next((path + ext for ext in ('.idx', '.tbi', '.csi')
-                      if os.path.isfile(path + ext)), None)
-        if index and hasattr(vcf, 'setIndexFile'):
-            vcf.setIndexFile(index)
-        if hasattr(vcf, 'setReferenceFasta'):
-            vcf.setReferenceFasta(reference)
+    def _makeVcf(self, path, filteringApplied):
+        self._checkOutputVCF(path)
+        tumor = self.inputTumor.get()
+        samples = self._readSamples()
+        vcf = VCFFile(filename=path)
+        vcf.setIndexFile(path + '.tbi')
+        vcf.setReferenceFasta(self._getPreparedReference())
+        vcf.setIsCompressed(True)
+        vcf.setScientificName(tumor.getReferenceScientificName())
+        vcf.setAssembly(tumor.getReferenceAssembly())
+        vcf.setSource('GATK')
+        vcf.setDatabase('Mutect2')
+        vcf.setVariantType(['somatic candidates', 'SNP', 'INDEL'][self.variantType.get()])
+        vcf.setTumorSample(samples['tumor'])
+        vcf.setNormalSample(samples['normal'])
+        vcf.setFilteringApplied(filteringApplied)
         return vcf
+
+    # -------------------------------------------------------
+    # Paths and command history
+    # -------------------------------------------------------
+
+    def _getAlignmentPath(self, label):
+        return self._getExtraPath('inputs', label + '.bam')
+
+    def _getSamplesFile(self):
+        return self._getExtraPath('mutect2_samples.json')
+
+    def _readSamples(self):
+        with open(self._getSamplesFile()) as handle:
+            return json.load(handle)
 
     def _getUnfilteredVcf(self):
         return self._getExtraPath('mutect2_unfiltered.vcf.gz')
@@ -211,127 +641,70 @@ class ProtGATKMutect2(EMProtocol):
     def _getStatsFile(self):
         return self._getUnfilteredVcf() + '.stats'
 
-    @staticmethod
-    def _getReferenceFasta(alignment):
-        if alignment is not None and hasattr(alignment, 'getReferenceFasta'):
-            return alignment.getReferenceFasta()
-        return None
-
-    @staticmethod
-    def _getSelectedVcfPath(pointer, indexParam):
-        vcfSet = pointer.get()
-        if vcfSet is None or vcfSet.getSize() == 0:
-            raise RuntimeError('A non-empty SetOfVCFFiles is required.')
-        index = indexParam.get()
-        if index < 0 or index >= vcfSet.getSize():
-            raise RuntimeError('VCF index {} is out of range (size {}).'.format(
-                index, vcfSet.getSize()))
-        for i, vcf in enumerate(vcfSet):
-            if i == index:
-                path = vcf.getFileName()
-                if not path or not os.path.isfile(path):
-                    raise RuntimeError('Selected VCF does not exist: {}'.format(path))
-                return path
-        raise RuntimeError('Unable to retrieve the selected VCF.')
-
-    def _ensureFastaIndex(self, reference):
-        if os.path.isfile(reference + '.fai'):
-            return
-        Plugin.runCondaCommand(
-            self, 'faidx {}'.format(shlex.quote(reference)),
-            RNASEQ_DIC, 'samtools')
-        self._checkNonempty(reference + '.fai', 'FASTA index')
-
-    @staticmethod
-    def _getDictionaryPath(reference):
-        root, extension = os.path.splitext(reference)
-        if extension.lower() in ('.fa', '.fasta', '.fna'):
-            return root + '.dict'
-        return reference + '.dict'
-
-    def _ensureSequenceDictionary(self, reference):
-        dictionary = self._getDictionaryPath(reference)
-        if os.path.isfile(dictionary):
-            return
-        self._runGatk(['CreateSequenceDictionary', '-R', reference,
-                       '-O', dictionary])
-        self._checkNonempty(dictionary, 'Sequence dictionary')
-
-    def _ensureFeatureIndex(self, vcf):
-        # GATK accepts Tribble indexes for plain VCF and tabix indexes for
-        # block-gzip-compressed VCF. A CSI index is not used here as the
-        # only available index, matching the existing ProtGATK convention.
-        candidates = [vcf + '.idx', vcf + '.tbi']
-        if any(os.path.isfile(path) for path in candidates):
-            return
-        self._runGatk(['IndexFeatureFile', '-I', vcf])
-        if not any(os.path.isfile(path) for path in candidates):
-            raise RuntimeError('No GATK-compatible index for VCF: {}'.format(vcf))
+    def _getCommandFile(self):
+        return self._getExtraPath('gatk_mutect2_commands.txt')
 
     def _runGatk(self, arguments):
-        command = ' '.join(shlex.quote(str(arg)) for arg in arguments)
-        Plugin.runCondaCommand(self, command, RNASEQ_DIC, 'gatk')
-        with open(self._getExtraPath('gatk_mutect2_commands.txt'), 'a') as handle:
-            handle.write('gatk ' + command + '\n')
+        self._runTool('gatk', arguments)
 
-    @staticmethod
-    def _checkNonempty(path, label):
-        if not os.path.isfile(path) or os.path.getsize(path) == 0:
-            raise RuntimeError('{} is missing or empty: {}'.format(label, path))
+    # -------------------------------------------------------
+    # Validation, summary and methods
+    # -------------------------------------------------------
 
     def _validate(self):
         errors = []
         tumor = self.inputTumor.get()
         if tumor is None:
             return ['A tumor AlignmentFile is required.']
-        try:
-            self._checkNonempty(tumor.getFileName(), 'Tumor BAM')
-        except (RuntimeError, TypeError):
-            errors.append('Tumor BAM is missing or empty.')
-        reference = self._getReferenceFasta(tumor)
-        if not reference or not os.path.isfile(reference):
-            errors.append('Tumor alignment must contain an existing reference FASTA.')
-
+        alignments = [('Tumor', tumor)]
         if self.useNormal.get():
             normal = self.inputNormal.get()
             if normal is None:
                 errors.append('A normal AlignmentFile is required.')
             else:
-                try:
-                    self._checkNonempty(normal.getFileName(), 'Normal BAM')
-                except (RuntimeError, TypeError):
-                    errors.append('Normal BAM is missing or empty.')
-                normalReference = self._getReferenceFasta(normal)
-                if not normalReference or not os.path.isfile(normalReference):
-                    errors.append('Normal alignment must contain an existing reference FASTA.')
-                elif reference and os.path.realpath(normalReference) != os.path.realpath(reference):
-                    errors.append('Tumor and normal must use the same reference FASTA.')
-                if normal.getFileName() == tumor.getFileName():
-                    errors.append('Tumor and normal BAM paths must differ.')
-            if not self.normalSample.get().strip():
-                errors.append('Enter the normal sample name from the BAM SM tag.')
-
-        for enabled, pointer, index, label in (
-            (self.useGermlineResource, self.germlineVCFs,
-             self.germlineIndex, 'Germline resource'),
-            (self.usePanelOfNormals, self.ponVCFs,
-             self.ponIndex, 'Panel of normals')
-        ):
+                alignments.append(('Normal', normal))
+        for label, alignment in alignments:
+            try:
+                self._checkNonempty(alignment.getFileName(), label + ' BAM')
+                self._checkNonempty(self._getReferenceFasta(alignment), label + ' reference FASTA')
+            except RuntimeError as error:
+                errors.append(str(error))
+            if alignment.getFormat() != 'BAM':
+                errors.append(label + ' alignment must be BAM.')
+        if len(alignments) == 2:
+            normal = alignments[1][1]
+            tumorBam, normalBam = tumor.getFileName(), normal.getFileName()
+            tumorRef, normalRef = self._getReferenceFasta(tumor), self._getReferenceFasta(normal)
+            if all(path and os.path.isfile(path) for path in (tumorBam, normalBam)):
+                if os.path.samefile(tumorBam, normalBam):
+                    errors.append('Tumor and normal must be different BAM files, including aliases.')
+            if all(path and os.path.isfile(path) for path in (tumorRef, normalRef)):
+                if not os.path.samefile(tumorRef, normalRef):
+                    errors.append('Tumor and normal must refer to the same reference FASTA file.')
+        for enabled, pointer, index, stem, option in self._resourceInputs():
             if enabled.get():
                 try:
-                    self._getSelectedVcfPath(pointer, index)
-                except (RuntimeError, AttributeError) as error:
-                    errors.append('{}: {}'.format(label, error))
+                    self._getSelectedResource(pointer, index)
+                except RuntimeError as error:
+                    errors.append('{} resource: {}'.format(stem, error))
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
+        if self.variantType.get() not in range(len(self.VARIANT_TYPES)):
+            errors.append('Select a valid variant type.')
         return errors
 
     def _summary(self):
         summary = [
-            'Calling mode: {}'.format(
-                'Tumor-normal' if self.useNormal.get() else 'Tumor-only'),
-            'FilterMutectCalls: {}'.format(
-                'enabled' if self.filterCalls.get() else 'disabled')
+            'Variant types: {}'.format(self.VARIANT_TYPES[self.variantType.get()]),
+            'Calling mode: {}'.format('Tumor-normal' if self.useNormal.get() else 'Tumor-only'),
+            'FilterMutectCalls: {}'.format('enabled' if self.filterCalls.get() else 'disabled'),
+            'Same-contig mate filter disabled: {}'.format(self.disableMateOnSameContigFilter.get()),
+            'Soft-clipped bases excluded: {}'.format(self.dontUseSoftClippedBases.get())
         ]
         if hasattr(self, 'outputVCF'):
+            summary.append('Tumor sample: {}'.format(self.outputVCF.getTumorSample()))
+            if self.outputVCF.getNormalSample():
+                summary.append('Normal sample: {}'.format(self.outputVCF.getNormalSample()))
             summary.append('Output VCF: {}'.format(self.outputVCF.getFileName()))
         return summary
 
@@ -339,8 +712,9 @@ class ProtGATKMutect2(EMProtocol):
         if not hasattr(self, 'outputVCF'):
             return []
         return [
-            'Candidate somatic variants were called with GATK Mutect2 '
-            'using {} analysis{}. The result was stored in a VCF file.'
+            'Candidate somatic variants were called with GATK Mutect2 using {} analysis{}. '
+            'Variant selection: {}. The result was stored in an indexed VCF file.'
             .format('tumor-normal' if self.useNormal.get() else 'tumor-only',
-                    ' and FilterMutectCalls' if self.filterCalls.get() else '')
+                    ' and FilterMutectCalls' if self.filterCalls.get() else '',
+                    self.VARIANT_TYPES[self.variantType.get()])
         ]

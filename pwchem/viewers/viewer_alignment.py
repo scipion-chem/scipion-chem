@@ -26,6 +26,8 @@
 
 import os
 import tempfile
+import shlex
+import threading
 import subprocess
 
 from pyworkflow.viewer import Viewer, DESKTOP_TKINTER
@@ -36,7 +38,13 @@ from pwchem.objects import AlignmentFile
 
 
 class AlignmentViewer(Viewer):
-    """Open a SAM/BAM/CRAM alignment file in IGV."""
+    """Open a SAM/BAM/CRAM alignment file in IGV.
+
+    The batch script uses the stored reference, annotation and explicit index
+    paths, including indexes kept outside the alignment directory. A bounded
+    samtools query selects an initial locus when possible; failure to obtain
+    that locus does not prevent viewing. Source files are not modified.
+    """
 
     _label = 'Alignment IGV viewer'
     _targets = [AlignmentFile]
@@ -93,53 +101,66 @@ class AlignmentViewer(Viewer):
         batchFile = self._createIgvBatchFile(
             alignmentFile=alignmentFile,
             fastaFile=fastaFile,
-            gtfFile=gtfFile
+            gtfFile=gtfFile,
+            indexFile=indexFile
         )
 
         command = (
             Plugin.getEnvActivationCommand(RNASEQ_DIC) +
-            ' && igv -b "{}"'.format(batchFile)
+            ' && exec igv -b {}'.format(shlex.quote(batchFile))
         )
 
-        subprocess.Popen(
-            command,
-            shell=True
-        )
-
+        try:
+            process = subprocess.Popen(command, shell=True, env=Plugin.getEnviron())
+        except OSError:
+            os.remove(batchFile)
+            raise
+        threading.Thread(target=self._removeBatchAfterExit, args=(process, batchFile), daemon=True).start()
         return []
+
+    @staticmethod
+    def _removeBatchAfterExit(process, batchFile):
+        process.wait()
+        try:
+            os.remove(batchFile)
+        except FileNotFoundError:
+            pass
+
+    @staticmethod
+    def _batchPath(path):
+        path = os.path.abspath(path)
+        if any(character in path for character in ('"', '\r', '\n')):
+            raise RuntimeError('IGV batch paths cannot contain double quotes or line breaks: {}'.format(path))
+        return '"{}"'.format(path)
 
     def _createIgvBatchFile(
             self,
             alignmentFile,
             fastaFile=None,
-            gtfFile=None):
+            gtfFile=None,
+            indexFile=None):
         """Create an IGV batch script."""
 
         region = self._getFirstMappedRegion(
-            alignmentFile
+            alignmentFile, fastaFile
         )
 
         lines = ['new']
 
         if fastaFile:
             lines.append(
-                'genome "{}"'.format(
-                    os.path.abspath(fastaFile)
-                )
+                'genome {}'.format(self._batchPath(fastaFile))
             )
 
         if gtfFile:
             lines.append(
-                'load "{}"'.format(
-                    os.path.abspath(gtfFile)
-                )
+                'load {}'.format(self._batchPath(gtfFile))
             )
 
-        lines.append(
-            'load "{}"'.format(
-                os.path.abspath(alignmentFile)
-            )
-        )
+        loadCommand = 'load ' + self._batchPath(alignmentFile)
+        if indexFile:
+            loadCommand += ' index=' + self._batchPath(indexFile)
+        lines.append(loadCommand)
 
         if region:
             lines.append(
@@ -173,25 +194,29 @@ class AlignmentViewer(Viewer):
 
     def _getFirstMappedRegion(
             self,
-            alignmentFile):
-        """Return a region around the first mapped read."""
+            alignmentFile, fastaFile=None):
+        """Return a region around the first mapped read; tolerate unavailable samtools."""
 
-        command = (
-            Plugin.getEnvActivationCommand(RNASEQ_DIC) +
-            ' && samtools view -@ 2 -F 4 "{}" | head -n 1'
-            .format(alignmentFile)
-        )
+        arguments = ['samtools', 'view', '-@', '2', '-F', '4']
+        if fastaFile:
+            arguments.extend(['-T', fastaFile])
+        arguments.append(alignmentFile)
+        command = (Plugin.getEnvActivationCommand(RNASEQ_DIC) + ' && ' +
+                   ' '.join(shlex.quote(value) for value in arguments) + ' | head -n 1')
 
         try:
             output = subprocess.check_output(
                 command,
                 shell=True,
                 text=True,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
+                env=Plugin.getEnviron(),
+                timeout=10
             ).strip()
 
         except (
                 subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
                 OSError):
             return None
 
@@ -211,6 +236,8 @@ class AlignmentViewer(Viewer):
         except ValueError:
             return None
 
+        if chromosome == '*' or position < 1:
+            return None
         start = max(1, position - 500)
         end = position + 1500
 
@@ -231,8 +258,8 @@ class AlignmentViewer(Viewer):
                 '{} file was not defined.'.format(label)
             )
 
-        if not os.path.exists(filePath):
+        if not os.path.isfile(filePath) or os.path.getsize(filePath) == 0:
             raise RuntimeError(
-                '{} file does not exist:\n{}'
+                '{} file is missing or empty:\n{}'
                 .format(label, filePath)
             )

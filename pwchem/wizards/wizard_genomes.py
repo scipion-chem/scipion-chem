@@ -23,7 +23,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import json, os
+import json
+import os
 import tkinter as tk
 from tkinter import filedialog
 
@@ -40,6 +41,7 @@ from pwchem.protocols.Sequences.protocol_download_vcf import ProtDownloadVCF
 from pwchem.protocols.Sequences.protocol_rnaseq_align import ProtRNASeqAlignment
 from pwchem.protocols.Sequences.protocol_import_genomes import ProtImportGenomes
 from pwchem.protocols.Sequences.protocol_gatk import ProtGATK
+from pwchem.protocols.Sequences.protocol_gatk_mutect2 import ProtGATKMutect2
 from pwchem.protocols.Sequences.protocol_import_vcf import ProtImportVCF
 from pwchem.utils.utilsRNA import getCommonSpecies
 
@@ -170,7 +172,8 @@ class SelectItemFromSetWizard(VariableWizard):
                 'getScientificName',
                 'getAssembly',
                 'getRelease',
-                'getSource'
+                'getSource',
+                'getDatabase'
         ):
             if hasattr(item, getterName):
                 value = getattr(item, getterName)()
@@ -178,12 +181,11 @@ class SelectItemFromSetWizard(VariableWizard):
                 if value:
                     parts.append(str(value))
 
-        # Generic fallback
-        if len(parts) == 1 and hasattr(item, 'getFileName'):
+        if hasattr(item, 'getFileName'):
             value = item.getFileName()
 
             if value:
-                parts.append(str(value))
+                parts.append(os.path.basename(value))
 
         return ' - '.join(parts)
 
@@ -212,6 +214,13 @@ SelectItemFromSetWizard().addTarget(
     inputs=['knownSites'],
     outputs=['vcfIndex']
 )
+
+for parameter, inputSet in (('germlineIndex', 'germlineVCFs'), ('ponIndex', 'ponVCFs')):
+    SelectItemFromSetWizard().addTarget(
+        protocol=ProtGATKMutect2,
+        targets=[parameter], inputs=[inputSet], outputs=[parameter]
+    )
+
 
 class ImportEntry:
     """Temporary entry used by the sequence-file import wizard."""
@@ -670,18 +679,26 @@ class ImportSequenceFilesWizard(VariableWizard):
         ).get()
 
         try:
-            data = (
-                json.loads(rawData)
-                if rawData
-                else []
-            )
-        except (TypeError, ValueError):
-            data = []
-
-        entries = [
-            ImportEntry.fromDict(item)
-            for item in data
-        ]
+            data = json.loads(rawData) if rawData else []
+            if not isinstance(data, list) or any(not isinstance(item, dict) for item in data):
+                raise ValueError('Configuration must be a JSON list of objects.')
+            entries = []
+            for item in data:
+                entry = dict(item)
+                for field in fields:
+                    name = field['name']
+                    value = entry.get(name)
+                    if value is None:
+                        value = ''
+                    if name == 'release' and type(value) is int:
+                        value = str(value)
+                    if not isinstance(value, str):
+                        raise ValueError('{} must be text.'.format(field['label']))
+                    entry[name] = value
+                entries.append(ImportEntry.fromDict(entry))
+        except (TypeError, ValueError) as error:
+            dialog.showError(title, 'Cannot edit the current configuration: {}'.format(error), form.root)
+            return
 
         dlg = ImportFilesDialog(
             form.root,

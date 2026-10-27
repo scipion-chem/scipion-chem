@@ -24,7 +24,10 @@
 # *
 # **************************************************************************
 
+import json
 import os
+import re
+import shlex
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, PointerParam, IntParam
@@ -74,7 +77,8 @@ class ProtFastpFilter(EMProtocol):
           FastQC is performed after fastp filtering.
 
       lengthRequired : int
-          Minimum read length required after filtering.
+          Minimum read length required after filtering. The default of 40
+          matches the reference RNA-seq script.
 
           Reads shorter than this value are discarded.
 
@@ -140,7 +144,11 @@ class ProtFastpFilter(EMProtocol):
           - Mean read length after filtering.
           - fastp HTML report.
           - fastp JSON report.
-          - FastQC HTML report(s), when requested.
+          - FastQC HTML report(s), when requested and reads remain.
+
+          The output has a source relation to the input FastqFile. For paired-end
+          data, the stored read count is the number of pairs (records per file),
+          while the fastp JSON total_reads count includes both mates.
 
           Filtered FASTQ files are stored uncompressed.
 
@@ -164,7 +172,8 @@ class ProtFastpFilter(EMProtocol):
       5. For paired-end datasets, verify that R1 and R2 contain the same
          number of reads.
 
-      6. If requested, execute FastQC on the filtered reads.
+      6. Check that the FASTQ record count agrees with the fastp JSON report.
+         If requested and reads remain, execute FastQC on the filtered reads.
 
       7. Create the output ``FastqFile`` containing the filtered files,
          statistics and quality-control reports.
@@ -178,12 +187,15 @@ class ProtFastpFilter(EMProtocol):
 
       - Input files must contain FASTQ quality scores.
 
-      - The minimum read length cannot exceed the input read length when
-        this information is available.
+      - The minimum read length is not limited by the stored input mean read
+        length: variable-length datasets can contain longer reads. A value
+        above the mean may therefore be valid, but can discard many reads.
 
       - Filtered FASTQ files are written in uncompressed FASTQ format.
 
-      - Output filenames are generated using the input sample name.
+      - Output filenames are generated from a sanitized version of the input
+        sample name. Directory separators and special characters are replaced
+        with underscores; the original name is preserved in output metadata.
 
       - If the input sample does not have a sample name, ``sample`` is used.
 
@@ -198,7 +210,24 @@ class ProtFastpFilter(EMProtocol):
       - FastQC, when enabled, is executed on the filtered reads rather than
         on the original input files.
 
-      - fastp HTML and JSON reports are always generated.
+      - fastp HTML and JSON reports are required and must be non-empty. The
+        JSON report must be readable and its retained-read count must match
+        the FASTQ outputs. This does not validate every FASTQ record field.
+
+      - If no reads pass filtering, the empty FASTQ outputs and fastp reports
+        are retained, the output count is zero and optional FastQC is skipped
+        with a warning. Review filtering thresholds before downstream alignment.
+
+      - Input FASTQ files must exist, be non-empty and, for paired-end data,
+        refer to different files even when symbolic links are used.
+
+      - Parameters follow fastp 0.24.0 limits: qualified and average quality
+        0-93, unqualified bases 0-100 percent, N bases 0-50, minimum length
+        zero or greater, and 1-16 threads.
+
+      - fastp HTML and JSON reports are always generated. Previous files at
+        the generated output paths are removed before execution, so an old
+        report or FASTQ cannot hide a missing result on a repeated run.
 
       - Generated fastp and FastQC reports are stored as attributes of the
         output ``FastqFile`` object.
@@ -233,7 +262,7 @@ class ProtFastpFilter(EMProtocol):
         form.addSection(label='Fastp parameters')
 
         form.addParam('lengthRequired', IntParam,
-                      default=15,
+                      default=40,
                       label='Minimum read length: ',
                       help='Reads shorter than this value will be discarded. '
                            'Corresponds to fastp option -l / --length_required.')
@@ -251,7 +280,7 @@ class ProtFastpFilter(EMProtocol):
                            'Corresponds to fastp option -u / --unqualified_percent_limit.')
 
         form.addParam('nBaseLimit', IntParam,
-                      default=10,
+                      default=5,
                       label='N base limit: ',
                       help='Reads with more N bases than this value will be discarded. '
                            'Corresponds to fastp option -n / --n_base_limit.')
@@ -274,11 +303,14 @@ class ProtFastpFilter(EMProtocol):
         self._insertFunctionStep(self.filterStep)
 
     def filterStep(self):
+        errors = self._validate()
+        if errors:
+            raise RuntimeError('Invalid fastp inputs: ' + '; '.join(errors))
         inputFastq = self.inputFastq.get()
 
         outputFastq = self._runFastp(inputFastq)
 
-        if self.runFastqc.get():
+        if self.runFastqc.get() and outputFastq.getNumReads() > 0:
             htmlFiles = self._runFastqc(outputFastq)
 
             if outputFastq.isPaired():
@@ -287,118 +319,77 @@ class ProtFastpFilter(EMProtocol):
             else:
                 outputFastq.setFastqcHtml(htmlFiles[0])
 
+        if self.runFastqc.get() and outputFastq.getNumReads() == 0:
+            self.warning('No reads passed fastp filtering. FastQC was skipped; review the fastp reports.')
+
         self._defineOutputs(outputFastq=outputFastq)
+        self._defineSourceRelation(self.inputFastq, outputFastq)
 
     def _runFastp(self, inputFastq):
-        fn1 = inputFastq.getFileName()
         isPaired = inputFastq.isPaired()
-
-        lengthRequired = self.lengthRequired.get()
-        threads = self.numberOfThreads.get()
-        qualifiedQualityPhred = self.qualifiedQualityPhred.get()
-        unqualifiedPercentLimit = self.unqualifiedPercentLimit.get()
-        nBaseLimit = self.nBaseLimit.get()
-        averageQual = self.averageQual.get()
-        extraArgs = ''
-
-        if self.disableAdapterTrimming.get():
-            extraArgs += '-A '
-
+        sampleName = inputFastq.getSampleName() or 'sample'
+        fileStem = re.sub(r'[^A-Za-z0-9_.-]+', '_', sampleName).strip('.') or 'sample'
         outDir = self._getExtraPath('fastp')
         os.makedirs(outDir, exist_ok=True)
 
-        sampleName = inputFastq.getSampleName()
+        out1 = os.path.join(outDir, f'{fileStem}_filtered_R1.fastq')
+        out2 = os.path.join(outDir, f'{fileStem}_filtered_R2.fastq') if isPaired else None
+        reportHtml = os.path.join(outDir, f'{fileStem}_fastp.html')
+        reportJson = os.path.join(outDir, f'{fileStem}_fastp.json')
 
-        if not sampleName:
-            sampleName = 'sample'
-
-        out1 = os.path.join(
-            outDir,
-            f'{sampleName}_filtered_R1.fastq'
-        )
-
-        reportHtml = os.path.join(
-            outDir,
-            f'{sampleName}_fastp.html'
-        )
-
-        reportJson = os.path.join(
-            outDir,
-            f'{sampleName}_fastp.json'
-        )
-
-        arguments = (
-            f'-i "{fn1}" '
-            f'-o "{out1}" '
-            f'-w {threads} '
-            f'-l {lengthRequired} '
-            f'-q {qualifiedQualityPhred} '
-            f'-u {unqualifiedPercentLimit} '
-            f'-n {nBaseLimit} '
-            f'-e {averageQual} '
-            f'{extraArgs}'
-            f'-h "{reportHtml}" '
-            f'-j "{reportJson}"'
-        )
-
+        args = [
+            '-i', inputFastq.getFileName(), '-o', out1,
+            '-w', self.numberOfThreads.get(), '-l', self.lengthRequired.get(),
+            '-q', self.qualifiedQualityPhred.get(), '-u', self.unqualifiedPercentLimit.get(),
+            '-n', self.nBaseLimit.get(), '-e', self.averageQual.get(),
+            '-h', reportHtml, '-j', reportJson
+        ]
         if isPaired:
-            fn2 = inputFastq.getFileName2()
+            args.extend(['-I', inputFastq.getFileName2(), '-O', out2])
+        if self.disableAdapterTrimming.get():
+            args.append('-A')
 
-            out2 = os.path.join(
-                outDir,
-                f'{sampleName}_filtered_R2.fastq'
-            )
-
-            arguments = (
-                f'-i "{fn1}" '
-                f'-I "{fn2}" '
-                f'-o "{out1}" '
-                f'-O "{out2}" '
-                f'-w {threads} '
-                f'-l {lengthRequired} '
-                f'-q {qualifiedQualityPhred} '
-                f'-u {unqualifiedPercentLimit} '
-                f'-n {nBaseLimit} '
-                f'-e {averageQual} '
-                f'{extraArgs}'
-                f'-h "{reportHtml}" '
-                f'-j "{reportJson}"'
-            )
-
+        inputFiles = [inputFastq.getFileName()]
+        if isPaired:
+            inputFiles.append(inputFastq.getFileName2())
+        for path in (out1, out2, reportHtml, reportJson):
+            if path and any(os.path.abspath(path) == os.path.abspath(source)
+                            or (os.path.exists(path) and os.path.samefile(path, source)) for source in inputFiles):
+                raise RuntimeError('fastp output would overwrite an input file: {}'.format(path))
+        for path in (out1, out2, reportHtml, reportJson):
+            if path and os.path.lexists(path):
+                os.remove(path)
+        arguments = ' '.join(shlex.quote(str(value)) for value in args)
         Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'fastp')
 
-        if not os.path.exists(out1):
-            raise RuntimeError(
-                f'fastp did not generate the expected output FASTQ: {out1}'
-            )
-
-        if isPaired and not os.path.exists(out2):
-            raise RuntimeError(
-                f'fastp did not generate the expected read 2 FASTQ: {out2}'
-            )
-
-        if not os.path.exists(reportHtml):
-            raise RuntimeError(
-                f'fastp did not generate the expected HTML report: {reportHtml}'
-            )
-
-        if not os.path.exists(reportJson):
-            raise RuntimeError(
-                f'fastp did not generate the expected JSON report: {reportJson}'
-            )
+        outputFiles = [out1, out2] if isPaired else [out1]
+        for path in outputFiles:
+            if not os.path.isfile(path):
+                raise RuntimeError(f'fastp did not generate the expected FASTQ: {path}')
+        for path in (reportHtml, reportJson):
+            if not os.path.isfile(path) or os.path.getsize(path) == 0:
+                raise RuntimeError(f'fastp report is missing or empty: {path}')
 
         numReads, readLength = getFastqStats(out1)
-
         if isPaired:
             numReads2, readLength2 = getFastqStats(out2)
-
             if numReads != numReads2:
-                raise RuntimeError(
-                    'Filtered paired FASTQ files have different number of reads: '
-                    'R1={} R2={}'.format(numReads, numReads2)
-                )
-
+                raise RuntimeError('Filtered paired FASTQ files have different numbers of reads: '
+                                   f'R1={numReads} R2={numReads2}')
             readLength = int(round((readLength + readLength2) / 2))
+
+        try:
+            with open(reportJson) as handle:
+                report = json.load(handle)
+            reportedReads = report['summary']['after_filtering']['total_reads']
+            if type(reportedReads) is not int or reportedReads < 0:
+                raise ValueError('Invalid total_reads value')
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            raise RuntimeError(f'Invalid fastp JSON report: {reportJson}') from error
+        expectedReads = numReads * (2 if isPaired else 1)
+        if reportedReads != expectedReads:
+            raise RuntimeError('Filtered FASTQ read count does not match the fastp report: '
+                               f'files={expectedReads}, report={reportedReads}')
 
         outputFastq = FastqFile()
         outputFastq.setFileName(out1)
@@ -409,13 +400,10 @@ class ProtFastpFilter(EMProtocol):
         outputFastq.setReadLength(readLength)
         outputFastq.setNumReads(numReads)
         outputFastq.setSampleName(sampleName)
-
         if isPaired:
             outputFastq.setFileName2(out2)
-
         outputFastq.setFastpHtml(reportHtml)
         outputFastq.setFastpJson(reportJson)
-
         return outputFastq
 
     def _runFastqc(self, outputFastq):
@@ -434,45 +422,36 @@ class ProtFastpFilter(EMProtocol):
 
     def _validate(self):
         errors = []
-
         inputFastq = self.inputFastq.get()
         if inputFastq is None:
-            errors.append('An input FASTQ object is required.')
-            return errors
+            return ['An input FASTQ object is required.']
 
-        if inputFastq.isPaired() and not inputFastq.hasFileName2():
-            errors.append(
-                'Input FASTQ is marked as paired-end but read 2 is missing.'
-            )
-
-        if not inputFastq.hasQuality():
-            errors.append(
-                'Input file does not contain quality scores and cannot be '
-                'processed as FASTQ.'
-            )
+        files = [('Read 1', inputFastq.getFileName())]
+        if inputFastq.isPaired():
+            files.append(('Read 2', inputFastq.getFileName2()))
+        for label, path in files:
+            if not path or not os.path.isfile(path):
+                errors.append(f'{label} FASTQ file is missing: {path}')
+            elif os.path.getsize(path) == 0:
+                errors.append(f'{label} FASTQ file is empty: {path}')
+        if (len(files) == 2 and all(path and os.path.isfile(path) for _, path in files)
+                and os.path.samefile(files[0][1], files[1][1])):
+            errors.append('Paired-end reads must use different FASTQ files.')
+        if inputFastq.getFormat() != 'FASTQ' or not inputFastq.hasQuality():
+            errors.append('Input must be FASTQ with quality scores.')
 
         if self.lengthRequired.get() < 0:
             errors.append('Minimum read length must be greater than or equal to 0.')
-
-        if inputFastq.getReadLength() > 0:
-            if self.lengthRequired.get() > inputFastq.getReadLength():
-                errors.append(
-                    f'Minimum read length ({self.lengthRequired.get()}) is larger '
-                    f'than the input read length ({inputFastq.getReadLength()}).'
-                )
-
-        if not 0 <= self.qualifiedQualityPhred.get() <= 36:
-            errors.append('Qualified quality phred must be between 0 and 36.')
-
-        if not 0 <= self.unqualifiedPercentLimit.get() <= 100:
-            errors.append('Unqualified percent limit must be between 0 and 100.')
-
-        if self.nBaseLimit.get() < 0:
-            errors.append('N base limit must be greater than or equal to 0.')
-
-        if self.averageQual.get() < 0:
-            errors.append('Average quality must be greater than or equal to 0.')
-
+        for value, label, maximum in (
+            (self.qualifiedQualityPhred.get(), 'Qualified quality phred', 93),
+            (self.unqualifiedPercentLimit.get(), 'Unqualified percent limit', 100),
+            (self.nBaseLimit.get(), 'N base limit', 50),
+            (self.averageQual.get(), 'Average quality', 93)
+        ):
+            if not 0 <= value <= maximum:
+                errors.append(f'{label} must be between 0 and {maximum}.')
+        if not 1 <= self.numberOfThreads.get() <= 16:
+            errors.append('fastp supports between 1 and 16 threads.')
         return errors
 
     def _summary(self):
@@ -480,7 +459,7 @@ class ProtFastpFilter(EMProtocol):
 
         inputFastq = self.inputFastq.get()
 
-        summary.append('FASTQ filtering performed with fastp')
+        summary.append('FASTQ filtering with fastp')
         summary.append(f'Minimum read length: {self.lengthRequired.get()}')
         summary.append(f'Threads: {self.numberOfThreads.get()}')
         summary.append(f'Qualified quality phred: {self.qualifiedQualityPhred.get()}')
@@ -494,11 +473,11 @@ class ProtFastpFilter(EMProtocol):
 
         if inputFastq:
             summary.append(f'Input: {inputFastq.getFileName()}')
-            if inputFastq.getReadLength() > 0:
+            if (inputFastq.getReadLength() or 0) > 0:
                 summary.append(
                     f'Input read length: {inputFastq.getReadLength()} bp'
                 )
-            if inputFastq.getNumReads() > 0:
+            if (inputFastq.getNumReads() or 0) > 0:
                 summary.append(
                     f'Input number of reads: {inputFastq.getNumReads()}'
                 )
@@ -515,18 +494,23 @@ class ProtFastpFilter(EMProtocol):
                     f'Output read length: {outputFastq.getReadLength()} bp'
                 )
 
-            if outputFastq.getNumReads() > 0:
-                summary.append(
-                    f'Output number of reads: {outputFastq.getNumReads()}'
-                )
+            summary.append(f'Output number of reads: {outputFastq.getNumReads()}')
 
-        summary.append(
-            f'FastQC: {"executed" if self.runFastqc.get() else "not executed"}'
-        )
+        if not self.runFastqc.get():
+            fastqcStatus = 'not requested'
+        elif not hasattr(self, 'outputFastq'):
+            fastqcStatus = 'pending'
+        elif self.outputFastq.getNumReads() == 0:
+            fastqcStatus = 'skipped (no reads passed filtering)'
+        else:
+            fastqcStatus = 'executed'
+        summary.append(f'FastQC: {fastqcStatus}')
 
         return summary
 
     def _methods(self):
+        if not hasattr(self, 'outputFastq'):
+            return []
         methods = []
 
         methods.append(
@@ -541,16 +525,15 @@ class ProtFastpFilter(EMProtocol):
             f'{"disabled" if self.disableAdapterTrimming.get() else "enabled"}.'
         )
 
-        if hasattr(self, 'outputFastq'):
-            outputFastq = self.outputFastq
+        outputFastq = self.outputFastq
+        methods.append(
+            f'The filtered FASTQ dataset contains '
+            f'{outputFastq.getNumReads()} '
+            f'{"read pairs" if outputFastq.isPaired() else "reads"} with an average read '
+            f'length of {outputFastq.getReadLength()} bp.'
+        )
 
-            methods.append(
-                f'The filtered FASTQ dataset contains '
-                f'{outputFastq.getNumReads()} reads with an average read '
-                f'length of {outputFastq.getReadLength()} bp.'
-            )
-
-        if self.runFastqc.get():
+        if self.runFastqc.get() and self.outputFastq.getNumReads() > 0:
             methods.append(
                 'FastQC quality control was performed on the filtered FASTQ files.'
             )

@@ -26,7 +26,6 @@
 # **************************************************************************
 
 import os
-import shlex
 
 from pyworkflow.protocol.params import (
     BooleanParam,
@@ -35,11 +34,10 @@ from pyworkflow.protocol.params import (
 )
 from pwem.protocols import EMProtocol
 
-from pwchem import Plugin
-from pwchem.constants import RNASEQ_DIC
+from pwchem.utils.utilsRNA import GATKPreparationMixin
 
 
-class ProtGATK(EMProtocol):
+class ProtGATK(GATKPreparationMixin, EMProtocol):
     """
     Process RNA-seq BAM alignments using GATK.
 
@@ -136,28 +134,56 @@ class ProtGATK(EMProtocol):
     ``AlignmentFile``.
 
     Before executing GATK, the protocol checks that the reference FASTA
-    exists and prepares the auxiliary files required by GATK when
-    necessary.
+    exists, is non-empty and is an uncompressed FASTA. Required inputs are
+    linked into the protocol working directory. Indexes and dictionaries are
+    copied or generated there, so original input directories need not be writable.
+    Symbolic links avoid copying full reference genomes and BAM files.
 
     These files include:
 
     FASTA index
         The ``.fai`` FASTA index is generated with samtools ``faidx`` when
-        it does not already exist.
+        no current, structurally valid index can be reused. Reuse requires a
+        non-empty index at least as recent as the FASTA, valid columns, positive
+        sequence lengths and offsets within the reference file.
 
     Sequence dictionary
         The GATK/Picard sequence dictionary (``.dict``) is generated using
-        GATK ``CreateSequenceDictionary`` when it does not already exist.
+        GATK ``CreateSequenceDictionary`` when no current, parseable dictionary
+        can be reused. Sequence names, lengths and order are compared with the
+        FASTA index. Disagreement triggers regeneration of both local files.
 
     Known-sites VCF index
         When ``BaseRecalibrator`` is enabled, the selected known-sites VCF
         must be indexed.
 
-        Existing ``.idx`` and ``.tbi`` indexes are accepted. A ``.csi``
-        index alone triggers an attempt to create a GATK-compatible index.
+        Plain VCF files use Tribble ``.idx`` indexes; BGZF-compressed VCF files
+        use tabix ``.tbi`` indexes. Their signatures and modification times are
+        checked before reuse, including an index stored separately in VCF metadata.
+        A ``.csi`` index alone triggers creation of a GATK-compatible index.
+        Ordinary gzip is rejected because it cannot be indexed as BGZF.
 
         If no compatible index is found, the protocol attempts to generate
-        one using GATK ``IndexFeatureFile``.
+        one using GATK ``IndexFeatureFile`` in the protocol working directory.
+
+    BAM index
+        Input and intermediate BAM indexes are checked before reuse. Missing,
+        stale, empty or unrecognized BAI files are regenerated with samtools.
+        Both file.bam.bai and file.bai naming conventions are recognized;
+        GATK-generated indexes are reused without indexing the BAM a second time.
+        The input BAM and newly indexed BAM files undergo samtools quickcheck,
+        which checks the header and end-of-file marker without scanning every
+        alignment record.
+
+    Reference compatibility
+        BAM sequence names, lengths and order must agree with the reference;
+        a BAM may describe a subset of reference sequences. Known-sites VCF
+        declarations must share at least one sequence with the reference, and
+        declared lengths must match for shared sequences. Extra VCF contigs
+        produce a warning and remain subject to GATK dictionary validation.
+        When a VCF omits contig declarations, the protocol warns that this
+        compatibility check could not be performed. These checks do not prove
+        sequence identity or replace complete BAM/VCF validation.
 
 
     ---------------------------------------------------------------------
@@ -225,24 +251,25 @@ class ProtGATK(EMProtocol):
 
         The output object is created by cloning the input
         ``AlignmentFile`` and updating the BAM and BAM index paths. This
-        preserves the alignment metadata, including the associated
-        reference genome information.
+        preserves alignment metadata. The reference FASTA path is updated to
+        the local link to the same genome, alongside its prepared indexes and
+        dictionary. Original reference and BAM files are not modified.
 
         The final BAM depends on the selected operations:
 
         - If ``ApplyBQSR`` is enabled, the recalibrated BAM is returned.
         - Otherwise, if ``SplitNCigarReads`` is enabled, the split BAM is
           returned.
-        - Otherwise, the original input BAM is used.
+        - Otherwise, a local link to the original input BAM is used, with
+          its BAI prepared inside the protocol directory.
 
         The final BAM is indexed with samtools and the resulting ``.bai``
         file is stored in the output ``AlignmentFile``.
 
-        When supported by the ``AlignmentFile`` object, the output is also
-        marked as indexed and sorted.
+        The output is marked as indexed and sorted after index preparation.
 
-        The executed GATK commands are stored in the output alignment when
-        command metadata are supported.
+        Executed GATK and samtools commands are stored in the output alignment
+        command metadata.
 
 
     ---------------------------------------------------------------------
@@ -251,7 +278,8 @@ class ProtGATK(EMProtocol):
 
     The protocol performs the following steps:
 
-    1. Retrieve the reference FASTA from the input ``AlignmentFile``.
+    1. Retrieve the reference FASTA from the input ``AlignmentFile`` and
+       prepare local links for the reference and input BAM.
 
     2. Check the reference FASTA and create its ``.fai`` index and
        sequence dictionary when necessary.
@@ -286,11 +314,17 @@ class ProtGATK(EMProtocol):
     - At least one GATK operation has been selected.
     - ``ApplyBQSR`` is not selected without ``BaseRecalibrator``.
     - The input alignment contains a reference FASTA.
-    - The reference FASTA exists.
+    - The reference FASTA exists and is non-empty.
+    - The alignment is represented as BAM and at least one thread is selected.
     - A non-empty ``SetOfVCFFiles`` is provided when
       ``BaseRecalibrator`` is enabled.
     - The selected VCF index is valid.
-    - The selected known-sites VCF exists.
+    - The selected known-sites VCF exists and is non-empty.
+
+    During input preparation, the protocol also checks BAM integrity, sequence
+    dictionary compatibility and known-sites VCF headers and compression.
+    BQSR requires read groups with non-empty ID and SM tags in the BAM header.
+    Invalid metadata are reported before the selected GATK operations run.
 
 
     ---------------------------------------------------------------------
@@ -300,7 +334,9 @@ class ProtGATK(EMProtocol):
     Depending on the selected operations, the protocol can generate:
 
     split_n_cigar_reads.bam
-        BAM generated by ``SplitNCigarReads``.
+        BAM generated by ``SplitNCigarReads``. Generated BAMs and their BAI
+        files are cleared before rerunning the corresponding operation, so
+        files from a previous attempt cannot hide a missing output.
 
     recalibration.table
         Base quality score recalibration table generated by
@@ -310,8 +346,17 @@ class ProtGATK(EMProtocol):
         BAM generated by ``ApplyBQSR``.
 
     gatk_commands.txt
-        Internal record containing the GATK commands executed by the
-        protocol.
+        Internal record containing GATK and samtools commands executed by the
+        protocol, including reference preparation and indexing commands.
+
+    reference/reference.fa, reference/reference.fa.fai, reference/reference.dict
+        Local reference link, FASTA index and sequence dictionary.
+
+    inputs/alignment.bam, inputs/alignment.bam.bai, inputs/alignment.bam.header.sam
+        Local input BAM link, prepared BAI and header used for compatibility checks.
+
+    inputs/known_sites.vcf or inputs/known_sites.vcf.gz
+        Local link to the selected known-sites VCF, with its prepared index.
 
 
     ---------------------------------------------------------------------
@@ -341,11 +386,14 @@ class ProtGATK(EMProtocol):
     - Only one VCF from the input ``SetOfVCFFiles`` is used in each
       protocol execution.
 
-    - Existing ``.idx`` and ``.tbi`` VCF indexes are accepted. A lone
-      ``.csi`` index is not considered sufficient for GATK.
+    - Compatible ``.idx`` (plain VCF) and ``.tbi`` (BGZF VCF) indexes are
+      reused after signature and timestamp checks. A lone ``.csi`` index
+      is not considered sufficient for GATK.
 
-    - Missing FASTA indexes, sequence dictionaries and VCF feature indexes
-      are generated automatically when required.
+    - Missing or unusable FASTA indexes, dictionaries, BAM indexes and VCF
+      feature indexes are generated locally when required. Existing files are
+      not fully checksum-verified; timestamps and structural checks cannot
+      detect every possible form of corruption.
 
     - ``ApplyBQSR`` requires ``BaseRecalibrator`` to be enabled in the
       same protocol execution.
@@ -361,8 +409,6 @@ class ProtGATK(EMProtocol):
     """
 
     _label = 'GATK processing'
-
-    GATK_COMMAND = 'gatk {}'
 
     # -------------------------------------------------------
     # Parameters
@@ -448,10 +494,7 @@ class ProtGATK(EMProtocol):
             )
         )
 
-        form.addParallelSection(
-            threads=4,
-            mpi=1
-        )
+        form.addParallelSection(threads=4, mpi=1)
 
     # -------------------------------------------------------
     # Steps
@@ -477,202 +520,83 @@ class ProtGATK(EMProtocol):
     # -------------------------------------------------------
 
     def prepareReferenceStep(self):
+        errors = self._validate()
+        if errors:
+            raise RuntimeError('Invalid GATK inputs: ' + '; '.join(errors))
+        os.makedirs(self._getExtraPath(), exist_ok=True)
+        with open(self._getCommandFile(), 'w'):
+            pass
         alignment = self.inputAlignment.get()
-        referenceFasta = self._getReferenceFasta(alignment)
-
-        if not referenceFasta:
-            raise RuntimeError(
-                'GATK requires a reference FASTA stored in the '
-                'input AlignmentFile.'
-            )
-
-        if not os.path.isfile(referenceFasta):
-            raise RuntimeError(
-                'Reference FASTA does not exist: {}'.format(referenceFasta)
-            )
-
-        self._ensureFastaIndex(referenceFasta)
-        self._ensureSequenceDictionary(referenceFasta)
-
+        contigs = self._prepareReference(self._getReferenceFasta(alignment))
+        self._prepareAlignment(alignment, self._getPreparedBam(), contigs, 'Input BAM',
+                               requireReadGroups=self.baseRecalibrator.get())
         if self.baseRecalibrator.get():
-            knownSites = self._getKnownSitesFile()
-
-            if not os.path.isfile(knownSites):
-                raise RuntimeError(
-                    'Known-sites VCF does not exist: {}'.format(
-                        knownSites
-                    )
-                )
-
-            self._ensureFeatureIndex(knownSites)
+            self._prepareVCF(self._getSelectedVCF(), self._getPreparedKnownSites(),
+                             contigs, 'Known-sites VCF')
 
     # -------------------------------------------------------
     # GATK operations
     # -------------------------------------------------------
 
     def splitNCigarReadsStep(self):
-        alignment = self.inputAlignment.get()
-        inputBam = alignment.getFileName()
-        referenceFasta = self._getReferenceFasta(alignment)
-        outputBam = self._getSplitBam()
-
+        inputBam = self._getPreparedBam()
         self._validateBamFile(inputBam)
-
-        args = (
-            'SplitNCigarReads '
-            '-R {reference} '
-            '-I {inputBam} '
-            '-O {outputBam}'
-        ).format(
-            reference=self._quote(referenceFasta),
-            inputBam=self._quote(inputBam),
-            outputBam=self._quote(outputBam)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'gatk'
-        )
-
-        self._validateBamFile(outputBam)
-        self._appendCommand(self.GATK_COMMAND.format(args))
+        self._clearBamOutput(self._getSplitBam())
+        self._runTool('gatk', ['SplitNCigarReads', '-R', self._getPreparedReference(),
+                               '-I', inputBam, '-O', self._getSplitBam()])
+        self._validateBamFile(self._getSplitBam())
 
     def baseRecalibratorStep(self):
-        alignment = self.inputAlignment.get()
         inputBam = self._getInputAfterSplit()
-        referenceFasta = self._getReferenceFasta(alignment)
-        knownSites = self._getKnownSitesFile()
-        recalTable = self._getRecalibrationTable()
-
         self._validateBamFile(inputBam)
-
-        args = (
-            'BaseRecalibrator '
-            '-R {reference} '
-            '-I {inputBam} '
-            '--known-sites {knownSites} '
-            '-O {recalTable}'
-        ).format(
-            reference=self._quote(referenceFasta),
-            inputBam=self._quote(inputBam),
-            knownSites=self._quote(knownSites),
-            recalTable=self._quote(recalTable)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'gatk'
-        )
-
-        if not os.path.isfile(recalTable):
-            raise RuntimeError(
-                'BaseRecalibrator did not create the recalibration table: {}'
-                .format(recalTable)
-            )
-
-        self._appendCommand(self.GATK_COMMAND.format(args))
+        self._ensureBamIndex(inputBam)
+        self._removeIndex(self._getRecalibrationTable())
+        self._runTool('gatk', ['BaseRecalibrator', '-R', self._getPreparedReference(),
+                               '-I', inputBam, '--known-sites', self._getPreparedKnownSites(),
+                               '-O', self._getRecalibrationTable()])
+        self._checkNonempty(self._getRecalibrationTable(), 'Recalibration table')
 
     def applyBQSRStep(self):
-        alignment = self.inputAlignment.get()
         inputBam = self._getInputAfterSplit()
-        referenceFasta = self._getReferenceFasta(alignment)
-        recalTable = self._getRecalibrationTable()
-        outputBam = self._getBqsrBam()
-
         self._validateBamFile(inputBam)
-
-        if not os.path.isfile(recalTable):
-            raise RuntimeError(
-                'ApplyBQSR requires a recalibration table generated by '
-                'BaseRecalibrator.'
-            )
-
-        args = (
-            'ApplyBQSR '
-            '-R {reference} '
-            '-I {inputBam} '
-            '--bqsr-recal-file {recalTable} '
-            '-O {outputBam}'
-        ).format(
-            reference=self._quote(referenceFasta),
-            inputBam=self._quote(inputBam),
-            recalTable=self._quote(recalTable),
-            outputBam=self._quote(outputBam)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'gatk'
-        )
-
-        self._validateBamFile(outputBam)
-        self._appendCommand(self.GATK_COMMAND.format(args))
+        self._checkNonempty(self._getRecalibrationTable(), 'Recalibration table')
+        self._clearBamOutput(self._getBqsrBam())
+        self._runTool('gatk', ['ApplyBQSR', '-R', self._getPreparedReference(),
+                               '-I', inputBam, '--bqsr-recal-file', self._getRecalibrationTable(),
+                               '-O', self._getBqsrBam()])
+        self._validateBamFile(self._getBqsrBam())
 
     # -------------------------------------------------------
     # Final BAM
     # -------------------------------------------------------
 
     def indexFinalBamStep(self):
-        finalBam = self._getFinalBam()
-
-        self._validateBamFile(finalBam)
-
-        Plugin.runCondaCommand(
-            self,
-            'index -@ {} {}'.format(
-                self.numberOfThreads.get(),
-                self._quote(finalBam)
-            ),
-            RNASEQ_DIC,
-            'samtools'
-        )
-
-        baiFile = finalBam + '.bai'
-
-        if not os.path.isfile(baiFile):
-            raise RuntimeError(
-                'BAM index was not created: {}'.format(baiFile)
-            )
+        self._ensureBamIndex(self._getFinalBam())
 
     def createOutputStep(self):
         inputAlignment = self.inputAlignment.get()
 
         finalBam = self._getFinalBam()
         finalBai = finalBam + '.bai'
+        self._validateBamFile(finalBam)
+        if not self._isCurrentIndex(finalBai, finalBam) or not self._hasIndexSignature(finalBai, b'BAI\x01'):
+            raise RuntimeError('Final BAM index is missing, outdated or invalid: {}'.format(finalBai))
 
         outputAlignment = inputAlignment.clone()
         outputAlignment.setFileName(finalBam)
+        outputAlignment.setReferenceFasta(self._getPreparedReference())
         outputAlignment.setIndexFile(finalBai)
         outputAlignment.setIsIndexed(True)
 
-        if hasattr(outputAlignment, 'setIsSorted'):
-            outputAlignment.setIsSorted(True)
+        outputAlignment.setIsSorted(True)
+        outputAlignment.setCommand(self._readCommandHistory())
 
-        if hasattr(outputAlignment, 'setCommand'):
-            outputAlignment.setCommand(
-                self._readCommandHistory()
-            )
+        self._defineOutputs(outputAlignment=outputAlignment)
 
-        self._defineOutputs(
-            outputAlignment=outputAlignment
-        )
-
-        self._defineSourceRelation(
-            self.inputAlignment,
-            outputAlignment
-        )
+        self._defineSourceRelation(self.inputAlignment, outputAlignment)
 
         if self.baseRecalibrator.get():
-            self._defineSourceRelation(
-                self.knownSites,
-                outputAlignment
-            )
+            self._defineSourceRelation(self.knownSites, outputAlignment)
 
     # -------------------------------------------------------
     # BAM flow
@@ -684,16 +608,13 @@ class ProtGATK(EMProtocol):
         if self.splitNCigarReads.get():
             return self._getSplitBam()
 
-        return self.inputAlignment.get().getFileName()
+        return self._getPreparedBam()
 
     def _getFinalBam(self):
         if self.applyBQSR.get():
             return self._getBqsrBam()
 
-        if self.splitNCigarReads.get():
-            return self._getSplitBam()
-
-        return self.inputAlignment.get().getFileName()
+        return self._getInputAfterSplit()
 
     # -------------------------------------------------------
     # VCF selection
@@ -705,18 +626,14 @@ class ProtGATK(EMProtocol):
         vcfSet = self.knownSites.get()
 
         if vcfSet is None:
-            raise RuntimeError(
-                'No SetOfVCFFiles selected.'
-            )
+            raise RuntimeError('No SetOfVCFFiles selected.')
 
         if vcfSet.getSize() == 0:
-            raise RuntimeError(
-                'The selected SetOfVCFFiles is empty.'
-            )
+            raise RuntimeError('The selected SetOfVCFFiles is empty.')
 
         index = self.vcfIndex.get()
 
-        if index < 0 or index >= vcfSet.getSize():
+        if index is None or index < 0 or index >= vcfSet.getSize():
             raise RuntimeError(
                 'VCF index {} is out of range for a SetOfVCFFiles '
                 'containing {} VCF(s).'.format(
@@ -729,26 +646,17 @@ class ProtGATK(EMProtocol):
             if currentIndex == index:
                 return vcfFile.clone()
 
-        raise RuntimeError(
-            'The selected VCF could not be retrieved.'
-        )
+        raise RuntimeError('The selected VCF could not be retrieved.')
 
     def _getKnownSitesFile(self):
         """Return the path of the selected known-sites VCF."""
 
         vcfObject = self._getSelectedVCF()
 
-        if not vcfObject:
-            raise RuntimeError(
-                'No known-sites VCF was selected.'
-            )
-
         vcfFile = vcfObject.getFileName()
 
         if not vcfFile:
-            raise RuntimeError(
-                'The selected VCFFile does not contain a VCF path.'
-            )
+            raise RuntimeError('The selected VCFFile does not contain a VCF path.')
 
         return vcfFile
 
@@ -757,246 +665,33 @@ class ProtGATK(EMProtocol):
     # -------------------------------------------------------
 
     def _getSplitBam(self):
-        return self._getExtraPath(
-            'split_n_cigar_reads.bam'
-        )
+        return self._getExtraPath('split_n_cigar_reads.bam')
 
     def _getBqsrBam(self):
-        return self._getExtraPath(
-            'bqsr.bam'
-        )
+        return self._getExtraPath('bqsr.bam')
 
     def _getRecalibrationTable(self):
-        return self._getExtraPath(
-            'recalibration.table'
-        )
+        return self._getExtraPath('recalibration.table')
 
     def _getCommandFile(self):
-        return self._getExtraPath(
-            'gatk_commands.txt'
-        )
-
-    # -------------------------------------------------------
-    # Command history
-    # -------------------------------------------------------
-
-    def _appendCommand(self, command):
-        with open(self._getCommandFile(), 'a') as outputFile:
-            outputFile.write(command + '\n')
-
-    def _readCommandHistory(self):
-        commandFile = self._getCommandFile()
-
-        if not os.path.isfile(commandFile):
-            return ''
-
-        with open(commandFile) as inputFile:
-            commands = [
-                line.strip()
-                for line in inputFile
-                if line.strip()
-            ]
-
-        return ' && '.join(commands)
+        return self._getExtraPath('gatk_commands.txt')
 
     # -------------------------------------------------------
     # Reference helpers
     # -------------------------------------------------------
 
-    def _ensureFastaIndex(self, referenceFasta):
-        fastaIndex = referenceFasta + '.fai'
+    def _getPreparedBam(self):
+        return self._getExtraPath('inputs', 'alignment.bam')
 
-        if os.path.isfile(fastaIndex):
-            return
-
-        Plugin.runCondaCommand(
-            self,
-            'faidx {}'.format(
-                self._quote(referenceFasta)
-            ),
-            RNASEQ_DIC,
-            'samtools'
-        )
-
-        if not os.path.isfile(fastaIndex):
-            raise RuntimeError(
-                'Reference FASTA index was not created: {}'.format(
-                    fastaIndex
-                )
-            )
-
-    def _ensureSequenceDictionary(self, referenceFasta):
-        dictionaryFile = self._getSequenceDictionaryPath(
-            referenceFasta
-        )
-
-        if os.path.isfile(dictionaryFile):
-            return
-
-        args = (
-            'CreateSequenceDictionary '
-            '-R {reference} '
-            '-O {dictionary}'
-        ).format(
-            reference=self._quote(referenceFasta),
-            dictionary=self._quote(dictionaryFile)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'gatk'
-        )
-
-        if not os.path.isfile(dictionaryFile):
-            raise RuntimeError(
-                'Reference sequence dictionary was not created: {}'
-                .format(dictionaryFile)
-            )
-
-    def _ensureFeatureIndex(self, featureFile):
-        """Ensure a GATK-compatible feature index exists for the VCF."""
-        possibleIndexes = [
-            featureFile + '.idx',
-            featureFile + '.tbi'
-        ]
-
-        if any(
-            os.path.isfile(indexFile)
-            for indexFile in possibleIndexes
-        ):
-            return
-
-        args = 'IndexFeatureFile -I {}'.format(
-            self._quote(featureFile)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'gatk'
-        )
-
-        if not any(
-            os.path.isfile(indexFile)
-            for indexFile in possibleIndexes
-        ):
-            raise RuntimeError(
-                'GATK-compatible known-sites VCF index was not created '
-                'for: {}'.format(featureFile)
-            )
-
-    # -------------------------------------------------------
-    # Alignment metadata
-    # -------------------------------------------------------
-
-    @staticmethod
-    def _getReferenceFasta(alignment):
-        if hasattr(alignment, 'getReferenceFasta'):
-            return alignment.getReferenceFasta()
-
-        return None
-
-    @staticmethod
-    def _getSequenceDictionaryPath(referenceFasta):
-        root, extension = os.path.splitext(
-            referenceFasta
-        )
-
-        if extension.lower() in (
-            '.fa',
-            '.fasta',
-            '.fna'
-        ):
-            return root + '.dict'
-
-        return referenceFasta + '.dict'
-
-    # -------------------------------------------------------
-    # Validation helpers
-    # -------------------------------------------------------
-
-    @staticmethod
-    def _validateBamFile(bamFile):
-        if not bamFile:
-            raise RuntimeError(
-                'The BAM path is empty.'
-            )
-
-        if not os.path.isfile(bamFile):
-            raise RuntimeError(
-                'BAM file does not exist: {}'.format(
-                    bamFile
-                )
-            )
-
-        if os.path.getsize(bamFile) == 0:
-            raise RuntimeError(
-                'BAM file is empty: {}'.format(
-                    bamFile
-                )
-            )
-
-    @staticmethod
-    def _quote(value):
-        return shlex.quote(str(value))
+    def _getPreparedKnownSites(self):
+        return self._getLocalVCFPath(self._getKnownSitesFile(), 'known_sites')
 
     def _validateKnownSites(self):
-        """Validate the known-sites VCF selected for BaseRecalibrator."""
-        errors = []
-
-        vcfSet = self.knownSites.get()
-
-        if vcfSet is None:
-            errors.append(
-                'BaseRecalibrator requires a SetOfVCFFiles '
-                'containing known variants.'
-            )
-            return errors
-
-        if vcfSet.getSize() == 0:
-            errors.append(
-                'The selected SetOfVCFFiles is empty.'
-            )
-            return errors
-
-        index = self.vcfIndex.get()
-
-        if (
-                index < 0
-                or index >= vcfSet.getSize()
-        ):
-            errors.append(
-                'VCF index {} is out of range for a '
-                'SetOfVCFFiles containing {} VCF(s).'
-                .format(
-                    index,
-                    vcfSet.getSize()
-                )
-            )
-            return errors
-
         try:
-            knownSites = self._getKnownSitesFile()
-
-            if not knownSites:
-                errors.append(
-                    'The selected VCFFile does not '
-                    'contain a VCF path.'
-                )
-
-            elif not os.path.isfile(knownSites):
-                errors.append(
-                    'The known-sites VCF does not exist: {}'
-                    .format(knownSites)
-                )
-
+            self._checkNonempty(self._getKnownSitesFile(), 'Known-sites VCF')
         except RuntimeError as error:
-            errors.append(str(error))
-
-        return errors
+            return [str(error)]
+        return []
 
     def _validate(self):
         errors = []
@@ -1004,68 +699,36 @@ class ProtGATK(EMProtocol):
         alignment = self.inputAlignment.get()
 
         if alignment is None:
-            errors.append(
-                'An input AlignmentFile object is required.'
-            )
+            errors.append('An input AlignmentFile object is required.')
             return errors
 
-        bamFile = alignment.getFileName()
-
-        if not bamFile:
-            errors.append(
-                'The input AlignmentFile does not contain a BAM path.'
-            )
-
-        elif not os.path.isfile(bamFile):
-            errors.append(
-                'The input BAM file does not exist: {}'.format(
-                    bamFile
-                )
-            )
-
-        elif os.path.getsize(bamFile) == 0:
-            errors.append(
-                'The input BAM file is empty: {}'.format(
-                    bamFile
-                )
-            )
+        try:
+            self._validateBamFile(alignment.getFileName())
+        except RuntimeError as error:
+            errors.append(str(error))
+        if alignment.getFormat() != 'BAM':
+            errors.append('GATK processing requires a BAM alignment.')
 
         if not (
-            self.splitNCigarReads.get()
-            or self.baseRecalibrator.get()
-            or self.applyBQSR.get()
+            self.splitNCigarReads.get() or self.baseRecalibrator.get() or self.applyBQSR.get()
         ):
-            errors.append(
-                'Select at least one GATK operation.'
-            )
+            errors.append('Select at least one GATK operation.')
 
         if (
-            self.applyBQSR.get()
-            and not self.baseRecalibrator.get()
+            self.applyBQSR.get() and (not self.baseRecalibrator.get())
         ):
-            errors.append(
-                'ApplyBQSR requires BaseRecalibrator to be selected.'
-            )
+            errors.append('ApplyBQSR requires BaseRecalibrator to be selected.')
 
-        referenceFasta = self._getReferenceFasta(
-            alignment
-        )
-
-        if not referenceFasta:
-            errors.append(
-                'The input AlignmentFile does not contain a reference FASTA.'
-            )
-
-        elif not os.path.isfile(referenceFasta):
-            errors.append(
-                'The reference FASTA does not exist: {}'
-                .format(referenceFasta)
-            )
+        referenceFasta = self._getReferenceFasta(alignment)
+        try:
+            self._checkNonempty(referenceFasta, 'Reference FASTA')
+        except RuntimeError as error:
+            errors.append(str(error))
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
 
         if self.baseRecalibrator.get():
-            errors.extend(
-                self._validateKnownSites()
-            )
+            errors.extend(self._validateKnownSites())
 
         return errors
 
@@ -1077,59 +740,20 @@ class ProtGATK(EMProtocol):
         operations = []
 
         if self.splitNCigarReads.get():
-            operations.append(
-                'SplitNCigarReads'
-            )
+            operations.append('SplitNCigarReads')
 
         if self.baseRecalibrator.get():
-            operations.append(
-                'BaseRecalibrator'
-            )
+            operations.append('BaseRecalibrator')
 
         if self.applyBQSR.get():
-            operations.append(
-                'ApplyBQSR'
-            )
+            operations.append('ApplyBQSR')
 
         return operations
 
     @staticmethod
     def _formatVCFSummary(vcfFile):
-        scientificName = ''
-        assembly = ''
-        source = ''
-
-        if hasattr(vcfFile, 'getScientificName'):
-            scientificName = (
-                vcfFile.getScientificName() or ''
-            )
-
-        if hasattr(vcfFile, 'getAssembly'):
-            assembly = (
-                vcfFile.getAssembly() or ''
-            )
-
-        if hasattr(vcfFile, 'getSource'):
-            source = (
-                vcfFile.getSource() or ''
-            )
-
-        values = [
-            value
-            for value in (
-                scientificName,
-                assembly,
-                source
-            )
-            if value
-        ]
-
-        if values:
-            return ' - '.join(values)
-
-        return os.path.basename(
-            vcfFile.getFileName()
-        )
+        values = [vcfFile.getScientificName(), vcfFile.getAssembly(), vcfFile.getSource()]
+        return ' - '.join(value for value in values if value) or os.path.basename(vcfFile.getFileName())
 
     def _getAvailableVCFsSummary(self):
         summary = []
@@ -1145,26 +769,16 @@ class ProtGATK(EMProtocol):
         if vcfSet.getSize() == 0:
             return summary
 
-        summary.append(
-            'Available known-sites VCFs:'
-        )
+        summary.append('Available known-sites VCFs:')
 
         selectedIndex = self.vcfIndex.get()
 
         for index, vcfFile in enumerate(vcfSet):
             marker = (
-                '*'
-                if index == selectedIndex
-                else ' '
+                '*' if index == selectedIndex else ' '
             )
 
-            summary.append(
-                '{} {} -> {}'.format(
-                    marker,
-                    index,
-                    self._formatVCFSummary(vcfFile)
-                )
-            )
+            summary.append('{} {} -> {}'.format(marker, index, self._formatVCFSummary(vcfFile)))
 
         summary.extend([
             '',
@@ -1176,41 +790,23 @@ class ProtGATK(EMProtocol):
         return summary
 
     def _summary(self):
-        operations = ' -> '.join(
-            self._getSelectedOperationNames()
-        )
+        operations = ' -> '.join(self._getSelectedOperationNames())
 
         summary = [
-            'Selected GATK operations: {}'.format(
-                operations
-            )
+            'Selected GATK operations: {}'.format(operations)
         ]
 
-        summary.extend(
-            self._getAvailableVCFsSummary()
-        )
+        summary.extend(self._getAvailableVCFsSummary())
 
         if not hasattr(self, 'outputAlignment'):
             return summary
 
-        summary.append(
-            'Output BAM: {}'.format(
-                self.outputAlignment.getFileName()
-            )
-        )
+        summary.append('Output BAM: {}'.format(self.outputAlignment.getFileName()))
 
         if self.baseRecalibrator.get():
-            summary.append(
-                'Known-sites VCF: {}'.format(
-                    self._getKnownSitesFile()
-                )
-            )
+            summary.append('Known-sites VCF: {}'.format(self._getKnownSitesFile()))
 
-            summary.append(
-                'Recalibration table: {}'.format(
-                    self._getRecalibrationTable()
-                )
-            )
+            summary.append('Recalibration table: {}'.format(self._getRecalibrationTable()))
 
         return summary
 
@@ -1218,9 +814,7 @@ class ProtGATK(EMProtocol):
         if not hasattr(self, 'outputAlignment'):
             return []
 
-        operations = ' followed by '.join(
-            self._getSelectedOperationNames()
-        )
+        operations = ' followed by '.join(self._getSelectedOperationNames())
 
         return [
             'The input RNA-seq BAM alignment was processed with GATK using '

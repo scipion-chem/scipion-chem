@@ -30,12 +30,15 @@ import re
 import shlex
 import shutil
 
-from pyworkflow.protocol.params import BooleanParam,EnumParam,IntParam,PointerParam
+from pyworkflow.protocol.params import (
+    BooleanParam, EnumParam, IntParam, PointerParam, StringParam
+)
 from pwem.protocols import EMProtocol
 
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import AlignmentFile
+from pwchem.utils.utilsRNA import GATKPreparationMixin
 
 
 class ProtRNASeqAlignment(EMProtocol):
@@ -46,6 +49,11 @@ class ProtRNASeqAlignment(EMProtocol):
     It accepts a FastqFile object containing either single-end or paired-end
     sequencing reads and aligns them against a selected reference genome from
     a SetOfGenomes object using STAR or HISAT2.
+
+    Retained genome indexes are reused only when their recorded input paths,
+    sizes, modification times and relevant index parameters match. This
+    comparison does not compute reference checksums. Changed or unrecorded
+    index inputs trigger a rebuild in the protocol directory.
 
     The protocol automatically builds the genome index required by the selected
     aligner, performs the alignment, sorts the resulting alignments by genomic
@@ -117,6 +125,47 @@ class ProtRNASeqAlignment(EMProtocol):
         The sjdbOverhang parameter is used during STAR genome index generation
         when a GTF annotation is available.
 
+    ----------------------------
+    STAR alignment parameters
+    ----------------------------
+
+    These options are displayed and applied only when STAR is selected.
+    Their defaults match the RNA-seq workflow configuration.
+
+    starOutFilterMultimapNmax : int, default 10
+        Maps to --outFilterMultimapNmax. Reads mapping to more than this
+        number of loci are discarded. The value must be positive.
+
+    starOutSAMstrandField : enum, default intronMotif
+        Maps to --outSAMstrandField. Choices are None and intronMotif.
+        intronMotif adds the XS strand tag and filters alignments with
+        inconsistent or non-canonical introns. This is distinct from the
+        RNA library strandness parameter used by HISAT2.
+
+    starOutReadsUnmapped : enum, default Fastx
+        Maps to --outReadsUnmapped. Choices are None and Fastx.
+        Fastx writes unmapped reads to star_Unmapped.out.mate1 and, for
+        paired-end input, star_Unmapped.out.mate2 in the extra directory.
+        These auxiliary files are not published as separate FastqFile objects.
+
+    starOutSAMunmapped : enum, default Within
+        Maps to --outSAMunmapped. Choices are None, Within and Within KeepPairs.
+        Within includes unmapped reads in the BAM. Within KeepPairs also
+        retains unmapped mates with mapped alignments. This option is
+        independent of writing unmapped reads to Fastx files.
+
+    starOutSAMattributes : str, default NH HI NM MD AS
+        Maps to --outSAMattributes. Specify space-separated SAM tags or
+        one STAR preset: None, Standard or All. The default requests the
+        mapping count (NH), alignment index (HI), edit distance (NM),
+        reference mismatch information (MD) and alignment score (AS).
+        Preflight validation checks tag syntax; STAR checks whether the
+        requested tags are supported.
+
+    ----------------------------
+    HISAT2 alignment
+    ----------------------------
+
     HISAT2
         HISAT2 is a splice-aware alignment program based on a hierarchical
         indexing strategy.
@@ -183,7 +232,12 @@ class ProtRNASeqAlignment(EMProtocol):
     - Multi-mapping rate.
     - Unmapped rate.
 
-    STAR statistics are obtained from the STAR final log file.
+    STAR statistics are obtained from the STAR final log file. For HISAT2
+    paired-end data, mapped, unique and multi-mapped counts describe
+    concordantly aligned pairs. Their rates use the total number of pairs,
+    keeping counts and percentages consistent. Discordant and separately
+    mapped mates contribute to the raw HISAT2 overall rate in its log, not
+    to these concordant-pair counts.
 
     HISAT2 statistics are extracted from the alignment summary written to
     standard error.
@@ -211,6 +265,7 @@ class ProtRNASeqAlignment(EMProtocol):
         - Reference GTF file, when available.
         - Reference name.
         - Reference source.
+        - Reference scientific name and assembly as structured metadata.
         - Alignment command.
         - Aligner log file.
         - Sorting and indexing status.
@@ -234,7 +289,10 @@ class ProtRNASeqAlignment(EMProtocol):
     - The selected Genome contains a reference FASTA file.
     - The reference FASTA file exists.
     - The optional GTF file exists when provided.
-    - STAR sjdbOverhang is either 0 or a positive integer.
+    - When STAR is selected, sjdbOverhang is 0 or a positive integer.
+    - When STAR is selected, the maximum mapping loci value is positive.
+    - When STAR is selected, SAM attributes contain two-character tags or
+      a single supported preset name (None, Standard or All).
 
     Execution is stopped if any required input file or reference information
     is missing.
@@ -259,12 +317,16 @@ class ProtRNASeqAlignment(EMProtocol):
       downstream RNA-seq analysis protocols in Scipion.
     """
     # -------------------------------------------------------
-    # Aligner choices
+    # Constants
     # -------------------------------------------------------
 
     ALIGN_STAR = 0
     ALIGN_HISAT2 = 1
     ALIGNER_CONDITION = 'aligner == %d'
+
+    STAR_STRAND_FIELDS = ['None', 'intronMotif']
+    STAR_UNMAPPED_READS = ['None', 'Fastx']
+    STAR_UNMAPPED_BAM = ['None', 'Within', 'Within KeepPairs']
 
     _label = 'RNA-seq alignment'
 
@@ -331,6 +393,46 @@ class ProtRNASeqAlignment(EMProtocol):
         )
 
         form.addParam(
+            'starOutFilterMultimapNmax', IntParam, default=10,
+            label='STAR maximum mapping loci: ',
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
+            help='--outFilterMultimapNmax: discard reads mapping to more '
+                 'than this number of loci. Must be positive.'
+        )
+        form.addParam(
+            'starOutSAMstrandField', EnumParam,
+            choices=self.STAR_STRAND_FIELDS, default=1,
+            label='STAR strand field: ',
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
+            help='--outSAMstrandField: intronMotif adds the XS strand tag '
+                 'and filters alignments with inconsistent or non-canonical introns.'
+        )
+        form.addParam(
+            'starOutReadsUnmapped', EnumParam,
+            choices=self.STAR_UNMAPPED_READS, default=1,
+            label='STAR unmapped reads output: ',
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
+            help='--outReadsUnmapped: Fastx writes unmapped reads to '
+                 'star_Unmapped.out.mate1 (and mate2 for paired-end) '
+                 'in the protocol extra directory.'
+        )
+        form.addParam(
+            'starOutSAMunmapped', EnumParam,
+            choices=self.STAR_UNMAPPED_BAM, default=1,
+            label='STAR unmapped reads in BAM: ',
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
+            help='--outSAMunmapped: Within includes unmapped reads in the BAM; '
+                 'KeepPairs also retains unmapped mates with mapped alignments.'
+        )
+        form.addParam(
+            'starOutSAMattributes', StringParam, default='NH HI NM MD AS',
+            label='STAR SAM attributes: ',
+            condition=self.ALIGNER_CONDITION % self.ALIGN_STAR,
+            help='--outSAMattributes: space-separated SAM tags, such as '
+                 'NH HI NM MD AS, or a STAR preset: None, Standard or All.'
+        )
+
+        form.addParam(
             'hisat2Dta',
             BooleanParam,
             default=True,
@@ -368,9 +470,7 @@ class ProtRNASeqAlignment(EMProtocol):
             )
         )
 
-        form.addParallelSection(
-            threads=4
-        )
+        form.addParallelSection(threads=4)
 
     # -------------------------------------------------------
     # Steps
@@ -390,28 +490,21 @@ class ProtRNASeqAlignment(EMProtocol):
 
     def prepareReferenceStep(self):
         """Resolve and persist reference paths and metadata."""
+        errors = self._validate()
+        if errors:
+            raise RuntimeError('Invalid alignment inputs: ' + '; '.join(errors))
         referenceInfo = self._getReferenceInfo()
 
         fastaFile = referenceInfo['fastaFile']
         gtfFile = referenceInfo.get('gtfFile')
 
         if not os.path.isfile(fastaFile):
-            raise RuntimeError(
-                'Reference FASTA does not exist: {}'.format(fastaFile)
-            )
+            raise RuntimeError('Reference FASTA does not exist: {}'.format(fastaFile))
 
         if gtfFile and not os.path.isfile(gtfFile):
-            raise RuntimeError(
-                'Reference GTF does not exist: {}'.format(gtfFile)
-            )
+            raise RuntimeError('Reference GTF does not exist: {}'.format(gtfFile))
 
-        self._writeJson(
-            self._getReferenceInfoFile(),
-            referenceInfo
-        )
-
-    def _getReferenceInfo(self):
-        return self._getReferenceFromGenomeObject()
+        self._writeJson(self._getReferenceInfoFile(), referenceInfo)
 
     def _getSelectedGenome(self):
         genomeSet = self.inputGenomes.get()
@@ -424,7 +517,7 @@ class ProtRNASeqAlignment(EMProtocol):
 
         index = self.genomeIndex.get()
 
-        if index < 0 or index >= genomeSet.getSize():
+        if index is None or index < 0 or index >= genomeSet.getSize():
             raise RuntimeError(
                 'Genome index {} is out of range for a SetOfGenomes '
                 'containing {} genome(s).'.format(
@@ -437,45 +530,21 @@ class ProtRNASeqAlignment(EMProtocol):
             if currentIndex == index:
                 return genome.clone()
 
-        raise RuntimeError(
-            'The selected Genome could not be retrieved.'
-        )
+        raise RuntimeError('The selected Genome could not be retrieved.')
 
-    def _getReferenceFromGenomeObject(self):
+    def _getReferenceInfo(self):
         genome = self._getSelectedGenome()
         fastaFile = genome.getFastaFile()
-        gtfFile = (
-            genome.getGtfFile()
-            if genome.hasGtfFile()
-            else None
-        )
+        if not fastaFile:
+            raise RuntimeError('The selected Genome does not contain a FASTA file.')
+        gtfFile = genome.getGtfFile() if genome.hasGtfFile() else None
 
-        scientificName = (
-            genome.getScientificName()
-            if genome.hasScientificName()
-            else ''
-        )
-        assembly = (
-            genome.getAssembly()
-            if genome.hasAssembly()
-            else ''
-        )
-        release = (
-            genome.getRelease()
-            if genome.hasRelease()
-            else ''
-        )
-        source = (
-            genome.getSource()
-            if genome.hasSource()
-            else 'Genome object'
-        )
+        scientificName = genome.getScientificName() if genome.hasScientificName() else ''
+        assembly = genome.getAssembly() if genome.hasAssembly() else ''
+        release = genome.getRelease() if genome.hasRelease() else ''
+        source = genome.getSource() if genome.hasSource() else 'Genome object'
 
-        referenceParts = [
-            value
-            for value in (scientificName, assembly)
-            if value
-        ]
+        referenceParts = [value for value in (scientificName, assembly) if value]
         referenceName = ' '.join(referenceParts)
 
         if release:
@@ -490,9 +559,7 @@ class ProtRNASeqAlignment(EMProtocol):
         return {
             'fastaFile': os.path.abspath(fastaFile),
             'gtfFile': (
-                os.path.abspath(gtfFile)
-                if gtfFile
-                else None
+                os.path.abspath(gtfFile) if gtfFile else None
             ),
             'referenceName': referenceName,
             'referenceSource': source,
@@ -500,73 +567,50 @@ class ProtRNASeqAlignment(EMProtocol):
             'assembly': assembly,
             'release': release
         }
+
     # -------------------------------------------------------
     # Genome index
     # -------------------------------------------------------
 
     def buildIndexStep(self):
-        referenceInfo = self._readJson(
-            self._getReferenceInfoFile()
-        )
+        referenceInfo = self._readJson(self._getReferenceInfoFile())
 
         if self.aligner.get() == self.ALIGN_STAR:
             indexInfo = self._buildStarIndex(referenceInfo)
         else:
             indexInfo = self._buildHisat2Index(referenceInfo)
 
-        self._writeJson(
-            self._getIndexInfoFile(),
-            indexInfo
-        )
+        self._writeJson(self._getIndexInfoFile(), indexInfo)
 
     def _buildStarIndex(self, referenceInfo):
         indexDir = self._getExtraPath('star_index')
-        os.makedirs(indexDir, exist_ok=True)
+        manifest = self._prepareIndexDirectory(indexDir, referenceInfo, star=True)
 
-        marker = os.path.join(
-            indexDir,
-            'genomeParameters.txt'
-        )
+        indexFiles = [os.path.join(indexDir, name) for name in
+                      ('genomeParameters.txt', 'Genome', 'SA', 'SAindex')]
 
-        if not os.path.exists(marker):
+        if not all(self._isNonemptyFile(path) for path in indexFiles):
             args = [
                 '--runMode genomeGenerate',
-                '--genomeDir {}'.format(
-                    self._quote(indexDir)
-                ),
-                '--genomeFastaFiles {}'.format(
-                    self._quote(referenceInfo['fastaFile'])
-                ),
-                '--runThreadN {}'.format(
-                    self.numberOfThreads.get()
-                )
+                '--genomeDir {}'.format(self._quote(indexDir)),
+                '--genomeFastaFiles {}'.format(self._quote(referenceInfo['fastaFile'])),
+                '--runThreadN {}'.format(self.numberOfThreads.get())
             ]
 
             gtfFile = referenceInfo.get('gtfFile')
             if gtfFile:
                 args.extend([
-                    '--sjdbGTFfile {}'.format(
-                        self._quote(gtfFile)
-                    ),
-                    '--sjdbOverhang {}'.format(
-                        self._getStarSjdbOverhang()
-                    )
+                    '--sjdbGTFfile {}'.format(self._quote(gtfFile)),
+                    '--sjdbOverhang {}'.format(self._getStarSjdbOverhang())
                 ])
 
             command = 'STAR {}'.format(' '.join(args))
 
-            Plugin.runCondaCommand(
-                self,
-                ' '.join(args),
-                RNASEQ_DIC,
-                'STAR'
-            )
+            Plugin.runCondaCommand(self, ' '.join(args), RNASEQ_DIC, 'STAR')
 
-            if not os.path.exists(marker):
-                raise RuntimeError(
-                    'STAR genome index was not created in: {}'
-                    .format(indexDir)
-                )
+            if not all(self._isNonemptyFile(path) for path in indexFiles):
+                raise RuntimeError('STAR genome index was not created in: {}'.format(indexDir))
+            self._writeJson(os.path.join(indexDir, 'index_inputs.json'), manifest)
         else:
             command = 'Existing STAR index: {}'.format(indexDir)
 
@@ -579,20 +623,11 @@ class ProtRNASeqAlignment(EMProtocol):
 
     def _buildHisat2Index(self, referenceInfo):
         indexDir = self._getExtraPath('hisat2_index')
-        os.makedirs(indexDir, exist_ok=True)
+        manifest = self._prepareIndexDirectory(indexDir, referenceInfo)
 
-        indexPrefix = os.path.join(
-            indexDir,
-            'genome'
-        )
+        indexPrefix = os.path.join(indexDir, 'genome')
 
-        standardMarker = indexPrefix + '.1.ht2'
-        largeMarker = indexPrefix + '.1.ht2l'
-
-        if not (
-            os.path.exists(standardMarker)
-            or os.path.exists(largeMarker)
-        ):
+        if not self._hasHisat2Index(indexPrefix):
             args = '{} {} --threads {}'.format(
                 self._quote(referenceInfo['fastaFile']),
                 self._quote(indexPrefix),
@@ -600,21 +635,13 @@ class ProtRNASeqAlignment(EMProtocol):
             )
             command = 'hisat2-build {}'.format(args)
 
-            Plugin.runCondaCommand(
-                self,
-                args,
-                RNASEQ_DIC,
-                'hisat2-build'
-            )
+            Plugin.runCondaCommand(self, args, RNASEQ_DIC, 'hisat2-build')
 
-            if not (
-                os.path.exists(standardMarker)
-                or os.path.exists(largeMarker)
-            ):
+            if not self._hasHisat2Index(indexPrefix):
                 raise RuntimeError(
-                    'HISAT2 genome index was not created with prefix: {}'
-                    .format(indexPrefix)
+                    'HISAT2 genome index was not created with prefix: {}'.format(indexPrefix)
                 )
+            self._writeJson(os.path.join(indexDir, 'index_inputs.json'), manifest)
         else:
             command = 'Existing HISAT2 index: {}'.format(indexPrefix)
 
@@ -624,6 +651,34 @@ class ProtRNASeqAlignment(EMProtocol):
             'indexDirectory': indexDir,
             'indexCommand': command
         }
+
+    def _prepareIndexDirectory(self, indexDir, referenceInfo, star=False):
+        """Reuse indexes only for unchanged reference inputs and index parameters."""
+        manifest = {}
+        fields = ('fastaFile', 'gtfFile') if star else ('fastaFile',)
+        for field in fields:
+            path = referenceInfo.get(field)
+            if path:
+                info = os.stat(path)
+                manifest[field] = [os.path.realpath(path), info.st_size, info.st_mtime_ns]
+        if star and referenceInfo.get('gtfFile'):
+            manifest['sjdbOverhang'] = self._getStarSjdbOverhang()
+        manifestPath = os.path.join(indexDir, 'index_inputs.json')
+        try:
+            previous = self._readJson(manifestPath)
+        except (OSError, ValueError):
+            previous = None
+        if previous != manifest and os.path.isdir(indexDir):
+            shutil.rmtree(indexDir)
+        os.makedirs(indexDir, exist_ok=True)
+        return manifest
+
+    def _hasHisat2Index(self, prefix):
+        return any(
+            all(self._isNonemptyFile('{}.{}.{}'.format(prefix, part, extension))
+                for part in range(1, 9))
+            for extension in ('ht2', 'ht2l')
+        )
 
     def _getStarSjdbOverhang(self):
         userValue = self.starSjdbOverhang.get()
@@ -644,85 +699,61 @@ class ProtRNASeqAlignment(EMProtocol):
     # -------------------------------------------------------
 
     def alignStep(self):
-        indexInfo = self._readJson(
-            self._getIndexInfoFile()
-        )
+        indexInfo = self._readJson(self._getIndexInfoFile())
 
         if self.aligner.get() == self.ALIGN_STAR:
             alignmentInfo = self._alignWithStar(indexInfo)
         else:
             alignmentInfo = self._alignWithHisat2(indexInfo)
 
-        self._writeJson(
-            self._getAlignmentInfoFile(),
-            alignmentInfo
-        )
+        self._writeJson(self._getAlignmentInfoFile(), alignmentInfo)
+
+    def _getStarAlignmentOptions(self):
+        """Build STAR options, quoting each value independently."""
+        options = [
+            ('outFilterMultimapNmax', str(self.starOutFilterMultimapNmax.get())),
+            ('outSAMstrandField', self.STAR_STRAND_FIELDS[self.starOutSAMstrandField.get()]),
+            ('outReadsUnmapped', self.STAR_UNMAPPED_READS[self.starOutReadsUnmapped.get()]),
+            ('outSAMunmapped', self.STAR_UNMAPPED_BAM[self.starOutSAMunmapped.get()]),
+            ('outSAMattributes', self.starOutSAMattributes.get() or '')
+        ]
+        args = []
+        for name, value in options:
+            values = ' '.join(shlex.quote(token) for token in value.split())
+            args.append('--{} {}'.format(name, values))
+        return args
 
     def _alignWithStar(self, indexInfo):
         fastqObj = self.inputFastq.get()
         outputPrefix = self._getExtraPath('star_')
 
-        readFiles = [
-            self._quote(fastqObj.getFileName())
-        ]
+        readFiles = [self._quote(fastqObj.getFileName())]
 
         if fastqObj.isPaired():
-            readFiles.append(
-                self._quote(fastqObj.getFileName2())
-            )
+            readFiles.append(self._quote(fastqObj.getFileName2()))
 
         args = [
-            '--genomeDir {}'.format(
-                self._quote(indexInfo['indexPath'])
-            ),
-            '--readFilesIn {}'.format(
-                ' '.join(readFiles)
-            ),
-            '--runThreadN {}'.format(
-                self.numberOfThreads.get()
-            ),
+            '--genomeDir {}'.format(self._quote(indexInfo['indexPath'])),
+            '--readFilesIn {}'.format(' '.join(readFiles)),
+            '--runThreadN {}'.format(self.numberOfThreads.get()),
             '--outSAMtype BAM SortedByCoordinate',
-            '--outFileNamePrefix {}'.format(
-                self._quote(outputPrefix)
-            )
+            '--outFileNamePrefix {}'.format(self._quote(outputPrefix))
         ]
+
+        args.extend(self._getStarAlignmentOptions())
 
         if fastqObj.isCompressed():
             args.append('--readFilesCommand zcat')
 
         command = 'STAR {}'.format(' '.join(args))
 
-        Plugin.runCondaCommand(
-            self,
-            ' '.join(args),
-            RNASEQ_DIC,
-            'STAR'
-        )
+        Plugin.runCondaCommand(self, ' '.join(args), RNASEQ_DIC, 'STAR')
 
-        bamFile = self._getExtraPath(
-            'star_Aligned.sortedByCoord.out.bam'
-        )
-        logFile = self._getExtraPath(
-            'star_Log.final.out'
-        )
+        bamFile = self._getExtraPath('star_Aligned.sortedByCoord.out.bam')
+        logFile = self._getExtraPath('star_Log.final.out')
         baiFile = bamFile + '.bai'
 
-        self._validateAlignmentFile(bamFile)
-
-        Plugin.runCondaCommand(
-            self,
-            'index -@ {} {}'.format(
-                self.numberOfThreads.get(),
-                self._quote(bamFile)
-            ),
-            RNASEQ_DIC,
-            'samtools'
-        )
-
-        if not os.path.exists(baiFile):
-            raise RuntimeError(
-                'BAM index was not created: {}'.format(baiFile)
-            )
+        self._indexBam(bamFile)
 
         return {
             'alignmentFile': bamFile,
@@ -738,20 +769,14 @@ class ProtRNASeqAlignment(EMProtocol):
     def _alignWithHisat2(self, indexInfo):
         fastqObj = self.inputFastq.get()
 
-        bamFile = self._getExtraPath(
-            'hisat2_alignment.sorted.bam'
-        )
+        bamFile = self._getExtraPath('hisat2_alignment.sorted.bam')
         baiFile = bamFile + '.bai'
-        logFile = self._getExtraPath(
-            'hisat2_alignment.log'
-        )
+        logFile = self._getExtraPath('hisat2_alignment.log')
 
         threads = self.numberOfThreads.get()
 
         hisatArgs = [
-            '-x {}'.format(
-                self._quote(indexInfo['indexPath'])
-            ),
+            '-x {}'.format(self._quote(indexInfo['indexPath'])),
             '-p {}'.format(threads)
         ]
 
@@ -760,25 +785,15 @@ class ProtRNASeqAlignment(EMProtocol):
 
         strandness = self._getHisat2Strandness()
         if strandness:
-            hisatArgs.append(
-                '--rna-strandness {}'.format(strandness)
-            )
+            hisatArgs.append('--rna-strandness {}'.format(strandness))
 
         if fastqObj.isPaired():
             hisatArgs.extend([
-                '-1 {}'.format(
-                    self._quote(fastqObj.getFileName())
-                ),
-                '-2 {}'.format(
-                    self._quote(fastqObj.getFileName2())
-                )
+                '-1 {}'.format(self._quote(fastqObj.getFileName())),
+                '-2 {}'.format(self._quote(fastqObj.getFileName2()))
             ])
         else:
-            hisatArgs.append(
-                '-U {}'.format(
-                    self._quote(fastqObj.getFileName())
-                )
-            )
+            hisatArgs.append('-U {}'.format(self._quote(fastqObj.getFileName())))
 
         pipelineArgs = (
             '{hisat} 2> {log} | '
@@ -790,31 +805,13 @@ class ProtRNASeqAlignment(EMProtocol):
             bam=self._quote(bamFile)
         )
 
-        command = 'hisat2 {}'.format(pipelineArgs)
+        pipeline = 'hisat2 {}'.format(pipelineArgs)
+        args = '-o pipefail -c {}'.format(shlex.quote(pipeline))
+        command = 'bash {}'.format(args)
 
-        Plugin.runCondaCommand(
-            self,
-            pipelineArgs,
-            RNASEQ_DIC,
-            'hisat2'
-        )
+        Plugin.runCondaCommand(self, args, RNASEQ_DIC, 'bash')
 
-        self._validateAlignmentFile(bamFile)
-
-        Plugin.runCondaCommand(
-            self,
-            'index -@ {} {}'.format(
-                threads,
-                self._quote(bamFile)
-            ),
-            RNASEQ_DIC,
-            'samtools'
-        )
-
-        if not os.path.exists(baiFile):
-            raise RuntimeError(
-                'BAM index was not created: {}'.format(baiFile)
-            )
+        self._indexBam(bamFile)
 
         return {
             'alignmentFile': bamFile,
@@ -826,6 +823,24 @@ class ProtRNASeqAlignment(EMProtocol):
             'sorted': True,
             'indexed': True
         }
+
+    def _indexBam(self, bamFile):
+        baiFile = bamFile + '.bai'
+        self._validateAlignmentFile(bamFile)
+        if os.path.lexists(baiFile):
+            os.remove(baiFile)
+        Plugin.runCondaCommand(self, 'quickcheck -v ' + self._quote(bamFile), RNASEQ_DIC, 'samtools')
+
+        Plugin.runCondaCommand(
+            self,
+            'index -@ {} {}'.format(self.numberOfThreads.get(), self._quote(bamFile)),
+            RNASEQ_DIC,
+            'samtools'
+        )
+
+        if (not GATKPreparationMixin._isCurrentIndex(baiFile, bamFile)
+                or not GATKPreparationMixin._hasIndexSignature(baiFile, b'BAI\x01')):
+            raise RuntimeError('A valid BAM index was not created: {}'.format(baiFile))
 
     def _getHisat2Strandness(self):
         selection = self.rnaStrandness.get()
@@ -841,89 +856,46 @@ class ProtRNASeqAlignment(EMProtocol):
         return 'F' if selection == 1 else 'R'
 
     def _validateAlignmentFile(self, bamFile):
-        if not os.path.exists(bamFile):
-            raise RuntimeError(
-                'Alignment BAM was not created: {}'.format(bamFile)
-            )
+        if not os.path.isfile(bamFile):
+            raise RuntimeError('Alignment BAM was not created: {}'.format(bamFile))
 
         if os.path.getsize(bamFile) == 0:
-            raise RuntimeError(
-                'Alignment BAM is empty: {}'.format(bamFile)
-            )
+            raise RuntimeError('Alignment BAM is empty: {}'.format(bamFile))
 
     # -------------------------------------------------------
     # Statistics
     # -------------------------------------------------------
 
     def parseStatisticsStep(self):
-        alignmentInfo = self._readJson(
-            self._getAlignmentInfoFile()
-        )
+        alignmentInfo = self._readJson(self._getAlignmentInfoFile())
 
         if alignmentInfo['aligner'] == 'STAR':
             statistics = self._parseStarStatistics()
-            bamFile = self._getExtraPath(
-                'star_Aligned.sortedByCoord.out.bam'
-            )
         else:
             statistics = self._parseHisat2Statistics()
-            bamFile = self._getExtraPath(
-                'hisat2_alignment.sorted.bam'
-            )
 
         statistics = self._completeStatisticsWithSamtools(
-            bamFile,
-            statistics
+            alignmentInfo['alignmentFile'], statistics
         )
 
         alignmentInfo['statistics'] = statistics
 
-        self._writeJson(
-            self._getAlignmentInfoFile(),
-            alignmentInfo
-        )
+        self._writeJson(self._getAlignmentInfoFile(), alignmentInfo)
 
     def _parseStarStatistics(self):
-        values = self._parseKeyValueLog(
-            separator='|'
-        )
+        values = self._parseKeyValueLog(separator='|')
 
-        totalReads = self._toInt(
-            values.get('Number of input reads')
-        )
-        uniqueReads = self._toInt(
-            values.get('Uniquely mapped reads number')
-        )
-        uniqueRate = self._toPercent(
-            values.get('Uniquely mapped reads %')
-        )
-        multiReads = self._toInt(
-            values.get('Number of reads mapped to multiple loci')
-        )
-        multiRate = self._toPercent(
-            values.get('% of reads mapped to multiple loci')
-        )
-        tooManyReads = self._toInt(
-            values.get('Number of reads mapped to too many loci')
-        )
-        tooManyRate = self._toPercent(
-            values.get('% of reads mapped to too many loci')
-        )
-
-        multiReads += tooManyReads
-        multiRate += tooManyRate
+        totalReads = self._toInt(values.get('Number of input reads'))
+        uniqueReads = self._toInt(values.get('Uniquely mapped reads number'))
+        uniqueRate = self._toPercent(values.get('Uniquely mapped reads %'))
+        multiReads = self._toInt(values.get('Number of reads mapped to multiple loci'))
+        multiRate = self._toPercent(values.get('% of reads mapped to multiple loci'))
 
         mappedReads = uniqueReads + multiReads
         unmappedReads = max(0, totalReads - mappedReads)
 
-        mappingRate = self._percentage(
-            mappedReads,
-            totalReads
-        )
-        unmappedRate = self._percentage(
-            unmappedReads,
-            totalReads
-        )
+        mappingRate = self._percentage(mappedReads, totalReads)
+        unmappedRate = self._percentage(unmappedReads, totalReads)
 
         return {
             'totalReads': totalReads,
@@ -938,9 +910,7 @@ class ProtRNASeqAlignment(EMProtocol):
         }
 
     def _parseHisat2Statistics(self):
-        logFile = self._getExtraPath(
-            'hisat2_alignment.log'
-        )
+        logFile = self._getExtraPath('hisat2_alignment.log')
 
         if not os.path.exists(logFile):
             return self._emptyStatistics()
@@ -948,20 +918,11 @@ class ProtRNASeqAlignment(EMProtocol):
         with open(logFile) as inputFile:
             text = inputFile.read()
 
-        totalReads = self._firstRegexInt(
-            text,
-            r'^\s*(\d+)\s+reads;'
-        )
+        totalReads = self._firstRegexInt(text, r'^\s*(\d+)\s+reads;')
         if totalReads == 0:
-            totalReads = self._firstRegexInt(
-                text,
-                r'^\s*(\d+)\s+\(.+\)\s+were paired;'
-            )
+            totalReads = self._firstRegexInt(text, r'^\s*(\d+)\s+\(.+\)\s+were paired;')
 
-        overallRate = self._firstRegexFloat(
-            text,
-            r'([\d.]+)%\s+overall alignment rate'
-        )
+        overallRate = self._firstRegexFloat(text, r'([\d.]+)%\s+overall alignment rate')
 
         fastqObj = self.inputFastq.get()
 
@@ -982,22 +943,14 @@ class ProtRNASeqAlignment(EMProtocol):
                 r'^\s*(\d+)\s+\([\d.]+%\)\s+aligned exactly 1 time$'
             )
 
-            multiReads = self._firstRegexInt(
-                text,
-                r'^\s*(\d+)\s+\([\d.]+%\)\s+aligned >1 times$'
-            )
+            multiReads = self._firstRegexInt(text, r'^\s*(\d+)\s+\([\d.]+%\)\s+aligned >1 times$')
 
         mappedReads = uniqueReads + multiReads
         unmappedReads = max(0, totalReads - mappedReads)
 
-        if totalReads > 0 and mappedReads == 0 and overallRate > 0:
-            mappedReads = int(
-                round(totalReads * overallRate / 100.0)
-            )
-            unmappedReads = max(
-                0,
-                totalReads - mappedReads
-            )
+        if not fastqObj.isPaired() and totalReads > 0 and mappedReads == 0 and overallRate > 0:
+            mappedReads = int(round(totalReads * overallRate / 100.0))
+            unmappedReads = max(0, totalReads - mappedReads)
 
         return {
             'totalReads': totalReads,
@@ -1006,22 +959,11 @@ class ProtRNASeqAlignment(EMProtocol):
             'multiMappedReads': multiReads,
             'unmappedReads': unmappedReads,
             'mappingRate': (
-                overallRate
-                if overallRate > 0
-                else self._percentage(mappedReads, totalReads)
+                self._percentage(mappedReads, totalReads)
             ),
-            'uniqueMappingRate': self._percentage(
-                uniqueReads,
-                totalReads
-            ),
-            'multiMappingRate': self._percentage(
-                multiReads,
-                totalReads
-            ),
-            'unmappedRate': self._percentage(
-                unmappedReads,
-                totalReads
-            )
+            'uniqueMappingRate': self._percentage(uniqueReads, totalReads),
+            'multiMappingRate': self._percentage(multiReads, totalReads),
+            'unmappedRate': self._percentage(unmappedReads, totalReads)
         }
 
     def _completeStatisticsWithSamtools(self, bamFile, statistics):
@@ -1032,9 +974,7 @@ class ProtRNASeqAlignment(EMProtocol):
         so the aligner log remains the primary source. flagstat is used only
         when a value could not be parsed.
         """
-        flagstatFile = self._getExtraPath(
-            'alignment_flagstat.txt'
-        )
+        flagstatFile = self._getExtraPath('alignment_flagstat.txt')
 
         Plugin.runCondaCommand(
             self,
@@ -1053,53 +993,33 @@ class ProtRNASeqAlignment(EMProtocol):
         with open(flagstatFile) as inputFile:
             text = inputFile.read()
 
-        flagstatTotal = self._firstRegexInt(
-            text,
-            r'^(\d+)\s+\+\s+\d+\s+in total'
-        )
-        flagstatMapped = self._firstRegexInt(
-            text,
-            r'^(\d+)\s+\+\s+\d+\s+mapped\s+\('
-        )
+        flagstatTotal = self._firstRegexInt(text, r'^(\d+)\s+\+\s+\d+\s+in total')
+        flagstatMapped = self._firstRegexInt(text, r'^(\d+)\s+\+\s+\d+\s+mapped\s+\(')
 
         fastqObj = self.inputFastq.get()
 
-        if not fastqObj.isPaired():
-            if statistics.get('totalReads', 0) == 0:
-                statistics['totalReads'] = flagstatTotal
-
-            if statistics.get('mappedReads', 0) == 0:
-                statistics['mappedReads'] = flagstatMapped
+        if not fastqObj.isPaired() and statistics.get('totalReads', 0) == 0:
+            statistics['totalReads'] = flagstatTotal
+            statistics['mappedReads'] = flagstatMapped
 
         totalReads = statistics.get('totalReads', 0)
         mappedReads = statistics.get('mappedReads', 0)
 
         if statistics.get('unmappedReads', 0) == 0:
-            statistics['unmappedReads'] = max(
-                0,
-                totalReads - mappedReads
-            )
+            statistics['unmappedReads'] = max(0, totalReads - mappedReads)
 
         if not statistics.get('mappingRate', 0.0):
-            statistics['mappingRate'] = self._percentage(
-                mappedReads,
-                totalReads
-            )
+            statistics['mappingRate'] = self._percentage(mappedReads, totalReads)
 
         if not statistics.get('unmappedRate', 0.0):
-            statistics['unmappedRate'] = self._percentage(
-                statistics['unmappedReads'],
-                totalReads
-            )
+            statistics['unmappedRate'] = self._percentage(statistics['unmappedReads'], totalReads)
 
         return statistics
 
     def _parseKeyValueLog(self, separator='|'):
         values = {}
 
-        logFile = self._getExtraPath(
-            'star_Log.final.out'
-        )
+        logFile = self._getExtraPath('star_Log.final.out')
 
         if not os.path.exists(logFile):
             return values
@@ -1157,151 +1077,69 @@ class ProtRNASeqAlignment(EMProtocol):
         if not denominator:
             return 0.0
 
-        return round(
-            100.0 * float(numerator) / float(denominator),
-            4
-        )
+        return round(100.0 * float(numerator) / float(denominator), 4)
 
     @staticmethod
     def _firstRegexInt(text, pattern):
-        match = re.search(
-            pattern,
-            text,
-            flags=re.MULTILINE
-        )
+        match = re.search(pattern, text, flags=re.MULTILINE)
         return int(match.group(1)) if match else 0
 
     @staticmethod
     def _firstRegexFloat(text, pattern):
-        match = re.search(
-            pattern,
-            text,
-            flags=re.MULTILINE
-        )
+        match = re.search(pattern, text, flags=re.MULTILINE)
         return float(match.group(1)) if match else 0.0
-
-    @staticmethod
-    def _sumRegexInts(text, patterns):
-        total = 0
-
-        for pattern in patterns:
-            matches = re.findall(
-                pattern,
-                text,
-                flags=re.MULTILINE
-            )
-            total += sum(int(value) for value in matches)
-
-        return total
 
     # -------------------------------------------------------
     # Output
     # -------------------------------------------------------
 
     def createOutputStep(self):
-        referenceInfo = self._readJson(
-            self._getReferenceInfoFile()
-        )
-        alignmentInfo = self._readJson(
-            self._getAlignmentInfoFile()
-        )
-        statistics = alignmentInfo.get(
-            'statistics',
-            self._emptyStatistics()
-        )
+        referenceInfo = self._readJson(self._getReferenceInfoFile())
+        alignmentInfo = self._readJson(self._getAlignmentInfoFile())
+        statistics = alignmentInfo.get('statistics', self._emptyStatistics())
 
         fastqObj = self.inputFastq.get()
 
-        outputAlignment = AlignmentFile(
-            filename=alignmentInfo['alignmentFile']
-        )
+        outputAlignment = AlignmentFile(filename=alignmentInfo['alignmentFile'])
 
-        outputAlignment.setFormat(
-            alignmentInfo['alignmentFormat']
-        )
-        outputAlignment.setSampleName(
-            fastqObj.getSampleName()
-        )
-        outputAlignment.setAligner(
-            alignmentInfo['aligner']
-        )
+        outputAlignment.setFormat(alignmentInfo['alignmentFormat'])
+        outputAlignment.setSampleName(fastqObj.getSampleName())
+        outputAlignment.setAligner(alignmentInfo['aligner'])
 
-        outputAlignment.setReferenceFasta(
-            referenceInfo['fastaFile']
-        )
+        outputAlignment.setReferenceFasta(referenceInfo['fastaFile'])
 
         if referenceInfo.get('gtfFile'):
-            outputAlignment.setReferenceGtf(
-                referenceInfo['gtfFile']
-            )
+            outputAlignment.setReferenceGtf(referenceInfo['gtfFile'])
 
-        outputAlignment.setReferenceName(
-            referenceInfo['referenceName']
-        )
-        outputAlignment.setReferenceSource(
-            referenceInfo['referenceSource']
-        )
+        outputAlignment.setReferenceName(referenceInfo['referenceName'])
+        outputAlignment.setReferenceSource(referenceInfo['referenceSource'])
+        outputAlignment.setReferenceScientificName(referenceInfo.get('scientificName'))
+        outputAlignment.setReferenceAssembly(referenceInfo.get('assembly'))
 
-        outputAlignment.setIsSorted(
-            alignmentInfo['sorted']
-        )
-        outputAlignment.setIsIndexed(
-            alignmentInfo['indexed']
-        )
-        outputAlignment.setIndexFile(
-            alignmentInfo['indexFile']
-        )
+        outputAlignment.setIsSorted(alignmentInfo['sorted'])
+        outputAlignment.setIsIndexed(alignmentInfo['indexed'])
+        outputAlignment.setIndexFile(alignmentInfo['indexFile'])
 
         if alignmentInfo.get('logFile'):
-            outputAlignment.setLogFile(
-                alignmentInfo['logFile']
-            )
+            outputAlignment.setLogFile(alignmentInfo['logFile'])
 
-        outputAlignment.setCommand(
-            alignmentInfo['command']
-        )
+        outputAlignment.setCommand(alignmentInfo['command'])
 
-        outputAlignment.setTotalReads(
-            statistics['totalReads']
-        )
-        outputAlignment.setMappedReads(
-            statistics['mappedReads']
-        )
-        outputAlignment.setUniquelyMappedReads(
-            statistics['uniquelyMappedReads']
-        )
-        outputAlignment.setMultiMappedReads(
-            statistics['multiMappedReads']
-        )
-        outputAlignment.setUnmappedReads(
-            statistics['unmappedReads']
-        )
-        outputAlignment.setMappingRate(
-            statistics['mappingRate']
-        )
-        outputAlignment.setUniqueMappingRate(
-            statistics['uniqueMappingRate']
-        )
-        outputAlignment.setMultiMappingRate(
-            statistics['multiMappingRate']
-        )
-        outputAlignment.setUnmappedRate(
-            statistics['unmappedRate']
-        )
+        outputAlignment.setTotalReads(statistics['totalReads'])
+        outputAlignment.setMappedReads(statistics['mappedReads'])
+        outputAlignment.setUniquelyMappedReads(statistics['uniquelyMappedReads'])
+        outputAlignment.setMultiMappedReads(statistics['multiMappedReads'])
+        outputAlignment.setUnmappedReads(statistics['unmappedReads'])
+        outputAlignment.setMappingRate(statistics['mappingRate'])
+        outputAlignment.setUniqueMappingRate(statistics['uniqueMappingRate'])
+        outputAlignment.setMultiMappingRate(statistics['multiMappingRate'])
+        outputAlignment.setUnmappedRate(statistics['unmappedRate'])
 
-        self._defineOutputs(
-            outputAlignment=outputAlignment
-        )
+        self._defineOutputs(outputAlignment=outputAlignment)
 
-        self._defineSourceRelation(
-            self.inputFastq,
-            outputAlignment
-        )
+        self._defineSourceRelation(self.inputFastq, outputAlignment)
+        self._defineSourceRelation(self.inputGenomes, outputAlignment)
 
-        self._defineSourceRelation(
-            self.inputGenomes,
-            outputAlignment
-        )
     # -------------------------------------------------------
     # Cleanup
     # -------------------------------------------------------
@@ -1310,47 +1148,29 @@ class ProtRNASeqAlignment(EMProtocol):
         if self.keepIntermediateFiles.get():
             return
 
-        indexInfo = self._readJson(
-            self._getIndexInfoFile()
-        )
-        indexDirectory = indexInfo.get(
-            'indexDirectory'
-        )
+        indexInfo = self._readJson(self._getIndexInfoFile())
+        indexDirectory = indexInfo.get('indexDirectory')
 
-        if (
-            indexDirectory
-            and os.path.isdir(indexDirectory)
-        ):
+        if indexDirectory and os.path.isdir(indexDirectory):
             shutil.rmtree(indexDirectory)
 
     # -------------------------------------------------------
-    # Persistent information
+    # File helpers
     # -------------------------------------------------------
 
     def _getReferenceInfoFile(self):
-        return self._getExtraPath(
-            'reference_info.json'
-        )
+        return self._getExtraPath('reference_info.json')
 
     def _getIndexInfoFile(self):
-        return self._getExtraPath(
-            'index_info.json'
-        )
+        return self._getExtraPath('index_info.json')
 
     def _getAlignmentInfoFile(self):
-        return self._getExtraPath(
-            'alignment_info.json'
-        )
+        return self._getExtraPath('alignment_info.json')
 
     @staticmethod
     def _writeJson(filePath, data):
         with open(filePath, 'w') as outputFile:
-            json.dump(
-                data,
-                outputFile,
-                indent=2,
-                sort_keys=True
-            )
+            json.dump(data, outputFile, indent=2, sort_keys=True)
 
     @staticmethod
     def _readJson(filePath):
@@ -1359,14 +1179,11 @@ class ProtRNASeqAlignment(EMProtocol):
 
     @staticmethod
     def _quote(value):
-        value = str(value)
+        return shlex.quote(str(value))
 
-        if not re.fullmatch(r'[A-Za-z0-9_./+\- ]+', value):
-            raise ValueError(
-                'Invalid character in command path: {}'.format(value)
-            )
-
-        return shlex.quote(value)
+    @staticmethod
+    def _isNonemptyFile(path):
+        return os.path.isfile(path) and os.path.getsize(path) > 0
 
     # -------------------------------------------------------
     # Validation
@@ -1382,77 +1199,79 @@ class ProtRNASeqAlignment(EMProtocol):
         return errors
 
     def _validateFastq(self, errors):
-        fastqObj = self.inputFastq.get()
-
-        if fastqObj is None:
-            errors.append(
-                'An input FastqFile object is required.'
-            )
+        fastq = self.inputFastq.get()
+        if fastq is None:
+            errors.append('An input FastqFile object is required.')
             return
-
-        read1 = fastqObj.getFileName()
-
-        if not read1:
-            errors.append(
-                'The input FASTQ read 1 path is empty.'
-            )
-        elif not os.path.isfile(read1):
-            errors.append(
-                'The input FASTQ read 1 file does not exist: {}'
-                .format(read1)
-            )
-
-        if fastqObj.isPaired():
-            read2 = fastqObj.getFileName2()
-
-            if not read2:
-                errors.append(
-                    'Paired-end input requires a read 2 file.'
-                )
-            elif not os.path.isfile(read2):
-                errors.append(
-                    'The input FASTQ read 2 file does not exist: {}'
-                    .format(read2)
-                )
+        files = [fastq.getFileName()]
+        if fastq.isPaired():
+            files.append(fastq.getFileName2())
+        for number, path in enumerate(files, start=1):
+            if not path or not os.path.isfile(path):
+                errors.append('Input FASTQ read {} is missing: {}'.format(number, path))
+            elif os.path.getsize(path) == 0:
+                errors.append('Input FASTQ read {} is empty: {}'.format(number, path))
+        if fastq.getFormat() != 'FASTQ' or not fastq.hasQuality():
+            errors.append('Input must be FASTQ with quality scores.')
+        if len(files) == 2 and all(path and os.path.isfile(path) for path in files):
+            if os.path.samefile(*files):
+                errors.append('Paired-end reads must use different FASTQ files.')
+            if files[0].endswith('.gz') != files[1].endswith('.gz'):
+                errors.append('Paired FASTQ files must use the same compression mode.')
+        if files[0] and fastq.isCompressed() != files[0].endswith('.gz'):
+            errors.append('FASTQ compression metadata do not match the read 1 extension.')
 
     def _validateReference(self, errors):
-        self._validateGenomeObjectReference(errors)
-
-    def _validateGenomeObjectReference(self, errors):
         try:
             genome = self._getSelectedGenome()
         except RuntimeError as error:
             errors.append(str(error))
             return
-
-        fastaFile = genome.getFastaFile()
-
-        if not fastaFile:
-            errors.append(
-                'The selected Genome does not contain a FASTA file.'
-            )
-        elif not os.path.isfile(fastaFile):
-            errors.append(
-                'The genome FASTA file does not exist: {}'
-                .format(fastaFile)
-            )
-
-        if genome.hasGtfFile():
-            gtfFile = genome.getGtfFile()
-
-            if not os.path.isfile(gtfFile):
-                errors.append(
-                    'The genome GTF file does not exist: {}'
-                    .format(gtfFile)
-                )
+        for path, label in ((genome.getFastaFile(), 'FASTA'), (genome.getGtfFile(), 'GTF')):
+            if label == 'GTF' and not path:
+                continue
+            if not path or not os.path.isfile(path):
+                errors.append('Genome {} file is missing: {}'.format(label, path))
+            elif os.path.getsize(path) == 0:
+                errors.append('Genome {} file is empty: {}'.format(label, path))
+            else:
+                with open(path, 'rb') as handle:
+                    if path.lower().endswith('.gz') or handle.read(2) == b'\x1f\x8b':
+                        errors.append('Genome {} must be uncompressed: {}'.format(label, path))
 
     def _validateAlignmentParameters(self, errors):
-        if (
-            self.aligner.get() == self.ALIGN_STAR
-            and self.starSjdbOverhang.get() < 0
+        if self.aligner.get() not in (self.ALIGN_STAR, self.ALIGN_HISAT2):
+            errors.append('Select a valid aligner.')
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
+        if self.rnaStrandness.get() not in (0, 1, 2):
+            errors.append('Select a valid RNA strandness.')
+        if self.aligner.get() != self.ALIGN_STAR:
+            return
+
+        if self.starSjdbOverhang.get() < 0:
+            errors.append('STAR sjdbOverhang must be 0 or a positive integer.')
+
+        if self.starOutFilterMultimapNmax.get() < 1:
+            errors.append('STAR maximum mapping loci must be a positive integer.')
+
+        for value, choices, label in (
+            (self.starOutSAMstrandField.get(), self.STAR_STRAND_FIELDS, 'SAM strand field'),
+            (self.starOutReadsUnmapped.get(), self.STAR_UNMAPPED_READS, 'unmapped-read output'),
+            (self.starOutSAMunmapped.get(), self.STAR_UNMAPPED_BAM, 'unmapped BAM output')
+        ):
+            if value not in range(len(choices)):
+                errors.append('Select a valid STAR {}.'.format(label))
+        attributes = (self.starOutSAMattributes.get() or '').split()
+        if len(attributes) == 1 and attributes[0] in ('None', 'Standard', 'All'):
+            return
+
+        if not attributes or any(
+            re.fullmatch(r'[A-Za-z][A-Za-z0-9]', tag) is None for tag in attributes
         ):
             errors.append(
-                'STAR sjdbOverhang must be 0 or a positive integer.'
+                'STAR SAM attributes must be space-separated two-character '
+                'tags or one preset: None, Standard or All.'
             )
 
     # -------------------------------------------------------
@@ -1469,17 +1288,10 @@ class ProtRNASeqAlignment(EMProtocol):
         if genomeSet.getSize() == 0:
             return summary
 
-        summary.append(
-            'Available genomes:'
-        )
+        summary.append('Available genomes:')
 
         for i, genome in enumerate(genomeSet):
-            summary.append(
-                self._formatGenomeSummary(
-                    i,
-                    genome
-                )
-            )
+            summary.append(self._formatGenomeSummary(i, genome))
 
         summary.extend([
             '',
@@ -1492,98 +1304,52 @@ class ProtRNASeqAlignment(EMProtocol):
 
     @staticmethod
     def _formatGenomeSummary(index, genome):
-        species = (
-            genome.getScientificName()
-            if genome.hasScientificName()
-            else 'Unknown species'
-        )
+        species = genome.getScientificName() if genome.hasScientificName() else 'Unknown species'
 
-        assembly = (
-            genome.getAssembly()
-            if genome.hasAssembly()
-            else ''
-        )
+        assembly = genome.getAssembly() if genome.hasAssembly() else ''
 
-        release = (
-            genome.getRelease()
-            if genome.hasRelease()
-            else ''
-        )
+        release = genome.getRelease() if genome.hasRelease() else ''
 
-        source = (
-            genome.getSource()
-            if genome.hasSource()
-            else ''
-        )
+        source = genome.getSource() if genome.hasSource() else ''
 
-        line = '{} -> {}'.format(
-            index,
-            species
-        )
+        line = '{} -> {}'.format(index, species)
 
         if assembly:
-            line += ' ({})'.format(
-                assembly
-            )
+            line += ' ({})'.format(assembly)
 
         if release:
             if source:
-                line += ', {} {}'.format(
-                    source,
-                    release
-                )
+                line += ', {} {}'.format(source, release)
             else:
-                line += ', release {}'.format(
-                    release
-                )
+                line += ', release {}'.format(release)
 
         return line
 
     def _summary(self):
-        summary = []
-
-        summary.extend(
-            self._getAvailableGenomesSummary()
-        )
+        summary = self._getAvailableGenomesSummary()
 
         if not hasattr(self, 'outputAlignment'):
-            summary.append(
-                'No alignment has been generated.'
-            )
+            summary.append('No alignment has been generated.')
             return summary
 
         output = self.outputAlignment
 
         summary.extend([
-            'Aligner: {}'.format(
-                output.getAligner()
-            ),
-            'Reference: {}'.format(
-                output.getReferenceName()
-            ),
-            'Reference source: {}'.format(
-                output.getReferenceSource()
-            ),
-            'Output: {}'.format(
-                output.getFileName()
-            ),
-            'Mapping rate: {:.2f}%'.format(
-                output.getMappingRate()
-            ),
-            'Mapped reads: {}'.format(
-                output.getMappedReads()
-            ),
-            'Unmapped reads: {}'.format(
-                output.getUnmappedReads()
-            )
+            'Aligner: {}'.format(output.getAligner()),
+            'Reference: {}'.format(output.getReferenceName()),
+            'Reference source: {}'.format(output.getReferenceSource()),
+            'Output: {}'.format(output.getFileName()),
+            'Mapping rate: {:.2f}%'.format(output.getMappingRate()),
+            'Mapped reads: {}'.format(output.getMappedReads()),
+            'Unmapped reads: {}'.format(output.getUnmappedReads())
         ])
 
+        if output.getAligner() == 'HISAT2' and self.inputFastq.get().isPaired():
+            summary.append('HISAT2 counts describe concordant pairs; unmapped includes pairs '
+                           'without a concordant alignment. See the log for the overall mate alignment rate.')
+
         if output.hasReferenceGtf():
-            summary.append(
-                'Annotation: {}'.format(
-                    output.getReferenceGtf()
-                )
-            )
+            summary.append('Annotation: {}'.format(output.getReferenceGtf()))
 
         return summary
 

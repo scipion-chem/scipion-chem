@@ -24,18 +24,19 @@
 # *
 # **************************************************************************
 
-import json
 import gzip
+import json
 import os
 import re
 import shutil
+import shlex
 import urllib.error
 import urllib.request
 import zipfile
 
-from pwchem.utils.utilsRNA import COMMON_SPECIES,getProviderSpeciesName,parseCustomSpecies
+from pwchem.utils.utilsRNA import COMMON_SPECIES, getProviderSpeciesName, parseCustomSpecies
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol.params import BooleanParam,EnumParam,StringParam
+from pyworkflow.protocol.params import BooleanParam, EnumParam, StringParam
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import Genome, SetOfGenomes
@@ -299,7 +300,12 @@ class ProtDownloadGenomes(EMProtocol):
 
         If NCBI does not provide a GTF annotation for the selected
         assembly, the reference genome is still created without an
-        annotation file.
+        annotation file. Missing or empty GTF files are treated as unavailable;
+        multiple matching annotation files are an error, not a missing annotation.
+
+    FASTA and GTF are selected from the same Ensembl collection. Main
+    Ensembl filenames must match the requested assembly and release; an
+    unavailable assembly is not silently replaced by another one.
 
     The resulting GTF path is stored in the corresponding ``Genome``
     object.
@@ -312,11 +318,16 @@ class ProtDownloadGenomes(EMProtocol):
     Existing files and overwrite behaviour
     ---------------------------------------------------------------------
 
-    By default, existing downloaded files are reused whenever possible.
+    By default, existing non-empty downloaded files are reused whenever possible.
+    Ensembl data are decompressed to a temporary file and moved to the final
+    path only after decompression succeeds. Files copied from NCBI packages
+    are also published through temporary files. Failed transfers do not publish
+    partial FASTA or GTF files. Existing files are not checksum-verified.
 
-    If ``overwrite`` is enabled, existing files and intermediate download
-    directories are removed and the requested genome files are downloaded
-    again.
+    If ``overwrite`` is enabled, existing NCBI files and intermediate
+    package directories are removed and the requested genome files are
+    downloaded again. A previous complete Ensembl file is replaced only after
+    its replacement has been downloaded and decompressed successfully.
 
     This behaviour allows interrupted or previously completed protocol
     executions to avoid unnecessary downloads.
@@ -406,7 +417,9 @@ class ProtDownloadGenomes(EMProtocol):
         genome FASTA when an annotation is available.
 
     overwrite : bool
-        If True, existing genome files are removed and downloaded again.
+        If True, download the genome files again instead of reusing them.
+        Ensembl files are replaced after successful decompression; existing
+        NCBI output directories are cleared before requesting a new package.
 
 
     ---------------------------------------------------------------------
@@ -475,7 +488,8 @@ class ProtDownloadGenomes(EMProtocol):
        ``SetOfGenomes``.
 
        Species that could not be resolved or downloaded are skipped and
-       are not included in the output set.
+       are not included in the output set. If no genome is available, the
+       protocol raises an error instead of publishing an empty set.
 
 
     ---------------------------------------------------------------------
@@ -523,8 +537,9 @@ class ProtDownloadGenomes(EMProtocol):
 
     - NCBI assembly accessions must include their version number.
 
-    - Genome information is persisted internally in ``genomes.json``
-      between protocol steps.
+    - Genome information is persisted atomically in ``genomes.json``
+      between protocol steps and after each attempted download. This lets
+      the download step reuse previously completed species when resumed.
 
     - Each successfully downloaded species generates an independent
       ``Genome`` object.
@@ -584,11 +599,6 @@ class ProtDownloadGenomes(EMProtocol):
     # ---------------------------------------------------------------------
 
     def _defineParams(self, form):
-
-        # ---------------------------------------------------------
-        # Source
-        # ---------------------------------------------------------
-
         form.addSection(label='Source')
 
         form.addParam(
@@ -605,10 +615,6 @@ class ProtDownloadGenomes(EMProtocol):
                 'genomes.'
             )
         )
-
-        # ---------------------------------------------------------
-        # Genome selection
-        # ---------------------------------------------------------
 
         form.addSection(label='Genome selection')
 
@@ -653,10 +659,6 @@ class ProtDownloadGenomes(EMProtocol):
             )
         )
 
-        # ---------------------------------------------------------
-        # Ensembl-specific genome options
-        # ---------------------------------------------------------
-
         form.addParam(
             'assemblies',
             StringParam,
@@ -693,10 +695,6 @@ class ProtDownloadGenomes(EMProtocol):
             )
         )
 
-        # ---------------------------------------------------------
-        # NCBI-specific genome options
-        # ---------------------------------------------------------
-
         form.addParam(
             'ncbiAssemblies',
             StringParam,
@@ -717,10 +715,6 @@ class ProtDownloadGenomes(EMProtocol):
             )
         )
 
-        # ---------------------------------------------------------
-        # Download options
-        # ---------------------------------------------------------
-
         form.addSection(label='Download options')
 
         form.addParam(
@@ -730,17 +724,9 @@ class ProtDownloadGenomes(EMProtocol):
             label='Download annotation GTF: '
         )
 
-        form.addParam(
-            'overwrite',
-            BooleanParam,
-            default=False,
-            label='Overwrite existing files: '
-        )
+        form.addParam('overwrite', BooleanParam, default=False, label='Overwrite existing files: ')
 
-        form.addParallelSection(
-            threads=1,
-            mpi=0
-        )
+        form.addParallelSection(threads=1, mpi=0)
 
     # ---------------------------------------------------------------------
     # Steps
@@ -772,30 +758,20 @@ class ProtDownloadGenomes(EMProtocol):
     @staticmethod
     def _splitParameterValues(value):
         """Split comma- or semicolon-separated parameter values."""
-        return [
-            item.strip()
-            for item in re.split(r'[;,]', value)
-            if item.strip()
-        ]
+        return [item.strip() for item in re.split('[;,]', value or '') if item.strip()]
 
     def _getSelectedSpecies(self):
         """Return selected species according to the selection mode."""
 
         if self.genomeSelection.get() == self.GENOME_COMMON:
-            selected = self._splitParameterValues(
-                self.commonSpecies.get()
-            )
+            selected = self._splitParameterValues(self.commonSpecies.get())
         else:
-            selected = parseCustomSpecies(
-                self.customSpecies.get()
-            )
+            selected = parseCustomSpecies(self.customSpecies.get())
 
         if not selected:
-            raise ValueError(
-                'At least one species must be selected.'
-            )
+            raise ValueError('At least one species must be selected.')
 
-        return selected
+        return list(dict.fromkeys(selected))
 
     # ---------------------------------------------------------------------
     # Genome information
@@ -814,41 +790,20 @@ class ProtDownloadGenomes(EMProtocol):
     # ---------------------------------------------------------------------
 
     def _getSelectedEnsemblGenomes(self, species):
+        assemblies = self._expandParameterValues(self.assemblies.get(), len(species), 'assemblies')
 
-        assemblies = self._expandParameterValues(
-            self.assemblies.get(),
-            len(species),
-            'assemblies'
-        )
-
-        releases = self._expandParameterValues(
-            self.releases.get(),
-            len(species),
-            'releases'
-        )
+        releases = self._expandParameterValues(self.releases.get(), len(species), 'releases')
 
         genomes = []
 
-        for speciesName, assembly, release in zip(
-                species,
-                assemblies,
-                releases):
+        for speciesName, assembly, release in zip(species, assemblies, releases):
             scientificName = speciesName.strip()
 
-            ensemblName = getProviderSpeciesName(
-                scientificName,
-                'ensembl'
-            )
+            ensemblName = getProviderSpeciesName(scientificName, 'ensembl')
 
-            speciesInfo = COMMON_SPECIES.get(
-                scientificName
-            )
+            speciesInfo = COMMON_SPECIES.get(scientificName)
 
-            defaultAssembly = (
-                speciesInfo.get('assembly')
-                if speciesInfo
-                else None
-            )
+            defaultAssembly = speciesInfo.get('assembly') if speciesInfo else None
 
             genomes.append({
                 'scientificName': scientificName,
@@ -876,16 +831,10 @@ class ProtDownloadGenomes(EMProtocol):
 
         genomes = []
 
-        for speciesName, assemblyRequest in zip(
-                species,
-                assemblies):
-
+        for speciesName, assemblyRequest in zip(species, assemblies):
             scientificName = speciesName.strip()
 
-            ncbiTaxon = getProviderSpeciesName(
-                scientificName,
-                'ncbi'
-            )
+            ncbiTaxon = getProviderSpeciesName(scientificName, 'ncbi')
 
             if assemblyRequest.lower() == 'latest':
                 accession = None
@@ -909,20 +858,11 @@ class ProtDownloadGenomes(EMProtocol):
     # ---------------------------------------------------------------------
 
     @classmethod
-    def _expandParameterValues(
-            cls,
-            value,
-            numberOfGenomes,
-            parameterName):
-
+    def _expandParameterValues(cls, value, numberOfGenomes, parameterName):
         values = cls._splitParameterValues(value)
 
         if not values:
-            raise ValueError(
-                '{} cannot be empty.'.format(
-                    parameterName.capitalize()
-                )
-            )
+            raise ValueError('{} cannot be empty.'.format(parameterName.capitalize()))
 
         if len(values) == 1:
             return values * numberOfGenomes
@@ -956,68 +896,37 @@ class ProtDownloadGenomes(EMProtocol):
                         latestRelease = self._getLatestEnsemblRelease()
                     genomeInfo['release'] = str(latestRelease)
 
-                genomeInfo['assembly'] = self._resolveAssembly(
-                    genomeInfo['assembly'],
-                    genomeInfo
-                )
+                genomeInfo['assembly'] = self._resolveAssembly(genomeInfo['assembly'], genomeInfo)
             except Exception as error:
-                genomeInfo['skipReason'] = str(error)
-                self.warning(
-                    self.SKIPPING_WARNING.format(
-                        genomeInfo['scientificName'], error
-                    )
-                )
+                self._skipGenome(genomeInfo, error)
 
     def _getLatestEnsemblRelease(self):
-
-        data = self._requestJson(
-            self.ENSEMBL_REST_DATA_URL,
-            'latest Ensembl release'
-        )
+        data = self._requestJson(self.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
 
         releases = data.get('releases', [])
 
         if not releases:
-            raise RuntimeError(
-                'The Ensembl REST response does not contain releases.'
-            )
+            raise RuntimeError('The Ensembl REST response does not contain releases.')
 
-        return max(
-            int(release)
-            for release in releases
-        )
+        return max((int(release) for release in releases))
 
-    def _resolveAssembly(
-            self,
-            assembly,
-            genomeInfo):
-
+    def _resolveAssembly(self, assembly, genomeInfo):
         assembly = assembly.strip()
 
         if assembly.lower() != 'latest':
             return assembly
 
-        defaultAssembly = genomeInfo.get(
-            'defaultAssembly'
-        )
+        defaultAssembly = genomeInfo.get('defaultAssembly')
 
         if defaultAssembly:
             return defaultAssembly
 
-        return self._getLatestEnsemblAssembly(
-            genomeInfo['ensemblName']
-        )
+        return self._getLatestEnsemblAssembly(genomeInfo['ensemblName'])
 
     def _getLatestEnsemblAssembly(self, species):
+        url = self.ENSEMBL_REST_ASSEMBLY_URL.format(species)
 
-        url = self.ENSEMBL_REST_ASSEMBLY_URL.format(
-            species
-        )
-
-        data = self._requestJson(
-            url,
-            'latest assembly for {}'.format(species)
-        )
+        data = self._requestJson(url, 'latest assembly for {}'.format(species))
 
         assembly = data.get('assembly_name')
 
@@ -1035,7 +944,7 @@ class ProtDownloadGenomes(EMProtocol):
             species,
             folder,
             suffix,
-            preferredDivision=None):
+            preferredDivision=None, filenamePrefix=None):
         """Find an Ensembl file, falling back to Ensembl Genomes divisions.
 
         Main Ensembl uses release-N directories. Ensembl Genomes has its own
@@ -1044,17 +953,16 @@ class ProtDownloadGenomes(EMProtocol):
         """
         locations = []
 
-        if preferredDivision is None:
+        if preferredDivision in (None, 'main'):
             subfolder = 'fasta/{}/dna/'.format(species) \
                 if folder == 'fasta' else 'gtf/{}/'.format(species)
 
             locations.append((
                 None,
-                'https://ftp.ensembl.org/pub/release-{}/{}'
-                .format(release, subfolder)
+                'https://ftp.ensembl.org/pub/release-{}/{}'.format(release, subfolder)
             ))
 
-            divisions = self.ENSEMBL_GENOMES_DIVISIONS
+            divisions = self.ENSEMBL_GENOMES_DIVISIONS if preferredDivision is None else ()
         else:
             divisions = (preferredDivision,)
 
@@ -1075,10 +983,7 @@ class ProtDownloadGenomes(EMProtocol):
         errors = []
 
         for division, url in locations:
-            request = urllib.request.Request(
-                url,
-                headers={'User-Agent': 'Scipion-Chem'}
-            )
+            request = urllib.request.Request(url, headers={'User-Agent': 'Scipion-Chem'})
 
             try:
                 with urllib.request.urlopen(request, timeout=120) as response:
@@ -1092,12 +997,11 @@ class ProtDownloadGenomes(EMProtocol):
             candidates = sorted(
                 filename for filename in matches
                 if filename.endswith(suffix)
+                and (filenamePrefix is None or filename.startswith(filenamePrefix))
             )
 
             if not candidates:
-                errors.append(
-                    "{}: no file ending with '{}'".format(url, suffix)
-                )
+                errors.append("{}: no file ending with '{}'".format(url, suffix))
                 continue
 
             if len(candidates) > 1:
@@ -1115,22 +1019,18 @@ class ProtDownloadGenomes(EMProtocol):
         )
 
     def _buildEnsemblDownloadUrls(self, genomeInfo):
-        release = self._validateEnsemblUrlComponent(
-            genomeInfo['release'], 'release'
-        )
-        species = self._validateEnsemblUrlComponent(
-            genomeInfo['ensemblName'], 'species'
-        )
+        release = self._validateEnsemblUrlComponent(genomeInfo['release'], 'release')
+        species = self._validateEnsemblUrlComponent(genomeInfo['ensemblName'], 'species')
+
+        self._validateEnsemblUrlComponent(genomeInfo['assembly'], 'assembly')
 
         fastaName, fastaDir, division = self._findEnsemblFile(
             release,
             species,
             'fasta',
-            '.dna.toplevel.fa.gz'
+            '.{}.dna.toplevel.fa.gz'.format(genomeInfo['assembly'])
         )
-        fastaName = self._validateEnsemblUrlComponent(
-            fastaName, 'FASTA filename'
-        )
+        fastaName = self._validateEnsemblUrlComponent(fastaName, 'FASTA filename')
         fastaUrl = fastaDir + fastaName
 
         genomeInfo['ensemblDivision'] = division or 'main'
@@ -1145,12 +1045,12 @@ class ProtDownloadGenomes(EMProtocol):
                 release,
                 species,
                 'gtf',
-                '.gtf.gz',
-                preferredDivision=division
+                '.{}.{}.gtf.gz'.format(genomeInfo['assembly'], release)
+                if division is None else '.gtf.gz',
+                preferredDivision=division or 'main',
+                filenamePrefix=fastaName[:-len('dna.toplevel.fa.gz')]
             )
-            gtfName = self._validateEnsemblUrlComponent(
-                gtfName, 'GTF filename'
-            )
+            gtfName = self._validateEnsemblUrlComponent(gtfName, 'GTF filename')
             gtfUrl = gtfDir + gtfName
 
         return fastaUrl, gtfUrl
@@ -1165,16 +1065,9 @@ class ProtDownloadGenomes(EMProtocol):
             if genomeInfo.get('accession') is not None:
                 continue
             try:
-                genomeInfo['accession'] = self._getNcbiReferenceAccession(
-                    genomeInfo['ncbiTaxon']
-                )
+                genomeInfo['accession'] = self._getNcbiReferenceAccession(genomeInfo['ncbiTaxon'])
             except Exception as error:
-                genomeInfo['skipReason'] = str(error)
-                self.warning(
-                    self.SKIPPING_WARNING.format(
-                        genomeInfo['scientificName'], error
-                    )
-                )
+                self._skipGenome(genomeInfo, error)
 
     @staticmethod
     def _readJsonLines(filename):
@@ -1202,32 +1095,24 @@ class ProtDownloadGenomes(EMProtocol):
 
         for source in ('RefSeq', 'GenBank'):
             outputFile = self._getTmpPath(
-                '{}_{}_ncbi_summary.jsonl'.format(
-                    self._safeName(taxon), source.lower()
-                )
+                '{}_{}_ncbi_summary.jsonl'.format(self._safeName(taxon), source.lower())
             )
 
             if os.path.exists(outputFile):
                 os.remove(outputFile)
 
             arguments = (
-                'summary genome taxon "{}" '
+                'summary genome taxon {} '
                 '--assembly-source {} '
                 '--tax-exact-match '
                 '--as-json-lines '
-                '> "{}"'
-            ).format(taxon, source, outputFile)
+                '> {}'
+            ).format(shlex.quote(taxon), source, shlex.quote(outputFile))
 
             try:
-                Plugin.runCondaCommand(
-                    self, arguments, RNASEQ_DIC, 'datasets'
-                )
+                Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'datasets')
             except Exception as error:
-                self.warning(
-                    'NCBI {} lookup failed for {}: {}'.format(
-                        source, taxon, error
-                    )
-                )
+                self.warning('NCBI {} lookup failed for {}: {}'.format(source, taxon, error))
                 continue
 
             reports = self._readJsonLines(outputFile)
@@ -1245,17 +1130,12 @@ class ProtDownloadGenomes(EMProtocol):
         def getReleaseDate(report):
             assemblyInfo = report.get('assemblyInfo', {})
             return (
-                    assemblyInfo.get('releaseDate')
-                    or assemblyInfo.get('submissionDate')
-                    or ''
+                    assemblyInfo.get('releaseDate') or assemblyInfo.get('submissionDate') or ''
             )
 
         latestReport = max(allReports, key=getReleaseDate)
 
-        accession = (
-                latestReport.get('accession')
-                or latestReport.get('currentAccession')
-        )
+        accession = latestReport.get('accession') or latestReport.get('currentAccession')
 
         if not accession:
             raise RuntimeError(
@@ -1269,8 +1149,13 @@ class ProtDownloadGenomes(EMProtocol):
     # Download
     # ---------------------------------------------------------------------
 
-    def downloadGenomesStep(self):
+    def _skipGenome(self, genomeInfo, error):
+        genomeInfo['skipReason'] = str(error)
+        genomeInfo.pop('fastaFile', None)
+        genomeInfo.pop('gtfFile', None)
+        self.warning(self.SKIPPING_WARNING.format(genomeInfo['scientificName'], error))
 
+    def downloadGenomesStep(self):
         genomes = self._readGenomeInfo()
 
         if self.source.get() == self.SOURCE_ENSEMBL:
@@ -1324,70 +1209,30 @@ class ProtDownloadGenomes(EMProtocol):
                     genomeInfo['gtfFile'] = gtfFile
 
             except Exception as error:
-                genomeInfo['skipReason'] = str(error)
-                genomeInfo.pop('fastaFile', None)
-                genomeInfo.pop('gtfFile', None)
-                self.warning(
-                    self.SKIPPING_WARNING.format(
-                        genomeInfo['scientificName'], error
-                    )
-                )
+                self._skipGenome(genomeInfo, error)
+            self._writeGenomeInfo(genomes)
 
     # ---------------------------------------------------------------------
     # NCBI download
     # ---------------------------------------------------------------------
     def _canReuseNcbiDownload(self, genomeInfo):
-        existingFasta = genomeInfo.get('fastaFile')
-        existingGtf = genomeInfo.get('gtfFile')
+        if self.overwrite.get() or not self._isNonemptyFile(genomeInfo.get('fastaFile')):
+            return False
+        return (not self.downloadAnnotation.get()
+                or self._isNonemptyFile(genomeInfo.get('gtfFile'))
+                or genomeInfo.get('annotationUnavailable', False))
 
-        fastaExists = (
-                existingFasta
-                and os.path.exists(existingFasta)
-        )
-
-        gtfExists = (
-                existingGtf
-                and os.path.exists(existingGtf)
-        )
-
-        return (
-                not self.overwrite.get()
-                and fastaExists
-                and (
-                        not self.downloadAnnotation.get()
-                        or gtfExists
-                )
-        )
-
-    def _prepareNcbiDownloadPaths(
-            self,
-            outputDir,
-            extractDir,
-            zipFile):
-
-        if (
-                self.overwrite.get()
-                and os.path.exists(outputDir)
-        ):
+    def _prepareNcbiDownloadPaths(self, outputDir, extractDir, zipFile):
+        if self.overwrite.get() and os.path.exists(outputDir):
             shutil.rmtree(outputDir)
 
-        os.makedirs(
-            outputDir,
-            exist_ok=True
-        )
+        os.makedirs(outputDir, exist_ok=True)
 
         if os.path.exists(extractDir):
             shutil.rmtree(extractDir)
 
         if os.path.exists(zipFile):
             os.remove(zipFile)
-
-    @staticmethod
-    def _getNcbiQueryName(genomeInfo):
-        return (
-                genomeInfo.get('accession')
-                or genomeInfo['ncbiTaxon']
-        )
 
     def _getNcbiGenomesToDownload(self, genomes):
         return [
@@ -1404,276 +1249,158 @@ class ProtDownloadGenomes(EMProtocol):
             with zipfile.ZipFile(zipFile, 'r') as archive:
                 archive.extractall(extractDir)
         except zipfile.BadZipFile as error:
-            raise RuntimeError(
-                'Invalid NCBI data package: {}'.format(error)
-            )
+            raise RuntimeError('Invalid NCBI data package: {}'.format(error))
 
     def _downloadNcbiGenomes(self, genomes):
-
         for genomeInfo in self._getNcbiGenomesToDownload(genomes):
+            try:
+                self._downloadNcbiGenome(genomeInfo)
+            except Exception as error:
+                self._skipGenome(genomeInfo, error)
+            self._writeGenomeInfo(genomes)
 
-            queryName = self._getNcbiQueryName(
-                genomeInfo
+    def _downloadNcbiGenome(self, genomeInfo):
+        queryName = genomeInfo['accession']
+
+        outputDir = self._getExtraPath(
+            'ncbi_{}_{}'.format(
+                self._safeName(genomeInfo['scientificName']),
+                self._safeName(queryName)
+            )
+        )
+
+        zipFile = os.path.join(outputDir, 'ncbi_dataset.zip')
+
+        extractDir = os.path.join(outputDir, 'package')
+
+        self._prepareNcbiDownloadPaths(outputDir, extractDir, zipFile)
+
+        includeFiles = 'genome,gtf' if self.downloadAnnotation.get() else 'genome'
+
+        arguments = (
+            'download genome accession {} '
+            '--include {} '
+            '--filename {} '
+            '--no-progressbar'
+        ).format(
+            shlex.quote(genomeInfo['accession']),
+            includeFiles,
+            shlex.quote(zipFile)
+        )
+
+        self._runNcbiDownload(arguments, zipFile, retries=3)
+
+        self._extractNcbiPackage(zipFile, extractDir)
+
+        reportFile = os.path.join(extractDir, 'ncbi_dataset', 'data', 'assembly_data_report.jsonl')
+
+        report = self._readNcbiAssemblyReport(reportFile)
+
+        accession = report.get('accession') or report.get('currentAccession')
+
+        if not accession:
+            raise RuntimeError(
+                'NCBI assembly report does not contain '
+                'an assembly accession.'
             )
 
-            outputDir = self._getExtraPath(
-                'ncbi_{}_{}'.format(
-                    self._safeName(
-                        genomeInfo['scientificName']
-                    ),
-                    self._safeName(queryName)
-                )
+        if accession != genomeInfo['accession']:
+            raise RuntimeError('NCBI returned {} instead of the requested {}.'.format(
+                accession, genomeInfo['accession']
+            ))
+
+        assemblyInfo = report.get('assemblyInfo', {})
+
+        assemblyName = assemblyInfo.get('assemblyName') or accession
+
+        organismInfo = report.get('organism', {})
+
+        scientificName = organismInfo.get('organismName') or genomeInfo['scientificName']
+
+        annotationInfo = report.get('annotationInfo', {})
+
+        fastaSource = self._findNcbiPackageFile(extractDir, ('.fna',), 'genome FASTA')
+
+        fastaFile = os.path.join(outputDir, '{}_genomic.fna'.format(accession))
+
+        self._copyPackageFile(fastaSource, fastaFile)
+
+        gtfFile = None
+
+        if self.downloadAnnotation.get():
+            gtfSource = self._findNcbiPackageFile(
+                extractDir, ('.gtf',), 'GTF annotation', required=False
             )
-
-            zipFile = os.path.join(
-                outputDir,
-                'ncbi_dataset.zip'
-            )
-
-            extractDir = os.path.join(
-                outputDir,
-                'package'
-            )
-
-            self._prepareNcbiDownloadPaths(
-                outputDir,
-                extractDir,
-                zipFile
-            )
-
-            includeFiles = (
-                'genome,gtf'
-                if self.downloadAnnotation.get()
-                else 'genome'
-            )
-
-            # -------------------------------------------------------------
-            # Build NCBI Datasets command
-            # -------------------------------------------------------------
-
-            arguments = (
-                'download genome accession "{}" '
-                '--include {} '
-                '--filename "{}" '
-                '--no-progressbar'
-            ).format(
-                genomeInfo['accession'],
-                includeFiles,
-                zipFile
-            )
-
-            self._runNcbiDownload(
-                arguments,
-                zipFile,
-                retries=3
-            )
-
-            # -------------------------------------------------------------
-            # Extract NCBI package
-            # -------------------------------------------------------------
-
-            self._extractNcbiPackage(
-                zipFile,
-                extractDir
-            )
-
-            # -------------------------------------------------------------
-            # Metadata
-            # -------------------------------------------------------------
-
-            reportFile = os.path.join(
-                extractDir,
-                'ncbi_dataset',
-                'data',
-                'assembly_data_report.jsonl'
-            )
-
-            report = self._readNcbiAssemblyReport(
-                reportFile
-            )
-
-            accession = (
-                    report.get('accession')
-                    or report.get('currentAccession')
-            )
-
-            if not accession:
-                raise RuntimeError(
-                    'NCBI assembly report does not contain '
-                    'an assembly accession.'
+            if gtfSource:
+                gtfFile = os.path.join(outputDir, '{}_genomic.gtf'.format(accession))
+                self._copyPackageFile(gtfSource, gtfFile)
+            else:
+                self.warning(
+                    'NCBI does not provide a GTF annotation for {} ({}). '
+                    'The reference genome will be created without annotation.'
+                    .format(scientificName, accession)
                 )
 
-            assemblyInfo = report.get(
-                'assemblyInfo',
-                {}
-            )
+        genomeInfo['scientificName'] = scientificName
+        genomeInfo['accession'] = accession
+        genomeInfo['assembly'] = assemblyName
 
-            assemblyName = (
-                    assemblyInfo.get('assemblyName')
-                    or accession
-            )
+        # NCBI accession acts as the versioned genome identifier.
+        genomeInfo['release'] = accession
 
-            organismInfo = report.get(
-                'organism',
-                {}
-            )
+        genomeInfo['annotationRelease'] = (
+            annotationInfo.get('name')
+        )
 
-            scientificName = (
-                    organismInfo.get('organismName')
-                    or genomeInfo['scientificName']
-            )
+        genomeInfo['fastaFile'] = fastaFile
+        genomeInfo['gtfFile'] = gtfFile
+        genomeInfo['annotationUnavailable'] = self.downloadAnnotation.get() and gtfFile is None
 
-            annotationInfo = report.get(
-                'annotationInfo',
-                {}
-            )
+        # Package is no longer required once files and metadata have
+        # been copied.
+        shutil.rmtree(extractDir, ignore_errors=True)
 
-            # -------------------------------------------------------------
-            # Locate downloaded files
-            # -------------------------------------------------------------
+        if os.path.exists(zipFile):
+            os.remove(zipFile)
 
-            fastaSource = self._findNcbiPackageFile(
-                extractDir,
-                ('.fna',),
-                'genome FASTA'
-            )
-
-            fastaFile = os.path.join(
-                outputDir,
-                '{}_genomic.fna'.format(
-                    accession
-                )
-            )
-
-            shutil.copy2(
-                fastaSource,
-                fastaFile
-            )
-
-            gtfFile = None
-
-            if self.downloadAnnotation.get():
-                try:
-                    gtfSource = self._findNcbiPackageFile(
-                        extractDir,
-                        ('.gtf',),
-                        'GTF annotation'
-                    )
-
-                    gtfFile = os.path.join(
-                        outputDir,
-                        '{}_genomic.gtf'.format(
-                            accession
-                        )
-                    )
-
-                    shutil.copy2(
-                        gtfSource,
-                        gtfFile
-                    )
-
-                except RuntimeError:
-                    self.warning(
-                        'NCBI does not provide a GTF annotation for {} ({}). '
-                        'The reference genome will be created without annotation.'
-                        .format(
-                            scientificName,
-                            accession
-                        )
-                    )
-
-            # -------------------------------------------------------------
-            # Store resolved metadata
-            # -------------------------------------------------------------
-
-            genomeInfo['scientificName'] = scientificName
-            genomeInfo['accession'] = accession
-            genomeInfo['assembly'] = assemblyName
-
-            # NCBI accession acts as the versioned genome identifier.
-            genomeInfo['release'] = accession
-
-            genomeInfo['annotationRelease'] = (
-                annotationInfo.get('name')
-            )
-
-            genomeInfo['fastaFile'] = fastaFile
-            genomeInfo['gtfFile'] = gtfFile
-
-            # Package is no longer required once files and metadata have
-            # been copied.
-            shutil.rmtree(
-                extractDir,
-                ignore_errors=True
-            )
-
-            if os.path.exists(zipFile):
-                os.remove(zipFile)
 
     # ---------------------------------------------------------------------
     # NCBI package utilities
     # ---------------------------------------------------------------------
 
     @staticmethod
-    def _readNcbiAssemblyReport(reportFile):
+    def _copyPackageFile(source, target):
+        partialFile = target + '.part'
+        try:
+            shutil.copy2(source, partialFile)
+            os.replace(partialFile, target)
+        finally:
+            if os.path.exists(partialFile):
+                os.remove(partialFile)
 
-        if not os.path.exists(reportFile):
-            raise RuntimeError(
-                'NCBI assembly report was not found: {}'
-                .format(reportFile)
-            )
-
-        reports = []
-
-        with open(reportFile) as inputFile:
-
-            for line in inputFile:
-                line = line.strip()
-
-                if line:
-                    reports.append(
-                        json.loads(line)
-                    )
-
+    @classmethod
+    def _readNcbiAssemblyReport(cls, reportFile):
+        reports = cls._readJsonLines(reportFile)
         if not reports:
-            raise RuntimeError(
-                'NCBI assembly report is empty.'
-            )
-
-        if len(reports) > 1:
-            raise RuntimeError(
-                'The NCBI query returned more than one reference '
-                'assembly. Please specify an explicit GCF_ or GCA_ '
-                'assembly accession.'
-            )
-
+            raise RuntimeError('NCBI assembly report is missing or empty: {}'.format(reportFile))
+        if len(reports) != 1:
+            raise RuntimeError('NCBI package must contain exactly one assembly report.')
         return reports[0]
 
     @staticmethod
-    def _findNcbiPackageFile(
-            rootDir,
-            extensions,
-            description):
-
+    def _findNcbiPackageFile(rootDir, extensions, description, required=True):
         candidates = []
 
         for root, _, files in os.walk(rootDir):
-
             for filename in files:
+                if filename.endswith(extensions) and os.path.getsize(os.path.join(root, filename)) > 0:
+                    candidates.append(os.path.join(root, filename))
 
-                if filename.endswith(extensions):
-                    candidates.append(
-                        os.path.join(
-                            root,
-                            filename
-                        )
-                    )
+        if not candidates and not required:
+            return None
 
         if not candidates:
-            raise RuntimeError(
-                'NCBI package does not contain {}.'
-                .format(description)
-            )
+            raise RuntimeError('NCBI package does not contain {}.'.format(description))
 
         if len(candidates) > 1:
             raise RuntimeError(
@@ -1686,33 +1413,21 @@ class ProtDownloadGenomes(EMProtocol):
 
         return candidates[0]
 
-    def _runNcbiDownload(
-            self,
-            arguments,
-            zipFile,
-            retries=3):
+    def _runNcbiDownload(self, arguments, zipFile, retries=3):
         """Run an NCBI Datasets download command with retries."""
 
         lastError = None
 
         for attempt in range(1, retries + 1):
-
             if os.path.exists(zipFile):
                 os.remove(zipFile)
 
             try:
-                Plugin.runCondaCommand(
-                    self,
-                    arguments,
-                    RNASEQ_DIC,
-                    'datasets'
-                )
+                Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'datasets')
 
-                if not os.path.exists(zipFile):
+                if not self._isNonemptyFile(zipFile) or not zipfile.is_zipfile(zipFile):
                     raise RuntimeError(
-                        'NCBI Datasets finished without generating '
-                        'the expected archive: {}'
-                        .format(zipFile)
+                        'NCBI Datasets did not generate a valid archive: {}'.format(zipFile)
                     )
 
                 return
@@ -1724,21 +1439,10 @@ class ProtDownloadGenomes(EMProtocol):
                     os.remove(zipFile)
 
                 self.warning(
-                    'NCBI download attempt {}/{} failed: {}'
-                    .format(
-                        attempt,
-                        retries,
-                        error
-                    )
+                    'NCBI download attempt {}/{} failed: {}'.format(attempt, retries, error)
                 )
 
-        raise RuntimeError(
-            'NCBI download failed after {} attempts: {}'
-            .format(
-                retries,
-                lastError
-            )
-        )
+        raise RuntimeError('NCBI download failed after {} attempts: {}'.format(retries, lastError))
 
     # =====================================================================
     # Common download utilities
@@ -1747,113 +1451,48 @@ class ProtDownloadGenomes(EMProtocol):
     def _validateEnsemblUrlComponent(value, name):
         value = str(value)
 
-        if not re.fullmatch(r'[A-Za-z0-9_.-]+', value):
-            raise RuntimeError(
-                'Invalid Ensembl {}: {}'.format(
-                    name,
-                    value
-                )
-            )
+        if value in ('.', '..') or not re.fullmatch(r'[A-Za-z0-9_.-]+', value):
+            raise RuntimeError('Invalid Ensembl {}: {}'.format(name, value))
 
         return value
 
-    def _downloadAndUncompress(
-            self,
-            url,
-            compressedFile,
-            outputFile):
+    @staticmethod
+    def _isNonemptyFile(path):
+        return bool(path) and os.path.isfile(path) and os.path.getsize(path) > 0
 
-        if (
-                os.path.exists(outputFile)
-                and not self.overwrite.get()
-        ):
+    def _downloadAndUncompress(self, url, compressedFile, outputFile):
+        if not self.overwrite.get() and self._isNonemptyFile(outputFile):
             return
 
-        if self.overwrite.get():
-
-            for path in (
-                    compressedFile,
-                    outputFile
-            ):
+        partialFile = outputFile + '.part'
+        request = urllib.request.Request(url, headers={'User-Agent': 'Scipion-Chem'})
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                with open(compressedFile, 'wb') as output:
+                    shutil.copyfileobj(response, output)
+            with gzip.open(compressedFile, 'rb') as inputFile:
+                with open(partialFile, 'wb') as output:
+                    shutil.copyfileobj(inputFile, output)
+            if not self._isNonemptyFile(partialFile):
+                raise RuntimeError('Downloaded file is empty: {}'.format(url))
+            os.replace(partialFile, outputFile)
+        except (OSError, EOFError, urllib.error.URLError) as error:
+            raise RuntimeError('Could not download or decompress {}: {}'.format(url, error)) from error
+        finally:
+            for path in (compressedFile, partialFile):
                 if os.path.exists(path):
                     os.remove(path)
-
-        request = urllib.request.Request(
-            url,
-            headers={
-                'User-Agent': 'Scipion-Chem'
-            }
-        )
-
-        try:
-            with urllib.request.urlopen(
-                    request,
-                    timeout=120) as response, open(
-                compressedFile,
-                'wb') as output:
-                shutil.copyfileobj(
-                    response,
-                    output
-                )
-
-        except (
-                urllib.error.URLError,
-                TimeoutError
-        ) as error:
-            raise RuntimeError(
-                'Could not download Ensembl file: {}'
-                .format(error)
-            )
-
-        if not os.path.exists(compressedFile):
-            raise RuntimeError(
-                'The downloaded file was not created: {}'
-                .format(compressedFile)
-            )
-
-        with gzip.open(
-                compressedFile,
-                'rb'
-        ) as inputFile, open(
-            outputFile,
-            'wb'
-        ) as output:
-            shutil.copyfileobj(
-                inputFile,
-                output
-            )
-
-        os.remove(compressedFile)
-
-        if not os.path.exists(outputFile):
-            raise RuntimeError(
-                'The uncompressed file was not created: {}'
-                .format(outputFile)
-            )
 
     # ---------------------------------------------------------------------
     # Generic utilities
     # ---------------------------------------------------------------------
 
     @staticmethod
-    def _removeGzipExtension(path):
-        return (
-            path[:-3]
-            if path.endswith('.gz')
-            else path
-        )
-
-    @staticmethod
     def _safeName(value):
-        return re.sub(
-            r'[^A-Za-z0-9_.-]+',
-            '_',
-            value
-        )
+        return re.sub('[^A-Za-z0-9_.-]+', '_', value)
 
     @staticmethod
     def _requestJson(url, description):
-
         request = urllib.request.Request(
             url,
             headers={
@@ -1863,56 +1502,32 @@ class ProtDownloadGenomes(EMProtocol):
         )
 
         try:
-            with urllib.request.urlopen(
-                    request,
-                    timeout=120) as response:
-
-                return json.loads(
-                    response.read().decode('utf-8')
-                )
+            with urllib.request.urlopen(request, timeout=120) as response:
+                return json.loads(response.read().decode('utf-8'))
 
         except (
             urllib.error.URLError,
             TimeoutError,
             json.JSONDecodeError
         ) as error:
-
-            raise RuntimeError(
-                'Could not retrieve {}: {}'
-                .format(
-                    description,
-                    error
-                )
-            )
+            raise RuntimeError('Could not retrieve {}: {}'.format(description, error))
 
     # =====================================================================
     # Persistent genome information
     # =====================================================================
 
     def _getGenomeInfoFile(self):
-        return self._getExtraPath(
-            'genomes.json'
-        )
+        return self._getExtraPath('genomes.json')
 
     def _writeGenomeInfo(self, genomes):
-
-        with open(
-                self._getGenomeInfoFile(),
-                'w') as outputFile:
-
-            json.dump(
-                genomes,
-                outputFile,
-                indent=2,
-                sort_keys=True
-            )
+        filename = self._getGenomeInfoFile()
+        partialFile = filename + '.part'
+        with open(partialFile, 'w') as outputFile:
+            json.dump(genomes, outputFile, indent=2, sort_keys=True)
+        os.replace(partialFile, filename)
 
     def _readGenomeInfo(self):
-
-        with open(
-                self._getGenomeInfoFile()
-        ) as inputFile:
-
+        with open(self._getGenomeInfoFile()) as inputFile:
             return json.load(inputFile)
 
     # =====================================================================
@@ -1920,80 +1535,55 @@ class ProtDownloadGenomes(EMProtocol):
     # =====================================================================
 
     def createOutputStep(self):
-
         genomesInfo = self._readGenomeInfo()
 
-        referenceGenomes = SetOfGenomes().create(
-            outputPath=self._getPath()
-        )
+        referenceGenomes = SetOfGenomes().create(outputPath=self._getPath())
 
-        referenceGenomes.setObjLabel(
-            'Reference genomes'
-        )
+        referenceGenomes.setObjLabel('Reference genomes')
 
         for genomeInfo in genomesInfo:
-
             fastaFile = genomeInfo.get('fastaFile')
             if (
                 genomeInfo.get('skipReason')
                 or not fastaFile
-                or not os.path.exists(fastaFile)
+                or not self._isNonemptyFile(fastaFile)
             ):
                 continue
 
             genome = Genome()
 
-            genome.setScientificName(
-                genomeInfo['scientificName']
-            )
+            genome.setScientificName(genomeInfo['scientificName'])
 
             if genomeInfo['source'] == 'Ensembl':
-                genome.setEnsemblSpecies(
-                    genomeInfo['ensemblName']
-                )
+                genome.setEnsemblSpecies(genomeInfo['ensemblName'])
 
-            genome.setAssembly(
-                genomeInfo['assembly']
-            )
+            genome.setAssembly(genomeInfo['assembly'])
 
-            genome.setSource(
-                genomeInfo['source']
-            )
+            genome.setSource(genomeInfo['source'])
 
-            genome.setRelease(
-                genomeInfo['release']
-            )
+            genome.setRelease(genomeInfo['release'])
 
-            genome.setFastaFile(
-                genomeInfo['fastaFile']
-            )
+            genome.setFastaFile(genomeInfo['fastaFile'])
 
-            if genomeInfo.get('gtfFile'):
-                genome.setGtfFile(
-                    genomeInfo['gtfFile']
-                )
+            if self._isNonemptyFile(genomeInfo.get('gtfFile')):
+                genome.setGtfFile(genomeInfo['gtfFile'])
 
             genome.setObjLabel(
-                '{} ({})'.format(
-                    genomeInfo['scientificName'],
-                    genomeInfo['assembly']
-                )
+                '{} ({})'.format(genomeInfo['scientificName'], genomeInfo['assembly'])
             )
 
-            referenceGenomes.append(
-                genome
-            )
+            referenceGenomes.append(genome)
 
-        self._defineOutputs(
-            referenceGenomes=referenceGenomes
-        )
+        if referenceGenomes.getSize() == 0:
+            raise RuntimeError('No reference genomes were downloaded. Check the skipped species warnings.')
+
+        self._defineOutputs(referenceGenomes=referenceGenomes)
 
     # =====================================================================
     # Validation
     # =====================================================================
 
     def _validate(self):
-
         errors = []
 
         try:
@@ -2004,18 +1594,10 @@ class ProtDownloadGenomes(EMProtocol):
             genomes = []
 
         if self.source.get() == self.SOURCE_ENSEMBL:
-
-            self._validateEnsemblParameters(
-                genomes,
-                errors
-            )
+            self._validateEnsemblParameters(genomes, errors)
 
         else:
-
-            self._validateNcbiParameters(
-                genomes,
-                errors
-            )
+            self._validateNcbiParameters(genomes, errors)
 
         return errors
 
@@ -2023,49 +1605,33 @@ class ProtDownloadGenomes(EMProtocol):
     # Ensembl validation
     # ---------------------------------------------------------------------
 
-    def _validateEnsemblParameters(
-            self,
-            genomes,
-            errors):
-
-        assemblies = self._splitParameterValues(
-            self.assemblies.get()
-        )
+    def _validateEnsemblParameters(self, genomes, errors):
+        assemblies = self._splitParameterValues(self.assemblies.get())
 
         if not assemblies:
-
-            errors.append(
-                'Assemblies cannot be empty.'
-            )
+            errors.append('Assemblies cannot be empty.')
 
         elif (
-            genomes
-            and len(assemblies) not in (
-                1,
-                len(genomes)
-            )
+            genomes and len(assemblies) not in (1, len(genomes))
         ):
             errors.append(
                 'Assemblies must contain one value or one value '
                 'per genome.'
             )
 
-        releases = self._splitParameterValues(
-            self.releases.get()
-        )
+        for assembly in assemblies:
+            try:
+                self._validateEnsemblUrlComponent(assembly, 'assembly')
+            except RuntimeError as error:
+                errors.append(str(error))
+
+        releases = self._splitParameterValues(self.releases.get())
 
         if not releases:
-
-            errors.append(
-                'Ensembl releases cannot be empty.'
-            )
+            errors.append('Ensembl releases cannot be empty.')
 
         elif (
-            genomes
-            and len(releases) not in (
-                1,
-                len(genomes)
-            )
+            genomes and len(releases) not in (1, len(genomes))
         ):
             errors.append(
                 'Releases must contain one value or one value '
@@ -2073,58 +1639,33 @@ class ProtDownloadGenomes(EMProtocol):
             )
 
         for release in releases:
-
-            self._validateReleaseValue(
-                release,
-                'Ensembl release',
-                errors
-            )
+            self._validateReleaseValue(release, 'Ensembl release', errors)
 
     # ---------------------------------------------------------------------
     # NCBI validation
     # ---------------------------------------------------------------------
 
-    def _validateNcbiParameters(
-            self,
-            genomes,
-            errors):
-
-        assemblies = self._splitParameterValues(
-            self.ncbiAssemblies.get()
-        )
+    def _validateNcbiParameters(self, genomes, errors):
+        assemblies = self._splitParameterValues(self.ncbiAssemblies.get())
 
         if not assemblies:
-
-            errors.append(
-                'NCBI assemblies cannot be empty.'
-            )
+            errors.append('NCBI assemblies cannot be empty.')
 
             return
 
-        if (
-            genomes
-            and len(assemblies) not in (
-                1,
-                len(genomes)
-            )
-        ):
+        if genomes and len(assemblies) not in (1, len(genomes)):
             errors.append(
                 'NCBI assemblies must contain one value or '
                 'one value per genome.'
             )
 
-        accessionPattern = re.compile(
-            r'^(GCF|GCA)_\d+\.\d+$',
-            re.IGNORECASE
-        )
+        accessionPattern = re.compile('^(GCF|GCA)_\\d+\\.\\d+$', re.IGNORECASE)
 
         for assembly in assemblies:
-
             if assembly.lower() == 'latest':
                 continue
 
             if not accessionPattern.match(assembly):
-
                 errors.append(
                     'NCBI assembly must be "Latest" or a valid '
                     'versioned GCF_/GCA_ accession: {}'
@@ -2132,11 +1673,7 @@ class ProtDownloadGenomes(EMProtocol):
                 )
 
     @staticmethod
-    def _validateReleaseValue(
-            release,
-            name,
-            errors):
-
+    def _validateReleaseValue(release, name, errors):
         if release.lower() == 'latest':
             return
 
@@ -2147,11 +1684,7 @@ class ProtDownloadGenomes(EMProtocol):
                 raise ValueError
 
         except ValueError:
-
-            errors.append(
-                '{} must be "Latest" or a positive integer.'
-                .format(name)
-            )
+            errors.append('{} must be "Latest" or a positive integer.'.format(name))
 
     # =====================================================================
     # Summary
@@ -2162,9 +1695,7 @@ class ProtDownloadGenomes(EMProtocol):
 
         if hasattr(self, 'referenceGenomes'):
             summary.append(
-                'Downloaded reference genomes: {}'.format(
-                    self.referenceGenomes.getSize()
-                )
+                'Downloaded reference genomes: {}'.format(self.referenceGenomes.getSize())
             )
 
             for genome in self.referenceGenomes:
@@ -2192,10 +1723,7 @@ class ProtDownloadGenomes(EMProtocol):
         except Exception:
             genomesInfo = []
 
-        skipped = [
-            genomeInfo for genomeInfo in genomesInfo
-            if genomeInfo.get('skipReason')
-        ]
+        skipped = [genomeInfo for genomeInfo in genomesInfo if genomeInfo.get('skipReason')]
         if skipped:
             summary.append('Skipped species: {}'.format(len(skipped)))
             for genomeInfo in skipped:
@@ -2213,18 +1741,10 @@ class ProtDownloadGenomes(EMProtocol):
     # =====================================================================
 
     def _methods(self):
-
-        if not hasattr(
-                self,
-                'referenceGenomes'):
-
+        if not hasattr(self, 'referenceGenomes'):
             return []
 
-        source = (
-            'Ensembl'
-            if self.source.get() == self.SOURCE_ENSEMBL
-            else 'NCBI'
-        )
+        source = 'Ensembl' if self.source.get() == self.SOURCE_ENSEMBL else 'NCBI'
 
         methods = [
             '{} reference genome(s) were downloaded from {}.'
@@ -2235,7 +1755,6 @@ class ProtDownloadGenomes(EMProtocol):
         ]
 
         for genome in self.referenceGenomes:
-
             methods.append(
                 '{} ({}, {})'.format(
                     genome.getScientificName(),
