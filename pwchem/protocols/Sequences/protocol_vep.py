@@ -129,7 +129,8 @@ class ProtVEP(GATKPreparationMixin, EMProtocol):
                 '--assembly', self.assembly.get(), '--uniprot', '--protein', '--symbol',
                 '--transcript_version', '--tsl', '--fork', self.numberOfThreads.get(),
                 '--no_stats', '--force_overwrite'])
-            sum(1 for _ in iterVepRows(raw))
+            annotationCount = sum(1 for _ in iterVepRows(raw))
+            self.info('Validated {} VEP annotations.'.format(annotationCount))
             selected = os.path.join(work, 'missense.tsv')
             if self.selectMissense.get():
                 self.runTool('filter_vep', ['-i', raw, '-o', selected,

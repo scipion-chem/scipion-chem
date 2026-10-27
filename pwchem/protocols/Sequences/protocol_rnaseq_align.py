@@ -700,12 +700,12 @@ class ProtRNASeqAlignment(EMProtocol):
     # -------------------------------------------------------
 
     def alignStep(self):
-        indexInfo = self._readJson(self._getIndexInfoFile())
-
         if self.aligner.get() == self.ALIGN_STAR:
-            alignmentInfo = self._alignWithStar(indexInfo)
+            alignmentInfo = self._alignWithStar()
+        elif self.aligner.get() == self.ALIGN_HISAT2:
+            alignmentInfo = self._alignWithHisat2()
         else:
-            alignmentInfo = self._alignWithHisat2(indexInfo)
+            raise RuntimeError('Invalid RNA-seq aligner selection.')
 
         self._writeJson(self._getAlignmentInfoFile(), alignmentInfo)
 
@@ -724,7 +724,7 @@ class ProtRNASeqAlignment(EMProtocol):
             args.append('--{} {}'.format(name, values))
         return args
 
-    def _alignWithStar(self, indexInfo):
+    def _alignWithStar(self):
         fastqObj = self.inputFastq.get()
         outputPrefix = self._getExtraPath('star_')
 
@@ -734,7 +734,7 @@ class ProtRNASeqAlignment(EMProtocol):
             readFiles.append(self.quote(fastqObj.getFileName2()))
 
         args = [
-            '--genomeDir {}'.format(self.quote(indexInfo['indexPath'])),
+            '--genomeDir {}'.format(self.quote(os.path.abspath(self._getExtraPath('star_index')))),
             '--readFilesIn {}'.format(' '.join(readFiles)),
             '--runThreadN {}'.format(self.numberOfThreads.get()),
             '--outSAMtype BAM SortedByCoordinate',
@@ -767,7 +767,7 @@ class ProtRNASeqAlignment(EMProtocol):
             'indexed': True
         }
 
-    def _alignWithHisat2(self, indexInfo):
+    def _alignWithHisat2(self):
         fastqObj = self.inputFastq.get()
 
         bamFile = self._getAlignmentBam()
@@ -777,7 +777,7 @@ class ProtRNASeqAlignment(EMProtocol):
         threads = self.numberOfThreads.get()
 
         hisatArgs = [
-            '-x {}'.format(self.quote(indexInfo['indexPath'])),
+            '-x {}'.format(self.quote(os.path.abspath(self._getExtraPath('hisat2_index', 'genome')))),
             '-p {}'.format(threads)
         ]
 
@@ -1156,10 +1156,9 @@ class ProtRNASeqAlignment(EMProtocol):
         if self.keepIntermediateFiles.get():
             return
 
-        indexInfo = self._readJson(self._getIndexInfoFile())
-        indexDirectory = indexInfo.get('indexDirectory')
-
-        if indexDirectory and os.path.isdir(indexDirectory):
+        directories = {self.ALIGN_STAR: 'star_index', self.ALIGN_HISAT2: 'hisat2_index'}
+        indexDirectory = self._getExtraPath(directories[self.aligner.get()])
+        if os.path.isdir(indexDirectory):
             shutil.rmtree(indexDirectory)
 
     # -------------------------------------------------------
