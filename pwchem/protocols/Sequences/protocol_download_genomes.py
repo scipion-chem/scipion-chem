@@ -1038,8 +1038,7 @@ class ProtDownloadGenomes(EMProtocol):
                 release,
                 species,
                 'gtf',
-                '.{}.{}.gtf.gz'.format(genomeInfo['assembly'], release)
-                if division is None else '.gtf.gz',
+                '.gtf.gz',
                 preferredDivision=division or 'main',
                 filenamePrefix=fastaName[:-len('dna.toplevel.fa.gz')]
             )

@@ -471,7 +471,7 @@ class ProtRNASeqAlignment(EMProtocol):
             )
         )
 
-        form.addParallelSection(threads=4)
+        form.addParallelSection(threads=4, mpi=1)
 
     # -------------------------------------------------------
     # Steps
@@ -574,7 +574,11 @@ class ProtRNASeqAlignment(EMProtocol):
     # -------------------------------------------------------
 
     def buildIndexStep(self):
-        referenceInfo = self._readJson(self._getReferenceInfoFile())
+        errors = []
+        self._validateReference(errors)
+        if errors:
+            raise RuntimeError('Invalid reference inputs: ' + '; '.join(errors))
+        referenceInfo = self._getReferenceInfo()
 
         if self.aligner.get() == self.ALIGN_STAR:
             indexInfo = self._buildStarIndex(referenceInfo)
