@@ -23,10 +23,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import gzip
+import http.client
 import json
 import os
 import re
 import shlex
+import zlib
 import shutil
 import urllib.error
 import urllib.request
@@ -42,7 +45,9 @@ from pyworkflow.protocol.params import (
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import VCFFile, SetOfVCFFiles
-from pwchem.utils.utilsRNA import COMMON_SPECIES,getProviderSpeciesName,parseCustomSpecies
+from pwchem.utils.utilsRNA import (
+    COMMON_SPECIES, GATKPreparationMixin, getProviderSpeciesName, parseCustomSpecies
+)
 
 
 class ProtDownloadVCF(EMProtocol):
@@ -96,7 +101,9 @@ class ProtDownloadVCF(EMProtocol):
 
         When several VCF files are available, files containing consequence,
         phenotype or somatic-specific data are excluded when possible in
-        order to select a general known-variation VCF.
+        order to select a general known-variation VCF. A clearly named combined
+        VCF is preferred. Ambiguous collections are rejected instead of silently
+        downloading the first chromosome or an arbitrary dataset.
 
         If a remote ``.tbi`` or ``.csi`` index is available, it is downloaded.
         Otherwise a local ``.csi`` index is generated.
@@ -259,9 +266,11 @@ class ProtDownloadVCF(EMProtocol):
         accession, the protocol attempts to identify a compatible assembly
         in EVA.
 
-        EVA matching first considers assembly names and exact accessions.
-        When necessary, RefSeq and GenBank accessions sharing the same
-        stable numeric assembly identifier can also be matched.
+        EVA matching first considers exact versioned accessions, then assembly
+        names as directory aliases. The accession embedded in the VCF filename
+        must match the request. A paired GenBank/RefSeq accession is accepted
+        only when NCBI explicitly reports that their assemblies are identical.
+        Sharing the numeric accession or using another version is insufficient.
 
         A single accession can be applied to every selected species or one
         accession can be provided per species.
@@ -292,6 +301,9 @@ class ProtDownloadVCF(EMProtocol):
             .csi
 
         The index path is stored in the corresponding ``VCFFile`` object.
+        Index signatures are checked before reuse. Empty, unrecognized or older
+        local indexes are discarded; these checks do not validate every index
+        entry against the variant records.
 
         When no remote index is available, bcftools generates a local
         ``.csi`` index (the VCF must be BGZF-compressed and sorted).
@@ -301,10 +313,20 @@ class ProtDownloadVCF(EMProtocol):
     Existing files and overwrite behaviour
     ---------------------------------------------------------------------
 
-    By default, previously downloaded files are reused when possible.
+    By default, non-empty downloaded files are reused when possible. Compressed
+    VCF headers are checked before indexing. This is a basic format check, not
+    a full validation of variant records or reference compatibility. For
+    Ensembl, an assembly declaration found in the header must match the
+    requested assembly. If no recognized assembly declaration is present,
+    the protocol warns that reference compatibility could not be verified.
 
-    If ``overwrite`` is enabled, existing destination files are removed
-    before being downloaded again.
+    Downloads are written to temporary files and moved to their final paths
+    only after completion. The received size is checked when Content-Length
+    is supplied by the server. Files are not checked against provider checksums.
+
+    If ``overwrite`` is enabled, complete destination files are replaced only
+    after a new transfer succeeds. VCF replacement invalidates local indexes,
+    which are downloaded again or generated for the new file.
 
     This avoids unnecessary downloads while allowing users to explicitly
     refresh previously retrieved VCF files.
@@ -466,7 +488,9 @@ class ProtDownloadVCF(EMProtocol):
        ``SetOfVCFFiles``.
 
        Species for which no suitable VCF could be resolved or downloaded
-       are skipped and are not included in the output set.
+       are skipped and are not included in the output set. If no valid VCF
+       and index remain, the protocol raises an error rather than publishing
+       an empty output set.
 
 
     ---------------------------------------------------------------------
@@ -488,6 +512,8 @@ class ProtDownloadVCF(EMProtocol):
     EVA downloads require:
 
     - Internet access to the European Variation Archive FTP server.
+
+    Local index generation requires bcftools and a sorted, BGZF-compressed VCF.
 
     Required command-line programs must be available through the RNA-seq
     environment configured by the Scipion-Chem plugin.
@@ -522,14 +548,17 @@ class ProtDownloadVCF(EMProtocol):
     - Explicit NCBI assembly accessions must be versioned ``GCF_`` or
       ``GCA_`` accessions.
 
-    - EVA assembly matching can account for equivalent GCF/GCA accessions
-      and version differences sharing the same stable assembly identifier.
+    - EVA assembly matching preserves versioned accession identity. Name
+      aliases are checked against the accession in the VCF filename. Paired
+      GCF/GCA accessions are accepted only if NCBI confirms identical assemblies;
+      versions are never substituted based on their numeric identifier alone.
 
     - Remote VCF indexes are downloaded when available. Otherwise a local
       ``.csi`` index is generated with bcftools.
 
-    - VCF information is persisted internally in ``vcfs.json`` between
-      protocol steps.
+    - VCF information is persisted atomically in ``vcfs.json`` between
+      protocol steps and after each download attempt. Failed species have
+      their output paths cleared so incomplete results are not published.
 
     - Errors affecting one species do not necessarily prevent other
       selected species from being processed.
@@ -622,7 +651,8 @@ class ProtDownloadVCF(EMProtocol):
     EMPTY_PARAMETER_ERROR = '{} cannot be empty.'
     ENSEMBL_SPECIES = 'Ensembl species'
 
-    VCF_FILENAME = 'variants.vcf.gz'
+    VCF_GZ_SUFFIX = '.vcf.gz'
+    VCF_FILENAME = 'variants' + VCF_GZ_SUFFIX
     HREF_PATTERN = r'href="([^"]+)"'
 
     _label = 'download vcf'
@@ -632,11 +662,6 @@ class ProtDownloadVCF(EMProtocol):
     # =====================================================================
 
     def _defineParams(self, form):
-
-        # ---------------------------------------------------------
-        # Source
-        # ---------------------------------------------------------
-
         form.addSection(label='Source')
 
         form.addParam(
@@ -658,10 +683,6 @@ class ProtDownloadVCF(EMProtocol):
                 'Variation Archive (EVA).'
             )
         )
-
-        # ---------------------------------------------------------
-        # Species selection
-        # ---------------------------------------------------------
 
         form.addSection(label='Species selection')
 
@@ -712,10 +733,6 @@ class ProtDownloadVCF(EMProtocol):
             )
         )
 
-        # ---------------------------------------------------------
-        # Ensembl
-        # ---------------------------------------------------------
-
         form.addParam(
             'assemblies',
             StringParam,
@@ -755,10 +772,6 @@ class ProtDownloadVCF(EMProtocol):
             )
         )
 
-        # ---------------------------------------------------------
-        # NCBI
-        # ---------------------------------------------------------
-
         form.addParam(
             'ncbiAssemblies',
             StringParam,
@@ -780,48 +793,28 @@ class ProtDownloadVCF(EMProtocol):
             )
         )
 
-        # ---------------------------------------------------------
-        # Download
-        # ---------------------------------------------------------
-
         form.addSection(label='Download options')
 
-        form.addParam(
-            'overwrite',
-            BooleanParam,
-            default=False,
-            label='Overwrite existing files: '
-        )
+        form.addParam('overwrite', BooleanParam, default=False, label='Overwrite existing files: ')
 
-        form.addParallelSection(
-            threads=1,
-            mpi=0
-        )
+        form.addParallelSection(threads=1, mpi=0)
 
     # =====================================================================
     # Steps
     # =====================================================================
 
     def _insertAllSteps(self):
+        self._insertFunctionStep(self.resolveVCFsStep)
 
-        self._insertFunctionStep(
-            self.resolveVCFsStep
-        )
+        self._insertFunctionStep(self.downloadVCFsStep)
 
-        self._insertFunctionStep(
-            self.downloadVCFsStep
-        )
-
-        self._insertFunctionStep(
-            self.createOutputStep
-        )
+        self._insertFunctionStep(self.createOutputStep)
 
     # =====================================================================
     # Resolve
     # =====================================================================
 
     def resolveVCFsStep(self):
-
         vcfInfo = self._getSelectedVCFs()
 
         if self.source.get() == self.SOURCE_ENSEMBL:
@@ -837,96 +830,50 @@ class ProtDownloadVCF(EMProtocol):
 
     @staticmethod
     def _splitParameterValues(value):
-
-        return [
-            item.strip()
-            for item in re.split(r'[;,]', value)
-            if item.strip()
-        ]
+        return [item.strip() for item in re.split('[;,]', value or '') if item.strip()]
 
     def _getSelectedSpecies(self):
-
-        if (
-            self.speciesSelection.get()
-            == self.SPECIES_COMMON
-        ):
-            selected = self._splitParameterValues(
-                self.commonSpecies.get()
-            )
+        if self.speciesSelection.get() == self.SPECIES_COMMON:
+            selected = self._splitParameterValues(self.commonSpecies.get())
         else:
-            selected = parseCustomSpecies(
-                self.customSpecies.get()
-            )
+            selected = parseCustomSpecies(self.customSpecies.get())
 
         if not selected:
-            raise ValueError(
-                'At least one species must be selected.'
-            )
+            raise ValueError('At least one species must be selected.')
 
-        return selected
+        return list(dict.fromkeys(selected))
 
     # =====================================================================
     # VCF information
     # =====================================================================
 
     def _getSelectedVCFs(self):
-
         species = self._getSelectedSpecies()
 
         if self.source.get() == self.SOURCE_ENSEMBL:
-            return self._getSelectedEnsemblVCFs(
-                species
-            )
+            return self._getSelectedEnsemblVCFs(species)
 
-        return self._getSelectedNcbiVCFs(
-            species
-        )
+        return self._getSelectedNcbiVCFs(species)
 
     # ---------------------------------------------------------------------
     # Ensembl information
     # ---------------------------------------------------------------------
 
-    def _getSelectedEnsemblVCFs(
-        self,
-        species
-    ):
+    def _getSelectedEnsemblVCFs(self, species):
+        assemblies = self._expandParameterValues(self.assemblies.get(), len(species), 'assemblies')
 
-        assemblies = self._expandParameterValues(
-            self.assemblies.get(),
-            len(species),
-            'assemblies'
-        )
-
-        releases = self._expandParameterValues(
-            self.releases.get(),
-            len(species),
-            'releases'
-        )
+        releases = self._expandParameterValues(self.releases.get(), len(species), 'releases')
 
         vcfInfo = []
 
-        for speciesName, assembly, release in zip(
-            species,
-            assemblies,
-            releases
-        ):
-
+        for speciesName, assembly, release in zip(species, assemblies, releases):
             scientificName = speciesName.strip()
 
-            ensemblName = getProviderSpeciesName(
-                scientificName,
-                'ensembl'
-            )
+            ensemblName = getProviderSpeciesName(scientificName, 'ensembl')
 
-            speciesInfo = COMMON_SPECIES.get(
-                scientificName
-            )
+            speciesInfo = COMMON_SPECIES.get(scientificName)
 
-            defaultAssembly = (
-                speciesInfo.get('assembly')
-                if speciesInfo
-                else None
-            )
+            defaultAssembly = speciesInfo.get('assembly') if speciesInfo else None
 
             vcfInfo.append({
                 'scientificName': scientificName,
@@ -948,11 +895,7 @@ class ProtDownloadVCF(EMProtocol):
     # NCBI information
     # ---------------------------------------------------------------------
 
-    def _getSelectedNcbiVCFs(
-        self,
-        species
-    ):
-
+    def _getSelectedNcbiVCFs(self, species):
         assemblies = self._expandParameterValues(
             self.ncbiAssemblies.get(),
             len(species),
@@ -961,17 +904,10 @@ class ProtDownloadVCF(EMProtocol):
 
         vcfInfo = []
 
-        for speciesName, assemblyRequest in zip(
-            species,
-            assemblies
-        ):
-
+        for speciesName, assemblyRequest in zip(species, assemblies):
             scientificName = speciesName.strip()
 
-            ncbiTaxon = getProviderSpeciesName(
-                scientificName,
-                'ncbi'
-            )
+            ncbiTaxon = getProviderSpeciesName(scientificName, 'ncbi')
 
             accession = None
 
@@ -1001,23 +937,11 @@ class ProtDownloadVCF(EMProtocol):
     # ---------------------------------------------------------------------
 
     @classmethod
-    def _expandParameterValues(
-        cls,
-        value,
-        numberOfSpecies,
-        parameterName
-    ):
-
-        values = cls._splitParameterValues(
-            value
-        )
+    def _expandParameterValues(cls, value, numberOfSpecies, parameterName):
+        values = cls._splitParameterValues(value)
 
         if not values:
-            raise ValueError(
-                cls.EMPTY_PARAMETER_ERROR.format(
-                    parameterName.capitalize()
-                )
-            )
+            raise ValueError(cls.EMPTY_PARAMETER_ERROR.format(parameterName.capitalize()))
 
         if len(values) == 1:
             return values * numberOfSpecies
@@ -1036,18 +960,12 @@ class ProtDownloadVCF(EMProtocol):
     # Ensembl resolution
     # =====================================================================
 
-    def _resolveEnsemblVCFs(
-            self,
-            vcfInfo
-    ):
-
+    def _resolveEnsemblVCFs(self, vcfInfo):
         latestRelease = None
 
         for info in vcfInfo:
-
             try:
                 if info['release'].lower() == 'latest':
-
                     if latestRelease is None:
                         try:
                             latestRelease = self._getLatestEnsemblRelease()
@@ -1062,14 +980,13 @@ class ProtDownloadVCF(EMProtocol):
                     info['release'] = str(latestRelease)
 
                 info['assembly'] = (
-                    self._resolveEnsemblAssembly(
-                        info['assembly'],
-                        info
-                    )
+                    self._resolveEnsemblAssembly(info['assembly'], info)
                 )
 
-            except RuntimeError as error:
+            except (RuntimeError, ValueError, OSError) as error:
                 info['error'] = str(error)
+                info['vcfFile'] = None
+                info['indexFile'] = None
 
                 self.warning(
                     'Could not resolve Ensembl data for {}: {}'
@@ -1080,16 +997,9 @@ class ProtDownloadVCF(EMProtocol):
                 )
 
     def _getLatestEnsemblRelease(self):
+        data = self._requestJson(self.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
 
-        data = self._requestJson(
-            self.ENSEMBL_REST_DATA_URL,
-            'latest Ensembl release'
-        )
-
-        releases = data.get(
-            'releases',
-            []
-        )
+        releases = data.get('releases', [])
 
         if not releases:
             raise RuntimeError(
@@ -1097,58 +1007,29 @@ class ProtDownloadVCF(EMProtocol):
                 'contain releases.'
             )
 
-        return max(
-            int(release)
-            for release in releases
-        )
+        return max((int(release) for release in releases))
 
-    def _resolveEnsemblAssembly(
-        self,
-        assembly,
-        info
-    ):
-
+    def _resolveEnsemblAssembly(self, assembly, info):
         assembly = assembly.strip()
 
         if assembly.lower() != 'latest':
             return assembly
 
-        defaultAssembly = info.get(
-            'defaultAssembly'
-        )
+        defaultAssembly = info.get('defaultAssembly')
 
         if defaultAssembly:
             return defaultAssembly
 
-        return self._getLatestEnsemblAssembly(
-            info['ensemblName']
-        )
+        return self._getLatestEnsemblAssembly(info['ensemblName'])
 
-    def _getLatestEnsemblAssembly(
-        self,
-        species
-    ):
+    def _getLatestEnsemblAssembly(self, species):
+        species = self._validateUrlComponent(species, self.ENSEMBL_SPECIES)
 
-        species = self._validateUrlComponent(
-            species,
-            self.ENSEMBL_SPECIES
-        )
+        url = self.ENSEMBL_REST_ASSEMBLY_URL.format(species)
 
-        url = (
-            self.ENSEMBL_REST_ASSEMBLY_URL
-            .format(species)
-        )
+        data = self._requestJson(url, 'latest assembly for {}'.format(species))
 
-        data = self._requestJson(
-            url,
-            'latest assembly for {}'.format(
-                species
-            )
-        )
-
-        assembly = data.get(
-            'assembly_name'
-        )
+        assembly = data.get('assembly_name')
 
         if not assembly:
             raise RuntimeError(
@@ -1164,14 +1045,11 @@ class ProtDownloadVCF(EMProtocol):
     # NCBI resolution
     # =====================================================================
 
-    def _resolveNcbiVCFs(
-            self,
-            vcfInfo
-    ):
+    def _resolveNcbiVCFs(self, vcfInfo):
         """Resolve assemblies needed by the NCBI/EVA source.
 
         For an explicit GCF_/GCA_ accession, resolve its assembly name through
-        NCBI as before.
+        NCBI, retaining versioned accession identity.
 
         For ``Latest``:
           * Homo sapiens is resolved through NCBI because dbSNP provides the
@@ -1182,22 +1060,12 @@ class ProtDownloadVCF(EMProtocol):
         """
 
         for info in vcfInfo:
-
             try:
-                assemblyRequest = str(
-                    info.get('assemblyRequest', 'Latest')
-                ).strip()
+                assemblyRequest = str(info.get('assemblyRequest', 'Latest')).strip()
 
-                isLatest = (
-                    assemblyRequest.lower() == 'latest'
-                )
+                isLatest = assemblyRequest.lower() == 'latest'
 
-                isHuman = (
-                    self._normaliseEvaName(
-                        info['scientificName']
-                    )
-                    == 'homosapiens'
-                )
+                isHuman = self._normaliseEvaName(info['scientificName']) == 'homosapiens'
 
                 if isLatest and not isHuman:
                     info['accession'] = None
@@ -1206,32 +1074,29 @@ class ProtDownloadVCF(EMProtocol):
 
                 if info.get('accession') is None:
                     info['accession'] = (
-                        self._getNcbiReferenceAccession(
-                            info['ncbiTaxon']
-                        )
+                        self._getNcbiReferenceAccession(info['ncbiTaxon'])
                     )
 
-                info['assembly'] = (
-                    self._getNcbiAssemblyName(
-                        info['accession']
-                    )
-                )
+                info['assembly'] = self._getNcbiAssemblyName(info['accession'])
+                report = self._getNcbiAssemblyReport(info['accession'])
+                assemblyInfo = report.get('assemblyInfo') or report.get('assembly_info') or {}
+                paired = assemblyInfo.get('pairedAssembly') or assemblyInfo.get('paired_assembly') or {}
+                info['compatibleAccessions'] = [info['accession']]
+                different = paired.get('refseqGenbankAreDifferent',
+                                       paired.get('refseq_genbank_are_different'))
+                if paired.get('accession') and different is False:
+                    info['compatibleAccessions'].append(paired['accession'])
 
-            except RuntimeError as error:
+            except (RuntimeError, ValueError, OSError) as error:
                 info['error'] = str(error)
+                info['vcfFile'] = None
+                info['indexFile'] = None
 
                 self.warning(
-                    'Could not resolve NCBI data for {}: {}'
-                    .format(
-                        info['scientificName'],
-                        error
-                    )
+                    'Could not resolve NCBI data for {}: {}'.format(info['scientificName'], error)
                 )
 
-    def _getNcbiReferenceAccession(
-        self,
-        taxon
-    ):
+    def _getNcbiReferenceAccession(self, taxon):
         """Return the newest NCBI assembly, preferring RefSeq.
 
         dbSNP VCF availability is checked later. Resolving a GenBank
@@ -1239,21 +1104,14 @@ class ProtDownloadVCF(EMProtocol):
         for that assembly.
         """
 
-        reports = self._getNcbiAssemblyReports(
-            taxon,
-            'RefSeq'
-        )
-
-        if not reports:
-            self.info(
-                'No RefSeq assembly found for {}. Trying GenBank.'
-                .format(taxon)
-            )
-
-            reports = self._getNcbiAssemblyReports(
-                taxon,
-                'GenBank'
-            )
+        reports = []
+        for source in ('RefSeq', 'GenBank'):
+            try:
+                reports = self._getNcbiAssemblyReports(taxon, source)
+            except RuntimeError as error:
+                self.warning('NCBI {} lookup failed for {}: {}'.format(source, taxon, error))
+            if reports:
+                break
 
         if not reports:
             raise RuntimeError(
@@ -1262,12 +1120,7 @@ class ProtDownloadVCF(EMProtocol):
             )
 
         def getReleaseDate(report):
-
-            assemblyInfo = (
-                report.get('assemblyInfo')
-                or report.get('assembly_info')
-                or {}
-            )
+            assemblyInfo = report.get('assemblyInfo') or report.get('assembly_info') or {}
 
             return (
                 assemblyInfo.get('releaseDate')
@@ -1277,10 +1130,7 @@ class ProtDownloadVCF(EMProtocol):
                 or ''
             )
 
-        latestReport = max(
-            reports,
-            key=getReleaseDate
-        )
+        latestReport = max(reports, key=getReleaseDate)
 
         accession = (
             latestReport.get('accession')
@@ -1296,197 +1146,115 @@ class ProtDownloadVCF(EMProtocol):
 
         return accession
 
-    def _getNcbiAssemblyReports(
-        self,
-        taxon,
-        assemblySource
-    ):
+    def _getNcbiAssemblyReports(self, taxon, assemblySource):
         """Retrieve NCBI assembly reports for one taxon and source."""
 
         outputFile = self._getTmpPath(
-            '{}_{}_ncbi_summary.jsonl'.format(
-                self._safeName(taxon),
-                assemblySource.lower()
-            )
+            '{}_{}_ncbi_summary.jsonl'.format(self._safeName(taxon), assemblySource.lower())
         )
 
         arguments = (
-            'summary genome taxon "{}" '
+            'summary genome taxon {} '
             '--assembly-source {} '
             '--tax-exact-match '
             '--as-json-lines '
-            '> "{}"'
+            '> {}'
         ).format(
-            taxon,
+            shlex.quote(taxon),
             assemblySource,
-            outputFile
+            shlex.quote(outputFile)
         )
 
-        Plugin.runCondaCommand(
-            self,
-            arguments,
-            RNASEQ_DIC,
-            'datasets'
+        return self._runNcbiSummary(arguments, outputFile)
+
+    def _runNcbiSummary(self, arguments, outputFile):
+        if os.path.exists(outputFile):
+            os.remove(outputFile)
+        try:
+            Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'datasets')
+            return self._readJsonLines(outputFile)
+        except Exception as error:
+            raise RuntimeError('Could not retrieve NCBI assembly metadata: {}'.format(error)) from error
+
+    def _getNcbiAssemblyReport(self, accession):
+        cache = getattr(self, '_ncbiAssemblyReports', {})
+        if accession in cache:
+            return cache[accession]
+        outputFile = self._getTmpPath('{}_assembly.jsonl'.format(self._safeName(accession)))
+        arguments = 'summary genome accession {} --as-json-lines > {}'.format(
+            shlex.quote(accession), shlex.quote(outputFile)
         )
+        reports = self._runNcbiSummary(arguments, outputFile)
+        matching = [report for report in reports
+                    if report.get('accession', '').upper() == accession.upper()]
+        if len(matching) != 1:
+            raise RuntimeError('Could not retrieve an exact NCBI assembly report for {}.'.format(accession))
+        cache[accession] = matching[0]
+        self._ncbiAssemblyReports = cache
+        return matching[0]
 
-        return self._readJsonLines(
-            outputFile
-        )
-
-    def _getNcbiAssemblyName(
-        self,
-        accession
-    ):
-
-        outputFile = self._getTmpPath(
-            '{}_assembly.jsonl'.format(
-                self._safeName(accession)
-            )
-        )
-
-        arguments = (
-            'summary genome accession "{}" '
-            '--as-json-lines '
-            '> "{}"'
-        ).format(
-            accession,
-            outputFile
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            arguments,
-            RNASEQ_DIC,
-            'datasets'
-        )
-
-        reports = self._readJsonLines(
-            outputFile
-        )
-
-        if not reports:
-            raise RuntimeError(
-                'Could not retrieve NCBI assembly '
-                'information for {}.'.format(
-                    accession
-                )
-            )
-
-        report = reports[0]
-
-        assemblyInfo = (
-            report.get('assemblyInfo')
-            or report.get('assembly_info')
-            or {}
-        )
-
-        return (
-            assemblyInfo.get('assemblyName')
-            or assemblyInfo.get('assembly_name')
-            or report.get('assemblyName')
-            or report.get('assembly_name')
-            or accession
-        )
+    def _getNcbiAssemblyName(self, accession):
+        report = self._getNcbiAssemblyReport(accession)
+        assemblyInfo = report.get('assemblyInfo') or report.get('assembly_info') or {}
+        return (assemblyInfo.get('assemblyName') or assemblyInfo.get('assembly_name')
+                or report.get('assemblyName') or report.get('assembly_name') or accession)
 
     # =====================================================================
     # Download
     # =====================================================================
 
     def downloadVCFsStep(self):
-
         vcfInfo = self._readVCFInfo()
 
         if self.source.get() == self.SOURCE_ENSEMBL:
-            self._downloadEnsemblVCFs(
-                vcfInfo
-            )
+            self._downloadEnsemblVCFs(vcfInfo)
         else:
-            self._downloadNcbiVCFs(
-                vcfInfo
-            )
+            self._downloadNcbiVCFs(vcfInfo)
 
-        self._writeVCFInfo(
-            vcfInfo
-        )
+        self._writeVCFInfo(vcfInfo)
 
     # =====================================================================
     # Ensembl download
     # =====================================================================
 
-    def _downloadEnsemblVCFs(
-            self,
-            vcfInfo
-    ):
+    def _downloadIndexedVCF(self, info, outputDir, vcfUrl, **indexOptions):
+        os.makedirs(outputDir, exist_ok=True)
+        outputVCF = os.path.join(outputDir, self.VCF_FILENAME)
+        self._downloadFile(vcfUrl, outputVCF)
+        indexFile = self._ensureVCFIndex(outputVCF, vcfUrl, **indexOptions)
+        info.update(vcfFile=outputVCF, indexFile=indexFile, error=None, downloadUrl=vcfUrl)
 
+    def _downloadEnsemblVCFs(self, vcfInfo):
         for info in vcfInfo:
-
             if info.get('error'):
                 continue
 
             try:
-                filename, baseUrl, provider = self._findEnsemblVCF(
-                    info
-                )
+                filename, baseUrl, provider = self._findEnsemblVCF(info)
 
-                filename = self._validateUrlComponent(
-                    filename,
-                    'Ensembl VCF filename'
-                )
+                filename = self._validateUrlComponent(filename, 'Ensembl VCF filename')
 
                 info['database'] = provider
 
                 if provider == 'Ensembl Genomes':
                     info['release'] = 'current'
 
-                ensemblName = self._validateUrlComponent(
-                    info['ensemblName'],
-                    self.ENSEMBL_SPECIES
-                )
+                ensemblName = self._validateUrlComponent(info['ensemblName'], self.ENSEMBL_SPECIES)
 
-                assembly = self._validateUrlComponent(
-                    info['assembly'],
-                    'assembly'
-                )
+                assembly = self._validateUrlComponent(info['assembly'], 'assembly')
 
                 outputDir = self._getExtraPath(
-                    '{}_{}_release-{}'.format(
-                        ensemblName,
-                        assembly,
-                        info['release']
-                    )
+                    '{}_{}_release-{}'.format(ensemblName, assembly, info['release'])
                 )
 
-                os.makedirs(
-                    outputDir,
-                    exist_ok=True
+                self._downloadIndexedVCF(
+                    info, outputDir, baseUrl + filename, assembly=info['assembly']
                 )
 
-                vcfUrl = baseUrl + filename
-
-                outputVCF = os.path.join(
-                    outputDir,
-                    self.VCF_FILENAME
-                )
-
-                self._downloadFile(
-                    vcfUrl,
-                    outputVCF
-                )
-
-                indexFile = self._ensureVCFIndex(
-                    outputVCF,
-                    vcfUrl
-                )
-
-                info['vcfFile'] = outputVCF
-                info['indexFile'] = indexFile
-
-            except (
-                    RuntimeError,
-                    ValueError
-            ) as error:
-
+            except (RuntimeError, ValueError, OSError, EOFError) as error:
                 info['error'] = str(error)
+                info['vcfFile'] = None
+                info['indexFile'] = None
 
                 self.warning(
                     'Could not download Ensembl VCF for {}: {}'
@@ -1495,11 +1263,10 @@ class ProtDownloadVCF(EMProtocol):
                         error
                     )
                 )
+            finally:
+                self._writeVCFInfo(vcfInfo)
 
-    def _findEnsemblVCF(
-        self,
-        info
-    ):
+    def _findEnsemblVCF(self, info):
         """Find a VCF in Ensembl main, then in Ensembl Genomes.
 
         Returns
@@ -1508,34 +1275,23 @@ class ProtDownloadVCF(EMProtocol):
             ``(filename, base_url, provider)``.
         """
 
-        ensemblName = self._validateUrlComponent(
-            info['ensemblName'],
-            self.ENSEMBL_SPECIES
-        )
+        ensemblName = self._validateUrlComponent(info['ensemblName'], self.ENSEMBL_SPECIES)
 
-        release = self._validateUrlComponent(
-            info['release'],
-            'Ensembl release'
-        )
+        release = self._validateUrlComponent(info['release'], 'Ensembl release')
 
         mainError = None
 
         # The main Ensembl FTP requires a numbered release. When REST is
         # unavailable, use the Ensembl Genomes "current" directories instead.
         if release != 'current':
-            mainUrl = (
-                '{}release-{}/variation/vcf/{}/'
-            ).format(
+            mainUrl = '{}release-{}/variation/vcf/{}/'.format(
                 self.ENSEMBL_FTP_BASE_URL,
                 release,
                 ensemblName
             )
 
             try:
-                filename = self._findVCFInRemoteDirectory(
-                    mainUrl,
-                    info['scientificName']
-                )
+                filename = self._findVCFInRemoteDirectory(mainUrl, info['scientificName'])
                 return filename, mainUrl, 'Ensembl Variation'
 
             except RuntimeError as error:
@@ -1547,9 +1303,7 @@ class ProtDownloadVCF(EMProtocol):
                     )
                 )
 
-        genomesResult = self._findEnsemblGenomesVCF(
-            info
-        )
+        genomesResult = self._findEnsemblGenomesVCF(info)
 
         if genomesResult:
             filename, baseUrl, division = genomesResult
@@ -1570,37 +1324,22 @@ class ProtDownloadVCF(EMProtocol):
             )
         ) from mainError
 
-    def _findEnsemblGenomesVCF(
-        self,
-        info
-    ):
+    def _findEnsemblGenomesVCF(self, info):
         """Search the Ensembl Genomes divisions for a species VCF."""
 
-        ensemblName = self._validateUrlComponent(
-            info['ensemblName'],
-            self.ENSEMBL_SPECIES
-        )
+        ensemblName = self._validateUrlComponent(info['ensemblName'], self.ENSEMBL_SPECIES)
 
         for division in self.ENSEMBL_GENOMES_DIVISIONS:
+            division = self._validateUrlComponent(division, 'Ensembl Genomes division')
 
-            division = self._validateUrlComponent(
-                division,
-                'Ensembl Genomes division'
-            )
-
-            baseUrl = (
-                '{}{}/current/variation/vcf/{}/'
-            ).format(
+            baseUrl = '{}{}/current/variation/vcf/{}/'.format(
                 self.ENSEMBL_GENOMES_FTP_BASE_URL,
                 division,
                 ensemblName
             )
 
             try:
-                filename = self._findVCFInRemoteDirectory(
-                    baseUrl,
-                    info['scientificName']
-                )
+                filename = self._findVCFInRemoteDirectory(baseUrl, info['scientificName'])
                 return filename, baseUrl, division
 
             except RuntimeError:
@@ -1608,33 +1347,17 @@ class ProtDownloadVCF(EMProtocol):
 
         return None
 
-    def _findVCFInRemoteDirectory(
-        self,
-        url,
-        scientificName
-    ):
+    def _findVCFInRemoteDirectory(self, url, scientificName):
         """Select a suitable VCF from a remote directory listing."""
 
-        html = self._readRemoteDirectory(
-            url
-        )
+        html = self._readRemoteDirectory(url)
 
-        matches = re.findall(
-            self.HREF_PATTERN,
-            html
-        )
+        matches = re.findall(self.HREF_PATTERN, html)
 
-        candidates = [
-            filename
-            for filename in matches
-            if filename.endswith('.vcf.gz')
-        ]
+        candidates = [filename for filename in matches if filename.endswith(self.VCF_GZ_SUFFIX)]
 
         if not candidates:
-            raise RuntimeError(
-                'No VCF files found in remote directory: {}'
-                .format(url)
-            )
+            raise RuntimeError('No VCF files found in remote directory: {}'.format(url))
 
         preferred = [
             filename
@@ -1647,45 +1370,29 @@ class ProtDownloadVCF(EMProtocol):
         if preferred:
             candidates = preferred
 
-        candidates = sorted(
-            candidates
-        )
-
+        candidates = sorted(set(candidates))
         if len(candidates) > 1:
-            self.info(
-                'Multiple VCF files found for {}. Using {}.'
-                .format(
-                    scientificName,
-                    candidates[0]
-                )
-            )
-
-        return self._validateUrlComponent(
-            candidates[0],
-            'Ensembl VCF filename'
-        )
+            speciesName = scientificName.lower().replace(' ', '_')
+            combined = [name for name in candidates
+                        if name.lower() == speciesName + self.VCF_GZ_SUFFIX
+                        or re.search(r'(?:^|[._-])(?:all|toplevel|whole_genome)[._-]', name.lower())]
+            if len(combined) != 1:
+                raise RuntimeError('Multiple VCFs found for {} in {}. Cannot select a complete '
+                                   'reference VCF unambiguously.'.format(scientificName, url))
+            candidates = combined
+        return self._validateUrlComponent(candidates[0], 'Ensembl VCF filename')
 
     # =====================================================================
     # NCBI dbSNP / EVA download
     # =====================================================================
 
-    def _downloadNcbiVCFs(
-            self,
-            vcfInfo
-    ):
+    def _downloadNcbiVCFs(self, vcfInfo):
         """Download from NCBI dbSNP, using EVA for non-human Latest requests."""
 
         try:
-            directoryHtml = self._readRemoteDirectory(
-                self.NCBI_DBSNP_VCF_URL
-            )
+            directoryHtml = self._readRemoteDirectory(self.NCBI_DBSNP_VCF_URL)
 
-            availableFiles = set(
-                re.findall(
-                    self.HREF_PATTERN,
-                    directoryHtml
-                )
-            )
+            availableFiles = set(re.findall(self.HREF_PATTERN, directoryHtml))
 
         except RuntimeError as error:
             self.warning(
@@ -1695,25 +1402,15 @@ class ProtDownloadVCF(EMProtocol):
             availableFiles = set()
 
         for info in vcfInfo:
-
             if info.get('error'):
                 continue
 
             try:
-                assemblyRequest = str(
-                    info.get('assemblyRequest', 'Latest')
-                ).strip()
+                assemblyRequest = str(info.get('assemblyRequest', 'Latest')).strip()
 
-                isLatest = (
-                    assemblyRequest.lower() == 'latest'
-                )
+                isLatest = assemblyRequest.lower() == 'latest'
 
-                isHuman = (
-                    self._normaliseEvaName(
-                        info['scientificName']
-                    )
-                    == 'homosapiens'
-                )
+                isHuman = self._normaliseEvaName(info['scientificName']) == 'homosapiens'
 
                 # NCBI no longer maintains non-human dbSNP VCF releases.
                 # If the user requested Latest, let EVA choose the newest
@@ -1727,30 +1424,15 @@ class ProtDownloadVCF(EMProtocol):
                         )
                     )
 
-                    self._downloadEvaVCF(
-                        info
-                    )
+                    self._downloadEvaVCF(info)
                     continue
 
-                accession = self._validateUrlComponent(
-                    info['accession'],
-                    'NCBI accession'
-                )
+                accession = self._validateUrlComponent(info['accession'], 'NCBI accession')
 
-                filename = '{}.gz'.format(
-                    accession
-                )
-
-                indexName = filename + '.tbi'
+                filename = '{}.gz'.format(accession)
 
                 if filename in availableFiles:
-                    self._downloadNcbiVCF(
-                        info,
-                        accession,
-                        filename,
-                        indexName,
-                        availableFiles
-                    )
+                    self._downloadNcbiVCF(info, accession, filename, availableFiles)
                     continue
 
                 self.info(
@@ -1762,16 +1444,12 @@ class ProtDownloadVCF(EMProtocol):
                     )
                 )
 
-                self._downloadEvaVCF(
-                    info
-                )
+                self._downloadEvaVCF(info)
 
-            except (
-                    RuntimeError,
-                    ValueError
-            ) as error:
-
+            except (RuntimeError, ValueError, OSError, EOFError) as error:
                 info['error'] = str(error)
+                info['vcfFile'] = None
+                info['indexFile'] = None
 
                 self.warning(
                     'Could not download a reference VCF for {}: {}'
@@ -1780,105 +1458,48 @@ class ProtDownloadVCF(EMProtocol):
                         error
                     )
                 )
+            finally:
+                self._writeVCFInfo(vcfInfo)
 
-    def _downloadNcbiVCF(
-            self,
-            info,
-            accession,
-            filename,
-            indexName,
-            availableFiles
-    ):
+    def _downloadNcbiVCF(self, info, accession, filename, availableFiles):
         """Download one VCF from the NCBI dbSNP latest release."""
 
         outputDir = self._getExtraPath(
-            'ncbi_{}_{}'.format(
-                self._safeName(
-                    info['scientificName']
-                ),
-                accession
-            )
+            'ncbi_{}_{}'.format(self._safeName(info['scientificName']), accession)
         )
 
-        os.makedirs(
-            outputDir,
-            exist_ok=True
-        )
-
-        outputVCF = os.path.join(
-            outputDir,
-             self.VCF_FILENAME
-        )
-
-        self._downloadFile(
-            self.NCBI_DBSNP_VCF_URL
-            + filename,
-            outputVCF
-        )
-
-        indexFile = self._ensureVCFIndex(
-            outputVCF,
-            self.NCBI_DBSNP_VCF_URL + filename,
-            availableFiles=availableFiles,
-            remoteFilename=filename
+        self._downloadIndexedVCF(
+            info, outputDir, self.NCBI_DBSNP_VCF_URL + filename,
+            availableFiles=availableFiles, remoteFilename=filename
         )
 
         info['requestedSource'] = 'NCBI'
         info['source'] = 'NCBI'
         info['database'] = 'dbSNP'
         info['release'] = 'latest'
-        info['vcfFile'] = outputVCF
-        info['indexFile'] = indexFile
-        info['error'] = None
 
     # =====================================================================
     # EVA fallback
     # =====================================================================
 
-    def _downloadEvaVCF(
-            self,
-            info
-    ):
+    def _downloadEvaVCF(self, info):
         """Download the matching current-ID VCF from EVA."""
 
         filename, indexName, baseUrl, evaAssembly = (
-            self._findEvaVCF(
-                info
-            )
+            self._findEvaVCF(info)
         )
 
         outputDir = self._getExtraPath(
             'eva_{}_{}_release-{}'.format(
-                self._safeName(
-                    info['scientificName']
-                ),
-                self._safeName(
-                    evaAssembly
-                ),
+                self._safeName(info['scientificName']),
+                self._safeName(evaAssembly),
                 self.EVA_RELEASE
             )
         )
 
-        os.makedirs(
-            outputDir,
-            exist_ok=True
-        )
-
-        outputVCF = os.path.join(
-            outputDir,
-             self.VCF_FILENAME
-        )
-
-        self._downloadFile(
-            baseUrl + filename,
-            outputVCF
-        )
-
-        indexFile = self._ensureVCFIndex(
-            outputVCF,
-            baseUrl + filename,
-            availableFiles={indexName} if indexName else set(),
-            remoteFilename=filename
+        self._downloadIndexedVCF(
+            info, outputDir, baseUrl + filename,
+            availableFiles={indexName} if indexName else set(), remoteFilename=filename
         )
 
         info['requestedSource'] = 'NCBI'
@@ -1886,9 +1507,6 @@ class ProtDownloadVCF(EMProtocol):
         info['database'] = 'European Variation Archive'
         info['release'] = self.EVA_RELEASE
         info['evaAssembly'] = evaAssembly
-        info['vcfFile'] = outputVCF
-        info['indexFile'] = indexFile
-        info['error'] = None
 
         self.info(
             'Using EVA release {} for {} ({}, EVA assembly directory {}).'
@@ -1900,20 +1518,15 @@ class ProtDownloadVCF(EMProtocol):
             )
         )
 
-    def _findEvaVCF(
-            self,
-            info
-    ):
+    def _findEvaVCF(self, info):
         """Find a suitable current-ID VCF in EVA.
 
         If the user requested ``Latest``, select the newest assembly among the
         assemblies that are actually present in EVA. For an explicit assembly
-        request, preserve the previous exact/matching behaviour.
+        request, require an exact accession or an NCBI-confirmed identical pair.
         """
 
-        speciesDirectory = self._getEvaSpeciesDirectory(
-            info['scientificName']
-        )
+        speciesDirectory = self._getEvaSpeciesDirectory(info['scientificName'])
 
         speciesUrl = (
             self.EVA_BASE_URL
@@ -1921,21 +1534,14 @@ class ProtDownloadVCF(EMProtocol):
             + '/'
         )
 
-        html = self._readRemoteDirectory(
-            speciesUrl
-        )
+        html = self._readRemoteDirectory(speciesUrl)
 
-        entries = re.findall(
-            self.HREF_PATTERN,
-            html
-        )
+        entries = re.findall(self.HREF_PATTERN, html)
 
         assemblyDirectories = [
             entry.rstrip('/')
             for entry in entries
-            if entry.endswith('/')
-            and not entry.startswith('/')
-            and not entry.startswith('?')
+            if entry.endswith('/') and (not entry.startswith('/')) and (not entry.startswith('?'))
         ]
 
         if not assemblyDirectories:
@@ -1947,71 +1553,38 @@ class ProtDownloadVCF(EMProtocol):
                 )
             )
 
-        assemblyRequest = str(
-            info.get('assemblyRequest', 'Latest')
-        ).strip()
+        assemblyRequest = str(info.get('assemblyRequest', 'Latest')).strip()
 
         if assemblyRequest.lower() == 'latest':
-            evaAssembly = self._getLatestEvaAssembly(
-                speciesUrl,
-                assemblyDirectories,
-                info
-            )
+            evaAssembly = self._getLatestEvaAssembly(speciesUrl, assemblyDirectories, info)
         else:
-            evaAssembly = self._matchEvaAssemblyDirectory(
-                assemblyDirectories,
-                info
-            )
+            evaAssembly = self._matchEvaAssemblyDirectory(assemblyDirectories, info)
 
         assemblyUrl = (
             speciesUrl
-            + self._validateUrlComponent(
-                evaAssembly,
-                'EVA assembly'
-            )
+            + self._validateUrlComponent(evaAssembly, 'EVA assembly')
             + '/'
         )
 
-        assemblyHtml = self._readRemoteDirectory(
-            assemblyUrl
-        )
+        assemblyHtml = self._readRemoteDirectory(assemblyUrl)
 
-        files = set(
-            re.findall(
-                self.HREF_PATTERN,
-                assemblyHtml
-            )
-        )
+        files = set(re.findall(self.HREF_PATTERN, assemblyHtml))
 
-        currentVCFs = sorted(
-            filename
-            for filename in files
-            if filename.endswith('_current_ids.vcf.gz')
-        )
+        accessions = None
+        if assemblyRequest.lower() != 'latest':
+            accessions = info.get('compatibleAccessions') or [info.get('accession')]
+        filename = self._selectEvaCurrentVCF(files, accessions)
+        if filename is None:
+            raise RuntimeError('EVA has no current-ID VCF matching the requested assembly for {}.'.format(
+                info['scientificName']
+            ))
 
-        if not currentVCFs:
-            raise RuntimeError(
-                'EVA does not provide a current-ID VCF for {} '
-                'assembly {}.'.format(
-                    info['scientificName'],
-                    evaAssembly
-                )
-            )
-
-        filename = currentVCFs[0]
-
-        csiName = filename + '.csi'
-        indexName = (
-            csiName
-            if csiName in files
-            else None
-        )
+        indexName = next((filename + ext for ext in ('.tbi', '.csi')
+                          if filename + ext in files), None)
 
         # The EVA VCF filename contains the assembly accession, e.g.
         # 9913_GCA_002263795.2_current_ids.vcf.gz.
-        evaAccession = self._getEvaAccessionFromFilename(
-            filename
-        )
+        evaAccession = self._getEvaAccessionFromFilename(filename)
 
         info['assembly'] = evaAssembly
 
@@ -2025,40 +1598,33 @@ class ProtDownloadVCF(EMProtocol):
             evaAssembly
         )
 
+    def _selectEvaCurrentVCF(self, files, accessions=None):
+        candidates = sorted({name for name in files if name.endswith('_current_ids.vcf.gz')})
+        if accessions:
+            allowed = {str(accession).upper() for accession in accessions if accession}
+            candidates = [name for name in candidates
+                          if self._getEvaAccessionFromFilename(name) in allowed]
+        if not candidates:
+            return None
+        if len(candidates) != 1:
+            raise RuntimeError('EVA provides multiple current-ID VCFs; assembly selection is ambiguous.')
+        return self._validateUrlComponent(candidates[0], 'EVA VCF filename')
+
     def _getEvaAssemblyCandidate(self, speciesUrl, directory):
         """Return the EVA VCF candidate for an assembly directory."""
-        validatedDirectory = self._validateUrlComponent(
-            directory,
-            'EVA assembly'
-        )
+        validatedDirectory = self._validateUrlComponent(directory, 'EVA assembly')
 
         assemblyUrl = speciesUrl + validatedDirectory + '/'
 
-        assemblyHtml = self._readRemoteDirectory(
-            assemblyUrl
-        )
+        assemblyHtml = self._readRemoteDirectory(assemblyUrl)
 
-        files = set(
-            re.findall(
-                self.HREF_PATTERN,
-                assemblyHtml
-            )
-        )
+        files = set(re.findall(self.HREF_PATTERN, assemblyHtml))
 
-        currentVCFs = sorted(
-            filename
-            for filename in files
-            if filename.endswith('_current_ids.vcf.gz')
-        )
-
-        if not currentVCFs:
+        filename = self._selectEvaCurrentVCF(files)
+        if filename is None:
             return None
 
-        filename = currentVCFs[0]
-
-        accession = self._getEvaAccessionFromFilename(
-            filename
-        )
+        accession = self._getEvaAccessionFromFilename(filename)
 
         return {
             'directory': directory,
@@ -2078,19 +1644,12 @@ class ProtDownloadVCF(EMProtocol):
 
             try:
                 candidate['releaseDate'] = (
-                    self._getNcbiAssemblyReleaseDate(
-                        accession
-                    )
+                    self._getNcbiAssemblyReleaseDate(accession)
                 )
             except RuntimeError:
                 candidate['releaseDate'] = ''
 
-    def _getLatestEvaAssembly(
-            self,
-            speciesUrl,
-            directories,
-            info
-    ):
+    def _getLatestEvaAssembly(self, speciesUrl, directories, info):
         """Return the newest assembly that actually has a VCF in EVA.
 
         EVA exposes several aliases for the same assembly (assembly names and
@@ -2106,10 +1665,7 @@ class ProtDownloadVCF(EMProtocol):
 
         for directory in directories:
             try:
-                candidate = self._getEvaAssemblyCandidate(
-                    speciesUrl,
-                    directory
-                )
+                candidate = self._getEvaAssemblyCandidate(speciesUrl, directory)
             except (RuntimeError, ValueError):
                 continue
 
@@ -2145,21 +1701,15 @@ class ProtDownloadVCF(EMProtocol):
                 datedCandidates,
                 key=lambda candidate: (
                     candidate['releaseDate'],
-                    self._evaAccessionSortKey(
-                        candidate.get('accession')
-                    )
+                    self._evaAccessionSortKey(candidate.get('accession'))
                 )
             )
         else:
             selected = max(
                 candidates.values(),
                 key=lambda candidate: (
-                    self._evaAccessionSortKey(
-                        candidate.get('accession')
-                    ),
-                    self._naturalSortKey(
-                        candidate['directory']
-                    )
+                    self._evaAccessionSortKey(candidate.get('accession')),
+                    self._naturalSortKey(candidate['directory'])
                 )
             )
 
@@ -2167,14 +1717,9 @@ class ProtDownloadVCF(EMProtocol):
         releaseDate = selected.get('releaseDate')
 
         if accession and releaseDate:
-            assemblyDetails = ' ({}, released {})'.format(
-                accession,
-                releaseDate
-            )
+            assemblyDetails = ' ({}, released {})'.format(accession, releaseDate)
         elif accession:
-            assemblyDetails = ' ({})'.format(
-                accession
-            )
+            assemblyDetails = ' ({})'.format(accession)
         else:
             assemblyDetails = ''
 
@@ -2190,85 +1735,24 @@ class ProtDownloadVCF(EMProtocol):
         return selected['directory']
 
     @staticmethod
-    def _getEvaAccessionFromFilename(
-            filename
-    ):
+    def _getEvaAccessionFromFilename(filename):
         """Extract a versioned GCA/GCF accession from an EVA VCF filename."""
 
-        match = re.search(
-            r'((?:GCA|GCF)_\d+\.\d+)',
-            str(filename),
-            re.IGNORECASE
-        )
+        match = re.search('((?:GCA|GCF)_\\d+\\.\\d+)', str(filename), re.IGNORECASE)
 
         return (
-            match.group(1).upper()
-            if match
-            else None
+            match.group(1).upper() if match else None
         )
 
-    def _getNcbiAssemblyReleaseDate(
-            self,
-            accession
-    ):
+    def _getNcbiAssemblyReleaseDate(self, accession):
         """Return the NCBI release/submission date for one assembly."""
-
-        outputFile = self._getTmpPath(
-            '{}_eva_assembly.jsonl'.format(
-                self._safeName(accession)
-            )
-        )
-
-        arguments = (
-            'summary genome accession "{}" '
-            '--as-json-lines '
-            '> "{}"'
-        ).format(
-            accession,
-            outputFile
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            arguments,
-            RNASEQ_DIC,
-            'datasets'
-        )
-
-        reports = self._readJsonLines(
-            outputFile
-        )
-
-        if not reports:
-            raise RuntimeError(
-                'Could not retrieve NCBI assembly information for {}.'
-                .format(
-                    accession
-                )
-            )
-
-        report = reports[0]
-
-        assemblyInfo = (
-            report.get('assemblyInfo')
-            or report.get('assembly_info')
-            or {}
-        )
-
-        releaseDate = (
-            assemblyInfo.get('releaseDate')
-            or assemblyInfo.get('release_date')
-            or assemblyInfo.get('submissionDate')
-            or assemblyInfo.get('submission_date')
-            or ''
-        )
-
-        return str(releaseDate)
+        report = self._getNcbiAssemblyReport(accession)
+        assemblyInfo = report.get('assemblyInfo') or report.get('assembly_info') or {}
+        return str(assemblyInfo.get('releaseDate') or assemblyInfo.get('release_date')
+                   or assemblyInfo.get('submissionDate') or assemblyInfo.get('submission_date') or '')
 
     @staticmethod
-    def _evaAccessionSortKey(
-            accession
-    ):
+    def _evaAccessionSortKey(accession):
         """Create a deterministic sortable key for a GCA/GCF accession."""
 
         match = re.fullmatch(
@@ -2286,39 +1770,22 @@ class ProtDownloadVCF(EMProtocol):
         )
 
     @staticmethod
-    def _naturalSortKey(
-            value
-    ):
+    def _naturalSortKey(value):
         """Natural-sort strings containing numeric assembly versions."""
 
         return tuple(
             int(part) if part.isdigit() else part.lower()
-            for part in re.split(
-                r'(\d+)',
-                str(value)
-            )
+            for part in re.split('(\\d+)', str(value))
         )
 
-    def _getEvaSpeciesDirectory(
-            self,
-            scientificName
-    ):
+    def _getEvaSpeciesDirectory(self, scientificName):
         """Return the EVA by_species directory for a scientific name."""
 
-        expected = self._normaliseEvaName(
-            scientificName
-        )
+        expected = self._normaliseEvaName(scientificName)
 
-        expectedDirectory = (
-            scientificName.strip()
-            .lower()
-            .replace(' ', '_')
-        )
+        expectedDirectory = scientificName.strip().lower().replace(' ', '_')
 
-        expectedDirectory = self._validateUrlComponent(
-            expectedDirectory,
-            'EVA species'
-        )
+        expectedDirectory = self._validateUrlComponent(expectedDirectory, 'EVA species')
 
         directUrl = (
             self.EVA_BASE_URL
@@ -2327,42 +1794,26 @@ class ProtDownloadVCF(EMProtocol):
         )
 
         try:
-            self._readRemoteDirectory(
-                directUrl
-            )
+            self._readRemoteDirectory(directUrl)
             return expectedDirectory
 
         except RuntimeError:
             pass
 
-        html = self._readRemoteDirectory(
-            self.EVA_BASE_URL
-        )
+        html = self._readRemoteDirectory(self.EVA_BASE_URL)
 
         directories = [
             entry.rstrip('/')
-            for entry in re.findall(
-                self.HREF_PATTERN,
-                html
-            )
-            if entry.endswith('/')
-            and not entry.startswith('/')
-            and not entry.startswith('?')
+            for entry in re.findall(self.HREF_PATTERN, html)
+            if entry.endswith('/') and (not entry.startswith('/')) and (not entry.startswith('?'))
         ]
 
         for directory in directories:
             if self._normaliseEvaName(directory) == expected:
-                return self._validateUrlComponent(
-                    directory,
-                    'EVA species'
-                )
+                return self._validateUrlComponent(directory, 'EVA species')
 
         raise RuntimeError(
-            'Species {} was not found in EVA release {}.'
-            .format(
-                scientificName,
-                self.EVA_RELEASE
-            )
+            'Species {} was not found in EVA release {}.'.format(scientificName, self.EVA_RELEASE)
         )
 
     def _matchEvaAssemblyName(self, directories, assemblyName):
@@ -2374,15 +1825,10 @@ class ProtDownloadVCF(EMProtocol):
         ):
             return None
 
-        normalisedName = self._normaliseEvaName(
-            assemblyName
-        )
+        normalisedName = self._normaliseEvaName(assemblyName)
 
         for directory in directories:
-            if (
-                    self._normaliseEvaName(directory)
-                    == normalisedName
-            ):
+            if self._normaliseEvaName(directory) == normalisedName:
                 return directory
 
         return None
@@ -2398,175 +1844,30 @@ class ProtDownloadVCF(EMProtocol):
 
         return None
 
-    def _matchEvaAssemblyDirectory(
-            self,
-            directories,
-            info
-    ):
-        """Match NCBI assembly metadata to an EVA assembly directory.
-
-        EVA and NCBI do not always expose exactly the same assembly
-        identifier. Prefer assembly-name matches, then exact accessions,
-        and finally accessions sharing the same numeric assembly identifier
-        while ignoring GCF/GCA and version differences.
-        """
-
-        assemblyName = info.get('assembly')
-        accession = info.get('accession')
-        assemblyRequest = info.get('assemblyRequest')
-
-        # -------------------------------------------------------------
-        # 1. Match by assembly name.
-        # -------------------------------------------------------------
-
-        directory = self._matchEvaAssemblyName(
-            directories,
-            assemblyName
-        )
-
+    def _matchEvaAssemblyDirectory(self, directories, info):
+        """Prefer exact versioned accessions; verify name aliases against the VCF."""
+        accessions = info.get('compatibleAccessions') or [info.get('accession')]
+        directory = self._matchEvaExactAccession(directories, accessions)
         if directory:
             return directory
-
-        # -------------------------------------------------------------
-        # 2. Try exact NCBI accession matches.
-        # -------------------------------------------------------------
-
-        accessionCandidates = [
-            candidate
-            for candidate in (
-                accession,
-                assemblyRequest,
-                assemblyName
-            )
-            if candidate
-               and str(candidate).lower() != 'latest'
-               and self._isNcbiAssemblyAccession(
-                candidate
-            )
-        ]
-
-        directory = self._matchEvaExactAccession(
-            directories,
-            accessionCandidates
-        )
-
+        directory = self._matchEvaAssemblyName(directories, info.get('assembly'))
         if directory:
             return directory
-
-        # -------------------------------------------------------------
-        # 3. Try normalised accession matches.
-        # -------------------------------------------------------------
-
-        normalisedCandidates = {
-            self._normaliseEvaName(
-                candidate
-            )
-            for candidate in accessionCandidates
-        }
-
-        for directory in directories:
-            if (
-                    self._normaliseEvaName(
-                        directory
-                    )
-                    in normalisedCandidates
-            ):
-                return directory
-
-        # -------------------------------------------------------------
-        # 4. Match the stable numeric accession.
-        #
-        # NCBI RefSeq and GenBank accessions can describe the same
-        # assembly using GCF_ and GCA_ respectively. EVA may also retain
-        # another version of that assembly.
-        #
-        # Example:
-        #
-        # NCBI:
-        #   GCF_002263795.3
-        #
-        # EVA:
-        #   GCA_002263795.2
-        #
-        # Both have stable identifier:
-        #   002263795
-        # -------------------------------------------------------------
-
-        accessionKeys = {
-            self._getNcbiAssemblyAccessionKey(
-                candidate
-            )
-            for candidate in accessionCandidates
-        }
-
-        accessionKeys.discard(
-            None
-        )
-
-        if accessionKeys:
-            for directory in directories:
-                directoryKey = (
-                    self._getNcbiAssemblyAccessionKey(
-                        directory
-                    )
-                )
-
-                if directoryKey in accessionKeys:
-                    return directory
-
-        raise RuntimeError(
-            'EVA contains {}, but no assembly matching '
-            '{} ({}) was found in release {}.'.format(
-                info['scientificName'],
-                info.get('assembly'),
-                info.get('accession'),
-                self.EVA_RELEASE
-            )
-        )
+        raise RuntimeError('No EVA assembly matching {} ({}) was found for {}.'.format(
+            info.get('assembly'), info.get('accession'), info['scientificName']
+        ))
 
     @staticmethod
-    def _isNcbiAssemblyAccession(
-        value
-    ):
+    def _isNcbiAssemblyAccession(value):
         """Return whether a value is a versioned GCF/GCA accession."""
 
-        return bool(
-            re.fullmatch(
-                r'(?:GCF|GCA)_\d+\.\d+',
-                str(value).strip(),
-                re.IGNORECASE
-            )
-        )
+        return bool(re.fullmatch('(?:GCF|GCA)_\\d+\\.\\d+', str(value).strip(), re.IGNORECASE))
 
     @staticmethod
-    def _getNcbiAssemblyAccessionKey(
-        value
-    ):
-        """Return the stable numeric part of a GCF/GCA accession."""
-
-        match = re.fullmatch(
-            r'(?:GCF|GCA)_(\d+)\.\d+',
-            str(value).strip(),
-            re.IGNORECASE
-        )
-
-        return (
-            match.group(1)
-            if match
-            else None
-        )
-
-    @staticmethod
-    def _normaliseEvaName(
-            value
-    ):
+    def _normaliseEvaName(value):
         """Normalise species/assembly names for EVA directory matching."""
 
-        return re.sub(
-            r'[^a-z0-9]+',
-            '',
-            str(value).lower()
-        )
+        return re.sub('[^a-z0-9]+', '', str(value).lower())
 
 
     # =====================================================================
@@ -2586,28 +1887,16 @@ class ProtDownloadVCF(EMProtocol):
     }
 
     @classmethod
-    def _validateUrlComponent(cls,value, componentName):
+    def _validateUrlComponent(cls, value, componentName):
         """Validate a value before using it in a remote URL."""
 
         value = str(value).strip()
 
         if not value:
-            raise ValueError(
-                cls.EMPTY_PARAMETER_ERROR.format(
-                    componentName
-                )
-            )
+            raise ValueError(cls.EMPTY_PARAMETER_ERROR.format(componentName))
 
-        if not re.fullmatch(
-                r'[A-Za-z0-9_.-]+',
-                value
-        ):
-            raise ValueError(
-                'Invalid {}: {}'.format(
-                    componentName,
-                    value
-                )
-            )
+        if value in ('.', '..') or not re.fullmatch(r'[A-Za-z0-9_.-]+', value):
+            raise ValueError('Invalid {}: {}'.format(componentName, value))
 
         return value
 
@@ -2618,53 +1907,26 @@ class ProtDownloadVCF(EMProtocol):
         parsedUrl = urlparse(url)
 
         if parsedUrl.scheme != 'https':
-            raise ValueError(
-                'Only HTTPS URLs are allowed.'
-            )
+            raise ValueError('Only HTTPS URLs are allowed.')
 
         if parsedUrl.hostname not in cls.ALLOWED_HOSTS:
-            raise ValueError(
-                'Remote host is not allowed: {}'
-                .format(
-                    parsedUrl.hostname
-                )
-            )
+            raise ValueError('Remote host is not allowed: {}'.format(parsedUrl.hostname))
 
         if parsedUrl.username or parsedUrl.password:
-            raise ValueError(
-                'Credentials are not allowed in remote URLs.'
-            )
+            raise ValueError('Credentials are not allowed in remote URLs.')
 
         if parsedUrl.port not in (None, 443):
-            raise ValueError(
-                'Only the default HTTPS port is allowed.'
-            )
+            raise ValueError('Only the default HTTPS port is allowed.')
 
-        pathParts = [
-            part
-            for part in parsedUrl.path.split('/')
-            if part
-        ]
+        pathParts = [part for part in parsedUrl.path.split('/') if part]
 
-        if any(
-                part in ('.', '..')
-                for part in pathParts
-        ):
-            raise ValueError(
-                'Path traversal is not allowed in remote URLs.'
-            )
+        if any((part in ('.', '..') for part in pathParts)):
+            raise ValueError('Path traversal is not allowed in remote URLs.')
 
         return url
 
     @classmethod
-    def _openRemoteRequest(
-            cls,
-            url,
-            *,
-            headers=None,
-            method=None,
-            timeout=None
-    ):
+    def _openRemoteRequest(cls, url, *, headers=None, method=None, timeout=None):
         """Open a validated request to an allowed remote server."""
 
         validatedUrl = cls._validateRemoteUrl(url)
@@ -2680,119 +1942,106 @@ class ProtDownloadVCF(EMProtocol):
             timeout=timeout or cls.HTTP_TIMEOUT
         )
 
-    def _downloadFile(
-            self,
-            url,
-            outputFile
-    ):
-        """Download a file from an allowed remote server."""
+    @staticmethod
+    def _isNonemptyFile(path):
+        return bool(path) and os.path.isfile(path) and os.path.getsize(path) > 0
 
-        if (
-                os.path.exists(outputFile)
-                and not self.overwrite.get()
-        ):
+    def _downloadFile(self, url, outputFile):
+        """Publish a download only after the transfer finishes."""
+        if not self.overwrite.get() and self._isNonemptyFile(outputFile):
             return
 
-        if (
-                self.overwrite.get()
-                and os.path.exists(outputFile)
-        ):
-            os.remove(
-                outputFile
-            )
-
+        partialFile = outputFile + '.part'
         try:
-            with self._openRemoteRequest(
-                    url,
-                    timeout=self.DOWNLOAD_TIMEOUT
-            ) as response, open(
-                outputFile,
-                'wb'
-            ) as output:
-                shutil.copyfileobj(
-                    response,
-                    output
-                )
-
-        except (
-                urllib.error.URLError,
-                TimeoutError,
-                ValueError
-        ) as error:
-
-            if os.path.exists(
-                    outputFile
-            ):
-                os.remove(
-                    outputFile
-                )
-
-            raise RuntimeError(
-                'Could not download VCF file: {}'
-                .format(
-                    error
-                )
-            ) from error
-
-        if not os.path.exists(
-                outputFile
-        ):
-            raise RuntimeError(
-                'Downloaded VCF file was not created: {}'
-                .format(
-                    outputFile
-                )
-            )
+            with self._openRemoteRequest(url, timeout=self.DOWNLOAD_TIMEOUT) as response:
+                expectedSize = response.headers.get('Content-Length')
+                with open(partialFile, 'wb') as output:
+                    shutil.copyfileobj(response, output)
+            if not self._isNonemptyFile(partialFile):
+                raise RuntimeError('Downloaded file is empty: {}'.format(url))
+            if expectedSize is not None and os.path.getsize(partialFile) != int(expectedSize):
+                raise RuntimeError('Incomplete download: {}'.format(url))
+            if outputFile.endswith(self.VCF_GZ_SUFFIX):
+                self._validateVCFHeader(partialFile)
+                self._removeLocalVCFIndexes(outputFile)
+            os.replace(partialFile, outputFile)
+        except (OSError, ValueError, EOFError, http.client.HTTPException) as error:
+            raise RuntimeError('Could not download {}: {}'.format(url, error)) from error
+        finally:
+            if os.path.exists(partialFile):
+                os.remove(partialFile)
 
     @classmethod
-    def _readRemoteDirectory(
-            cls,
-            url
-    ):
+    def _validateVCFHeader(cls, filename):
+        try:
+            GATKPreparationMixin.readVCFContigs(filename, compressed=True)
+        except (OSError, EOFError, UnicodeError, zlib.error) as error:
+            raise RuntimeError('Invalid compressed VCF: {}'.format(filename)) from error
+        assemblies = set()
+        with gzip.open(filename, 'rt') as handle:
+            if not handle.readline().startswith('##fileformat=VCFv'):
+                raise RuntimeError('Downloaded file is not a VCF: {}'.format(filename))
+            for line in handle:
+                if line.startswith('##'):
+                    assembly = cls._getVCFAssembly(line)
+                    if assembly is not None:
+                        assemblies.add(assembly)
+                    continue
+                columns = line.rstrip().split('\t')
+                if columns[:8] == ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO']:
+                    return assemblies
+                break
+        raise RuntimeError('VCF column header is missing or invalid: {}'.format(filename))
+
+    @staticmethod
+    def _getVCFAssembly(line):
+        match = re.search(r'(?:^|,)assembly=([^,>]+)', line)
+        if match:
+            return match.group(1).strip('"')
+        if line.startswith('##assembly='):
+            return line.partition('=')[2].strip()
+        if line.startswith('##reference=') and '.dna.' in line:
+            name = line.strip().rsplit('/', 1)[-1].split('.dna.', 1)[0]
+            if '.' in name:
+                return name.split('.', 1)[1]
+        return None
+
+    @classmethod
+    def _readRemoteDirectory(cls, url):
         """Read an allowed remote directory."""
 
         try:
-            with cls._openRemoteRequest(
-                    url
-            ) as response:
-
-                return response.read().decode(
-                    'utf-8'
-                )
+            with cls._openRemoteRequest(url) as response:
+                return response.read().decode('utf-8')
 
         except (
-                urllib.error.URLError,
-                TimeoutError,
+                OSError,
+                http.client.HTTPException,
                 ValueError
         ) as error:
-
-            raise RuntimeError(
-                'Cannot access remote directory: {}'
-                .format(
-                    error
-                )
-            ) from error
+            raise RuntimeError('Cannot access remote directory: {}'.format(error)) from error
 
     @classmethod
-    def _remoteFileExists(
-            cls,
-            url
-    ):
+    def _remoteFileExists(cls, url):
         """Return whether a remote file exists."""
 
         try:
-            with cls._openRemoteRequest(
-                    url,
-                    method='HEAD'
-            ):
+            with cls._openRemoteRequest(url, method='HEAD'):
                 return True
 
         except (
-                urllib.error.URLError,
-                TimeoutError,
+                OSError,
+                http.client.HTTPException,
                 ValueError
         ):
             return False
+
+    @staticmethod
+    def _isVCFIndex(path):
+        if not path:
+            return False
+        signature = {'.tbi': b'TBI\x01', '.csi': b'CSI\x01'}.get(os.path.splitext(path)[1])
+        return signature is not None and GATKPreparationMixin.hasIndexSignature(path, signature)
 
     def _removeLocalVCFIndexes(self, vcfFile):
         """Remove any existing local VCF indexes."""
@@ -2802,21 +2051,20 @@ class ProtDownloadVCF(EMProtocol):
                 os.remove(indexPath)
 
     def _getLocalVCFIndex(self, vcfFile):
-        """Return an existing valid local VCF index, if available."""
+        """Reuse a non-empty index that is not older than the VCF."""
+        validIndexes = []
         for extension in ('.tbi', '.csi'):
             indexPath = vcfFile + extension
-            if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
-                return indexPath
+            if not os.path.isfile(indexPath):
+                continue
+            if (self._isVCFIndex(indexPath)
+                    and os.path.getmtime(indexPath) >= os.path.getmtime(vcfFile)):
+                validIndexes.append(indexPath)
+            else:
+                os.remove(indexPath)
+        return validIndexes[0] if validIndexes else None
 
-        return None
-
-    def _downloadVCFIndex(
-            self,
-            vcfFile,
-            vcfUrl,
-            remoteFilename,
-            availableFiles=None
-    ):
+    def _downloadVCFIndex(self, vcfFile, vcfUrl, remoteFilename, availableFiles=None):
         """Download a remote VCF index, if available."""
         for extension in ('.tbi', '.csi'):
             indexName = remoteFilename + extension
@@ -2835,8 +2083,10 @@ class ProtDownloadVCF(EMProtocol):
             try:
                 self._downloadFile(indexUrl, indexPath)
 
-                if os.path.isfile(indexPath) and os.path.getsize(indexPath) > 0:
+                if self._isVCFIndex(indexPath):
                     return indexPath
+                os.remove(indexPath)
+                self.warning('Downloaded index has an invalid signature: {}'.format(indexUrl))
 
             except RuntimeError as error:
                 self.warning(
@@ -2853,12 +2103,7 @@ class ProtDownloadVCF(EMProtocol):
         arguments = 'index -f -c {}'.format(shlex.quote(vcfFile))
 
         try:
-            Plugin.runCondaCommand(
-                self,
-                arguments,
-                RNASEQ_DIC,
-                'bcftools'
-            )
+            Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'bcftools')
         except Exception as error:
             raise RuntimeError(
                 'Could not generate a VCF index for {}. Ensure bcftools '
@@ -2868,26 +2113,29 @@ class ProtDownloadVCF(EMProtocol):
 
         indexPath = vcfFile + '.csi'
 
-        if not os.path.isfile(indexPath) or os.path.getsize(indexPath) == 0:
+        if not self._isVCFIndex(indexPath):
             raise RuntimeError(
-                'bcftools did not create the expected VCF index: {}'
-                .format(indexPath)
+                'bcftools did not create the expected VCF index: {}'.format(indexPath)
             )
 
         return indexPath
 
-    def _ensureVCFIndex(
-            self,
-            vcfFile,
-            vcfUrl,
-            availableFiles=None,
-            remoteFilename=None
-    ):
+    def _ensureVCFIndex(self, vcfFile, vcfUrl, availableFiles=None, remoteFilename=None, assembly=None):
         """Reuse/download a VCF index or create a CSI index locally.
 
         A remote TBI is preferred for compatibility with downstream tools.
         When the source has no index, bcftools creates a CSI index.
         """
+        declaredAssemblies = self._validateVCFHeader(vcfFile)
+        if assembly is not None:
+            if declaredAssemblies and assembly not in declaredAssemblies:
+                raise RuntimeError('VCF reference {} does not match the requested assembly {}.'.format(
+                    ', '.join(sorted(declaredAssemblies)), assembly
+                ))
+            if not declaredAssemblies:
+                self.warning('VCF header does not identify its assembly; compatibility with {} '
+                             'could not be verified.'.format(assembly))
+
         if remoteFilename is None:
             remoteFilename = vcfUrl.rsplit('/', 1)[-1]
 
@@ -2898,12 +2146,7 @@ class ProtDownloadVCF(EMProtocol):
             if indexPath is not None:
                 return indexPath
 
-        indexPath = self._downloadVCFIndex(
-            vcfFile,
-            vcfUrl,
-            remoteFilename,
-            availableFiles
-        )
+        indexPath = self._downloadVCFIndex(vcfFile, vcfUrl, remoteFilename, availableFiles)
 
         if indexPath is not None:
             return indexPath
@@ -2915,215 +2158,118 @@ class ProtDownloadVCF(EMProtocol):
     # =====================================================================
 
     @classmethod
-    def _requestJson(
-        cls,
-        url,
-        description
-    ):
-
+    def _requestJson(cls, url, description):
         try:
-            with cls._openRemoteRequest(
-                url,
-                headers=cls.JSON_HEADERS
-            ) as response:
-
-                return json.loads(
-                    response.read().decode(
-                        'utf-8'
-                    )
-                )
+            with cls._openRemoteRequest(url, headers=cls.JSON_HEADERS) as response:
+                return json.loads(response.read().decode('utf-8'))
 
         except (
-            urllib.error.URLError,
-            TimeoutError,
+            OSError,
+            http.client.HTTPException,
             ValueError
         ) as error:
-            raise RuntimeError(
-                'Could not retrieve {}: {}'
-                .format(
-                    description,
-                    error
-                )
-            ) from error
+            raise RuntimeError('Could not retrieve {}: {}'.format(description, error)) from error
 
     @staticmethod
-    def _readJsonLines(
-        filename
-    ):
-
-        if not os.path.exists(
-            filename
-        ):
+    def _readJsonLines(filename):
+        if not os.path.exists(filename):
             return []
 
         reports = []
 
-        with open(
-            filename
-        ) as inputFile:
-
+        with open(filename) as inputFile:
             for line in inputFile:
-
                 line = line.strip()
 
                 if line:
-                    reports.append(
-                        json.loads(
-                            line
-                        )
-                    )
+                    reports.append(json.loads(line))
 
         return reports
 
     @staticmethod
-    def _safeName(
-        value
-    ):
-
-        return re.sub(
-            r'[^A-Za-z0-9_.-]+',
-            '_',
-            value
-        )
+    def _safeName(value):
+        return re.sub('[^A-Za-z0-9_.-]+', '_', value)
 
     # =====================================================================
     # Persistent VCF information
     # =====================================================================
 
     def _getVCFInfoFile(self):
+        return self._getExtraPath('vcfs.json')
 
-        return self._getExtraPath(
-            'vcfs.json'
-        )
-
-    def _writeVCFInfo(
-        self,
-        vcfInfo
-    ):
-
-        with open(
-            self._getVCFInfoFile(),
-            'w'
-        ) as outputFile:
-
-            json.dump(
-                vcfInfo,
-                outputFile,
-                indent=2,
-                sort_keys=True
-            )
+    def _writeVCFInfo(self, vcfInfo):
+        filename = self._getVCFInfoFile()
+        partialFile = filename + '.part'
+        with open(partialFile, 'w') as outputFile:
+            json.dump(vcfInfo, outputFile, indent=2, sort_keys=True)
+        os.replace(partialFile, filename)
 
     def _readVCFInfo(self):
-
-        with open(
-            self._getVCFInfoFile()
-        ) as inputFile:
-
-            return json.load(
-                inputFile
-            )
+        with open(self._getVCFInfoFile()) as inputFile:
+            return json.load(inputFile)
 
     # =====================================================================
     # Output
     # =====================================================================
 
     def createOutputStep(self):
-
         vcfsInfo = self._readVCFInfo()
 
-        outputVCFs = SetOfVCFFiles().create(
-            outputPath=self._getPath()
-        )
+        outputVCFs = SetOfVCFFiles().create(outputPath=self._getPath())
 
-        outputVCFs.setObjLabel(
-            'Known variants VCFs'
-        )
+        outputVCFs.setObjLabel('Known variants VCFs')
 
         for info in vcfsInfo:
-
-            if not info.get('vcfFile'):
+            if (info.get('error') or not self._isNonemptyFile(info.get('vcfFile'))
+                    or not self._isNonemptyFile(info.get('indexFile'))):
                 continue
 
-            vcf = VCFFile(
-                filename=info['vcfFile']
-            )
+            vcf = VCFFile(filename=info['vcfFile'])
 
-            vcf.setScientificName(
-                info['scientificName']
-            )
+            vcf.setScientificName(info['scientificName'])
 
-            vcf.setAssembly(
-                info['assembly']
-            )
+            vcf.setAssembly(info['assembly'])
 
-            vcf.setSource(
-                info['source']
-            )
+            vcf.setSource(info['source'])
 
-            vcf.setDatabase(
-                info['database']
-            )
+            vcf.setDatabase(info['database'])
 
-            vcf.setRelease(
-                info['release']
-            )
+            vcf.setRelease(info['release'])
 
-            vcf.setVariantType(
-                info['variantType']
-            )
+            vcf.setVariantType(info['variantType'])
 
-            vcf.setIsCompressed(
-                True
-            )
+            vcf.setIsCompressed(True)
 
-            if info.get(
-                    'indexFile'
-            ):
-                vcf.setIndexFile(
-                    info['indexFile']
-                )
+            if info.get('indexFile'):
+                vcf.setIndexFile(info['indexFile'])
 
-            vcf.setObjLabel(
-                '{} ({})'.format(
-                    info['scientificName'],
-                    info['assembly']
-                )
-            )
+            vcf.setObjLabel('{} ({})'.format(info['scientificName'], info['assembly']))
 
-            outputVCFs.append(
-                vcf
-            )
+            outputVCFs.append(vcf)
 
-        self._defineOutputs(
-            outputVCFs=outputVCFs
-        )
+        if outputVCFs.getSize() == 0:
+            raise RuntimeError('No reference VCFs were downloaded. Check the species warnings.')
+
+        self._defineOutputs(outputVCFs=outputVCFs)
 
     # =====================================================================
     # Validation
     # =====================================================================
 
     def _validateEnsemblParams(self, species, errors):
-        assemblies = self._splitParameterValues(
-            self.assemblies.get()
-        )
+        assemblies = self._splitParameterValues(self.assemblies.get())
 
-        releases = self._splitParameterValues(
-            self.releases.get()
-        )
+        releases = self._splitParameterValues(self.releases.get())
 
-        self._validateParameterCount(
-            assemblies,
-            species,
-            'Assemblies',
-            errors
-        )
+        self._validateParameterCount(assemblies, species, 'Assemblies', errors)
 
-        self._validateParameterCount(
-            releases,
-            species,
-            'Ensembl releases',
-            errors
-        )
+        self._validateParameterCount(releases, species, 'Ensembl releases', errors)
+
+        for assembly in assemblies:
+            try:
+                self._validateUrlComponent(assembly, 'Ensembl assembly')
+            except ValueError as error:
+                errors.append(str(error))
 
         for release in releases:
             if release.lower() == 'latest':
@@ -3144,21 +2290,11 @@ class ProtDownloadVCF(EMProtocol):
                 )
 
     def _validateNcbiParams(self, species, errors):
-        assemblies = self._splitParameterValues(
-            self.ncbiAssemblies.get()
-        )
+        assemblies = self._splitParameterValues(self.ncbiAssemblies.get())
 
-        self._validateParameterCount(
-            assemblies,
-            species,
-            'NCBI assemblies',
-            errors
-        )
+        self._validateParameterCount(assemblies, species, 'NCBI assemblies', errors)
 
-        accessionPattern = re.compile(
-            r'^(GCF|GCA)_\d+\.\d+$',
-            re.IGNORECASE
-        )
+        accessionPattern = re.compile('^(GCF|GCA)_\\d+\\.\\d+$', re.IGNORECASE)
 
         for assembly in assemblies:
             if assembly.lower() == 'latest':
@@ -3174,28 +2310,12 @@ class ProtDownloadVCF(EMProtocol):
                 )
 
     @classmethod
-    def _validateParameterCount(
-            cls,
-            values,
-            species,
-            parameterName,
-            errors
-    ):
+    def _validateParameterCount(cls, values, species, parameterName, errors):
         if not values:
-            errors.append(
-                cls.EMPTY_PARAMETER_ERROR.format(
-                    parameterName
-                )
-            )
+            errors.append(cls.EMPTY_PARAMETER_ERROR.format(parameterName))
             return
 
-        if (
-                species
-                and len(values) not in (
-                1,
-                len(species)
-        )
-        ):
+        if species and len(values) not in (1, len(species)):
             errors.append(
                 '{} must contain one value or '
                 'one value per species.'.format(
@@ -3225,73 +2345,35 @@ class ProtDownloadVCF(EMProtocol):
     # =====================================================================
 
     def _summary(self):
-
-        if not hasattr(
-                self,
-                'outputVCFs'
-        ):
-            return [
-                'No VCF files have been downloaded.'
-            ]
-
-        summary = [
-            'Downloaded VCF files: {}'.format(
-                self.outputVCFs.getSize()
-            )
-        ]
-
-        for vcf in self.outputVCFs:
-            summary.append(
-                '{} ({}) - source: {} ({})'.format(
-                    vcf.getScientificName(),
-                    vcf.getAssembly(),
-                    vcf.getSource(),
-                    vcf.getDatabase()
-                )
-            )
-
-        vcfsInfo = self._readVCFInfo()
-
-        skipped = [
-            info
-            for info in vcfsInfo
-            if info.get('error')
-        ]
-
+        summary = []
+        if hasattr(self, 'outputVCFs'):
+            summary.append('Downloaded VCF files: {}'.format(self.outputVCFs.getSize()))
+            for vcf in self.outputVCFs:
+                summary.append('{} ({}) - source: {} ({})'.format(
+                    vcf.getScientificName(), vcf.getAssembly(), vcf.getSource(), vcf.getDatabase()
+                ))
+        else:
+            summary.append('No VCF files have been downloaded.')
+        try:
+            vcfsInfo = self._readVCFInfo()
+        except (OSError, ValueError):
+            return summary
+        skipped = [info for info in vcfsInfo if info.get('error')]
         if skipped:
-
-            summary.append(
-                'Skipped species: {}'.format(
-                    len(skipped)
-                )
-            )
-
-            for info in skipped:
-                summary.append(
-                    '{}: {}'.format(
-                        info['scientificName'],
-                        info['error']
-                    )
-                )
-
+            summary.append('Skipped species: {}'.format(len(skipped)))
+            summary.extend('{}: {}'.format(info['scientificName'], info['error']) for info in skipped)
         return summary
+
     # =====================================================================
     # Methods
     # =====================================================================
 
     def _methods(self):
-
-        if not hasattr(
-            self,
-            'outputVCFs'
-        ):
+        if not hasattr(self, 'outputVCFs'):
             return []
 
         sources = sorted({
-            '{} ({})'.format(
-                vcf.getSource(),
-                vcf.getDatabase()
-            )
+            '{} ({})'.format(vcf.getSource(), vcf.getDatabase())
             for vcf in self.outputVCFs
         })
 

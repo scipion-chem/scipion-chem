@@ -25,15 +25,14 @@
 # **************************************************************************
 
 import os
-import shlex
 
 from pyworkflow.protocol.params import BooleanParam, PointerParam
 from pwem.protocols import EMProtocol
 
-from pwchem import Plugin
-from pwchem.constants import RNASEQ_DIC
+from pwchem.utils.utilsRNA import GATKPreparationMixin
 
-class ProtPicard(EMProtocol):
+
+class ProtPicard(GATKPreparationMixin, EMProtocol):
     """
     Process BAM alignments using one or more Picard operations.
 
@@ -58,21 +57,33 @@ class ProtPicard(EMProtocol):
 
         ``RGSM`` is obtained automatically from the sample name stored in
         the input ``AlignmentFile``. If no sample name is available,
-        ``sample`` is used.
+        ``sample`` is used. Leading and trailing whitespace is removed.
+        The resulting sample name must contain printable ASCII characters,
+        as required for SAM read-group values. Existing read groups are
+        replaced by a single group; library and platform values are the
+        fixed values shown above, rather than inferred from sequencing data.
 
     MarkDuplicates
         Identifies reads that are likely to represent PCR or optical
         duplicates.
 
         Duplicate reads are marked but are not removed from the BAM file.
-        A Picard duplication metrics file is also generated.
+        A non-empty Picard duplication metrics file is also generated.
+        When read-group replacement is disabled, the input header must already
+        declare read groups with unique, non-empty IDs. This does not certify
+        that every alignment record carries the correct RG tag.
 
     ReorderSam
         Reorders the BAM according to the sequence dictionary of the
         reference genome associated with the input ``AlignmentFile``.
 
         This operation requires a valid reference FASTA stored in the
-        alignment metadata.
+        alignment metadata. Reference auxiliary files are prepared locally:
+        usable FASTA indexes and dictionaries are copied; missing, outdated or
+        invalid ones are generated with samtools and Picard. Sequence names,
+        lengths and order must agree between the local index and dictionary.
+        The input BAM may use a different sequence order, but its sequences
+        must exist in the reference with matching lengths.
 
         In the RNA-seq workflow, this operation can be used after the GATK
         BAM-processing steps.
@@ -85,14 +96,19 @@ class ProtPicard(EMProtocol):
     When several operations are selected, they are always executed in the
     following order::
 
-        AddOrReplaceReadGroups
+        Input validation and optional reference preparation
+            -> AddOrReplaceReadGroups
             -> MarkDuplicates
             -> ReorderSam
+            -> Final BAM indexing and output creation
 
     Operations that are not selected are skipped while preserving this
     execution order.
 
-    At least one Picard operation must be selected.
+    At least one Picard operation must be selected. AddOrReplaceReadGroups
+    requests coordinate sorting. When that operation is disabled, the input
+    BAM header must already declare coordinate order, so the final result
+    can be indexed. Sorting is not inferred from the input object metadata.
 
 
     ---------------------------------------------------------------------
@@ -129,11 +145,16 @@ class ProtPicard(EMProtocol):
         - Otherwise, ``AddOrReplaceReadGroups`` output.
 
         The final BAM is indexed with samtools and the resulting ``.bai``
-        file is associated with the output ``AlignmentFile``.
+        file is associated with the output ``AlignmentFile``. Empty or
+        invalid indexes stop execution rather than being published.
 
         When supported by the ``AlignmentFile`` object, the output is
         marked as indexed and sorted and the executed Picard commands are
-        stored as command metadata.
+        stored as command metadata. The sample name is also updated when
+        read groups are replaced, including use of the ``sample`` fallback.
+        Reference metadata are preserved, including the scientific name,
+        assembly and original reference FASTA path. Local preparation does
+        not modify the source reference or its auxiliary files.
 
 
     ---------------------------------------------------------------------
@@ -143,9 +164,22 @@ class ProtPicard(EMProtocol):
     Before execution, the protocol verifies that:
 
     - An input ``AlignmentFile`` has been provided.
-    - The input BAM exists and is not empty.
+    - The alignment format is BAM, and the input file exists and is not empty.
     - At least one Picard operation has been selected.
-    - A valid reference FASTA is available when ``ReorderSam`` is enabled.
+    - A non-empty reference FASTA is available when ``ReorderSam`` is enabled.
+    - At least one thread is available for final BAM indexing.
+    - An explicitly supplied sample name can be written into SAM read groups.
+
+    During preparation, samtools quickcheck checks the input BAM header and
+    end-of-file marker, and the extracted SAM header is inspected for sequence
+    declarations, sort order and duplicate read-group IDs. When reordering is
+    enabled, the reference must be uncompressed and its sequence lengths must
+    match the BAM. The order may differ, since changing it is ReorderSam's job.
+
+    These checks reuse utilsRNA routines. They do not scan every alignment,
+    verify reference MD5s, establish biological sample identity or replace
+    Picard validation. MarkDuplicates retains VALIDATION_STRINGENCY=SILENT
+    to match the reference workflow; that setting is not full BAM validation.
 
 
     ---------------------------------------------------------------------
@@ -167,7 +201,16 @@ class ProtPicard(EMProtocol):
         BAM generated by ``ReorderSam``.
 
     picard_commands.txt
-        Internal record of the Picard commands executed by the protocol.
+        Record of the Picard and samtools commands executed by the protocol.
+
+    input.header.sam
+        Input BAM header used to check sequence and read-group declarations.
+
+    reference/reference.fa, reference/reference.fa.fai, reference/reference.dict
+        Local reference link, FASTA index and sequence dictionary used for
+        ReorderSam. Existing source auxiliary files are copied when usable.
+        Index checks inspect signatures, timestamps and dictionary structure;
+        they do not certify the integrity of every index entry.
 
 
     ---------------------------------------------------------------------
@@ -193,6 +236,9 @@ class ProtPicard(EMProtocol):
       input ``AlignmentFile``.
 
     - Intermediate BAM files remain in the protocol working directory.
+      Previous BAMs, indexes and metrics at the generated output paths are
+      removed before each corresponding operation, preventing stale results
+      from hiding a missing output during repeated execution.
 
     - The final BAM is always indexed with samtools.
 
@@ -200,9 +246,10 @@ class ProtPicard(EMProtocol):
       alignment.
     """
 
+    CREATE_INDEX_OPTION = 'CREATE_INDEX=false'
+
     _label = 'Picard processing'
 
-    PICARD_COMMAND = 'picard {}'
     # -------------------------------------------------------
     # Parameters
     # -------------------------------------------------------
@@ -262,238 +309,145 @@ class ProtPicard(EMProtocol):
                 'after the GATK BAM-processing steps.'
             )
         )
+        form.addParallelSection(threads=4, mpi=1)
 
     # -------------------------------------------------------
     # Steps
     # -------------------------------------------------------
 
     def _insertAllSteps(self):
+        self._insertFunctionStep(self.prepareInputsStep)
         if self.addReadGroups.get():
             self._insertFunctionStep(self.addReadGroupsStep)
-
         if self.markDuplicates.get():
             self._insertFunctionStep(self.markDuplicatesStep)
-
         if self.reorderBam.get():
             self._insertFunctionStep(self.reorderBamStep)
-
         self._insertFunctionStep(self.indexFinalBamStep)
         self._insertFunctionStep(self.createOutputStep)
+
+    def prepareInputsStep(self):
+        errors = self._validate()
+        if errors:
+            raise RuntimeError('Invalid Picard inputs: ' + '; '.join(errors))
+        os.makedirs(self._getExtraPath(), exist_ok=True)
+        with open(self._getCommandFile(), 'w') as commandFile:
+            commandFile.write('')
+        bam = self.inputAlignment.get().getFileName()
+        self.runTool('samtools', ['quickcheck', '-v', bam])
+        header = self._getExtraPath('input.header.sam')
+        self.runTool('samtools', ['view', '-H', '-o', header, bam])
+        contigs, groups, sortOrder = self.readSamHeader(header)
+        if not self.addReadGroups.get():
+            self._checkExistingReadGroups(groups, sortOrder)
+        if self.reorderBam.get():
+            reference = self.prepareReference(self.getReferenceFasta(self.inputAlignment.get()))
+            for name, length in contigs.items():
+                if reference.get(name) != length:
+                    raise RuntimeError('Input BAM sequence {} (length {}) is absent from the reference '
+                                       'or has a different length.'.format(name, length))
+
+    def _checkExistingReadGroups(self, groups, sortOrder):
+        if sortOrder != 'coordinate':
+            raise RuntimeError('Input BAM must declare coordinate sorting when '
+                               'AddOrReplaceReadGroups is disabled.')
+        ids = [group.get('ID', '').strip() for group in groups]
+        if any(not groupId for groupId in ids) or len(ids) != len(set(ids)):
+            raise RuntimeError('Input BAM contains empty or duplicate read-group IDs.')
+        if self.markDuplicates.get() and not groups:
+            raise RuntimeError('MarkDuplicates requires read groups. Enable AddOrReplaceReadGroups '
+                               'or supply a BAM with existing read groups.')
+
+    def ensureSequenceDictionary(self, referenceFasta):
+        """Use Picard for reference preparation without requiring GATK."""
+        dictionary = self.getSequenceDictionaryPath(referenceFasta)
+        if self.isCurrentIndex(dictionary, referenceFasta) and self.validSequenceDictionary(dictionary):
+            return
+        self.removeIndex(dictionary)
+        self.runTool('picard', ['CreateSequenceDictionary', 'R=' + referenceFasta, 'O=' + dictionary])
+        if not self.validSequenceDictionary(dictionary):
+            raise RuntimeError('Picard did not create a valid sequence dictionary: {}'.format(dictionary))
 
     # -------------------------------------------------------
     # Picard operations
     # -------------------------------------------------------
 
+    def _runPicard(self, arguments, outputBam):
+        self.clearBamOutput(outputBam)
+        self.runTool('picard', arguments)
+        self.validateBamFile(outputBam)
+
     def addReadGroupsStep(self):
-        inputAlignment = self.inputAlignment.get()
-        inputBam = inputAlignment.getFileName()
-        outputBam = self._getAddReadGroupsBam()
-
-        self._validateBamFile(inputBam)
-
-        sampleName = self._getInputSampleName(inputAlignment) or 'sample'
-
-        args = (
-            'AddOrReplaceReadGroups '
-            'I={inputBam} '
-            'O={outputBam} '
-            'SO=coordinate '
-            'RGID=id '
-            'RGLB=library '
-            'RGPL=ILLUMINA '
-            'RGPU=machine '
-            'RGSM={sampleName}'
-        ).format(
-            inputBam=self._quote(inputBam),
-            outputBam=self._quote(outputBam),
-            sampleName=self._quote(sampleName)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'picard'
-        )
-
-        self._validateBamFile(outputBam)
-        self._appendCommand(self.PICARD_COMMAND.format(args))
+        alignment = self.inputAlignment.get()
+        self._runPicard([
+            'AddOrReplaceReadGroups', 'I=' + alignment.getFileName(),
+            'O=' + self._getAddReadGroupsBam(), 'SO=coordinate', self.CREATE_INDEX_OPTION,
+            'RGID=id', 'RGLB=library', 'RGPL=ILLUMINA', 'RGPU=machine',
+            'RGSM=' + self._getInputSampleName(alignment)
+        ], self._getAddReadGroupsBam())
 
     def markDuplicatesStep(self):
-        inputBam = self._getInputForMarkDuplicates()
-        outputBam = self._getMarkDuplicatesBam()
-        metricsFile = self._getMarkDuplicatesMetricsFile()
-
-        self._validateBamFile(inputBam)
-
-        args = (
-            'MarkDuplicates '
-            'I={inputBam} '
-            'O={outputBam} '
-            'M={metricsFile} '
-            'REMOVE_DUPLICATES=false '
-            'CREATE_INDEX=false '
-            'VALIDATION_STRINGENCY=SILENT'
-        ).format(
-            inputBam=self._quote(inputBam),
-            outputBam=self._quote(outputBam),
-            metricsFile=self._quote(metricsFile)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'picard'
-        )
-
-        self._validateBamFile(outputBam)
-
-        if not os.path.isfile(metricsFile):
-            raise RuntimeError(
-                'Picard duplication metrics file was not created: {}'
-                .format(metricsFile)
-            )
-
-        self._appendCommand(self.PICARD_COMMAND.format(args))
+        metrics = self._getMarkDuplicatesMetricsFile()
+        self.removeIndex(metrics)
+        self._runPicard([
+            'MarkDuplicates', 'I=' + self._getInputForMarkDuplicates(),
+            'O=' + self._getMarkDuplicatesBam(), 'M=' + metrics,
+            'REMOVE_DUPLICATES=false', self.CREATE_INDEX_OPTION, 'VALIDATION_STRINGENCY=SILENT'
+        ], self._getMarkDuplicatesBam())
+        self.checkNonempty(metrics, 'Picard duplication metrics')
 
     def reorderBamStep(self):
-        inputAlignment = self.inputAlignment.get()
-        inputBam = self._getInputForReorderSam()
-        outputBam = self._getReorderedBam()
-        referenceFasta = self._getReferenceFasta(inputAlignment)
-
-        self._validateBamFile(inputBam)
-
-        if not referenceFasta:
-            raise RuntimeError(
-                'ReorderSam requires a reference FASTA stored in the '
-                'input AlignmentFile.'
-            )
-
-        if not os.path.isfile(referenceFasta):
-            raise RuntimeError(
-                'Reference FASTA does not exist: {}'.format(referenceFasta)
-            )
-
-        # ReorderSam expects a sequence dictionary, not the FASTA itself.
-        referenceDict = os.path.splitext(referenceFasta)[0] + '.dict'
-        if not os.path.isfile(referenceDict):
-            referenceDict = self._getExtraPath('reference.dict')
-            dictArgs = 'CreateSequenceDictionary R={} O={}'.format(
-                self._quote(referenceFasta), self._quote(referenceDict)
-            )
-            Plugin.runCondaCommand(self, dictArgs, RNASEQ_DIC, 'picard')
-            self._appendCommand(self.PICARD_COMMAND.format(dictArgs))
-
-        if not os.path.isfile(referenceDict) or os.path.getsize(referenceDict) == 0:
-            raise RuntimeError('Reference sequence dictionary was not created: {}'.format(referenceDict))
-
-        args = (
-            'ReorderSam '
-            'I={inputBam} '
-            'O={outputBam} '
-            'SD={referenceDict} '
-            'CREATE_INDEX=false'
-        ).format(
-            inputBam=self._quote(inputBam),
-            outputBam=self._quote(outputBam),
-            referenceDict=self._quote(referenceDict)
-        )
-
-        Plugin.runCondaCommand(
-            self,
-            args,
-            RNASEQ_DIC,
-            'picard'
-        )
-
-        self._validateBamFile(outputBam)
-        self._appendCommand(self.PICARD_COMMAND.format(args))
+        dictionary = self.getSequenceDictionaryPath(self.getPreparedReference())
+        self.checkNonempty(dictionary, 'Reference sequence dictionary')
+        self._runPicard([
+            'ReorderSam', 'I=' + self._getInputForReorderSam(),
+            'O=' + self._getReorderedBam(), 'SD=' + dictionary, self.CREATE_INDEX_OPTION
+        ], self._getReorderedBam())
 
     # -------------------------------------------------------
-    # Final BAM
+    # Output
     # -------------------------------------------------------
 
     def indexFinalBamStep(self):
-        finalBam = self._getFinalBam()
-
-        self._validateBamFile(finalBam)
-
-        Plugin.runCondaCommand(
-            self,
-            'index {}'.format(self._quote(finalBam)),
-            RNASEQ_DIC,
-            'samtools'
-        )
-
-        baiFile = finalBam + '.bai'
-
-        if not os.path.isfile(baiFile):
-            raise RuntimeError(
-                'BAM index was not created: {}'.format(baiFile)
-            )
+        self.ensureBamIndex(self._getFinalBam())
 
     def createOutputStep(self):
-        inputAlignment = self.inputAlignment.get()
-
         finalBam = self._getFinalBam()
         finalBai = finalBam + '.bai'
-
-        outputAlignment = inputAlignment.clone()
-        outputAlignment.setFileName(finalBam)
-        outputAlignment.setIndexFile(finalBai)
-        outputAlignment.setIsIndexed(True)
-
-        if hasattr(outputAlignment, 'setIsSorted'):
-            outputAlignment.setIsSorted(True)
-
-        if hasattr(outputAlignment, 'setCommand'):
-            outputAlignment.setCommand(self._readCommandHistory())
-
-        self._defineOutputs(
-            outputAlignment=outputAlignment
-        )
-
-        self._defineSourceRelation(
-            self.inputAlignment,
-            outputAlignment
-        )
+        self.validateBamFile(finalBam)
+        if not self.isCurrentIndex(finalBai, finalBam) or not self.hasIndexSignature(finalBai, b'BAI\x01'):
+            raise RuntimeError('Final BAM index is missing, outdated or invalid: {}'.format(finalBai))
+        alignment = self.inputAlignment.get()
+        output = alignment.clone()
+        output.setFileName(finalBam)
+        output.setIndexFile(finalBai)
+        output.setIsIndexed(True)
+        output.setIsSorted(True)
+        output.setCommand(self.readCommandHistory())
+        if self.addReadGroups.get():
+            output.setSampleName(self._getInputSampleName(alignment))
+        self._defineOutputs(outputAlignment=output)
+        self._defineSourceRelation(self.inputAlignment, output)
 
     # -------------------------------------------------------
-    # BAM flow
+    # BAM flow and paths
     # -------------------------------------------------------
 
     def _getInputForMarkDuplicates(self):
-        if self.addReadGroups.get():
-            return self._getAddReadGroupsBam()
-
-        return self.inputAlignment.get().getFileName()
+        return (self._getAddReadGroupsBam() if self.addReadGroups.get()
+                else self.inputAlignment.get().getFileName())
 
     def _getInputForReorderSam(self):
-        if self.markDuplicates.get():
-            return self._getMarkDuplicatesBam()
-
-        if self.addReadGroups.get():
-            return self._getAddReadGroupsBam()
-
-        return self.inputAlignment.get().getFileName()
+        return self._getMarkDuplicatesBam() if self.markDuplicates.get() else self._getInputForMarkDuplicates()
 
     def _getFinalBam(self):
         if self.reorderBam.get():
             return self._getReorderedBam()
-
         if self.markDuplicates.get():
             return self._getMarkDuplicatesBam()
-
         if self.addReadGroups.get():
             return self._getAddReadGroupsBam()
-
-        return self.inputAlignment.get().getFileName()
-
-    # -------------------------------------------------------
-    # Paths
-    # -------------------------------------------------------
+        raise RuntimeError('Select at least one Picard operation.')
 
     def _getAddReadGroupsBam(self):
         return self._getExtraPath('add_read_groups.bam')
@@ -510,177 +464,60 @@ class ProtPicard(EMProtocol):
     def _getCommandFile(self):
         return self._getExtraPath('picard_commands.txt')
 
-    # -------------------------------------------------------
-    # Command history
-    # -------------------------------------------------------
-
-    def _appendCommand(self, command):
-        with open(self._getCommandFile(), 'a') as outputFile:
-            outputFile.write(command + '\n')
-
-    def _readCommandHistory(self):
-        commandFile = self._getCommandFile()
-
-        if not os.path.isfile(commandFile):
-            return ''
-
-        with open(commandFile) as inputFile:
-            commands = [
-                line.strip()
-                for line in inputFile
-                if line.strip()
-            ]
-
-        return ' && '.join(commands)
-
-    # -------------------------------------------------------
-    # Alignment metadata
-    # -------------------------------------------------------
-
     @staticmethod
     def _getInputSampleName(alignment):
-        if hasattr(alignment, 'getSampleName'):
-            return alignment.getSampleName()
-
-        return ''
-
-    @staticmethod
-    def _getReferenceFasta(alignment):
-        if hasattr(alignment, 'getReferenceFasta'):
-            return alignment.getReferenceFasta()
-
-        return None
+        return (alignment.getSampleName() or '').strip() or 'sample'
 
     # -------------------------------------------------------
-    # Validation helpers
+    # Validation and reporting
     # -------------------------------------------------------
-
-    @staticmethod
-    def _validateBamFile(bamFile):
-        if not bamFile:
-            raise RuntimeError('The BAM path is empty.')
-
-        if not os.path.isfile(bamFile):
-            raise RuntimeError(
-                'BAM file does not exist: {}'.format(bamFile)
-            )
-
-        if os.path.getsize(bamFile) == 0:
-            raise RuntimeError(
-                'BAM file is empty: {}'.format(bamFile)
-            )
-
-    @staticmethod
-    def _quote(value):
-        return shlex.quote(str(value))
 
     def _validate(self):
         errors = []
-
         alignment = self.inputAlignment.get()
-
         if alignment is None:
-            errors.append(
-                'An input AlignmentFile object is required.'
-            )
-            return errors
-
-        inputBam = alignment.getFileName()
-
-        if not inputBam:
-            errors.append(
-                'The input AlignmentFile does not contain a BAM path.'
-            )
-        elif not os.path.isfile(inputBam):
-            errors.append(
-                'The input BAM file does not exist: {}'
-                .format(inputBam)
-            )
-        elif os.path.getsize(inputBam) == 0:
-            errors.append(
-                'The input BAM file is empty: {}'
-                .format(inputBam)
-            )
-
-        if not (
-            self.addReadGroups.get()
-            or self.markDuplicates.get()
-            or self.reorderBam.get()
-        ):
-            errors.append(
-                'Select at least one Picard operation.'
-            )
-
+            return ['An input AlignmentFile object is required.']
+        try:
+            self.validateBamFile(alignment.getFileName())
+        except RuntimeError as error:
+            errors.append(str(error))
+        if alignment.getFormat() != 'BAM':
+            errors.append('Input alignment must be BAM.')
+        if not self._getSelectedOperationNames():
+            errors.append('Select at least one Picard operation.')
         if self.reorderBam.get():
-            referenceFasta = self._getReferenceFasta(alignment)
-
-            if not referenceFasta:
-                errors.append(
-                    'ReorderSam requires a reference FASTA stored in '
-                    'the input AlignmentFile.'
-                )
-            elif not os.path.isfile(referenceFasta):
-                errors.append(
-                    'The reference FASTA does not exist: {}'
-                    .format(referenceFasta)
-                )
-
+            try:
+                self.checkNonempty(self.getReferenceFasta(alignment), 'Reference FASTA')
+            except RuntimeError as error:
+                errors.append(str(error))
+        if self.addReadGroups.get():
+            sample = self._getInputSampleName(alignment)
+            if any(not 32 <= ord(character) <= 126 for character in sample):
+                errors.append('Sample name must contain only printable ASCII characters for SAM read groups.')
+        if self.numberOfThreads.get() < 1:
+            errors.append('At least one thread is required.')
         return errors
 
-    # -------------------------------------------------------
-    # Summary and methods
-    # -------------------------------------------------------
-
     def _getSelectedOperationNames(self):
-        operations = []
-
-        if self.addReadGroups.get():
-            operations.append('AddOrReplaceReadGroups')
-
-        if self.markDuplicates.get():
-            operations.append('MarkDuplicates')
-
-        if self.reorderBam.get():
-            operations.append('ReorderSam')
-
-        return operations
+        return [name for selected, name in (
+            (self.addReadGroups.get(), 'AddOrReplaceReadGroups'),
+            (self.markDuplicates.get(), 'MarkDuplicates'),
+            (self.reorderBam.get(), 'ReorderSam')
+        ) if selected]
 
     def _summary(self):
+        operations = ' -> '.join(self._getSelectedOperationNames())
         if not hasattr(self, 'outputAlignment'):
-            return [
-                'Selected Picard operations: {}'.format(
-                    ' -> '.join(self._getSelectedOperationNames())
-                )
-            ]
-
-        summary = [
-            'Picard operations: {}'.format(
-                ' -> '.join(self._getSelectedOperationNames())
-            ),
-            'Output BAM: {}'.format(
-                self.outputAlignment.getFileName()
-            )
-        ]
-
+            return ['Selected Picard operations: {}'.format(operations)]
+        summary = ['Picard operations: {}'.format(operations),
+                   'Output BAM: {}'.format(self.outputAlignment.getFileName())]
         if self.markDuplicates.get():
-            summary.append(
-                'Duplication metrics: {}'.format(
-                    self._getMarkDuplicatesMetricsFile()
-                )
-            )
-
+            summary.append('Duplication metrics: {}'.format(self._getMarkDuplicatesMetricsFile()))
         return summary
 
     def _methods(self):
         if not hasattr(self, 'outputAlignment'):
             return []
-
-        operations = ' followed by '.join(
-            self._getSelectedOperationNames()
-        )
-
-        return [
-            'The input BAM alignment was processed with Picard using {}. '
-            'The resulting BAM file was indexed with samtools.'
-            .format(operations)
-        ]
+        return ['The input BAM alignment was processed with Picard using {}. '
+                'The resulting BAM file was indexed with samtools.'
+                .format(' followed by '.join(self._getSelectedOperationNames()))]
