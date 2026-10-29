@@ -53,16 +53,67 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
             print("ERROR: The ligand pose file was not found.")
             return
 
+        ligandFile = os.path.abspath(ligandFile)
         extension = os.path.splitext(ligandFile)[1].lower()
-
-        if extension not in (".sdf", ".mol"):
-            print(
-                "ERROR: The atom-numbering preview supports SDF/MOL "
-                "files only. Received: {}".format(extension)
-            )
-            return
-
         project = protocol.getProject()
+
+        # Convert unsupported formats to SDF using the Scipion-chem
+        # Open Babel conversion script.
+        if extension not in (".sdf", ".mol"):
+            convertedFile = os.path.abspath(
+                project.getTmpPath(
+                    "ligand_atom_numbers_{}.sdf".format(
+                        protocol.getObjId()
+                    )
+                )
+            )
+
+            os.makedirs(os.path.dirname(convertedFile), exist_ok=True)
+
+            try:
+                args = '-i "{}" -of sdf -o "{}" -od "{}" --overWrite'.format(
+                    os.path.abspath(ligandFile),
+                    os.path.splitext(os.path.basename(convertedFile))[0],
+                    os.path.dirname(convertedFile)
+                )
+
+                pwchemPlugin.runScript(
+                    protocol,
+                    "obabel_IO.py",
+                    args,
+                    env=OPENBABEL_DIC,
+                    popen=True,
+                    cwd=os.path.dirname(ligandFile)
+                )
+
+                # obabel_IO.py may name the output from the input basename.
+                generatedFile = os.path.join(
+                    os.path.dirname(convertedFile),
+                    os.path.splitext(os.path.basename(ligandFile))[0]
+                    + ".sdf"
+                )
+
+                if os.path.isfile(generatedFile):
+                    if generatedFile != convertedFile:
+                        os.replace(generatedFile, convertedFile)
+
+                if (
+                    not os.path.isfile(convertedFile)
+                    or os.path.getsize(convertedFile) == 0
+                ):
+                    print(
+                        "ERROR: Open Babel did not generate the expected "
+                        "SDF file: {}".format(convertedFile)
+                    )
+                    return
+
+                ligandFile = convertedFile
+
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                print("ERROR: Could not convert ligand to SDF:", exc)
+                return
 
         imageFile = os.path.abspath(
             project.getTmpPath(
@@ -72,9 +123,9 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
             )
         )
 
-        args = "{} {}".format(
-            shlex.quote(os.path.abspath(ligandFile)),
-            shlex.quote(imageFile)
+        args = '{} "{}"'.format(
+            shlex.quote(ligandFile),
+            imageFile
         )
 
         try:
@@ -84,12 +135,15 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
                 args,
                 env=RDKIT_DIC,
                 popen=True,
-                cwd=os.path.dirname(os.path.abspath(ligandFile))
+                cwd=os.path.dirname(ligandFile)
             )
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            print("ERROR: Could not generate the ligand atom-number figure:", exc)
+            print(
+                "ERROR: Could not generate the ligand atom-number figure:",
+                exc
+            )
             return
 
         if not os.path.isfile(imageFile):

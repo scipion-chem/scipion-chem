@@ -43,7 +43,8 @@ from pwchem.objects import SmallMolecule, SetOfSmallMolecules
 from pwchem.utils import pdbqt2other
 from pwem.convert import cifToPdb
 from pwchem import Plugin as pwchemPlugin
-from pwchem.constants import RDKIT_DIC
+from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
+
 
 class ProtContactLigands(EMProtocol):
     """
@@ -664,8 +665,9 @@ class ProtContactLigands(EMProtocol):
 
         return filename
 
-    def _getMappedLigandAtomCoordinates(
-            self, referenceFile, poseFile):
+    def _getMappedLigandAtomCoordinates(self, referenceFile, poseFile):
+        referenceFile = self._getRDKitCompatibleLigandFile(referenceFile)
+        poseFile = self._getRDKitCompatibleLigandFile(poseFile)
 
         outputFile = self._getTmpPath('mapped_ligand_atom.json')
 
@@ -731,3 +733,41 @@ class ProtContactLigands(EMProtocol):
                 return molFile
 
         raise ValueError('Could not find a reference ligand file.')
+
+    def _getRDKitCompatibleLigandFile(self, ligandFile):
+        """Return an SDF file for CIF inputs, otherwise the original file."""
+
+        ext = os.path.splitext(ligandFile)[1].lower()
+
+        if ext not in ('.cif', '.mmcif'):
+            return ligandFile
+
+        outputFile = os.path.abspath(
+            self._getTmpPath(
+                os.path.splitext(os.path.basename(ligandFile))[0] + '.sdf'
+            )
+        )
+
+        if os.path.isfile(outputFile) and os.path.getsize(outputFile) > 0:
+            return outputFile
+
+        args = '-i "{}" -of sdf -o "{}" -od "{}" --overWrite'.format(
+            os.path.abspath(ligandFile),
+            os.path.splitext(os.path.basename(outputFile))[0],
+            os.path.dirname(outputFile)
+        )
+
+        pwchemPlugin.runScript(
+            self,
+            'obabel_IO.py',
+            args,
+            env=OPENBABEL_DIC,
+            cwd=os.path.dirname(os.path.abspath(ligandFile))
+        )
+
+        if not os.path.isfile(outputFile) or os.path.getsize(outputFile) == 0:
+            raise RuntimeError(
+                'Could not convert CIF ligand to SDF: {}'.format(ligandFile)
+            )
+
+        return outputFile
