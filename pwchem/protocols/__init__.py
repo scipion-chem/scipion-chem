@@ -41,6 +41,7 @@ from pwchem.protocols.VirtualDrugScreening.protocol_ligand_fingerprint_distance 
 from pwchem.protocols.VirtualDrugScreening.protocol_ligand_filter import ProtocolGeneralLigandFiltering
 from pwchem.protocols.VirtualDrugScreening.protocol_cluster_mols import ProtClusterMolecules
 from pwchem.protocols.VirtualDrugScreening.protocol_group_byAttribute import ProtChemGroupByAtt
+from pwchem.protocols.VirtualDrugScreening.protocol_filter_contacts import ProtContactLigands
 
 
 from pwchem.protocols.VirtualDrugScreening.protocol_define_manual_structROIs import ProtDefineStructROIs

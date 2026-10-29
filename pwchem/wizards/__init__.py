@@ -10,4 +10,5 @@ from .wizard_defaults import *
 from .wizard_show_file import *
 from .wizard_genomes import *
 from .wizard_add_mutations import *
+from .wizard_show_molecule import *
 
