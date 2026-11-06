@@ -115,8 +115,9 @@ class TestVCFRecordValidation(unittest.TestCase):
         self.writeVCF('3\t1\trs1\t<W>\tT\t.\t.\t.\n')
         with open(self.filename, 'rb') as handle:
             original = handle.read()
+        protocol = self.repairProtocol()
         with self.assertRaisesRegex(RuntimeError, 'no valid records'):
-            self.repairProtocol()._repairVCF(self.filename)
+            protocol._repairVCF(self.filename)
         with open(self.filename, 'rb') as handle:
             self.assertEqual(handle.read(), original)
         self.assertFalse(os.path.exists(self.filename + '.original'))
@@ -142,8 +143,9 @@ class TestVCFRecordValidation(unittest.TestCase):
             handle.truncate(os.path.getsize(self.filename) - 8)
         with open(self.filename, 'rb') as handle:
             original = handle.read()
+        protocol = self.repairProtocol()
         with self.assertRaisesRegex(RuntimeError, 'Invalid compressed VCF'):
-            self.repairProtocol()._repairVCF(self.filename)
+            protocol._repairVCF(self.filename)
         with open(self.filename, 'rb') as handle:
             self.assertEqual(handle.read(), original)
         self.assertFalse(os.path.exists(self.filename + '.original'))
@@ -161,9 +163,10 @@ class TestVCFRecordValidation(unittest.TestCase):
                 raise OSError('report publication failed')
             return replace(source, destination)
 
+        protocol = self.repairProtocol()
         with patch('os.replace', side_effect=failReport):
             with self.assertRaisesRegex(OSError, 'report publication failed'):
-                self.repairProtocol()._repairVCF(self.filename)
+                protocol._repairVCF(self.filename)
         with open(self.filename, 'rb') as handle:
             self.assertEqual(handle.read(), original)
         self.assertFalse(os.path.exists(self.filename + '.excluded.tsv'))

@@ -763,7 +763,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
         """Return selected species according to the selection mode."""
 
         if self.genomeSelection.get() == self.GENOME_COMMON:
-            selected = self._splitParameterValues(self.commonSpecies.get())
+            selected = self.splitParameterValues(self.commonSpecies.get())
         else:
             selected = parseCustomSpecies(self.customSpecies.get())
 
@@ -789,9 +789,9 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
     # ---------------------------------------------------------------------
 
     def _getSelectedEnsemblGenomes(self, species):
-        assemblies = self._expandParameterValues(self.assemblies.get(), len(species), 'assemblies')
+        assemblies = self.expandParameterValues(self.assemblies.get(), len(species), 'assemblies')
 
-        releases = self._expandParameterValues(self.releases.get(), len(species), 'releases')
+        releases = self.expandParameterValues(self.releases.get(), len(species), 'releases')
 
         genomes = []
 
@@ -822,7 +822,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
     def _getSelectedNcbiGenomes(self, species):
         """Build NCBI genome information for the selected species."""
 
-        assemblies = self._expandParameterValues(
+        assemblies = self.expandParameterValues(
             self.ncbiAssemblies.get(),
             len(species),
             'NCBI assemblies'
@@ -875,7 +875,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
 
                 if releaseValue.lower() == 'latest':
                     if latestRelease is None:
-                        latestRelease = self._getLatestEnsemblRelease()
+                        latestRelease = self.getLatestEnsemblRelease()
                     genomeInfo['release'] = str(latestRelease)
 
                 genomeInfo['assembly'] = self._resolveAssembly(genomeInfo['assembly'], genomeInfo)
@@ -1042,7 +1042,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
 
         for source in ('RefSeq', 'GenBank'):
             outputFile = self._getTmpPath(
-                '{}_{}_ncbi_summary.jsonl'.format(self._safeName(taxon), source.lower())
+                '{}_{}_ncbi_summary.jsonl'.format(self.safeName(taxon), source.lower())
             )
 
             if os.path.exists(outputFile):
@@ -1062,7 +1062,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
                 self.warning('NCBI {} lookup failed for {}: {}'.format(source, taxon, error))
                 continue
 
-            reports = self._readJsonLines(outputFile)
+            reports = self.readJsonLines(outputFile)
 
             if reports:
                 allReports = reports
@@ -1163,10 +1163,10 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
     # NCBI download
     # ---------------------------------------------------------------------
     def _canReuseNcbiDownload(self, genomeInfo):
-        if self.overwrite.get() or not self._isNonemptyFile(genomeInfo.get('fastaFile')):
+        if self.overwrite.get() or not self.isNonemptyFile(genomeInfo.get('fastaFile')):
             return False
         return (not self.downloadAnnotation.get()
-                or self._isNonemptyFile(genomeInfo.get('gtfFile'))
+                or self.isNonemptyFile(genomeInfo.get('gtfFile'))
                 or genomeInfo.get('annotationUnavailable', False))
 
     def _prepareNcbiDownloadPaths(self, outputDir, extractDir, zipFile):
@@ -1211,8 +1211,8 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
 
         outputDir = self._getExtraPath(
             'ncbi_{}_{}'.format(
-                self._safeName(genomeInfo['scientificName']),
-                self._safeName(queryName)
+                self.safeName(genomeInfo['scientificName']),
+                self.safeName(queryName)
             )
         )
 
@@ -1327,7 +1327,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
 
     @classmethod
     def _readNcbiAssemblyReport(cls, reportFile):
-        reports = cls._readJsonLines(reportFile)
+        reports = cls.readJsonLines(reportFile)
         if not reports:
             raise RuntimeError('NCBI assembly report is missing or empty: {}'.format(reportFile))
         if len(reports) != 1:
@@ -1372,7 +1372,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
             try:
                 Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'datasets')
 
-                if not self._isNonemptyFile(zipFile) or not zipfile.is_zipfile(zipFile):
+                if not self.isNonemptyFile(zipFile) or not zipfile.is_zipfile(zipFile):
                     raise RuntimeError(
                         'NCBI Datasets did not generate a valid archive: {}'.format(zipFile)
                     )
@@ -1405,7 +1405,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
 
 
     def _downloadAndUncompress(self, url, compressedFile, outputFile):
-        if not self.overwrite.get() and self._isNonemptyFile(outputFile):
+        if not self.overwrite.get() and self.isNonemptyFile(outputFile):
             return
 
         partialFile = outputFile + PARTIAL_FILE_SUFFIX
@@ -1415,7 +1415,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
                 shutil.copyfileobj(response, output)
             with gzip.open(compressedFile, 'rb') as inputFile, open(partialFile, 'wb') as output:
                 shutil.copyfileobj(inputFile, output)
-            if not self._isNonemptyFile(partialFile):
+            if not self.isNonemptyFile(partialFile):
                 raise RuntimeError('Downloaded file is empty: {}'.format(url))
             os.replace(partialFile, outputFile)
         except (OSError, EOFError) as error:
@@ -1485,7 +1485,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
             if (
                 genomeInfo.get('skipReason')
                 or not fastaFile
-                or not self._isNonemptyFile(fastaFile)
+                or not self.isNonemptyFile(fastaFile)
             ):
                 continue
 
@@ -1504,7 +1504,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
 
             genome.setFastaFile(genomeInfo['fastaFile'])
 
-            if self._isNonemptyFile(genomeInfo.get('gtfFile')):
+            if self.isNonemptyFile(genomeInfo.get('gtfFile')):
                 genome.setGtfFile(genomeInfo['gtfFile'])
 
             genome.setObjLabel(
@@ -1545,7 +1545,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
     # ---------------------------------------------------------------------
 
     def _validateEnsemblParameters(self, genomes, errors):
-        assemblies = self._splitParameterValues(self.assemblies.get())
+        assemblies = self.splitParameterValues(self.assemblies.get())
 
         if not assemblies:
             errors.append('Assemblies cannot be empty.')
@@ -1564,7 +1564,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
             except RuntimeError as error:
                 errors.append(str(error))
 
-        releases = self._splitParameterValues(self.releases.get())
+        releases = self.splitParameterValues(self.releases.get())
 
         if not releases:
             errors.append('Ensembl releases cannot be empty.')
@@ -1585,7 +1585,7 @@ class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
     # ---------------------------------------------------------------------
 
     def _validateNcbiParameters(self, genomes, errors):
-        assemblies = self._splitParameterValues(self.ncbiAssemblies.get())
+        assemblies = self.splitParameterValues(self.ncbiAssemblies.get())
 
         if not assemblies:
             errors.append('NCBI assemblies cannot be empty.')

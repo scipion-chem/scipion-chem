@@ -32,6 +32,9 @@ from pwchem.protocols import ProtPicard
 from .viewer_alignment import AlignmentViewer
 
 
+DUPLICATION_METRICS_TITLE = 'Picard duplication metrics'
+
+
 class PicardViewer(ProtocolViewer):
     """Open the final BAM in IGV and the optional MarkDuplicates report."""
 
@@ -63,14 +66,14 @@ class PicardViewer(ProtocolViewer):
         if not self.protocol.markDuplicates.get():
             raise RuntimeError('MarkDuplicates was not selected for this protocol.')
         path = self.protocol._getMarkDuplicatesMetricsFile()
-        AlignmentViewer._checkFile(path, 'Picard duplication metrics')
+        AlignmentViewer._checkFile(path, DUPLICATION_METRICS_TITLE)
         return path
 
     def _showMetricsFile(self, paramName=None):
         try:
             metrics = self.protocol._readDuplicationMetrics(self._getMetricsPath())
         except (OSError, RuntimeError, ValueError) as error:
-            return [self.errorMessage(str(error), 'Picard duplication metrics')]
+            return [self.errorMessage(str(error), DUPLICATION_METRICS_TITLE)]
         labels = {
             'LIBRARY': 'Library',
             'UNPAIRED_READS_EXAMINED': 'Unpaired reads examined',
@@ -87,7 +90,7 @@ class PicardViewer(ProtocolViewer):
         rows = [tuple(self._formatMetric(column, row[column]) for column in columns)
                 for row in metrics]
         TableView(headerList=[labels.get(column, column) for column in columns], dataList=rows,
-                  title='Picard duplication metrics',
+                  title=DUPLICATION_METRICS_TITLE,
                   mesg='One row per library. Duplicates are marked, not removed. '
                        'Optical duplicate pairs are included in duplicate pairs. '
                        'Read counts and pair counts have different units.',

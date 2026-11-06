@@ -508,8 +508,8 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
         ) if selected]
 
     @staticmethod
-    def _readDuplicationMetrics(path):
-        """Read library metrics, excluding command comments and histograms."""
+    def readDuplicationTableLines(path):
+        """Read only the DuplicationMetrics table, excluding histograms."""
         with open(path) as handle:
             for line in handle:
                 if line.startswith('## METRICS CLASS') and line.rstrip().endswith('.DuplicationMetrics'):
@@ -521,21 +521,29 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
                 if not line.strip() or line.startswith('#'):
                     break
                 lines.append(line)
+        return lines
+
+    @staticmethod
+    def parseDuplicationMetricRow(row):
+        if None in row or any(value is None for value in row.values()):
+            raise ValueError('Malformed Picard duplication metrics row.')
+        try:
+            fraction = float(row['PERCENT_DUPLICATION'])
+        except (TypeError, ValueError) as error:
+            raise ValueError('Invalid Picard duplication fraction.') from error
+        if not math.isfinite(fraction) or not 0 <= fraction <= 1:
+            raise ValueError('Picard duplication fraction must be between 0 and 1.')
+        row['PERCENT_DUPLICATION'] = fraction
+        return row
+
+    @classmethod
+    def _readDuplicationMetrics(cls, path):
+        """Read and validate each library's duplication metrics."""
+        lines = cls.readDuplicationTableLines(path)
         table = csv.DictReader(lines, delimiter='\t')
         if not {'LIBRARY', 'PERCENT_DUPLICATION'}.issubset(table.fieldnames or []):
             raise ValueError('Missing library or duplication columns in Picard metrics.')
-        metrics = []
-        for row in table:
-            if None in row or any(value is None for value in row.values()):
-                raise ValueError('Malformed Picard duplication metrics row.')
-            try:
-                fraction = float(row['PERCENT_DUPLICATION'])
-            except (TypeError, ValueError) as error:
-                raise ValueError('Invalid Picard duplication fraction.') from error
-            if not math.isfinite(fraction) or not 0 <= fraction <= 1:
-                raise ValueError('Picard duplication fraction must be between 0 and 1.')
-            row['PERCENT_DUPLICATION'] = fraction
-            metrics.append(row)
+        metrics = [cls.parseDuplicationMetricRow(row) for row in table]
         if not metrics:
             raise ValueError('Picard duplication metrics contain no library rows.')
         return metrics

@@ -836,7 +836,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
 
     def _getSelectedSpecies(self):
         if self.speciesSelection.get() == self.SPECIES_COMMON:
-            selected = self._splitParameterValues(self.commonSpecies.get())
+            selected = self.splitParameterValues(self.commonSpecies.get())
         else:
             selected = parseCustomSpecies(self.customSpecies.get())
 
@@ -862,9 +862,9 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
     # ---------------------------------------------------------------------
 
     def _getSelectedEnsemblVCFs(self, species):
-        assemblies = self._expandParameterValues(self.assemblies.get(), len(species), 'assemblies')
+        assemblies = self.expandParameterValues(self.assemblies.get(), len(species), 'assemblies')
 
-        releases = self._expandParameterValues(self.releases.get(), len(species), 'releases')
+        releases = self.expandParameterValues(self.releases.get(), len(species), 'releases')
 
         vcfInfo = []
 
@@ -898,7 +898,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
     # ---------------------------------------------------------------------
 
     def _getSelectedNcbiVCFs(self, species):
-        assemblies = self._expandParameterValues(
+        assemblies = self.expandParameterValues(
             self.ncbiAssemblies.get(),
             len(species),
             'NCBI assemblies'
@@ -951,7 +951,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
                 if info['release'].lower() == 'latest':
                     if latestRelease is None:
                         try:
-                            latestRelease = self._getLatestEnsemblRelease()
+                            latestRelease = self.getLatestEnsemblRelease()
                         except RuntimeError as error:
                             self.warning(
                                 'Could not resolve latest Ensembl release: {}. '
@@ -1121,7 +1121,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
         """Retrieve NCBI assembly reports for one taxon and source."""
 
         outputFile = self._getTmpPath(
-            '{}_{}_ncbi_summary.jsonl'.format(self._safeName(taxon), assemblySource.lower())
+            '{}_{}_ncbi_summary.jsonl'.format(self.safeName(taxon), assemblySource.lower())
         )
 
         arguments = (
@@ -1143,7 +1143,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
             os.remove(outputFile)
         try:
             Plugin.runCondaCommand(self, arguments, RNASEQ_DIC, 'datasets')
-            return self._readJsonLines(outputFile)
+            return self.readJsonLines(outputFile)
         except Exception as error:
             raise RuntimeError('Could not retrieve NCBI assembly metadata: {}'.format(error)) from error
 
@@ -1151,7 +1151,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
         cache = getattr(self, '_ncbiAssemblyReports', {})
         if accession in cache:
             return cache[accession]
-        outputFile = self._getTmpPath('{}_assembly.jsonl'.format(self._safeName(accession)))
+        outputFile = self._getTmpPath('{}_assembly.jsonl'.format(self.safeName(accession)))
         arguments = 'summary genome accession {} --as-json-lines > {}'.format(
             shlex.quote(accession), shlex.quote(outputFile)
         )
@@ -1241,7 +1241,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
                 self, arguments, RNASEQ_DIC, 'bcftools'
             )
 
-            if not self._isNonemptyFile(temporaryVCF):
+            if not self.isNonemptyFile(temporaryVCF):
                 raise RuntimeError(
                     'bcftools did not generate the combined VCF.'
                 )
@@ -1575,7 +1575,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
         """Download one VCF from the NCBI dbSNP latest release."""
 
         outputDir = self._getExtraPath(
-            'ncbi_{}_{}'.format(self._safeName(info['scientificName']), accession)
+            'ncbi_{}_{}'.format(self.safeName(info['scientificName']), accession)
         )
 
         self._downloadIndexedVCF(
@@ -1601,8 +1601,8 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
 
         outputDir = self._getExtraPath(
             'eva_{}_{}_release-{}'.format(
-                self._safeName(info['scientificName']),
-                self._safeName(evaAssembly),
+                self.safeName(info['scientificName']),
+                self.safeName(evaAssembly),
                 self.EVA_RELEASE
             )
         )
@@ -2055,7 +2055,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
 
     def _downloadFile(self, url, outputFile):
         """Publish a download only after the transfer finishes."""
-        if not self.overwrite.get() and self._isNonemptyFile(outputFile):
+        if not self.overwrite.get() and self.isNonemptyFile(outputFile):
             return
 
         partialFile = outputFile + '.part'
@@ -2064,7 +2064,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
                 expectedSize = response.headers.get('Content-Length')
                 with open(partialFile, 'wb') as output:
                     shutil.copyfileobj(response, output)
-            if not self._isNonemptyFile(partialFile):
+            if not self.isNonemptyFile(partialFile):
                 raise RuntimeError('Downloaded file is empty: {}'.format(url))
             if expectedSize is not None and os.path.getsize(partialFile) != int(expectedSize):
                 raise RuntimeError('Incomplete download: {}'.format(url))
@@ -2100,15 +2100,8 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
                 break
         raise RuntimeError('VCF column header is missing or invalid: {}'.format(filename))
 
-    @classmethod
-    def _validateVCFRecords(cls, filename, validOutput=None, rejectedOutput=None):
-        """Check mandatory VCF fields, optionally writing an audited repair.
-
-        Symbolic and breakend ALT alleles are allowed, but REF must always
-        contain explicit A/C/G/T/N bases. INFO/FORMAT semantics and reference
-        concordance require separate, reference-aware validation.
-        """
-        assemblies = cls._validateVCFHeader(filename)
+    @staticmethod
+    def vcfAllelePatterns():
         bases = re.compile(r'[ACGTNacgtn]+')
         symbolic = re.compile(r'<[^<>\s,]+>')
         breakend = re.compile(
@@ -2116,71 +2109,110 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
             r'([\[\]])[^\[\]\s]+:[0-9]+\2[ACGTNacgtn]+|'
             r'\.[ACGTNacgtn]+|[ACGTNacgtn]+\.)'
         )
+        return bases, symbolic, breakend
+
+    @staticmethod
+    def vcfAltError(value, patterns):
+        alleles = value.split(',')
+        reason = None
+        if value != '.' and '.' in alleles:
+            reason = 'missing ALT cannot be combined with other alleles'
+        bases, symbolic, breakend = patterns
+        for allele in alleles:
+            if not (allele in ('.', '*') or bases.fullmatch(allele)
+                    or symbolic.fullmatch(allele) or breakend.fullmatch(allele)):
+                return 'invalid ALT {!r}'.format(allele)
+        return reason
+
+    @classmethod
+    def vcfRecordError(cls, columns, expectedColumns, patterns):
+        if len(columns) != expectedColumns:
+            return 'expected {} columns, found {}'.format(expectedColumns, len(columns))
+        if not columns[0] or any(character.isspace() for character in columns[0]):
+            return 'invalid CHROM'
+        if not columns[1].isascii() or not columns[1].isdigit():
+            return 'POS must be a non-negative integer'
+        if not patterns[0].fullmatch(columns[3]):
+            return 'invalid REF {!r}; expected A/C/G/T/N bases'.format(columns[3])
+        return cls.vcfAltError(columns[4], patterns)
+
+    @classmethod
+    def iterCheckedVCFLines(cls, handle, filename):
+        """Yield line metadata, separating headers from checked variant records."""
+        patterns = cls.vcfAllelePatterns()
         expectedColumns = None
+        for number, line in enumerate(handle, 1):
+            if line.startswith('##') and expectedColumns is None:
+                yield number, line, None, False
+                continue
+            columns = line.rstrip('\r\n').split('\t')
+            if line.startswith('#CHROM\t') and expectedColumns is None:
+                expectedColumns = len(columns)
+                if expectedColumns == 9:
+                    raise RuntimeError('Invalid VCF header in {}: FORMAT has no samples.'.format(filename))
+                yield number, line, None, False
+                continue
+            yield number, line, cls.vcfRecordError(columns, expectedColumns, patterns), True
+
+    @staticmethod
+    def raiseVCFRecordError(filename, number, line, reason):
+        columns = line.rstrip('\r\n').split('\t')
+        location = ':'.join(columns[:2])
+        variant = columns[2] if len(columns) > 2 else '?'
+        raise RuntimeError(
+            'Malformed VCF {} at line {} ({}; ID={}): {}. '
+            'No records were filtered; use a corrected source VCF.'
+            .format(filename, number, location, variant, reason)
+        )
+
+    @staticmethod
+    def openVCFRepairOutputs(stack, validOutput, rejectedOutput):
+        if validOutput is None:
+            return None, None
+        from Bio.bgzf import BgzfWriter
+        output = stack.enter_context(BgzfWriter(validOutput, 'wb'))
+        report = stack.enter_context(open(rejectedOutput, 'w'))
+        writer = csv.writer(report, delimiter='\t', lineterminator='\n')
+        writer.writerow(['line', 'reason', 'original_record'])
+        return output, writer
+
+    @classmethod
+    def processVCFRecords(cls, handle, filename, output, reportWriter):
         validCount = rejectedCount = 0
+        for number, line, reason, isRecord in cls.iterCheckedVCFLines(handle, filename):
+            if reason:
+                if reportWriter is None:
+                    cls.raiseVCFRecordError(filename, number, line, reason)
+                reportWriter.writerow([number, reason, line.rstrip('\r\n')])
+                rejectedCount += 1
+                continue
+            if isRecord:
+                validCount += 1
+            if output is not None:
+                output.write((line.rstrip('\r\n') + '\n').encode('utf-8'))
+        return validCount, rejectedCount
+
+    @classmethod
+    def _validateVCFRecords(cls, filename, validOutput=None, rejectedOutput=None):
+        """Check mandatory VCF fields, optionally writing an audited repair.
+
+        REF must contain explicit A/C/G/T/N bases; symbolic and breakend ALT
+        alleles are allowed. INFO/FORMAT semantics and reference concordance
+        require separate, reference-aware validation.
+        """
+        assemblies = cls._validateVCFHeader(filename)
         try:
             with ExitStack() as stack:
                 handle = stack.enter_context(gzip.open(filename, 'rt'))
-                output = report = None
-                if validOutput is not None:
-                    from Bio.bgzf import BgzfWriter
-                    output = stack.enter_context(BgzfWriter(validOutput, 'wb'))
-                    report = stack.enter_context(open(rejectedOutput, 'w'))
-                    reportWriter = csv.writer(report, delimiter='\t', lineterminator='\n')
-                    reportWriter.writerow(['line', 'reason', 'original_record'])
-                for lineNumber, line in enumerate(handle, 1):
-                    if line.startswith('##') and expectedColumns is None:
-                        if output is not None:
-                            output.write(line.encode('utf-8'))
-                        continue
-                    columns = line.rstrip('\r\n').split('\t')
-                    if line.startswith('#CHROM\t') and expectedColumns is None:
-                        expectedColumns = len(columns)
-                        if expectedColumns == 9:
-                            raise RuntimeError('Invalid VCF header in {}: FORMAT has no samples.'
-                                               .format(filename))
-                        if output is not None:
-                            output.write(line.encode('utf-8'))
-                        continue
-                    reason = None
-                    if len(columns) != expectedColumns:
-                        reason = 'expected {} columns, found {}'.format(expectedColumns, len(columns))
-                    elif not columns[0] or any(c.isspace() for c in columns[0]):
-                        reason = 'invalid CHROM'
-                    elif not columns[1].isascii() or not columns[1].isdigit():
-                        reason = 'POS must be a non-negative integer'
-                    elif not bases.fullmatch(columns[3]):
-                        reason = 'invalid REF {!r}; expected A/C/G/T/N bases'.format(columns[3])
-                    else:
-                        if columns[4] != '.' and '.' in columns[4].split(','):
-                            reason = 'missing ALT cannot be combined with other alleles'
-                        for allele in columns[4].split(','):
-                            if not (allele in ('.', '*') or bases.fullmatch(allele)
-                                    or symbolic.fullmatch(allele) or breakend.fullmatch(allele)):
-                                reason = 'invalid ALT {!r}'.format(allele)
-                                break
-                    if reason:
-                        if report is not None:
-                            reportWriter.writerow([lineNumber, reason, line.rstrip('\r\n')])
-                            rejectedCount += 1
-                            continue
-                        location = ':'.join(columns[:2])
-                        variant = columns[2] if len(columns) > 2 else '?'
-                        raise RuntimeError(
-                            'Malformed VCF {} at line {} ({}; ID={}): {}. '
-                            'No records were filtered; use a corrected source VCF.'
-                            .format(filename, lineNumber, location, variant, reason)
-                        )
-                    validCount += 1
-                    if output is not None:
-                        output.write((line.rstrip('\r\n') + '\n').encode('utf-8'))
+                output, reportWriter = cls.openVCFRepairOutputs(stack, validOutput, rejectedOutput)
+                validCount, rejectedCount = cls.processVCFRecords(handle, filename, output, reportWriter)
         except (OSError, EOFError, UnicodeError, zlib.error) as error:
             raise RuntimeError('Invalid compressed VCF {}: {}'.format(filename, error)) from error
-        if validOutput is not None:
-            if not validCount:
-                raise RuntimeError('VCF repair would leave no valid records: {}'.format(filename))
-            return rejectedCount
-        return assemblies
+        if validOutput is None:
+            return assemblies
+        if not validCount:
+            raise RuntimeError('VCF repair would leave no valid records: {}'.format(filename))
+        return rejectedCount
 
     def _repairVCF(self, filename):
         """Replace malformed records with an audited, BGZF-compressed copy."""
@@ -2444,8 +2476,8 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
         outputVCFs.setObjLabel('Known variants VCFs')
 
         for info in vcfsInfo:
-            if (info.get('error') or not self._isNonemptyFile(info.get('vcfFile'))
-                    or not self._isNonemptyFile(info.get('indexFile'))):
+            if (info.get('error') or not self.isNonemptyFile(info.get('vcfFile'))
+                    or not self.isNonemptyFile(info.get('indexFile'))):
                 continue
 
             vcf = VCFFile(filename=info['vcfFile'])
@@ -2481,9 +2513,9 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
     # =====================================================================
 
     def _validateEnsemblParams(self, species, errors):
-        assemblies = self._splitParameterValues(self.assemblies.get())
+        assemblies = self.splitParameterValues(self.assemblies.get())
 
-        releases = self._splitParameterValues(self.releases.get())
+        releases = self.splitParameterValues(self.releases.get())
 
         self._validateParameterCount(assemblies, species, 'Assemblies', errors)
 
@@ -2514,7 +2546,7 @@ class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
                 )
 
     def _validateNcbiParams(self, species, errors):
-        assemblies = self._splitParameterValues(self.ncbiAssemblies.get())
+        assemblies = self.splitParameterValues(self.ncbiAssemblies.get())
 
         self._validateParameterCount(assemblies, species, 'NCBI assemblies', errors)
 

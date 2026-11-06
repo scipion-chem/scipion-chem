@@ -44,6 +44,9 @@ from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import AlignmentFile
 
 
+BASH_EXECUTABLE = '/bin/bash'
+
+
 class AlignmentViewer(Viewer):
     """Open a SAM/BAM/CRAM alignment file in IGV.
 
@@ -169,7 +172,7 @@ class AlignmentViewer(Viewer):
 
         with tempfile.NamedTemporaryFile(prefix='scipion_igv_', suffix='.log', delete=False) as log:
             logPath = log.name
-            process = subprocess.Popen(command, shell=True, executable='/bin/bash',
+            process = subprocess.Popen(command, shell=True, executable=BASH_EXECUTABLE,
                                        env=Plugin.getEnviron(), stdout=log, stderr=subprocess.STDOUT,
                                        start_new_session=True)
         try:
@@ -202,7 +205,7 @@ class AlignmentViewer(Viewer):
             pass
 
     def _runPreparationCommand(self, command, job):
-        process = subprocess.Popen(command, shell=True, executable='/bin/bash',
+        process = subprocess.Popen(command, shell=True, executable=BASH_EXECUTABLE,
                                    env=Plugin.getEnviron(), stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True, start_new_session=True)
         while True:
@@ -361,7 +364,7 @@ class AlignmentViewer(Viewer):
             output = subprocess.check_output(
                 command,
                 shell=True,
-                executable='/bin/bash',
+                executable=BASH_EXECUTABLE,
                 text=True,
                 stderr=subprocess.DEVNULL,
                 env=Plugin.getEnviron(),

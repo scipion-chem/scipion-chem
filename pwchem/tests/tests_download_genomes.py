@@ -40,35 +40,35 @@ class TestGenomicResourceHelpers(unittest.TestCase):
     def testSharedMethodsAreInherited(self):
         for cls in (ProtDownloadGenomes, ProtDownloadVCF):
             self.assertTrue(issubclass(cls, GenomicResourceMixin))
-            self.assertEqual(cls._splitParameterValues(' a; b,, '), ['a', 'b'])
-            self.assertEqual(cls._expandParameterValues('Latest', 2, 'releases'), ['Latest', 'Latest'])
-            self.assertEqual(cls._expandParameterValues('1;2', 2, 'releases'), ['1', '2'])
+            self.assertEqual(cls.splitParameterValues(' a; b,, '), ['a', 'b'])
+            self.assertEqual(cls.expandParameterValues('Latest', 2, 'releases'), ['Latest', 'Latest'])
+            self.assertEqual(cls.expandParameterValues('1;2', 2, 'releases'), ['1', '2'])
             with self.assertRaises(ValueError):
-                cls._expandParameterValues('', 2, 'releases')
+                cls.expandParameterValues('', 2, 'releases')
             with self.assertRaises(ValueError):
-                cls._expandParameterValues('1;2;3', 2, 'releases')
+                cls.expandParameterValues('1;2;3', 2, 'releases')
 
     def testReleaseUsesProviderRequest(self):
         for cls in (ProtDownloadGenomes, ProtDownloadVCF):
             protocol = cls()
             with patch.object(protocol, '_requestJson', return_value={'releases': ['99', '116', '100']}) as request:
-                self.assertEqual(protocol._getLatestEnsemblRelease(), 116)
+                self.assertEqual(protocol.getLatestEnsemblRelease(), 116)
                 request.assert_called_once_with(protocol.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
             with patch.object(protocol, '_requestJson', return_value={}):
                 with self.assertRaises(RuntimeError):
-                    protocol._getLatestEnsemblRelease()
+                    protocol.getLatestEnsemblRelease()
 
     def testLocalMetadataAndFileChecks(self):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, 'metadata.jsonl')
-            self.assertEqual(GenomicResourceMixin._readJsonLines(path), [])
-            self.assertFalse(GenomicResourceMixin._isNonemptyFile(path))
+            self.assertEqual(GenomicResourceMixin.readJsonLines(path), [])
+            self.assertFalse(GenomicResourceMixin.isNonemptyFile(path))
             with open(path, 'w') as handle:
                 handle.write('{"accession": "GCF_1.1"}\n\n{"accession": "GCF_2.1"}\n')
-            self.assertEqual(GenomicResourceMixin._readJsonLines(path),
+            self.assertEqual(GenomicResourceMixin.readJsonLines(path),
                              [{'accession': 'GCF_1.1'}, {'accession': 'GCF_2.1'}])
-            self.assertTrue(GenomicResourceMixin._isNonemptyFile(path))
-            self.assertEqual(GenomicResourceMixin._safeName('Homo sapiens/GRCh38'), 'Homo_sapiens_GRCh38')
+            self.assertTrue(GenomicResourceMixin.isNonemptyFile(path))
+            self.assertEqual(GenomicResourceMixin.safeName('Homo sapiens/GRCh38'), 'Homo_sapiens_GRCh38')
 
 
 class TestDownloadGenomes(BaseTest):

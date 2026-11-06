@@ -168,12 +168,12 @@ class GenomicResourceMixin:
     """
 
     @staticmethod
-    def _splitParameterValues(value):
+    def splitParameterValues(value):
         return [item.strip() for item in re.split('[;,]', value or '') if item.strip()]
 
     @classmethod
-    def _expandParameterValues(cls, value, count, parameterName):
-        values = cls._splitParameterValues(value)
+    def expandParameterValues(cls, value, count, parameterName):
+        values = cls.splitParameterValues(value)
         if not values:
             raise ValueError('{} cannot be empty.'.format(parameterName.capitalize()))
         if len(values) == 1:
@@ -183,7 +183,7 @@ class GenomicResourceMixin:
                              .format(parameterName))
         return values
 
-    def _getLatestEnsemblRelease(self):
+    def getLatestEnsemblRelease(self):
         data = self._requestJson(self.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
         releases = data.get('releases', [])
         if not releases:
@@ -191,16 +191,16 @@ class GenomicResourceMixin:
         return max(int(release) for release in releases)
 
     @staticmethod
-    def _readJsonLines(filename):
+    def readJsonLines(filename):
         if not os.path.exists(filename):
             return []
         with open(filename) as handle:
             return [json.loads(line) for line in handle if line.strip()]
 
     @staticmethod
-    def _isNonemptyFile(path):
+    def isNonemptyFile(path):
         return bool(path) and os.path.isfile(path) and os.path.getsize(path) > 0
 
     @staticmethod
-    def _safeName(value):
+    def safeName(value):
         return re.sub('[^A-Za-z0-9_.-]+', '_', str(value))
