@@ -39,6 +39,8 @@ from .tests_download_genomes import *
 from .tests_download_vcf import *
 from .tests_fastp import *
 from .tests_gatk import *
+from .tests_gatk_mutect2 import *
+from .tests_cufflinks import *
 from .tests_import_fastq import *
 from .tests_import_genomes import *
 from .tests_import_vcf import *
@@ -46,6 +48,9 @@ from .tests_molecular_dynamics import *
 from .tests_picard import *
 from .tests_structROI_voting import *
 from .tests_rnaseq_align import *
+from .tests_bcftools_isec import *
+from .tests_vep import *
+from .tests_vep_to_aminoacids import *
 from enum import Enum
 
 class DataSetMDSystem(Enum):

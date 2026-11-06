@@ -2185,7 +2185,9 @@ class FastqFile(data.EMFile):
     if self.isPaired() and self.hasFileName2():
       files.append(self.getFileName2())
 
-    return [fn for fn in files if fn]
+    files.extend(self.getHtmlFiles())
+    files.append(self.getFastpJson())
+    return list(dict.fromkeys(fn for fn in files if fn))
 
   # -------------------------------------------------------
   # FastQC
@@ -2259,7 +2261,7 @@ class FastqFile(data.EMFile):
 
     htmlFiles.extend(self.getFastqcFiles())
 
-    return htmlFiles
+    return list(dict.fromkeys(htmlFiles))
 
   # -------------------------------------------------------
   # Representation
@@ -2301,6 +2303,8 @@ class AlignmentFile(data.EMFile):
     self._referenceGtf = pwobj.String(kwargs.get('referenceGtf', None))
     self._referenceName = pwobj.String(kwargs.get('referenceName', None))
     self._referenceSource = pwobj.String(kwargs.get('referenceSource', None))
+    self._referenceScientificName = pwobj.String(kwargs.get('referenceScientificName', None))
+    self._referenceAssembly = pwobj.String(kwargs.get('referenceAssembly', None))
 
     self._isSorted = pwobj.Boolean(kwargs.get('isSorted', False))
     self._isIndexed = pwobj.Boolean(kwargs.get('isIndexed', False))
@@ -2386,6 +2390,18 @@ class AlignmentFile(data.EMFile):
 
   def hasReferenceSource(self):
     return bool(self.getReferenceSource())
+
+  def getReferenceScientificName(self):
+    return self._referenceScientificName.get()
+
+  def setReferenceScientificName(self, value):
+    self._referenceScientificName.set(value)
+
+  def getReferenceAssembly(self):
+    return self._referenceAssembly.get()
+
+  def setReferenceAssembly(self, value):
+    self._referenceAssembly.set(value)
 
   # Status
   def isSorted(self):
@@ -2518,15 +2534,12 @@ class AlignmentFile(data.EMFile):
     return bool(self.getCommand())
 
   def isComplete(self):
-    if not os.path.exists(self.getFileName()):
+    filename = self.getFileName()
+    if not filename or not os.path.isfile(filename) or os.path.getsize(filename) == 0:
       return False
-
-    if self.getFormat().upper() in ('BAM', 'CRAM'):
-      return (
-              self.hasIndexFile() and
-              os.path.exists(self.getIndexFile())
-      )
-
+    if (self.getFormat() or '').upper() in ('BAM', 'CRAM'):
+      index = self.getIndexFile()
+      return bool(index and os.path.isfile(index) and os.path.getsize(index) > 0)
     return True
 
   def getStatistics(self):
@@ -2554,7 +2567,8 @@ class AlignmentFile(data.EMFile):
     if self.hasLogFile():
       files.append(self.getLogFile())
 
-    return files
+    files.extend([self.getReferenceFasta(), self.getReferenceGtf()])
+    return list(dict.fromkeys(path for path in files if path))
 
   def getSummary(self):
     return {
@@ -2684,6 +2698,10 @@ class Genome(data.EMObject):
       return os.path.basename(self.getGtfFile())
     return None
 
+  def getFiles(self):
+    """Return the reference files associated with this genome."""
+    return list(dict.fromkeys(path for path in (self.getFastaFile(), self.getGtfFile()) if path))
+
   # -------------------------------------------------------
   # Representation
   # -------------------------------------------------------
@@ -2736,6 +2754,211 @@ class SetOfGenomes(data.EMSet):
 
     return labels
 
+class RNASeqExpression(data.EMFile):
+  """Native Cufflinks/Cuffdiff expression tables and their analysis metadata.
+
+  The primary file is isoforms.fpkm_tracking. Related paths keep the
+  native output schema; condition labels are separate from sample names.
+  """
+
+  def __init__(self, filename=None, **kwargs):
+    super().__init__(filename=filename, **kwargs)
+    self._program = pwobj.String(kwargs.get('program', None))
+    self._sampleName = pwobj.String(kwargs.get('sampleName', None))
+    self._comparisonSample = pwobj.String(kwargs.get('comparisonSample', None))
+    self._sampleLabel = pwobj.String(kwargs.get('sampleLabel', None))
+    self._comparisonLabel = pwobj.String(kwargs.get('comparisonLabel', None))
+    self._referenceGtf = pwobj.String(kwargs.get('referenceGtf', None))
+    self._referenceFasta = pwobj.String(kwargs.get('referenceFasta', None))
+    self._scientificName = pwobj.String(kwargs.get('scientificName', None))
+    self._assembly = pwobj.String(kwargs.get('assembly', None))
+    self._genesFile = pwobj.String(kwargs.get('genesFile', None))
+    self._transcriptsFile = pwobj.String(kwargs.get('transcriptsFile', None))
+    self._isoformDiffFile = pwobj.String(kwargs.get('isoformDiffFile', None))
+    self._geneDiffFile = pwobj.String(kwargs.get('geneDiffFile', None))
+    self._command = pwobj.String(kwargs.get('command', None))
+
+  def getProgram(self):
+    return self._program.get()
+
+  def setProgram(self, value):
+    self._program.set(value)
+
+  def getSampleName(self):
+    return self._sampleName.get()
+
+  def setSampleName(self, value):
+    self._sampleName.set(value)
+
+  def getComparisonSample(self):
+    return self._comparisonSample.get()
+
+  def setComparisonSample(self, value):
+    self._comparisonSample.set(value)
+
+  def getSampleLabel(self):
+    return self._sampleLabel.get()
+
+  def setSampleLabel(self, value):
+    self._sampleLabel.set(value)
+
+  def getComparisonLabel(self):
+    return self._comparisonLabel.get()
+
+  def setComparisonLabel(self, value):
+    self._comparisonLabel.set(value)
+
+  def getReferenceGtf(self):
+    return self._referenceGtf.get()
+
+  def setReferenceGtf(self, value):
+    self._referenceGtf.set(value)
+
+  def getReferenceFasta(self):
+    return self._referenceFasta.get()
+
+  def setReferenceFasta(self, value):
+    self._referenceFasta.set(value)
+
+  def getScientificName(self):
+    return self._scientificName.get()
+
+  def setScientificName(self, value):
+    self._scientificName.set(value)
+
+  def getAssembly(self):
+    return self._assembly.get()
+
+  def setAssembly(self, value):
+    self._assembly.set(value)
+
+  def getGenesFile(self):
+    return self._genesFile.get()
+
+  def setGenesFile(self, value):
+    self._genesFile.set(value)
+
+  def getTranscriptsFile(self):
+    return self._transcriptsFile.get()
+
+  def setTranscriptsFile(self, value):
+    self._transcriptsFile.set(value)
+
+  def getIsoformDiffFile(self):
+    return self._isoformDiffFile.get()
+
+  def setIsoformDiffFile(self, value):
+    self._isoformDiffFile.set(value)
+
+  def getGeneDiffFile(self):
+    return self._geneDiffFile.get()
+
+  def setGeneDiffFile(self, value):
+    self._geneDiffFile.set(value)
+
+  def getCommand(self):
+    return self._command.get()
+
+  def setCommand(self, value):
+    self._command.set(value)
+
+  def getOutputDirectory(self):
+    return os.path.dirname(self.getFileName()) if self.getFileName() else None
+
+  def getFiles(self):
+    files = [self.getFileName(), self.getGenesFile(), self.getTranscriptsFile(),
+             self.getIsoformDiffFile(), self.getGeneDiffFile(),
+             self.getReferenceGtf(), self.getReferenceFasta()]
+    return list(dict.fromkeys(path for path in files if path))
+
+  def getObjLabel(self):
+    label = self.getSampleLabel() or self.getSampleName() or 'Expression'
+    if self.getComparisonLabel():
+      label += ' vs ' + self.getComparisonLabel()
+    return label
+
+class VariantAnnotation(data.EMFile):
+    """Native tabular VEP output with reference and command metadata."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._scientificName = pwobj.String(kwargs.get('scientificName'))
+        self._assembly = pwobj.String(kwargs.get('assembly'))
+        self._cacheVersion = pwobj.Integer(kwargs.get('cacheVersion'))
+        self._command = pwobj.String(kwargs.get('command'))
+
+    def getScientificName(self):
+        return self._scientificName.get()
+
+    def getAssembly(self):
+        return self._assembly.get()
+
+    def getCacheVersion(self):
+        return self._cacheVersion.get()
+
+    def getCommand(self):
+        return self._command.get()
+
+
+class MutationReport(data.EMFile):
+    """Candidate CSV, mutation/transcript TSV and WT/MUT peptide FASTA.
+
+    The primary CSV retains seq,symbol,FPKM and unique mutant sequences,
+    while the detailed TSV keeps all accepted transcript effects.
+
+    Each row represents one annotated transcript effect; variants are not
+    collapsed across proteins and separate variants are not phased together.
+    Rejected effects are recorded separately with the reason.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._peptidesFile = pwobj.String(kwargs.get('peptidesFile'))
+        self._mutationsFile = pwobj.String(kwargs.get('mutationsFile'))
+        self._peptideLength = pwobj.Integer(kwargs.get('peptideLength', 25))
+        self._rejectedFile = pwobj.String(kwargs.get('rejectedFile'))
+        self._scientificName = pwobj.String(kwargs.get('scientificName'))
+        self._assembly = pwobj.String(kwargs.get('assembly'))
+        self._flankSize = pwobj.Integer(kwargs.get('flankSize'))
+        self._proteinFasta = pwobj.String(kwargs.get('proteinFasta'))
+        self._expressionColumn = pwobj.String(kwargs.get('expressionColumn'))
+        self._minimumFPKM = pwobj.Float(kwargs.get('minimumFPKM', 0))
+
+    def getMutationsFile(self):
+        return self._mutationsFile.get()
+
+    def getPeptideLength(self):
+        return self._peptideLength.get()
+
+    def getPeptidesFile(self):
+        return self._peptidesFile.get()
+
+    def getRejectedFile(self):
+        return self._rejectedFile.get()
+
+    def getScientificName(self):
+        return self._scientificName.get()
+
+    def getAssembly(self):
+        return self._assembly.get()
+
+    def getFlankSize(self):
+        return self._flankSize.get()
+
+    def getProteinFasta(self):
+        return self._proteinFasta.get()
+
+    def getExpressionColumn(self):
+        return self._expressionColumn.get()
+
+    def getMinimumFPKM(self):
+        return self._minimumFPKM.get()
+
+    def getFiles(self):
+        return [path for path in (self.getFileName(), self.getPeptidesFile(),
+                                 self.getRejectedFile(), self.getProteinFasta(), self.getMutationsFile()) if path]
+
+
 class VCFFile(data.EMFile):
     """Object representing a Variant Call Format (VCF) file."""
 
@@ -2766,6 +2989,10 @@ class VCFFile(data.EMFile):
       self._isCompressed = pwobj.Boolean(
         kwargs.get('isCompressed', False)
       )
+      self._referenceFasta = pwobj.String(kwargs.get('referenceFasta', None))
+      self._tumorSample = pwobj.String(kwargs.get('tumorSample', None))
+      self._normalSample = pwobj.String(kwargs.get('normalSample', None))
+      self._filteringApplied = pwobj.Boolean(kwargs.get('filteringApplied', False))
 
     # -------------------------------------------------------
     # Species
@@ -2869,6 +3096,34 @@ class VCFFile(data.EMFile):
       self._isCompressed.set(value)
 
     # -------------------------------------------------------
+    # Calling metadata
+    # -------------------------------------------------------
+
+    def getReferenceFasta(self):
+      return self._referenceFasta.get()
+
+    def setReferenceFasta(self, value):
+      self._referenceFasta.set(value)
+
+    def getTumorSample(self):
+      return self._tumorSample.get()
+
+    def setTumorSample(self, value):
+      self._tumorSample.set(value)
+
+    def getNormalSample(self):
+      return self._normalSample.get()
+
+    def setNormalSample(self, value):
+      self._normalSample.set(value)
+
+    def getFilteringApplied(self):
+      return self._filteringApplied.get()
+
+    def setFilteringApplied(self, value):
+      self._filteringApplied.set(value)
+
+    # -------------------------------------------------------
     # Files
     # -------------------------------------------------------
 
@@ -2881,7 +3136,8 @@ class VCFFile(data.EMFile):
       if self.hasIndexFile():
         files.append(self.getIndexFile())
 
-      return files
+      files.append(self.getReferenceFasta())
+      return list(dict.fromkeys(path for path in files if path))
 
     # -------------------------------------------------------
     # Representation

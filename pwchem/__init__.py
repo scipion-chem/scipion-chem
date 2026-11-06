@@ -67,6 +67,7 @@ class Plugin(pwem.Plugin):
         cls.addPoseBustersPackage(env)
         cls.addCocadaPackage(env)
         cls.addRNASeqPackage(env)
+        cls.addCufflinksPackage(env)
 
     @classmethod
     def _defineVariables(cls):
@@ -81,6 +82,7 @@ class Plugin(pwem.Plugin):
         cls._defineEmVar(POSEB_DIC['home'], cls.getEnvName(POSEB_DIC))
         cls._defineEmVar(SCORCH2_DIC['home'], cls.getEnvName(SCORCH2_DIC))
         cls._defineEmVar(RNASEQ_DIC['home'], cls.getEnvName(RNASEQ_DIC))
+        cls._defineEmVar(CUFFLINKS_DIC['home'], cls.getEnvName(CUFFLINKS_DIC))
         cls._defineEmVar(COCADA_DIC['home'], cls.getEnvName(COCADA_DIC))
 
         # Common enviroments
@@ -334,7 +336,6 @@ class Plugin(pwem.Plugin):
 
         rnaseqEnvName = cls.getEnvName(RNASEQ_DIC)
 
-
         installer.addCommand(
             f'conda create -y -n {rnaseqEnvName} '
             f'-c conda-forge -c bioconda '
@@ -349,12 +350,41 @@ class Plugin(pwem.Plugin):
             f'igvtools={IGVTOOLS_DIC["version"]} '
             f'ncbi-datasets-cli={NCBI_DATASETS_DIC["version"]}',
             'RNASEQ_ENV_CREATED'
+        ).addCommand(
+            f'conda install -y -n {rnaseqEnvName} '
+            f'-c conda-forge -c bioconda '
+            f'bcftools={BCFTOOLS_DIC["version"]}',
+            'RNASEQ_BCFTOOLS_INSTALLED'
+        ).addCommand(
+            f'conda install -y -n {rnaseqEnvName} '
+            f'-c conda-forge -c bioconda '
+            f'ensembl-vep={VEP_DIC["version"]}',
+            'RNASEQ_VARIANT_ANNOTATION_TOOLS_INSTALLED'
         ).addPackage(
-                    env,
-                    dependencies=['conda'],
-                    default=default
-                )
+            env,
+            dependencies=['conda'],
+            default=default
+        )
 
+    @classmethod
+    def addCufflinksPackage(cls, env, default=True):
+        installer = InstallHelper(
+            CUFFLINKS_DIC['name'],
+            packageHome=cls.getVar(CUFFLINKS_DIC['home']),
+            packageVersion=CUFFLINKS_DIC['version']
+        )
+
+        installer.addCommand(
+            f'conda create -y -n cufflinks-{CUFFLINKS_DIC["version"]} '
+            f'-c conda-forge -c bioconda '
+            f'python=3.6 '
+            f'cufflinks={CUFFLINKS_DIC["version"]}',
+            'CUFFLINKS_ENV_CREATED'
+        ).addPackage(
+            env,
+            dependencies=['conda'],
+            default=default
+        )
     @classmethod
     def addCocadaPackage(cls, env, default=True):
         # Instantiating install helper

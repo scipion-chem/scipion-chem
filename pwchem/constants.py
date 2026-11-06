@@ -46,11 +46,14 @@ FASTP_DIC = {'name': 'fastp','version': '0.24.0'}
 STAR_DIC = {'name': 'star', 'version': '2.7.11b'}
 HISAT2_DIC = {'name': 'hisat2', 'version': '2.2.1'}
 SAMTOOLS_DIC = {'name': 'samtools','version': '1.20'}
+BCFTOOLS_DIC = {'name': 'bcftools', 'version': '1.20'}
 IGV_DIC = {'name': 'igv','version': '2.19.8'}
 IGVTOOLS_DIC = {'name': 'igvtools', 'version': '2.17.3'}
 NCBI_DATASETS_DIC = {'name': 'ncbi-datasets-cli', 'version': '18.33.1'}
 PICARD_DIC = {'name': 'picard', 'version': '3.4.0'}
 GATK_DIC = {'name': 'gatk4', 'version': '4.6.2.0'}
+CUFFLINKS_DIC = {'name': 'cufflinks','version': '2.2.1','home': 'CUFFLINKS_HOME'}
+VEP_DIC = {'name': 'ensembl-vep', 'version': '116.3'}
 COCADA_DIC = {'name': 'cocada', 'version': '1.6', 'home': 'COCADA_HOME'}
 
 #Autoligand
