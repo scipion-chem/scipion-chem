@@ -32,7 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, FileParam, PointerParam, StringParam
 
 from pwchem.objects import RNASeqExpression
-from pwchem.utils.utilsRNA import GATKPreparationMixin, checkGtfAnnotation
+from pwchem.utils.utilsRNA import GATKPreparationMixin
 
 
 class ProtCufflinks(GATKPreparationMixin, EMProtocol):
@@ -242,7 +242,7 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
         self._checkAnnotation(annotation, firstContigs)
 
     def _checkAnnotation(self, path, contigs):
-        extraContigs = checkGtfAnnotation(path, contigs)
+        extraContigs = self.checkGtfAnnotation(path, contigs)
         if extraContigs:
             self.warning('GTF contains {} sequence(s) absent from the BAM dictionary.'.format(len(extraContigs)))
 
@@ -400,3 +400,49 @@ class ProtCufflinks(GATKPreparationMixin, EMProtocol):
         return ['Transcript and gene expression were analysed with {} using the supplied GTF '
                 'and {} coordinate-sorted BAM alignment(s). Native FPKM tables were retained.'
                 .format(self._getProgram(), len(self._getAlignments()))]
+
+    @staticmethod
+    def iterGtfRecords(path):
+        """Yield line number, fields and end coordinate for valid GTF records."""
+        with open(path) as handle:
+            for number, line in enumerate(handle, 1):
+                if not line.strip() or line.startswith('#'):
+                    continue
+                fields = line.rstrip('\r\n').split('\t')
+                if len(fields) != 9:
+                    raise RuntimeError('GTF line {} must contain nine tab-separated columns.'.format(number))
+                try:
+                    start, end = int(fields[3]), int(fields[4])
+                    if start < 1 or end < start:
+                        raise ValueError
+                except ValueError as error:
+                    raise RuntimeError('Invalid GTF coordinates at line {}.'.format(number)) from error
+                yield number, fields, end
+
+
+    @classmethod
+    def checkGtfAnnotation(cls, path, contigs, featureTypes=('exon', 'CDS', 'UTR', 'five_prime_utr', 'three_prime_utr'),
+                           attribute='transcript_id'):
+        """Validate GTF coordinates and feature identifiers against a BAM dictionary.
+
+        Return annotation-only contigs for the caller to report. Cufflinks
+        requires transcript-bearing features with transcript_id attributes.
+        """
+        sharedFeatures = 0
+        extraContigs = set()
+        pattern = re.compile(r'(?:^|;)\s*' + re.escape(attribute) + r'\s+"[^"\n]+"')
+        for number, fields, end in cls.iterGtfRecords(path):
+            name = fields[0]
+            if name not in contigs:
+                extraContigs.add(name)
+                continue
+            if end > contigs[name]:
+                raise RuntimeError('GTF line {} exceeds BAM sequence {} length.'.format(number, name))
+            if fields[2] not in featureTypes:
+                continue
+            if not pattern.search(fields[8]):
+                raise RuntimeError('GTF transcript feature lacks {} at line {}.'.format(attribute, number))
+            sharedFeatures += 1
+        if not sharedFeatures:
+            raise RuntimeError('GTF has no transcript features on the BAM reference sequences.')
+        return extraContigs

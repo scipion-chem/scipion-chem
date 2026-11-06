@@ -513,6 +513,11 @@ class ProtGATKMutect2(GATKPreparationMixin, EMProtocol):
     # Calling, filtering and type selection
     # -------------------------------------------------------
 
+    def clearVCFOutput(self, path):
+        """Remove a generated VCF and companion indexes before rerunning a step."""
+        for output in (path, path + '.tbi', path + '.csi', path + '.idx'):
+            self.removeIndex(output)
+
     def mutect2Step(self):
         self.clearVCFOutput(self._getUnfilteredVcf())
         self.removeIndex(self._getStatsFile())

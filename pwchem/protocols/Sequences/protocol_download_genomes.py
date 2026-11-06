@@ -34,7 +34,7 @@ import urllib.error
 import urllib.request
 import zipfile
 
-from pwchem.utils.utilsRNA import COMMON_SPECIES, getProviderSpeciesName, parseCustomSpecies
+from pwchem.utils.utilsSpecies import GenomicResourceMixin, COMMON_SPECIES, getProviderSpeciesName, parseCustomSpecies
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import BooleanParam, EnumParam, StringParam
 from pwchem import Plugin
@@ -45,7 +45,7 @@ from pwchem.objects import Genome, SetOfGenomes
 PARTIAL_FILE_SUFFIX = '.part'
 
 
-class ProtDownloadGenomes(EMProtocol):
+class ProtDownloadGenomes(GenomicResourceMixin, EMProtocol):
     """
     Download reference genomes and genome annotations from Ensembl or NCBI.
 
@@ -758,10 +758,6 @@ class ProtDownloadGenomes(EMProtocol):
     # Species selection
     # ---------------------------------------------------------------------
 
-    @staticmethod
-    def _splitParameterValues(value):
-        """Split comma- or semicolon-separated parameter values."""
-        return [item.strip() for item in re.split('[;,]', value or '') if item.strip()]
 
     def _getSelectedSpecies(self):
         """Return selected species according to the selection mode."""
@@ -860,23 +856,6 @@ class ProtDownloadGenomes(EMProtocol):
     # Parameter utilities
     # ---------------------------------------------------------------------
 
-    @classmethod
-    def _expandParameterValues(cls, value, numberOfGenomes, parameterName):
-        values = cls._splitParameterValues(value)
-
-        if not values:
-            raise ValueError('{} cannot be empty.'.format(parameterName.capitalize()))
-
-        if len(values) == 1:
-            return values * numberOfGenomes
-
-        if len(values) != numberOfGenomes:
-            raise ValueError(
-                'The number of {} must be either 1 or equal to the '
-                'number of genomes.'.format(parameterName)
-            )
-
-        return values
 
     # =====================================================================
     # Ensembl
@@ -903,15 +882,6 @@ class ProtDownloadGenomes(EMProtocol):
             except Exception as error:
                 self._skipGenome(genomeInfo, error)
 
-    def _getLatestEnsemblRelease(self):
-        data = self._requestJson(self.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
-
-        releases = data.get('releases', [])
-
-        if not releases:
-            raise RuntimeError('The Ensembl REST response does not contain releases.')
-
-        return max((int(release) for release in releases))
 
     def _resolveAssembly(self, assembly, genomeInfo):
         assembly = assembly.strip()
@@ -1061,21 +1031,6 @@ class ProtDownloadGenomes(EMProtocol):
             except Exception as error:
                 self._skipGenome(genomeInfo, error)
 
-    @staticmethod
-    def _readJsonLines(filename):
-        """Read JSON objects from a JSON Lines file."""
-        if not os.path.exists(filename):
-            return []
-
-        reports = []
-
-        with open(filename) as inputFile:
-            for line in inputFile:
-                line = line.strip()
-                if line:
-                    reports.append(json.loads(line))
-
-        return reports
 
     def _getNcbiReferenceAccession(self, taxon):
         """Return the latest NCBI assembly for a taxon.
@@ -1448,9 +1403,6 @@ class ProtDownloadGenomes(EMProtocol):
 
         return value
 
-    @staticmethod
-    def _isNonemptyFile(path):
-        return bool(path) and os.path.isfile(path) and os.path.getsize(path) > 0
 
     def _downloadAndUncompress(self, url, compressedFile, outputFile):
         if not self.overwrite.get() and self._isNonemptyFile(outputFile):
@@ -1477,9 +1429,6 @@ class ProtDownloadGenomes(EMProtocol):
     # Generic utilities
     # ---------------------------------------------------------------------
 
-    @staticmethod
-    def _safeName(value):
-        return re.sub('[^A-Za-z0-9_.-]+', '_', value)
 
     @staticmethod
     def _requestJson(url, description):

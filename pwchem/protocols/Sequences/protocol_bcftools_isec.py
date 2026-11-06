@@ -30,7 +30,6 @@ import tempfile
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol.params import EnumParam, PointerParam
 
-from pwchem.objects import VCFFile
 from pwchem.utils.utilsRNA import GATKPreparationMixin
 
 

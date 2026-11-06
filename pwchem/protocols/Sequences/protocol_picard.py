@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 
+import csv
+import math
 import os
 
 from pyworkflow.protocol.params import BooleanParam, PointerParam
@@ -505,6 +507,45 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
             (self.reorderBam.get(), 'ReorderSam')
         ) if selected]
 
+    @staticmethod
+    def _readDuplicationMetrics(path):
+        """Read library metrics, excluding command comments and histograms."""
+        with open(path) as handle:
+            for line in handle:
+                if line.startswith('## METRICS CLASS') and line.rstrip().endswith('.DuplicationMetrics'):
+                    break
+            else:
+                raise ValueError('No Picard DuplicationMetrics table found.')
+            lines = []
+            for line in handle:
+                if not line.strip() or line.startswith('#'):
+                    break
+                lines.append(line)
+        table = csv.DictReader(lines, delimiter='\t')
+        if not {'LIBRARY', 'PERCENT_DUPLICATION'}.issubset(table.fieldnames or []):
+            raise ValueError('Missing library or duplication columns in Picard metrics.')
+        metrics = []
+        for row in table:
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError('Malformed Picard duplication metrics row.')
+            try:
+                fraction = float(row['PERCENT_DUPLICATION'])
+            except (TypeError, ValueError) as error:
+                raise ValueError('Invalid Picard duplication fraction.') from error
+            if not math.isfinite(fraction) or not 0 <= fraction <= 1:
+                raise ValueError('Picard duplication fraction must be between 0 and 1.')
+            row['PERCENT_DUPLICATION'] = fraction
+            metrics.append(row)
+        if not metrics:
+            raise ValueError('Picard duplication metrics contain no library rows.')
+        return metrics
+
+    @classmethod
+    def _readDuplicationPercentages(cls, path):
+        """Return percentages for the summary using the same metrics as the viewer."""
+        return [(row['LIBRARY'] or 'unknown library', 100 * row['PERCENT_DUPLICATION'])
+                for row in cls._readDuplicationMetrics(path)]
+
     def _summary(self):
         operations = ' -> '.join(self._getSelectedOperationNames())
         if not hasattr(self, 'outputAlignment'):
@@ -512,7 +553,13 @@ class ProtPicard(GATKPreparationMixin, EMProtocol):
         summary = ['Picard operations: {}'.format(operations),
                    'Output BAM: {}'.format(self.outputAlignment.getFileName())]
         if self.markDuplicates.get():
-            summary.append('Duplication metrics: {}'.format(self._getMarkDuplicatesMetricsFile()))
+            metrics = self._getMarkDuplicatesMetricsFile()
+            summary.append('Duplication metrics: {}'.format(metrics))
+            try:
+                summary.extend('Duplication ({}): {:.2f}%'.format(library, percentage)
+                               for library, percentage in self._readDuplicationPercentages(metrics))
+            except (OSError, ValueError) as error:
+                summary.append('Duplication percentage unavailable: {}'.format(error))
         return summary
 
     def _methods(self):

@@ -24,6 +24,8 @@
 # *
 # **************************************************************************
 import gzip
+import csv
+from contextlib import ExitStack
 import http.client
 import json
 import os
@@ -45,12 +47,11 @@ from pyworkflow.protocol.params import (
 from pwchem import Plugin
 from pwchem.constants import RNASEQ_DIC
 from pwchem.objects import VCFFile, SetOfVCFFiles
-from pwchem.utils.utilsRNA import (
-    COMMON_SPECIES, GATKPreparationMixin, getProviderSpeciesName, parseCustomSpecies
-)
+from pwchem.utils.utilsRNA import GATKPreparationMixin
+from pwchem.utils.utilsSpecies import GenomicResourceMixin, COMMON_SPECIES, getProviderSpeciesName, parseCustomSpecies
 
 
-class ProtDownloadVCF(EMProtocol):
+class ProtDownloadVCF(GenomicResourceMixin, EMProtocol):
     """
     Download known-variant VCF files from Ensembl or NCBI/EVA.
 
@@ -314,8 +315,12 @@ class ProtDownloadVCF(EMProtocol):
     ---------------------------------------------------------------------
 
     By default, non-empty downloaded files are reused when possible. Compressed
-    VCF headers are checked before indexing. This is a basic format check, not
-    a full validation of variant records or reference compatibility. For
+    VCF headers and mandatory record fields are checked before indexing,
+    including column counts, positions and REF/ALT allele syntax. This does
+    not check alleles against the reference genome or validate INFO/FORMAT
+    annotations. Malformed records are excluded from a repaired copy; the
+    original and a report of excluded records are preserved alongside it.
+    Broken headers/compression and files with no valid records are rejected. For
     Ensembl, an assembly declaration found in the header must match the
     requested assembly. If no recognized assembly declaration is present,
     the protocol warns that reference compatibility could not be verified.
@@ -828,9 +833,6 @@ class ProtDownloadVCF(EMProtocol):
     # Species
     # =====================================================================
 
-    @staticmethod
-    def _splitParameterValues(value):
-        return [item.strip() for item in re.split('[;,]', value or '') if item.strip()]
 
     def _getSelectedSpecies(self):
         if self.speciesSelection.get() == self.SPECIES_COMMON:
@@ -936,25 +938,6 @@ class ProtDownloadVCF(EMProtocol):
     # Parameter utilities
     # ---------------------------------------------------------------------
 
-    @classmethod
-    def _expandParameterValues(cls, value, numberOfSpecies, parameterName):
-        values = cls._splitParameterValues(value)
-
-        if not values:
-            raise ValueError(cls.EMPTY_PARAMETER_ERROR.format(parameterName.capitalize()))
-
-        if len(values) == 1:
-            return values * numberOfSpecies
-
-        if len(values) != numberOfSpecies:
-            raise ValueError(
-                'The number of {} must be either 1 or equal '
-                'to the number of species.'.format(
-                    parameterName
-                )
-            )
-
-        return values
 
     # =====================================================================
     # Ensembl resolution
@@ -996,18 +979,6 @@ class ProtDownloadVCF(EMProtocol):
                     )
                 )
 
-    def _getLatestEnsemblRelease(self):
-        data = self._requestJson(self.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
-
-        releases = data.get('releases', [])
-
-        if not releases:
-            raise RuntimeError(
-                'The Ensembl REST response does not '
-                'contain releases.'
-            )
-
-        return max((int(release) for release in releases))
 
     def _resolveEnsemblAssembly(self, assembly, info):
         assembly = assembly.strip()
@@ -1224,6 +1195,77 @@ class ProtDownloadVCF(EMProtocol):
         indexFile = self._ensureVCFIndex(outputVCF, vcfUrl, **indexOptions)
         info.update(vcfFile=outputVCF, indexFile=indexFile, error=None, downloadUrl=vcfUrl)
 
+    def _downloadChromosomeVCFs(
+            self, info, outputDir, baseUrl, filenames
+    ):
+        """Download and concatenate chromosome VCFs for GATK."""
+
+        os.makedirs(outputDir, exist_ok=True)
+
+        chromosomeDir = os.path.join(outputDir, 'chromosomes')
+        os.makedirs(chromosomeDir, exist_ok=True)
+
+        chromosomeVCFs = []
+
+        for filename in filenames:
+
+            vcfUrl = baseUrl + filename
+            localVCF = os.path.join(chromosomeDir, filename)
+
+            self.info('Downloading chromosome VCF: {}'.format(filename))
+
+            self._downloadFile(vcfUrl, localVCF)
+
+            self._ensureVCFIndex(
+                localVCF,
+                vcfUrl,
+                assembly=info['assembly']
+            )
+
+            chromosomeVCFs.append(localVCF)
+
+        outputVCF = os.path.join(outputDir, self.VCF_FILENAME)
+
+        # Build the final VCF in a temporary path.
+        temporaryVCF = outputVCF + '.tmp.vcf.gz'
+
+        arguments = (
+            'concat -a -Oz -o {} {}'
+        ).format(
+            shlex.quote(temporaryVCF),
+            ' '.join(shlex.quote(path) for path in chromosomeVCFs)
+        )
+
+        try:
+            Plugin.runCondaCommand(
+                self, arguments, RNASEQ_DIC, 'bcftools'
+            )
+
+            if not self._isNonemptyFile(temporaryVCF):
+                raise RuntimeError(
+                    'bcftools did not generate the combined VCF.'
+                )
+
+            self._validateVCFRecords(temporaryVCF)
+
+            # Replace the old output only after successful concatenation.
+            self._removeLocalVCFIndexes(outputVCF)
+            os.replace(temporaryVCF, outputVCF)
+
+            indexFile = self._createLocalVCFIndex(outputVCF)
+
+        finally:
+            if os.path.exists(temporaryVCF):
+                os.remove(temporaryVCF)
+
+        info.update(
+            vcfFile=outputVCF,
+            indexFile=indexFile,
+            error=None,
+            downloadUrl=baseUrl,
+            chromosomeFiles=filenames
+        )
+
     def _downloadEnsemblVCFs(self, vcfInfo):
         for info in vcfInfo:
             if info.get('error'):
@@ -1232,7 +1274,6 @@ class ProtDownloadVCF(EMProtocol):
             try:
                 filename, baseUrl, provider = self._findEnsemblVCF(info)
 
-                filename = self._validateUrlComponent(filename, 'Ensembl VCF filename')
 
                 info['database'] = provider
 
@@ -1247,9 +1288,20 @@ class ProtDownloadVCF(EMProtocol):
                     '{}_{}_release-{}'.format(ensemblName, assembly, info['release'])
                 )
 
-                self._downloadIndexedVCF(
-                    info, outputDir, baseUrl + filename, assembly=info['assembly']
-                )
+                if isinstance(filename, list):
+                    self._downloadChromosomeVCFs(
+                        info,
+                        outputDir,
+                        baseUrl,
+                        filename
+                    )
+                else:
+                    self._downloadIndexedVCF(
+                        info,
+                        outputDir,
+                        baseUrl + filename,
+                        assembly=info['assembly']
+                    )
 
             except (RuntimeError, ValueError, OSError, EOFError) as error:
                 info['error'] = str(error)
@@ -1348,40 +1400,98 @@ class ProtDownloadVCF(EMProtocol):
         return None
 
     def _findVCFInRemoteDirectory(self, url, scientificName):
-        """Select a suitable VCF from a remote directory listing."""
+        """Select a complete VCF or a collection of chromosome VCFs."""
 
         html = self._readRemoteDirectory(url)
-
         matches = re.findall(self.HREF_PATTERN, html)
 
-        candidates = [filename for filename in matches if filename.endswith(self.VCF_GZ_SUFFIX)]
+        speciesName = scientificName.lower().replace(' ', '_')
+
+        candidates = sorted({
+            filename for filename in matches
+            if filename.endswith(self.VCF_GZ_SUFFIX)
+               and 'incl_consequences' not in filename.lower()
+               and 'phenotype' not in filename.lower()
+               and 'somatic' not in filename.lower()
+               and 'structural' not in filename.lower()
+        })
 
         if not candidates:
-            raise RuntimeError('No VCF files found in remote directory: {}'.format(url))
+            raise RuntimeError(
+                'No suitable known-variant VCFs found in {}'.format(url)
+            )
 
-        preferred = [
-            filename
-            for filename in candidates
-            if 'incl_consequences' not in filename.lower()
-            and 'phenotype' not in filename.lower()
-            and 'somatic' not in filename.lower()
+        combined = [
+            name for name in candidates
+            if name.lower() == speciesName + self.VCF_GZ_SUFFIX
+               or re.search(
+                r'(?:^|[._-])(?:all|toplevel|whole_genome)[._-]',
+                name.lower()
+            )
         ]
 
-        if preferred:
-            candidates = preferred
+        if len(combined) == 1:
+            return self._validateUrlComponent(
+                combined[0], 'Ensembl VCF filename'
+            )
 
-        candidates = sorted(set(candidates))
-        if len(candidates) > 1:
-            speciesName = scientificName.lower().replace(' ', '_')
-            combined = [name for name in candidates
-                        if name.lower() == speciesName + self.VCF_GZ_SUFFIX
-                        or re.search(r'(?:^|[._-])(?:all|toplevel|whole_genome)[._-]', name.lower())]
-            if len(combined) != 1:
-                raise RuntimeError('Multiple VCFs found for {} in {}. Cannot select a complete '
-                                   'reference VCF unambiguously.'.format(scientificName, url))
-            candidates = combined
-        return self._validateUrlComponent(candidates[0], 'Ensembl VCF filename')
+        if len(combined) > 1:
+            raise RuntimeError(
+                'Multiple combined VCFs found for {}.'.format(scientificName)
+            )
 
+        chromosomePattern = re.compile(
+            r'^' + re.escape(speciesName)
+            + r'-chr([0-9]+|X|Y|MT)\.vcf\.gz$',
+            re.IGNORECASE
+        )
+
+        chromosomeFiles = {}
+
+        for filename in candidates:
+            match = chromosomePattern.fullmatch(filename)
+
+            if match:
+                chromosome = match.group(1).upper()
+                chromosomeFiles[chromosome] = filename
+
+        if chromosomeFiles:
+            # Require all autosomes to avoid silently publishing
+            # an incomplete reference.
+            required = {str(i) for i in range(1, 23)}
+
+            if scientificName.lower() == 'homo sapiens':
+                missing = required - set(chromosomeFiles)
+
+                if missing:
+                    raise RuntimeError(
+                        'Missing chromosome VCFs for {}: {}'.format(
+                            scientificName,
+                            ', '.join(sorted(missing, key=int))
+                        )
+                    )
+
+            chromosomeOrder = (
+                    [str(i) for i in range(1, 23)] + ['X', 'Y', 'MT']
+            )
+
+            filenames = [
+                chromosomeFiles[chromosome]
+                for chromosome in chromosomeOrder
+                if chromosome in chromosomeFiles
+            ]
+
+            return [
+                self._validateUrlComponent(
+                    filename, 'Ensembl VCF filename'
+                )
+                for filename in filenames
+            ]
+
+        raise RuntimeError(
+            'Cannot select a complete reference VCF for {} in {}.'
+            .format(scientificName, url)
+        )
     # =====================================================================
     # NCBI dbSNP / EVA download
     # =====================================================================
@@ -1942,9 +2052,6 @@ class ProtDownloadVCF(EMProtocol):
             timeout=timeout or cls.HTTP_TIMEOUT
         )
 
-    @staticmethod
-    def _isNonemptyFile(path):
-        return bool(path) and os.path.isfile(path) and os.path.getsize(path) > 0
 
     def _downloadFile(self, url, outputFile):
         """Publish a download only after the transfer finishes."""
@@ -1992,6 +2099,135 @@ class ProtDownloadVCF(EMProtocol):
                     return assemblies
                 break
         raise RuntimeError('VCF column header is missing or invalid: {}'.format(filename))
+
+    @classmethod
+    def _validateVCFRecords(cls, filename, validOutput=None, rejectedOutput=None):
+        """Check mandatory VCF fields, optionally writing an audited repair.
+
+        Symbolic and breakend ALT alleles are allowed, but REF must always
+        contain explicit A/C/G/T/N bases. INFO/FORMAT semantics and reference
+        concordance require separate, reference-aware validation.
+        """
+        assemblies = cls._validateVCFHeader(filename)
+        bases = re.compile(r'[ACGTNacgtn]+')
+        symbolic = re.compile(r'<[^<>\s,]+>')
+        breakend = re.compile(
+            r'(?:[ACGTNacgtn]+([\[\]])[^\[\]\s]+:[0-9]+\1|'
+            r'([\[\]])[^\[\]\s]+:[0-9]+\2[ACGTNacgtn]+|'
+            r'\.[ACGTNacgtn]+|[ACGTNacgtn]+\.)'
+        )
+        expectedColumns = None
+        validCount = rejectedCount = 0
+        try:
+            with ExitStack() as stack:
+                handle = stack.enter_context(gzip.open(filename, 'rt'))
+                output = report = None
+                if validOutput is not None:
+                    from Bio.bgzf import BgzfWriter
+                    output = stack.enter_context(BgzfWriter(validOutput, 'wb'))
+                    report = stack.enter_context(open(rejectedOutput, 'w'))
+                    reportWriter = csv.writer(report, delimiter='\t', lineterminator='\n')
+                    reportWriter.writerow(['line', 'reason', 'original_record'])
+                for lineNumber, line in enumerate(handle, 1):
+                    if line.startswith('##') and expectedColumns is None:
+                        if output is not None:
+                            output.write(line.encode('utf-8'))
+                        continue
+                    columns = line.rstrip('\r\n').split('\t')
+                    if line.startswith('#CHROM\t') and expectedColumns is None:
+                        expectedColumns = len(columns)
+                        if expectedColumns == 9:
+                            raise RuntimeError('Invalid VCF header in {}: FORMAT has no samples.'
+                                               .format(filename))
+                        if output is not None:
+                            output.write(line.encode('utf-8'))
+                        continue
+                    reason = None
+                    if len(columns) != expectedColumns:
+                        reason = 'expected {} columns, found {}'.format(expectedColumns, len(columns))
+                    elif not columns[0] or any(c.isspace() for c in columns[0]):
+                        reason = 'invalid CHROM'
+                    elif not columns[1].isascii() or not columns[1].isdigit():
+                        reason = 'POS must be a non-negative integer'
+                    elif not bases.fullmatch(columns[3]):
+                        reason = 'invalid REF {!r}; expected A/C/G/T/N bases'.format(columns[3])
+                    else:
+                        if columns[4] != '.' and '.' in columns[4].split(','):
+                            reason = 'missing ALT cannot be combined with other alleles'
+                        for allele in columns[4].split(','):
+                            if not (allele in ('.', '*') or bases.fullmatch(allele)
+                                    or symbolic.fullmatch(allele) or breakend.fullmatch(allele)):
+                                reason = 'invalid ALT {!r}'.format(allele)
+                                break
+                    if reason:
+                        if report is not None:
+                            reportWriter.writerow([lineNumber, reason, line.rstrip('\r\n')])
+                            rejectedCount += 1
+                            continue
+                        location = ':'.join(columns[:2])
+                        variant = columns[2] if len(columns) > 2 else '?'
+                        raise RuntimeError(
+                            'Malformed VCF {} at line {} ({}; ID={}): {}. '
+                            'No records were filtered; use a corrected source VCF.'
+                            .format(filename, lineNumber, location, variant, reason)
+                        )
+                    validCount += 1
+                    if output is not None:
+                        output.write((line.rstrip('\r\n') + '\n').encode('utf-8'))
+        except (OSError, EOFError, UnicodeError, zlib.error) as error:
+            raise RuntimeError('Invalid compressed VCF {}: {}'.format(filename, error)) from error
+        if validOutput is not None:
+            if not validCount:
+                raise RuntimeError('VCF repair would leave no valid records: {}'.format(filename))
+            return rejectedCount
+        return assemblies
+
+    def _repairVCF(self, filename):
+        """Replace malformed records with an audited, BGZF-compressed copy."""
+        try:
+            self._validateVCFRecords(filename)
+            return False
+        except RuntimeError as error:
+            if not str(error).startswith('Malformed VCF '):
+                raise
+
+        temporary = filename + '.repair.tmp.vcf.gz'
+        report = filename + '.excluded.tsv'
+        temporaryReport = report + '.tmp'
+        backup = filename + '.original'
+        number = 1
+        while os.path.exists(backup):
+            backup = filename + '.original.{}'.format(number)
+            number += 1
+        try:
+            excluded = self._validateVCFRecords(filename, temporary, temporaryReport)
+            if os.path.exists(report):
+                shutil.copy2(report, backup + '.previous-exclusions.tsv')
+            # Keep the source intact until the complete stream has been read.
+            os.replace(filename, backup)
+            try:
+                # Publish the audit marker before the repaired data. A failed
+                # publication must not expose a filtered file as an original
+                # eligible for reuse of the provider's unfiltered index.
+                os.replace(temporaryReport, report)
+                os.replace(temporary, filename)
+                self._removeLocalVCFIndexes(filename)
+            except OSError:
+                os.replace(backup, filename)
+                previousReport = backup + '.previous-exclusions.tsv'
+                if os.path.exists(previousReport):
+                    shutil.copy2(previousReport, report)
+                elif os.path.exists(report):
+                    os.remove(report)
+                raise
+            self.warning('Repaired VCF {}: excluded {} malformed records. '
+                         'Original: {}. Report: {}. Alleles were not inferred or replaced.'
+                         .format(filename, excluded, backup, report))
+            return True
+        finally:
+            for path in (temporary, temporaryReport):
+                if os.path.exists(path):
+                    os.remove(path)
 
     @staticmethod
     def _getVCFAssembly(line):
@@ -2136,6 +2372,13 @@ class ProtDownloadVCF(EMProtocol):
                 self.warning('VCF header does not identify its assembly; compatibility with {} '
                              'could not be verified.'.format(assembly))
 
+        repaired = self._repairVCF(vcfFile)
+        # A provider index describes the unfiltered source and must never be
+        # attached to a repaired file, including when resuming this protocol.
+        if repaired or os.path.exists(vcfFile + '.excluded.tsv'):
+            indexPath = self._getLocalVCFIndex(vcfFile)
+            return indexPath or self._createLocalVCFIndex(vcfFile)
+
         if remoteFilename is None:
             remoteFilename = vcfUrl.rsplit('/', 1)[-1]
 
@@ -2170,25 +2413,6 @@ class ProtDownloadVCF(EMProtocol):
         ) as error:
             raise RuntimeError('Could not retrieve {}: {}'.format(description, error)) from error
 
-    @staticmethod
-    def _readJsonLines(filename):
-        if not os.path.exists(filename):
-            return []
-
-        reports = []
-
-        with open(filename) as inputFile:
-            for line in inputFile:
-                line = line.strip()
-
-                if line:
-                    reports.append(json.loads(line))
-
-        return reports
-
-    @staticmethod
-    def _safeName(value):
-        return re.sub('[^A-Za-z0-9_.-]+', '_', value)
 
     # =====================================================================
     # Persistent VCF information

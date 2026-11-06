@@ -21,69 +21,54 @@
 # * e-mail address 'scipion@cnb.csic.es'
 # **************************************************************************
 
+import os
+import tempfile
+import unittest
+from unittest.mock import patch
+
 from pyworkflow.tests import BaseTest, setupTestProject
 
-from pwchem.protocols import ProtDownloadGenomes
+from pwchem.protocols import ProtDownloadGenomes, ProtDownloadVCF
 from pwchem.utils import assertHandle
-from pwchem.utils.utilsRNA import (
-    assertOutputExists,
-    assertGenomeFiles
-)
+from pwchem.utils.utilsRNA import assertOutputExists, assertGenomeFiles
+from pwchem.utils.utilsSpecies import GenomicResourceMixin
 
 
-def assertGenomeMetadata(test, protocol, genome, source):
-    """Check the basic metadata stored in a downloaded Genome object."""
-    assertHandle(
-        test.assertTrue,
-        bool(genome.getScientificName()),
-        cwd=protocol.getWorkingDir()
-    )
+class TestGenomicResourceHelpers(unittest.TestCase):
+    """Offline regression checks for shared genome/VCF metadata helpers."""
 
-    assertHandle(
-        test.assertTrue,
-        bool(genome.getAssembly()),
-        cwd=protocol.getWorkingDir()
-    )
+    def testSharedMethodsAreInherited(self):
+        for cls in (ProtDownloadGenomes, ProtDownloadVCF):
+            self.assertTrue(issubclass(cls, GenomicResourceMixin))
+            self.assertEqual(cls._splitParameterValues(' a; b,, '), ['a', 'b'])
+            self.assertEqual(cls._expandParameterValues('Latest', 2, 'releases'), ['Latest', 'Latest'])
+            self.assertEqual(cls._expandParameterValues('1;2', 2, 'releases'), ['1', '2'])
+            with self.assertRaises(ValueError):
+                cls._expandParameterValues('', 2, 'releases')
+            with self.assertRaises(ValueError):
+                cls._expandParameterValues('1;2;3', 2, 'releases')
 
-    assertHandle(
-        test.assertTrue,
-        bool(genome.getRelease()),
-        cwd=protocol.getWorkingDir()
-    )
+    def testReleaseUsesProviderRequest(self):
+        for cls in (ProtDownloadGenomes, ProtDownloadVCF):
+            protocol = cls()
+            with patch.object(protocol, '_requestJson', return_value={'releases': ['99', '116', '100']}) as request:
+                self.assertEqual(protocol._getLatestEnsemblRelease(), 116)
+                request.assert_called_once_with(protocol.ENSEMBL_REST_DATA_URL, 'latest Ensembl release')
+            with patch.object(protocol, '_requestJson', return_value={}):
+                with self.assertRaises(RuntimeError):
+                    protocol._getLatestEnsemblRelease()
 
-    assertHandle(
-        test.assertEqual,
-        genome.getSource(),
-        source,
-        cwd=protocol.getWorkingDir()
-    )
-
-
-def assertResolvedGenome(test, protocol, genome):
-    """Check that Latest values were resolved."""
-    assertHandle(
-        test.assertNotEqual,
-        genome.getAssembly().lower(),
-        'latest',
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertNotEqual,
-        genome.getRelease().lower(),
-        'latest',
-        cwd=protocol.getWorkingDir()
-    )
-
-
-def assertNcbiAccession(test, protocol, genome):
-    """Check that the NCBI release is a versioned assembly accession."""
-    assertHandle(
-        test.assertRegex,
-        genome.getRelease(),
-        r'^(GCF|GCA)_\d+\.\d+$',
-        cwd=protocol.getWorkingDir()
-    )
+    def testLocalMetadataAndFileChecks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, 'metadata.jsonl')
+            self.assertEqual(GenomicResourceMixin._readJsonLines(path), [])
+            self.assertFalse(GenomicResourceMixin._isNonemptyFile(path))
+            with open(path, 'w') as handle:
+                handle.write('{"accession": "GCF_1.1"}\n\n{"accession": "GCF_2.1"}\n')
+            self.assertEqual(GenomicResourceMixin._readJsonLines(path),
+                             [{'accession': 'GCF_1.1'}, {'accession': 'GCF_2.1'}])
+            self.assertTrue(GenomicResourceMixin._isNonemptyFile(path))
+            self.assertEqual(GenomicResourceMixin._safeName('Homo sapiens/GRCh38'), 'Homo_sapiens_GRCh38')
 
 
 class TestDownloadGenomes(BaseTest):
@@ -138,8 +123,7 @@ class TestDownloadGenomes(BaseTest):
             cwd=prot.getWorkingDir()
         )
 
-        assertGenomeMetadata(
-            self,
+        self.assertGenomeMetadata(
             prot,
             genome,
             'Ensembl'
@@ -152,8 +136,7 @@ class TestDownloadGenomes(BaseTest):
             expectGtf=True
         )
 
-        assertResolvedGenome(
-            self,
+        self.assertResolvedGenome(
             prot,
             genome
         )
@@ -202,8 +185,7 @@ class TestDownloadGenomes(BaseTest):
             cwd=prot.getWorkingDir()
         )
 
-        assertGenomeMetadata(
-            self,
+        self.assertGenomeMetadata(
             prot,
             genome,
             'NCBI'
@@ -216,14 +198,12 @@ class TestDownloadGenomes(BaseTest):
             expectGtf=True
         )
 
-        assertResolvedGenome(
-            self,
+        self.assertResolvedGenome(
             prot,
             genome
         )
 
-        assertNcbiAccession(
-            self,
+        self.assertNcbiAccession(
             prot,
             genome
         )
@@ -274,8 +254,7 @@ class TestDownloadGenomes(BaseTest):
                 genome.getScientificName()
             )
 
-            assertGenomeMetadata(
-                self,
+            self.assertGenomeMetadata(
                 prot,
                 genome,
                 'Ensembl'
@@ -288,8 +267,7 @@ class TestDownloadGenomes(BaseTest):
                 expectGtf=True
             )
 
-            assertResolvedGenome(
-                self,
+            self.assertResolvedGenome(
                 prot,
                 genome
             )
@@ -350,8 +328,7 @@ class TestDownloadGenomes(BaseTest):
                 genome.getScientificName()
             )
 
-            assertGenomeMetadata(
-                self,
+            self.assertGenomeMetadata(
                 prot,
                 genome,
                 'NCBI'
@@ -364,14 +341,12 @@ class TestDownloadGenomes(BaseTest):
                 expectGtf=False
             )
 
-            assertResolvedGenome(
-                self,
+            self.assertResolvedGenome(
                 prot,
                 genome
             )
 
-            assertNcbiAccession(
-                self,
+            self.assertNcbiAccession(
                 prot,
                 genome
             )
@@ -434,8 +409,7 @@ class TestDownloadGenomes(BaseTest):
             cwd=prot.getWorkingDir()
         )
 
-        assertGenomeMetadata(
-            self,
+        self.assertGenomeMetadata(
             prot,
             genome,
             'NCBI'
@@ -448,14 +422,12 @@ class TestDownloadGenomes(BaseTest):
             expectGtf=False
         )
 
-        assertResolvedGenome(
-            self,
+        self.assertResolvedGenome(
             prot,
             genome
         )
 
-        assertNcbiAccession(
-            self,
+        self.assertNcbiAccession(
             prot,
             genome
         )
@@ -464,4 +436,58 @@ class TestDownloadGenomes(BaseTest):
             self.assertTrue,
             genome.getRelease().startswith('GCA_'),
             cwd=prot.getWorkingDir()
+        )
+
+    def assertGenomeMetadata(self, protocol, genome, source):
+        """Check the basic metadata stored in a downloaded Genome object."""
+        assertHandle(
+            self.assertTrue,
+            bool(genome.getScientificName()),
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertTrue,
+            bool(genome.getAssembly()),
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertTrue,
+            bool(genome.getRelease()),
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            genome.getSource(),
+            source,
+            cwd=protocol.getWorkingDir()
+        )
+
+
+    def assertResolvedGenome(self, protocol, genome):
+        """Check that Latest values were resolved."""
+        assertHandle(
+            self.assertNotEqual,
+            genome.getAssembly().lower(),
+            'latest',
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertNotEqual,
+            genome.getRelease().lower(),
+            'latest',
+            cwd=protocol.getWorkingDir()
+        )
+
+
+    def assertNcbiAccession(self, protocol, genome):
+        """Check that the NCBI release is a versioned assembly accession."""
+        assertHandle(
+            self.assertRegex,
+            genome.getRelease(),
+            r'^(GCF|GCA)_\d+\.\d+$',
+            cwd=protocol.getWorkingDir()
         )

@@ -31,7 +31,6 @@ import requests
 
 from pwchem.objects import RNASeqExpression, VariantAnnotation
 from pwchem.protocols import ProtVEPToAminoacids
-from pwchem.utils.utilsRNA import buildMutationReport, fetchUniParcSequence
 
 
 HEADER = ('#Uploaded_variation\tLocation\tAllele\tGene\tFeature\tFeature_type\t'
@@ -71,7 +70,7 @@ class TestVEPToAminoacids(unittest.TestCase):
     def _run(self, **kwargs):
         directory = os.path.join(self.work.name, 'report')
         kwargs.setdefault('expression', self.expression)
-        buildMutationReport(self.vep, self.fasta, directory, **kwargs)
+        ProtVEPToAminoacids.buildMutationReport(self.vep, self.fasta, directory, **kwargs)
         tables = []
         for filename, delimiter in [('mutations.tsv', '\t'), ('rejected.tsv', '\t'), ('candidates.csv', ',')]:
             with open(os.path.join(directory, filename)) as handle:
@@ -206,7 +205,7 @@ class TestVEPToAminoacids(unittest.TestCase):
         response = Mock(status_code=200, text='>{}\n{}\n'.format(ACCESSION, PROTEIN))
         session.get.return_value = response
         for _ in range(2):
-            self.assertEqual(fetchUniParcSequence(ACCESSION, cache, session), PROTEIN)
+            self.assertEqual(ProtVEPToAminoacids.fetchUniParcSequence(ACCESSION, cache, session), PROTEIN)
         session.get.assert_called_once()
         self.assertEqual(session.get.call_args.kwargs['timeout'], (10, 60))
         response.close.assert_called_once()
@@ -216,7 +215,7 @@ class TestVEPToAminoacids(unittest.TestCase):
         session.get.side_effect = [requests.ConnectionError('offline'),
             Mock(status_code=200, text='>{}\n{}\n'.format(ACCESSION, PROTEIN))]
         with patch('time.sleep'):
-            result = fetchUniParcSequence(ACCESSION, os.path.join(self.work.name, 'cache'), session)
+            result = ProtVEPToAminoacids.fetchUniParcSequence(ACCESSION, os.path.join(self.work.name, 'cache'), session)
         self.assertEqual(result, PROTEIN)
         self.assertEqual(session.get.call_count, 2)
 
@@ -225,7 +224,7 @@ class TestVEPToAminoacids(unittest.TestCase):
         session.get.side_effect = requests.Timeout('timed out')
         cache = os.path.join(self.work.name, 'cache')
         with patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'download failed'):
-            fetchUniParcSequence(ACCESSION, cache, session)
+            ProtVEPToAminoacids.fetchUniParcSequence(ACCESSION, cache, session)
         self.assertEqual(session.get.call_count, 3)
 
     def testRejectWrongOrMultipleHTTPRecords(self):
@@ -235,7 +234,7 @@ class TestVEPToAminoacids(unittest.TestCase):
             session.get.return_value = Mock(status_code=200, text=fasta)
             cache = os.path.join(self.work.name, 'cache')
             with self.subTest(fasta=fasta), self.assertRaises(RuntimeError):
-                fetchUniParcSequence(ACCESSION, cache, session)
+                ProtVEPToAminoacids.fetchUniParcSequence(ACCESSION, cache, session)
 
     def testLocalSourceRemainsUnchanged(self):
         with open(self.fasta) as handle:
@@ -253,7 +252,7 @@ class TestVEPToAminoacids(unittest.TestCase):
             session = factory.return_value.__enter__.return_value
             session.get.return_value = Mock(status_code=200, text='>{}\n{}\n'.format(ACCESSION, PROTEIN))
             for _ in range(2):
-                buildMutationReport(self.vep, None, directory, expression=self.expression, cacheDirectory=cache)
+                ProtVEPToAminoacids.buildMutationReport(self.vep, None, directory, expression=self.expression, cacheDirectory=cache)
             session.get.assert_called_once()
         with open(os.path.join(directory, 'candidates.csv')) as handle:
             rows = list(csv.DictReader(handle))
@@ -268,6 +267,6 @@ class TestVEPToAminoacids(unittest.TestCase):
         session.get.return_value = response
         cache = os.path.join(self.work.name, 'cache')
         with patch('time.sleep'), self.assertRaisesRegex(RuntimeError, 'HTTP 503'):
-            fetchUniParcSequence(ACCESSION, cache, session)
+            ProtVEPToAminoacids.fetchUniParcSequence(ACCESSION, cache, session)
         self.assertEqual(session.get.call_count, 3)
         self.assertEqual(response.close.call_count, 3)

@@ -43,7 +43,7 @@ from pwchem.protocols.Sequences.protocol_import_genomes import ProtImportGenomes
 from pwchem.protocols.Sequences.protocol_gatk import ProtGATK
 from pwchem.protocols.Sequences.protocol_gatk_mutect2 import ProtGATKMutect2
 from pwchem.protocols.Sequences.protocol_import_vcf import ProtImportVCF
-from pwchem.utils.utilsRNA import getCommonSpecies
+from pwchem.utils.utilsSpecies import getCommonSpecies
 
 ALL_FILES = ('All files', '*')
 

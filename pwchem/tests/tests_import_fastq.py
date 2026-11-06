@@ -27,56 +27,6 @@ from pwchem.protocols import ProtImportFastq
 from pwchem.utils import assertHandle
 
 
-def assertOutputExists(test, protocol, outputFastq):
-    assertHandle(
-        test.assertIsNotNone,
-        outputFastq,
-        cwd=protocol.getWorkingDir()
-    )
-
-
-def assertFastqProperties(test, protocol, outputFastq, sampleName):
-    assertHandle(
-        test.assertEqual,
-        outputFastq.getSampleName(),
-        sampleName,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertGreater,
-        outputFastq.getNumReads(),
-        0,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertGreater,
-        outputFastq.getReadLength(),
-        0,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertEqual,
-        outputFastq.getFormat(),
-        'FASTQ',
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertTrue,
-        outputFastq.hasQuality(),
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertTrue,
-        outputFastq.isCompressed(),
-        cwd=protocol.getWorkingDir()
-    )
-
-
 class TestImportFastq(BaseTest):
 
     @classmethod
@@ -116,14 +66,12 @@ class TestImportFastq(BaseTest):
             None
         )
 
-        assertOutputExists(
-            self,
+        self.assertOutputExists(
             prot,
             outputFastq
         )
 
-        assertFastqProperties(
-            self,
+        self.assertFastqProperties(
             prot,
             outputFastq,
             'mouse_single'
@@ -168,14 +116,12 @@ class TestImportFastq(BaseTest):
             None
         )
 
-        assertOutputExists(
-            self,
+        self.assertOutputExists(
             prot,
             outputFastq
         )
 
-        assertFastqProperties(
-            self,
+        self.assertFastqProperties(
             prot,
             outputFastq,
             'human_paired'
@@ -211,4 +157,53 @@ class TestImportFastq(BaseTest):
             self.assertTrue,
             outputFastq.hasFastqcHtmlR2(),
             cwd=prot.getWorkingDir()
+        )
+
+    def assertOutputExists(self, protocol, outputFastq):
+        assertHandle(
+            self.assertIsNotNone,
+            outputFastq,
+            cwd=protocol.getWorkingDir()
+        )
+
+
+    def assertFastqProperties(self, protocol, outputFastq, sampleName):
+        assertHandle(
+            self.assertEqual,
+            outputFastq.getSampleName(),
+            sampleName,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertGreater,
+            outputFastq.getNumReads(),
+            0,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertGreater,
+            outputFastq.getReadLength(),
+            0,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            outputFastq.getFormat(),
+            'FASTQ',
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertTrue,
+            outputFastq.hasQuality(),
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertTrue,
+            outputFastq.isCompressed(),
+            cwd=protocol.getWorkingDir()
         )
