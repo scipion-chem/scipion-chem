@@ -336,6 +336,13 @@ class SelectResidueWizardQT(SelectResidueWizard, SelectChainWizardQT):
               break
       return realSeq
 
+SelectResidueWizardQT().addTarget(
+    protocol=ProtContactLigands,
+    targets=['recResidue'],
+    inputs=['inputLigandSet', 'recChain'],
+    outputs=['recResidue']
+)
+
 
 class SelectAtomWizardQT(SelectResidueWizardQT):
   _targets, _inputs, _outputs = [], {}, {}
@@ -431,6 +438,10 @@ SelectChainWizardQT().addTarget(protocol=ProtMapAttributeToSeqROIs,
                               targets=['chain_name'],
                               inputs=['inputAtomStruct'],
                               outputs=['chain_name'])
+SelectChainWizardQT().addTarget(protocol=ProtContactLigands,
+                                targets=['recChain'],
+                                inputs=['inputLigandSet'],
+                                outputs=['recChain'])
 
 
 class SelectMultiResidueWizardQT(SelectResidueWizardQT):
