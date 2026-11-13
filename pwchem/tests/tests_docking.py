@@ -477,3 +477,29 @@ class TestMapLigandContacts(TestExtractLigand):
         self._waitOutput(protContacts, 'outputStructROIs')
         assertHandle(self.assertIsNotNone, getattr(protContacts, 'outputStructROIs', None),
                                  cwd=protContacts.getWorkingDir())
+
+class TestLigandDistance(TestExtractLigand):
+    @classmethod
+    def _runLigDist(cls, inputLigands):
+        protLigDist = cls.newProtocol(
+            ProtContactLigands,
+            inputLigandSet=inputLigands,
+            recChain='{"model": 0, "chain": "C", "residues": 141}',
+            recResidue='{"index": "45-45", "residues": "H"}',
+            recAtom='CE1',
+            ligAtom=36,
+            cutoff=4.3
+        )
+
+        cls.proj.launchProtocol(protLigDist)
+        return protLigDist
+
+    def test(self):
+        self._waitOutput(self.protImportPDB, 'outputPdb')
+        protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
+        self._waitOutput(protExtract, 'outputSmallMolecules', timeOut=30000)
+        ligands = self._runLigDist(protExtract)
+        self._waitOutput(ligands, 'outputSmallMolecules')
+
+        assertHandle(self.assertIsNotNone, getattr(ligands, 'outputSmallMolecules', None),
+                     cwd=ligands.getWorkingDir())
