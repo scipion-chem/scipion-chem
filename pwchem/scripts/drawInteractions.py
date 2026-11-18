@@ -57,8 +57,6 @@ DEF_SAVE_FILE = 'moleculeInteractions.png'
 # Unit of the number written on each interaction line: a distance for a single pose, the
 # fraction of frames it is present in for a trajectory
 DEF_VALUE_UNIT = ''
-# Fraction of the figure height kept free at the top for the legends
-LEGEND_ROOM = 0.2
 
 
 class ResidueBox(FancyBboxPatch):
@@ -68,6 +66,12 @@ class ResidueBox(FancyBboxPatch):
 		self.size = (width, height)
 		FancyBboxPatch.__init__(self, (center[0] - width / 2, center[1] - height / 2), width, height,
 														boxstyle='round,pad=0,rounding_size={}'.format(height / 2), **kwargs)
+
+	def setSize(self, width, height):
+		center = self.get_center()
+		self.size = (width, height)
+		self.set_bounds(center[0] - width / 2, center[1] - height / 2, width, height)
+		self.set_boxstyle('round', pad=0, rounding_size=height / 2)
 
 	def get_center(self):
 		return self.get_x() + self.size[0] / 2, self.get_y() + self.size[1] / 2
@@ -330,9 +334,9 @@ class MoleculeInteractions:
 		self.cirDic, allPoints = self.getDrawnPoints(self.nDic)
 
 		self.getBoundingBoxes(allPoints)
+		self.addLegends()
 		self.drawAminoacids()
 		self.drawInteractions()
-		self.addLegends()
 
 	########## Actions tools ########################
 	def onPress(self, event):
@@ -473,8 +477,8 @@ class MoleculeInteractions:
 			self.fig, self.ax = plt.subplots(figsize=(10, 10 * bboxHeight / bboxWidth))
 			self.ax.imshow(imgFull)
 			self.ax.set_xlim(bboxX[0], bboxX[1])
-			# Headroom over the drawn points, so the legends do not sit on top of a residue
-			self.ax.set_ylim(bboxY[0], bboxY[1] + bboxHeight * LEGEND_ROOM)
+			self.bboxY = bboxY
+			self.ax.set_ylim(bboxY[0], bboxY[1])
 			self.ax.set_axis_off()
 
 			self.fig.canvas.mpl_connect('button_press_event', self.onPress)
@@ -498,6 +502,28 @@ class MoleculeInteractions:
 			self.resCircles[resId] = circle
 			self.circles[circle] = resId
 			self.cirLabels[circle] = cirLabel
+
+		self.fitBoxesToLabels()
+
+	def fitBoxesToLabels(self):
+		'''Each box is given in the coordinates of the drawing and its name in points, so the one
+		only holds the other at a certain scale: the boxes are fitted to the names as they are
+		drawn, and the view widened for those ending up over its border. Widening it changes the
+		scale, so it is all done again'''
+		for _ in range(2):
+			self.fig.canvas.draw()
+			for circle, label in self.cirLabels.items():
+				labelBox = label.get_window_extent().transformed(self.ax.transData.inverted())
+				circle.setSize(labelBox.width + labelBox.height * 0.9, labelBox.height * 1.9)
+
+			pad = max([circle.size[1] for circle in self.circles])
+			corners = [(x, y) for circle in self.circles
+						 for x in (circle.get_x(), circle.get_x() + circle.size[0])
+						 for y in (circle.get_y(), circle.get_y() + circle.size[1])]
+			xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+			xLims, yLims = self.ax.get_xlim(), self.ax.get_ylim()
+			self.ax.set_xlim(min(xLims[0], min(xs) - pad), max(xLims[1], max(xs) + pad))
+			self.ax.set_ylim(min(yLims[0], min(ys) - pad), max(yLims[1], max(ys) + pad))
 
 	def drawInteractions(self):
 		'''Draw all the interactions between residues and moelcule atoms'''
@@ -528,13 +554,20 @@ class MoleculeInteractions:
 
 		legend = self.ax.legend(handles=handles, ncol=len(columns), frameon=True, loc='upper left',
 											handlelength=1.8, columnspacing=1.5)
+
+		# Room is made over the drawing for as much as the legend measures, instead of for a
+		# guessed fraction of it: a short and wide figure would get the molecule drawn under the
+		# legend otherwise. Growing the view changes the scale, so the measure is taken again
+		for _ in range(3):
+			self.fig.canvas.draw()
+			legendBox = legend.get_window_extent().transformed(self.ax.transData.inverted())
+			self.ax.set_ylim(self.bboxY[0], self.bboxY[1] + legendBox.height * 1.05)
 		# No add_artist: ax.legend already attaches it, and adding it again draws it twice, which
 		# only shows up as duplicated elements in a vector output
 
 
 	def display(self):
 		'''Main function to display the generated graph'''
-		plt.tight_layout(pad=5)
 		plt.show()
 
 
