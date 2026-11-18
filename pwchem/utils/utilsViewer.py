@@ -25,7 +25,20 @@
 # **************************************************************************
 
 import os
+import xml.etree.ElementTree as ET
+
 from ..utils import addToDic, getBaseName, natural_sort
+
+# PLIP interaction containers in its XML report: {container: (type drawn, ligand atom field, distance field)}
+PLIP_INTERACTIONS = {
+    'hydrophobic_interactions': ('hydrophobic', 'ligcarbonidx', 'dist'),
+    'hydrogen_bonds': ('hbond', ('donoridx', 'acceptoridx'), 'dist_h-a'),
+    'water_bridges': ('waterbridge', ('donor_idx', 'acceptor_idx'), 'dist_a-w'),
+    'salt_bridges': ('saltbridge', 'lig_idx_list', 'dist'),
+    'pi_stacks': ('pistacking', 'lig_idx_list', 'centdist'),
+    'pi_cation_interactions': ('pication', 'lig_idx_list', 'dist'),
+    'halogen_bonds': ('halogen', 'don_idx', 'dist'),
+}
 
 def buildPMLDockingSingleStr(viewer, molFile, molName, addTarget=True, disable=True):
     pmlStr = ''
@@ -180,7 +193,94 @@ def writePmlFile(pmlFile, pmlStr):
         f.write('zoom')
     return pmlFile, pmlStr
 
+def parsePlipXML(xmlFile):
+    """Interactions PLIP found for a pose, in the shape drawInteractions.py expects.
+
+    :return: ({(residueId, ligandAtomIds): {interactionType: distance}}, {residueId: (x, y, z)}), the
+             second being where the protein atom of the interaction is, used to place the residue
+    """
+    intDic, resCoords = {}, {}
+    for site in ET.parse(xmlFile).getroot().iter('bindingsite'):
+        for container in site.find('interactions'):
+            if container.tag not in PLIP_INTERACTIONS:
+                continue
+            intType, idxField, distField = PLIP_INTERACTIONS[container.tag]
+
+            for contact in container:
+                ligIdxs = getPlipLigandIdxs(contact, idxField)
+                if not ligIdxs:
+                    continue
+
+                resId = '{}_{}'.format(getPlipText(contact, 'restype'), getPlipText(contact, 'resnr'))
+                pairId = (resId, '_'.join(ligIdxs))
+                intDic.setdefault(pairId, {})[intType] = float(getPlipText(contact, distField, 0))
+                resCoords.setdefault(resId, []).append(getPlipCoords(contact, 'protcoo'))
+
+    # Several contacts of the same residue: it is drawn where they average
+    resCoords = {resId: [sum(cs) / len(cs) for cs in zip(*coords)] for resId, coords in resCoords.items()}
+    return intDic, resCoords
+
+def getPlipText(element, tag, default=None):
+    found = element.find(tag)
+    return found.text if found is not None and found.text else default
+
+def getPlipLigandIdxs(contact, idxField):
+    """Atoms of the ligand taking part in an interaction: a list (salt bridges, rings), a single atom or,
+    for the donor/acceptor pairs, whichever of the two is not the protein"""
+    if isinstance(idxField, tuple):
+        donField, accField = idxField
+        idxField = accField if getPlipText(contact, 'protisdon', 'False') == 'True' else donField
+        return [getPlipText(contact, idxField)] if getPlipText(contact, idxField) else []
+
+    elif idxField.endswith('_list'):
+        found = contact.find(idxField)
+        return [idx.text for idx in found] if found is not None else []
+
+    idx = getPlipText(contact, idxField)
+    return [idx] if idx else []
+
+def getPlipCoords(contact, tag):
+    coo = contact.find(tag)
+    return [float(coo.find(c).text) for c in ('x', 'y', 'z')] if coo is not None else [0.0, 0.0, 0.0]
+
+def getPlipLigandName(xmlFile):
+    """Residue name PLIP gave to the ligand of the complex"""
+    hetId = ET.parse(xmlFile).getroot().find('.//identifiers/hetid')
+    return hetId.text if hetId is not None else 'UNL'
+
+def writePlipLigandFile(plipDir, xmlFile, outFile, complexFile):
+    """Ligand alone, with the atom numbers the report refers to: those of the PDB PLIP fixed, or those
+    of the complex it was given when it found nothing to fix and wrote no fixed copy"""
+    ligName = getPlipLigandName(xmlFile)
+    fixedFiles = [f for f in os.listdir(plipDir) if f.startswith('plipfixed.') and f.endswith('.pdb')]
+    source = os.path.join(plipDir, fixedFiles[0]) if fixedFiles else complexFile
+
+    with open(outFile, 'w') as fOut, open(source) as fIn:
+        for line in fIn:
+            if line.startswith(('ATOM', 'HETATM')) and line[17:20].strip() == ligName:
+                fOut.write(line)
+    return outFile
+
+def writeDrawInteractionsParams(paramsFile, molFile, intDic, outFile, poseFile=None, resCoords=None,
+                                valueUnit=None):
+    """Parameters file read by drawInteractions.py. The pose file (with the bond orders a PDB has
+    lost) and the coordinates of the residues are optional, but the diagram is better with them"""
+    with open(paramsFile, 'w') as f:
+        f.write(f'molFile :: {os.path.abspath(molFile)}\n')
+        f.write(f'intDic :: {intDic}\n')
+        f.write(f'outFile :: {os.path.abspath(outFile)}\n')
+        if poseFile:
+            f.write(f'poseFile :: {os.path.abspath(poseFile)}\n')
+        if resCoords:
+            f.write(f'resCoords :: {resCoords}\n')
+        if valueUnit:
+            f.write(f'valueUnit :: {valueUnit}\n')
+    return paramsFile
+
 def sortMolsByUnique(mols):
+    if not mols:
+        return []
+
     uniques, newMols = [], []
     for mol in mols:
         uniq = mol.clone().getUniqueName()

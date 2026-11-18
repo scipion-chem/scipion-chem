@@ -39,6 +39,7 @@ from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
 from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort, addHydrogensToMol, relabelAtomsPDB
 from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import RDKIT_DIC
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
 PYMOL, CHIMERAX, VIEWDOCKX = 0, 1, 2
@@ -139,6 +140,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         group.addParam('displayPymolPLIP', params.StringParam, default='',
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
+        group.addParam('displayPlipDiagram', params.StringParam, default='',
+                       label='Draw ligand interactions diagram: ',
+                       help='Draw the interactions of this single ligand as a 2D diagram, with the '
+                            'interacting residues placed around the molecule as they are in the pocket. '
+                            'The residues can be dragged and the figure is saved when its window is closed')
 
     #Covalent section: only when the molecules carry a covalent complex file
     if self.checkIfCovalent():
@@ -241,6 +247,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       'displayMoleculeDock': self._viewMoleculeDock,
       'displaySingleDock': self._viewSingleDock,
       'displayPymolPLIP': self._viewPymolPLIP,
+      'displayPlipDiagram': self._viewPlipDiagram,
 
       #Ligand
       'displaySet': self._viewSet,
@@ -384,21 +391,50 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       elif self.getEnumText('displaySoftware') == VIEWDOCKX_LAB:
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
-  def _viewPymolPLIP(self, e=None):
-    pmlsDir = self.getPmlsDir()
-
-    ligandLabel = self.displayPymolPLIP.get()
+  def runPlipOnPose(self, ligandLabel, plipArgs='-yt'):
+    """Analyse a single pose with PLIP, in the complex formed with the receptor it was docked into."""
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
-    if len(mols) > 0:
-      mol = mols[0].clone()
-      mergedPDB = self.createComplexPDB(self.getReceptorFile(mol), mol.getPoseFile(),
-                                        os.path.join(pmlsDir, ligandLabel + '.pdb'))
+    if not mols:
+      return None, None
 
-      pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
-                           cwd=os.path.abspath(pmlsDir))
+    pmlsDir = self.getPmlsDir()
+    mol = mols[0].clone()
+    mergedPDB = self.createComplexPDB(self.getReceptorFile(mol), mol.getPoseFile(),
+                                      os.path.join(pmlsDir, ligandLabel + '.pdb'))
 
+    pwchemPlugin.runPLIP('-f {} {} -o {}'.format(os.path.abspath(mergedPDB), plipArgs, ligandLabel),
+                         cwd=os.path.abspath(pmlsDir))
+    return mol, os.path.abspath(os.path.join(pmlsDir, ligandLabel))
+
+  def _viewPlipDiagram(self, e=None):
+    ligandLabel = self.displayPlipDiagram.get()
+    mol, plipDir = self.runPlipOnPose(ligandLabel, plipArgs='-x')
+    if mol is None:
+      return
+
+    xmlFile = os.path.join(plipDir, f'{ligandLabel}_report.xml')
+    intDic, resCoords = parsePlipXML(xmlFile)
+    if not intDic:
+      showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
+      return
+
+    ligFile = writePlipLigandFile(plipDir, xmlFile, os.path.join(plipDir, f'{ligandLabel}_ligand.pdb'),
+                                  os.path.join(self.getPmlsDir(), f'{ligandLabel}.pdb'))
+    paramsFile = writeDrawInteractionsParams(os.path.join(plipDir, 'drawInteractionsParams.txt'),
+                                             ligFile, intDic,
+                                             os.path.join(plipDir, f'{ligandLabel}_interactions.png'),
+                                             poseFile=mol.getFileName(), resCoords=resCoords,
+                                             valueUnit='Å')
+
+    pwchemPlugin.runScript(self.protocol, 'drawInteractions.py', os.path.abspath(paramsFile),
+                           env=RDKIT_DIC, cwd=plipDir, popen=True, wait=False)
+
+  def _viewPymolPLIP(self, e=None):
+    ligandLabel = self.displayPymolPLIP.get()
+    mol, plipDir = self.runPlipOnPose(ligandLabel)
+    if mol is not None:
       pmlFile, pmlFiles = '', []
-      for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
+      for file in os.listdir(plipDir):
           if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
               pmlFiles.append(file)
 
@@ -411,7 +447,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           pmlFile = pmlFiles[0]
 
       if pmlFile != '':
-        pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
+        pmlFile = os.path.join(plipDir, pmlFile)
         pymolV = PyMolViewer(project=self.getProject())
         return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
       else:
