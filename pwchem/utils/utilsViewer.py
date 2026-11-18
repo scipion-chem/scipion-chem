@@ -51,22 +51,12 @@ def buildSchShowStr(name, isReceptor=True):
     return schStr
 
 def buildPMLDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True):
-    if addTarget and pose:
-        genRecFile = os.path.abspath(viewer.protocol.getOriginalReceptorFile())
-
     # Build complex groups, in case mols have different receptor files
     cGroups, uNames = {}, {}
     for mol in mols:
         molFile = mol.getPoseFile() if pose else mol.getFileName()
-        if addTarget and pose:
-            if mol.getProteinFile():
-                recFile = mol.getProteinFile()
-            else:
-                recFile = genRecFile
-
-            cGroups = addToDic(cGroups, recFile, molFile)
-        else:
-            cGroups = addToDic(cGroups, 'all', molFile)
+        recFile = viewer.getReceptorFile(mol) if addTarget and pose else None
+        cGroups = addToDic(cGroups, os.path.abspath(recFile) if recFile else 'all', molFile)
         uNames[molFile] = mol.getUniqueName()
 
     pmlStr, ci = '', 1
@@ -115,6 +105,74 @@ def buildPMLCovalentStr(covDic, disable=True):
     if covDic:
         pmlStr += f'orient {next(iter(covDic))} and resn LIG\n'
     return pmlStr
+
+def buildChimeraDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True,
+                                 vinaDock=False):
+    """ChimeraX counterpart of buildPMLDockingGroupsStr: each receptor is shown with the poses
+    docked into it, grouped together as a pymol group is.
+    """
+    cGroups, uNames = {}, {}
+    for mol in mols:
+        if vinaDock:
+            molFile, molName = viewer.getDockFile(mol), mol.getUniqueName(pose=False, dock=False)
+        else:
+            molFile, molName = mol.getPoseFile() if pose else mol.getFileName(), mol.getUniqueName()
+
+        recFile = viewer.getReceptorFile(mol) if addTarget and pose else None
+        cGroups = addToDic(cGroups, os.path.abspath(recFile) if recFile else 'all', molFile)
+        uNames[molFile] = molName
+
+    chimStr, mi, cGroupLims = '', 1, []
+    for recFile, molFiles in cGroups.items():
+        firstId = mi
+        if recFile != 'all':
+            chimStr += f"run(session, 'open {recFile}')\n"
+            mi += 1
+
+        molFiles = natural_sort(set(molFiles))
+        for i, molFile in enumerate(molFiles):
+            chimStr += f"run(session, 'open {os.path.abspath(molFile)} name {uNames[molFile]}')\n"
+            if disable and i != 0:
+                chimStr += f"run(session, 'hide #{mi} models')\n"
+            mi += 1
+
+        if recFile != 'all':
+            ci = len(cGroupLims) + 1
+            complexName = f'{getBaseName(recFile)}_{ci}' if len(molFiles) > 1 \
+                else f'{uNames[molFiles[0]]}_{ci}'
+            cGroupLims.append((firstId, mi - 1, complexName))
+
+    for ci, (firstId, lastId, complexName) in enumerate(cGroupLims):
+        if firstId < lastId:
+            chimStr += f"""run(session, 'rename #{firstId}-{lastId} "{complexName}" id #{mi + ci}')\n"""
+            if disable and ci != 0:
+                chimStr += f"run(session, 'hide #{mi + ci} models')\n"
+    return chimStr
+
+
+def buildChimeraCovalentStr(covDic, disable=True):
+    """ChimeraX counterpart of buildPMLCovalentStr.
+
+    :param covDic: {objectName: covalent complex file}
+    :param disable: hide every complex but the first, so poses do not overlap
+    """
+    chimStr = ''
+    for i, (objName, covFile) in enumerate(covDic.items()):
+        chimStr += f"run(session, 'open {os.path.abspath(covFile)} name {objName}')\n"
+        if disable and i != 0:
+            chimStr += f"run(session, 'hide #{i + 1} models')\n"
+    return chimStr
+
+
+def writeChimeraFile(chimFile, chimStr, vinaDock=False):
+    with open(chimFile, 'w') as f:
+        f.write('from chimerax.core.commands import run\n')
+        f.write(f"run(session, 'cd {os.getcwd()}')\n")
+        f.write("run(session, 'cofr 0,0,0')\n")  # set center of coordinates
+        f.write(chimStr)
+        if vinaDock:
+            f.write("run(session, 'viewdockx')\n")
+    return chimFile, chimStr
 
 def writePmlFile(pmlFile, pmlStr):
     with open(pmlFile, 'w') as f:
