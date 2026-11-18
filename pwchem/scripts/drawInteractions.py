@@ -555,15 +555,13 @@ class MoleculeInteractions:
 		legend = self.ax.legend(handles=handles, ncol=len(columns), frameon=True, loc='upper left',
 											handlelength=1.8, columnspacing=1.5)
 
-		# Room is made over the drawing for as much as the legend measures, instead of for a
-		# guessed fraction of it: a short and wide figure would get the molecule drawn under the
-		# legend otherwise. Growing the view changes the scale, so the measure is taken again
+		for row in (0, nRows):
+			legend.get_texts()[row].set_fontweight('bold')
+
 		for _ in range(3):
 			self.fig.canvas.draw()
 			legendBox = legend.get_window_extent().transformed(self.ax.transData.inverted())
 			self.ax.set_ylim(self.bboxY[0], self.bboxY[1] + legendBox.height * 1.05)
-		# No add_artist: ax.legend already attaches it, and adding it again draws it twice, which
-		# only shows up as duplicated elements in a vector output
 
 
 	def display(self):
