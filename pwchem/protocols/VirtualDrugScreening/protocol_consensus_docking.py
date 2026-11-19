@@ -407,7 +407,7 @@ class ProtocolConsensusDocking(EMProtocol):
         reference one. Done on the converted files, so the clustering RMSD, which does not fit
         anything, compares poses living in the same coordinate frame'''
         recDic, molsDir = self.buildReceptorDic(), self.getInputMolsDir()
-        self.transDic, self.fitDic, self.nFitDic = {}, {}, {}
+        self.transDic, self.fitDic, self.nFitDic, self.nCAs = {}, {}, {}, {}
 
         for molFile in glob.glob(os.path.join(molsDir, '*')):
             uName = getBaseName(molFile)
@@ -417,13 +417,26 @@ class ProtocolConsensusDocking(EMProtocol):
             rot, tran = self.getTransform(recDic[uName])
             self.transformMolFile(molFile, rot, tran)
 
-        allRMSD = list(self.fitDic.values())
+        self.reportFits()
 
-        badFits = {rec: rms for rec, rms in self.fitDic.items() if rms > self.maxFitRMSD.get()}
-        if badFits:
-            print(f'WARNING: {len(badFits)} receptor(s) fitted with a CA RMSD above '
-                  f'{self.maxFitRMSD.get()} A. Their poses may look like a disagreement when they are '
-                  f'just badly superposed.')
+    def reportFits(self):
+        '''Summary of the receptor superpositions. A fit is reported as bad when its RMSD is high or when
+        most of the paired CAs had to be discarded as outliers (the RMSD alone only covers the kept ones)'''
+        if not self.fitDic:
+            return
+        rmsds = np.array(list(self.fitDic.values()))
+        print(f'Receptor alignment: {len(rmsds)} receptor(s) fitted, CA RMSD mean {rmsds.mean():.2f} A, '
+              f'max {rmsds.max():.2f} A')
+
+        bad = {rec: (rms, *self.nFitDic[rec]) for rec, rms in self.fitDic.items()
+               if rms > self.maxFitRMSD.get() or self.nFitDic[rec][0] < 0.5 * self.nFitDic[rec][1]}
+        if bad:
+            print(f'WARNING: {len(bad)} receptor(s) badly superposed (CA RMSD above {self.maxFitRMSD.get()} A '
+                  f'or less than half of the paired CAs within {FIT_CUTOFF} A). Worst ones:')
+            for rec, (rms, nUsed, nPairs) in sorted(bad.items(), key=lambda x: -x[1][0])[:3]:
+                print(f'  {os.path.basename(rec)}: RMSD {rms:.2f} A, {nUsed}/{nPairs} CAs used, '
+                      f'CAs in file {self.nCAs.get(rec)} vs reference {self.nCAs.get(self.getReferenceFile())}')
+
 
     def getTransform(self, recFile):
         '''(rotation, translation) taking recFile onto the reference. Cached by receptor file, so a
@@ -440,6 +453,7 @@ class ProtocolConsensusDocking(EMProtocol):
             rotran, rms, nUsed = self.fitAtoms(refCAs, movCAs)
             self.transDic[recFile], self.fitDic[recFile] = rotran, rms
             self.nFitDic[recFile] = (nUsed, len(refCAs))
+            self.nCAs[recFile] = sum(len(c) for c in self.getChains(recFile).values())
         return self.transDic[recFile]
 
     def fitAtoms(self, refAtoms, movAtoms):
@@ -499,6 +513,7 @@ class ProtocolConsensusDocking(EMProtocol):
     def getReferenceChains(self):
         if not hasattr(self, 'refChains'):
             self.refChains = self.getChains(self.getReferenceFile())
+            self.nCAs[self.getReferenceFile()] = sum(len(c) for c in self.refChains.values())
         return self.refChains
 
     def getChains(self, structFile):
