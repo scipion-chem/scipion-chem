@@ -50,8 +50,10 @@ RES_GROUPS = {'Apolar': ['GLY', 'ALA', 'VAL', 'LEU', 'ILE', 'MET'], 'Aromatic': 
 
 COLOR_DIC = {res: RES_COLORS[group] for group, resGroup in RES_GROUPS.items() for res in resGroup}
 
-COLOR_INT_DIC = {'halogen': 'red', 'hbond': 'cyan', 'hydrophobic': 'green', 'pication': 'orange', 'pistacking': 'brown',
-								 'saltbridge': 'gray', 'waterbridge': 'blue'}
+# Hbond and waterbridge are both blue, told apart by how dark they are rather than by their hue: the
+# lines are drawn half transparent, which washes a light colour out
+COLOR_INT_DIC = {'halogen': 'red', 'hbond': 'royalblue', 'hydrophobic': 'green', 'pication': 'orange',
+								 'pistacking': 'brown', 'saltbridge': 'gray', 'waterbridge': 'navy'}
 
 DEF_SAVE_FILE = 'moleculeInteractions.png'
 # Unit of the number written on each interaction line: a distance for a single pose, the
