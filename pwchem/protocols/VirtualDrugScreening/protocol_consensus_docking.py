@@ -303,12 +303,16 @@ class ProtocolConsensusDocking(EMProtocol):
         self.consensusMols = self.fillEmptyAttributes(self.consensusMols)
         self.consensusMols, idsDic = self.reorderIds(self.consensusMols)
 
+        # Each representative keeps the pose and the receptor of its own input protocol
+        origDic, recDic = self.buildOrigPoseDic(), self.buildReceptorDic()
+
         outDocked = SetOfSmallMolecules(filename=self._getPath('consensusDocked_All.sqlite'))
         outDocked.setDocked(True)
         outDocked.setProteinFile(inputProteinFile)
         for outDock in self.consensusMols:
             newDock = outDock.clone()
             #newDock = self.relabelPosId(newDock)
+            newDock = self.restoreOriginalFiles(newDock, origDic, recDic)
             outDocked.append(newDock)
         self._defineOutputs(outputSmallMolecules=outDocked)
 
@@ -373,6 +377,29 @@ class ProtocolConsensusDocking(EMProtocol):
 
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
+
+    def restoreOriginalFiles(self, mol, origDic, recDic):
+        '''Point a representative back at the files of the protocol that generated it: its pose as it
+        was written and its own receptor, which are already in the same frame.'''
+        posFile = origDic.get(mol.getUniqueName())
+        if posFile:
+            mol.setPoseFile(self.getRelPath(posFile))
+
+        recFile = recDic.get(mol.getUniqueName())
+        if recFile:
+            mol.setProteinFile(self.getRelPath(recFile))
+        return mol
+
+    def buildOrigPoseDic(self):
+        '''{uniqueName: pose file as the input protocol wrote it}'''
+        return {mol.getUniqueName(): mol.getPoseFile()
+                for molSet in self.inputMoleculesSets for mol in molSet.get()}
+
+    def getRelPath(self, filePath):
+        '''Path relative to the project, so that the output does not depend on where it is stored'''
+        projPath = os.path.abspath(self.getProject().getPath())
+        absPath = os.path.abspath(filePath)
+        return os.path.relpath(absPath, projPath) if absPath.startswith(projPath) else filePath
 
     ################## Receptor alignment ##################
     def alignMolecules(self):
