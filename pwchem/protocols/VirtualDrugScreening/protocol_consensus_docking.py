@@ -33,16 +33,23 @@ same or different software
 """
 
 import os, re, glob
+import numpy as np
 from scipy.cluster.hierarchy import linkage, fcluster
+from Bio.PDB import PDBParser, MMCIFParser, Superimposer
 
 from pyworkflow.protocol import params
 from pyworkflow.utils import Message
+from pyworkflow.object import Float
 from pwem.protocols import EMProtocol
 
 from pwchem.objects import SetOfSmallMolecules
 from pwchem.utils import *
 
 MIN, MAX = 0, 1
+REF_AS, REF_SET = 0, 1
+
+# Cluster provenance attributes written on every representative (see clusterStats)
+STAT_ATTRS = ['consensusMethods', 'consensusPoses', 'consensusScore', 'clusterRMSD']
 
 class ProtocolConsensusDocking(EMProtocol):
     """
@@ -154,25 +161,59 @@ class ProtocolConsensusDocking(EMProtocol):
                        label="Input Sets of Docked Molecules",
                        help='Select the pocket sets to make the consensus')
 
+        group = form.addGroup('Receptor alignment')
+        group.addParam('doAlign', params.BooleanParam, default=False,
+                       label='Align receptors: ',
+                       help='Superpose every pose onto a common reference before clustering.\n'
+                            'The RMSD used for the clustering is calculated on the coordinates as they are, '
+                            'with no fitting, so it is only meaningful when every pose has been generated in '
+                            'the same coordinate frame. That is the case for docking into a single prepared '
+                            'receptor, but not for co-folding methods, which predict a receptor of their own '
+                            'for each model.\nEach pose is moved with the transformation that superposes its '
+                            'own receptor onto the reference one, matching CA atoms by chain and residue '
+                            'number. The receptor of a pose is its own protein file if it has one '
+                            '(co-folding, where every model has its own structure), else the protein file of '
+                            'its input set (docking, where a whole set shares the receptor).')
+        group.addParam('refOrigin', params.EnumParam, default=REF_AS, condition='doAlign',
+                       choices=['AtomStruct', 'From input set'], label='Reference: ', display=params.EnumParam.DISPLAY_HLIST,
+                       help='Structure every pose is superposed onto.')
+        group.addParam('refStruct', params.PointerParam, pointerClass='AtomStruct',
+                       condition='doAlign and refOrigin==%s' % REF_AS, allowsNull=True,
+                       label='Reference structure: ',
+                       help='Receptor (or complex) used as reference for the superposition.')
+        group.addParam('refSet', params.StringParam, default='',
+                       condition='doAlign and refOrigin==%s' % REF_SET,
+                       label='Reference input set: ',
+                       help='The receptor of the first molecule of this input set is used as reference. '
+                            'Use the wizard to pick one of the input sets.')
+        group.addParam('maxFitRMSD', params.FloatParam, default=5.0, condition='doAlign',
+                       expertLevel=params.LEVEL_ADVANCED, label='Warn above fit RMSD: ',
+                       help='A superposition whose CA RMSD is above this value is reported in the log. A bad '
+                            'fit is indistinguishable from a method that disagrees once the coordinates have '
+                            'been written, so it is worth checking.')
+
         group = form.addGroup('Clustering')
         group.addParam('linkage', params.EnumParam, default=0,
                        choices=['Single', 'Complete', 'Average', 'Ward', 'Centroid', 'Median'],
                        label='Hierarchical clustering linkage: ',
                        help='Hierarchical clustering linkage used on scipy clustering.\n'
                             'https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html')
-        form.addParam('outIndv', params.BooleanParam, default=False,
-                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
-                      help='Creates an output set related to each input set, with the elements from each input'
-                           'present in the consensus clusters')
-        form.addParam('sameClust', params.BooleanParam, default=True,
-                      label='Count poses from same input: ', expertLevel=params.LEVEL_ADVANCED,
-                      help='Whether to count overlapping docked molecules from the same input set when calculating the '
-                           'cluster size')
-
         group.addParam('maxRMSD', params.FloatParam, default=1, label='Max RMSD for overlap: ',
                       help="Maximum RMSD for clustering different docked molecules")
         group.addParam('numOfOverlap', params.IntParam, default=2, label='Minimum number of overlapping dockings: ',
                       help="Min number of docked molecules to be considered consensus docking")
+        group.addParam('sameClust', params.BooleanParam, default=True,
+                      label='Count poses from same input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Whether to count overlapping docked molecules from the same input set when calculating the '
+                           'cluster size.\nWhen True, the size of a cluster is its number of poses, so a single input '
+                           'set can reach the minimum on its own. When False, it is the number of input sets present '
+                           'in the cluster, so the minimum is the number of inputs that must agree.')
+        group.addParam('minPosesPerSet', params.IntParam, default=1, condition='not sameClust',
+                       expertLevel=params.LEVEL_ADVANCED, label='Min poses per input to count: ',
+                       help='How many poses an input set must place in a cluster before that set counts towards '
+                            'the cluster size. 1 means a single pose is enough.\nRaise it when each input produces '
+                            'several correlated poses (the diffusion samples of a co-folding method, for example), '
+                            'so that an input counts with a pose it reproduces and not with its luckiest sample.')
 
         group = form.addGroup('Representative')
         group.addParam('repMode', params.EnumParam, default=0, choices=['Medoid', 'By attribute'],
@@ -187,6 +228,16 @@ class ProtocolConsensusDocking(EMProtocol):
                        label='Keep values: ', condition='repMode==1',
                        help='Whether to keep the minimum or maximum values of the criteria attribute to select the '
                             'representative')
+        group.addParam('oneRepPerMol', params.BooleanParam, default=False,
+                       label='One representative per molecule: ',
+                       help='Keep only the best supported cluster of each molecule, instead of one representative '
+                            'per cluster reaching the minimum size. Clusters are compared by number of input sets, '
+                            'then number of poses, then tightness (mean RMSD inside the cluster).\nMolecules with no '
+                            'cluster reaching the minimum produce no output.')
+        group.addParam('outIndv', params.BooleanParam, default=False,
+                      label='Output for each input: ', expertLevel=params.LEVEL_ADVANCED,
+                      help='Creates an output set related to each input set, with the elements from each input'
+                           'present in the consensus clusters')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -218,12 +269,19 @@ class ProtocolConsensusDocking(EMProtocol):
         self.convertPDBFiles(tmpDirPdb, outDir)
         self.convertMAEFiles(tmpDirMae, outDir)
 
+        if self.doAlign.get():
+            self.alignMolecules()
+
     def consensusStep(self):
         molSetDic = self.buildMolSetDic()
+        self.posesPerSetMol = self.buildPosesPerSetMol()
         minSize = self.numOfOverlap.get()
 
         molClusters = self.generateDockingClusters()
         self.consensusMols = self.cluster2representative(molClusters, molSetDic, minSize)
+
+        if self.oneRepPerMol.get():
+            self.consensusMols = self.selectBestPerMol(self.consensusMols)
 
         if self.outIndv.get():
             self.indepConsensusSets = {}
@@ -232,7 +290,8 @@ class ProtocolConsensusDocking(EMProtocol):
             for inSetId in indepClustersDic:
                 # Getting independent representative for each input set
                 self.indepConsensusSets[inSetId] = self.cluster2representative(indepClustersDic[inSetId],
-                                                                               molSetDic, minSize=1)
+                                                                               molSetDic, minSize=1,
+                                                                               addStats=False)
 
     def createOutputStep(self):
         inputProteinFile = self.inputMoleculesSets[0].get().getProteinFile()
@@ -285,6 +344,9 @@ class ProtocolConsensusDocking(EMProtocol):
             validations.append('You must specify an attribute to choose a ligand representative of the generated '
                                'cluster. Typically, the energy or the score, to choose the best out of the cluster')
 
+        if not self.sameClust.get() and self.minPosesPerSet.get() < 1:
+            validations.append('The minimum number of poses per input to count must be at least 1.')
+
         return validations
 
     # --------------------------- UTILS functions -----------------------------------
@@ -309,12 +371,150 @@ class ProtocolConsensusDocking(EMProtocol):
     def getInputMolsDir(self):
         return os.path.abspath(self._getExtraPath('inputMolecules'))
 
+    ################## Receptor alignment ##################
+    def alignMolecules(self):
+        '''Move every converted pose with the transformation superposing its own receptor onto the
+        reference one. Done on the converted files, so the clustering RMSD, which does not fit
+        anything, compares poses living in the same coordinate frame'''
+        recDic, molsDir = self.buildReceptorDic(), self.getInputMolsDir()
+        self.transDic, self.fitDic = {}, {}
+
+        for molFile in glob.glob(os.path.join(molsDir, '*')):
+            uName = getBaseName(molFile)
+            if uName not in recDic:
+                raise Exception(f'No input molecule found for the converted file {molFile}')
+
+            rot, tran = self.getTransform(recDic[uName])
+            self.transformMolFile(molFile, rot, tran)
+
+        badFits = {rec: rms for rec, rms in self.fitDic.items() if rms > self.maxFitRMSD.get()}
+        print(f'Receptors superposed onto {self.getReferenceFile()}: {len(self.fitDic)}')
+        if badFits:
+            print(f'WARNING: {len(badFits)} receptor(s) fitted with a CA RMSD above '
+                  f'{self.maxFitRMSD.get()} A. Their poses may look like a disagreement when they are '
+                  f'just badly superposed:')
+            for rec, rms in badFits.items():
+                print(f'\t{rms:.2f} A\t{rec}')
+
+    def getTransform(self, recFile):
+        '''(rotation, translation) taking recFile onto the reference. Cached by receptor file, so a
+        receptor shared by a whole input set is only fitted once'''
+        recFile = os.path.abspath(recFile)
+        if recFile not in self.transDic:
+            refCAs, movCAs = self.getReferenceCAs(), self.getCAs(recFile)
+            keys = [k for k in refCAs if k in movCAs]
+            if len(keys) < 3:
+                raise Exception(f'Only {len(keys)} CA atoms could be matched between {recFile} and the '
+                                f'reference {self.getReferenceFile()}. They are matched by chain and '
+                                f'residue number, so both structures must share the numbering.')
+
+            sup = Superimposer()
+            sup.set_atoms([refCAs[k] for k in keys], [movCAs[k] for k in keys])
+            self.transDic[recFile], self.fitDic[recFile] = sup.rotran, sup.rms
+        return self.transDic[recFile]
+
+    def getRefSetId(self):
+        """Return the index of the input set whose name matches refSet"""
+        targetName = self.refSet.get()
+        if targetName:
+            for idx, setPointer in enumerate(self.inputMoleculesSets):
+                if str(setPointer.get()) == targetName:
+                    return idx
+        return None
+
+    def getReferenceFile(self):
+        if self.refOrigin.get() == REF_AS:
+            return os.path.abspath(self.refStruct.get().getFileName())
+
+        molSet = self.inputMoleculesSets[self.getRefSetId()].get()
+        refFile = molSet.getFirstItem().getProteinFile() or molSet.getProteinFile()
+        return os.path.abspath(refFile)
+
+    def getReferenceCAs(self):
+        if not hasattr(self, 'refCAs'):
+            self.refCAs = self.getCAs(self.getReferenceFile())
+        return self.refCAs
+
+    def getCAs(self, structFile):
+        '''{(chainId, residueNumber): CA atom} of the first model of a structure'''
+        parser = MMCIFParser(QUIET=True) if structFile.lower().endswith(('.cif', '.mmcif')) \
+            else PDBParser(QUIET=True)
+        struct = parser.get_structure(getBaseName(structFile), structFile)
+
+        cas = {}
+        for model in struct:
+            for chain in model:
+                for residue in chain:
+                    if 'CA' in residue:
+                        cas[(chain.id, residue.id[1])] = residue['CA']
+            break
+        return cas
+
+    def transformMolFile(self, molFile, rot, tran):
+        '''Apply a rotation and a translation to the coordinates of a (multi)molecule SDF file'''
+        if not molFile.lower().endswith(('.sdf', '.sd')):
+            raise Exception(f'Receptor alignment is only implemented for SDF poses, got {molFile}')
+
+        with open(molFile) as f:
+            lines = f.readlines()
+
+        outLines, i = [], 0
+        while i < len(lines):
+            countsIdx = i + 3
+            if countsIdx >= len(lines):
+                outLines += lines[i:]
+                break
+
+            if 'V3000' in lines[countsIdx]:
+                raise Exception(f'V3000 SDF files are not supported by the receptor alignment: {molFile}')
+
+            nAtoms = int(lines[countsIdx][0:3])
+            outLines += lines[i:countsIdx + 1]
+
+            for atomLine in lines[countsIdx + 1: countsIdx + 1 + nAtoms]:
+                coords = [float(atomLine[0:10]), float(atomLine[10:20]), float(atomLine[20:30])]
+                newCoords = np.dot(coords, rot) + tran
+                outLines.append('%10.4f%10.4f%10.4f%s' % (*newCoords, atomLine[30:]))
+
+            i = countsIdx + 1 + nAtoms
+            while i < len(lines):
+                outLines.append(lines[i])
+                i += 1
+                if outLines[-1].startswith('$$$$'):
+                    break
+
+        tmpFile = molFile + '.tmp'
+        with open(tmpFile, 'w') as f:
+            f.writelines(outLines)
+        os.replace(tmpFile, molFile)
+
     def buildMolSetDic(self):
         dic = {}
         for i, pSet in enumerate(self.inputMoleculesSets):
             for mol in pSet.get():
                 dic[mol.getUniqueName()] = i
         return dic
+
+    def buildPosesPerSetMol(self):
+        '''{(molName, inputSetId): number of poses of that molecule in that input set}.
+        Denominator of the consensusScore'''
+        dic = {}
+        for i, pSet in enumerate(self.inputMoleculesSets):
+            for mol in pSet.get():
+                key = (mol.getMolName(), i)
+                dic[key] = dic.get(key, 0) + 1
+        return dic
+
+    def buildReceptorDic(self):
+        '''{uniqueName: receptor file}. The receptor of a pose is its own protein file if it has one
+        (every co-folding model predicts its own structure), else the one of its input set'''
+        recDic = {}
+        for molSet in self.inputMoleculesSets:
+            molSet = molSet.get()
+            setRec = molSet.getProteinFile()
+            for mol in molSet:
+                recDic[mol.getUniqueName()] = mol.getProteinFile() or setRec
+        return recDic
 
     def createIndepOutputs(self):
         outSets = {}
@@ -394,8 +594,7 @@ class ProtocolConsensusDocking(EMProtocol):
             if self.countMolsInCluster(clust, molSetDic) >= self.numOfOverlap.get():
                 curIndepCluster = {}
                 for mol, sRMSD in clust:
-                    curMolFile = mol.getPoseFile()
-                    inSetId = molSetDic[curMolFile]
+                    inSetId = molSetDic[mol.getUniqueName()]
                     if inSetId not in curIndepCluster:
                         curIndepCluster[inSetId] = []
                     curIndepCluster[inSetId] += [(mol, sRMSD)]
@@ -406,21 +605,65 @@ class ProtocolConsensusDocking(EMProtocol):
                     indepClustersDic[inSetId] += [setMols]
         return indepClustersDic
 
-    def countMolsInCluster(self, cluster, molSetDic):
-        setIds = []
+    def getSetCounts(self, cluster, molSetDic):
+        '''Return {inputSetId: number of poses of that input set in the cluster}'''
+        counts = {}
         for mol, _ in cluster:
             setId = molSetDic[mol.getUniqueName()]
-            if self.sameClust.get() or not setId in setIds:
-                setIds.append(setId)
-        return len(setIds)
+            counts[setId] = counts.get(setId, 0) + 1
+        return counts
 
-    def cluster2representative(self, clusters, molSetDic, minSize):
+    def countMolsInCluster(self, cluster, molSetDic):
+        '''Size of a cluster: either its number of poses (sameClust) or the number of input sets
+        placing at least minPosesPerSet poses in it'''
+        counts = self.getSetCounts(cluster, molSetDic)
+        if self.sameClust.get():
+            return sum(counts.values())
+
+        minPoses = self.minPosesPerSet.get()
+        return len([setId for setId, nPoses in counts.items() if nPoses >= minPoses])
+
+    def clusterStats(self, cluster, molSetDic):
+        '''Support of a cluster, to be stored on its representative:
+        - consensusMethods: number of input sets present in it
+        - consensusPoses: number of poses in it
+        - consensusScore: sum over the input sets of the fraction of their poses (for that molecule)
+                          present in the cluster. Ranges from 0 to the number of input sets
+        - clusterRMSD: mean RMSD between the poses of the cluster. The sums of distances are already
+                       calculated for the medoid, and each pairwise distance appears in two of them
+        '''
+        counts = self.getSetCounts(cluster, molSetDic)
+        molName, nPoses = cluster[0][0].getMolName(), len(cluster)
+
+        score = 0
+        for setId, nSetPoses in counts.items():
+            score += nSetPoses / self.posesPerSetMol[(molName, setId)]
+
+        meanRMSD = sum([sRMSD for _, sRMSD in cluster]) / (nPoses * (nPoses - 1)) if nPoses > 1 else 0
+        return {'consensusMethods': len(counts), 'consensusPoses': nPoses,
+                'consensusScore': score, 'clusterRMSD': meanRMSD}
+
+    def cluster2representative(self, clusters, molSetDic, minSize, addStats=True):
         representatives = []
         for clust in clusters:
             if self.countMolsInCluster(clust, molSetDic) >= minSize:
                 repr = self.getRepresentativeMolecule(clust)
+                if addStats:
+                    for attr, value in self.clusterStats(clust, molSetDic).items():
+                        setattr(repr, attr, Float(value))
                 representatives.append(repr)
         return representatives
+
+    def selectBestPerMol(self, representatives):
+        '''Keep a single representative per molName: the one coming from the best supported cluster.
+        Clusters are compared by number of input sets, then number of poses, then tightness'''
+        bestDic = {}
+        for mol in representatives:
+            molName = mol.getMolName()
+            rank = (mol.consensusMethods.get(), mol.consensusPoses.get(), -mol.clusterRMSD.get())
+            if molName not in bestDic or rank > bestDic[molName][0]:
+                bestDic[molName] = (rank, mol)
+        return [mol for _, mol in bestDic.values()]
 
     def getRepresentativeMolecule(self, cluster):
         '''Return the docked molecule with max score in a cluster'''

@@ -34,6 +34,7 @@ from pyworkflow.gui import ListTreeProviderString
 from pyworkflow.gui import dialog
 
 from pwchem.protocols.VirtualDrugScreening.protocol_consensus_structROIs import ProtocolConsensusStructROIs
+from pwchem.protocols.VirtualDrugScreening.protocol_consensus_docking import ProtocolConsensusDocking
 
 
 class ExtractObjectsWizard(VariableWizard):
@@ -61,7 +62,7 @@ class ExtractObjectsWizard(VariableWizard):
         provider = ListTreeProviderString(displayList)
         dlg = dialog.ListDialog(
             form.root,
-            "Input ROI Sets",
+            "Input sets",
             provider,
             "Select one input set"
         )
@@ -75,3 +76,8 @@ ExtractObjectsWizard().addTarget(protocol=ProtocolConsensusStructROIs,
                              targets=['fromSet'],
                              inputs=['inputStructROIsSets'],
                              outputs=['fromSet'])
+
+ExtractObjectsWizard().addTarget(protocol=ProtocolConsensusDocking,
+                             targets=['refSet'],
+                             inputs=['inputMoleculesSets'],
+                             outputs=['refSet'])
