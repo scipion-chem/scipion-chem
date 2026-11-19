@@ -121,6 +121,11 @@ Output
     A filtered SetOfSmallMolecules containing only poses that pass the minimum
     number of PoseBusters validation tests.
 
+- outputSmallMoleculesFailed (optional):
+    A SetOfSmallMolecules with the poses that do not pass them, so that nothing
+    is lost: the two sets together hold all the input poses. They carry the
+    result of each test, to see which ones they fail.
+
     Each retained molecule includes:
     - Boolean flags for each evaluated test (TRUE/FALSE)
     - Link to the PoseBusters result file
@@ -184,6 +189,9 @@ Notes
         fGroup = form.addGroup('Tests')
         fGroup.addParam('testsPassed', params.IntParam, label='Min. tests passed: ', default=self.NTESTS['receptor'],
                         help='Minimum number of tests passed to keep each molecule.')
+        fGroup.addParam('outputFailed', params.BooleanParam, label='Create a set with the discarded molecules: ',
+                        default=False,
+                        help='Create an extra set with the poses that do not pass PoseBusters.')
         fGroup.addParam('doSpecific', params.BooleanParam, label='Check only specific tests: ', default='',
                         expertLevel=params.LEVEL_ADVANCED,
                         help='Check only a subset of specific tests on filtering')
@@ -246,20 +254,34 @@ Notes
             concatThreadFiles(resultsFile, self._getPath())
         resTestsDic = self.parseResultRows(resultsFile)
 
-        newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSet.get(), self._getPath(), copyInfo=True)
-        for mol in self.inputMoleculesSet.get():
+        molSet = self.inputMoleculesSet.get()
+        newMols = SetOfSmallMolecules.createCopy(molSet, self._getPath(), copyInfo=True)
+        failedMols = SetOfSmallMolecules.createCopy(molSet, self._getPath(), suffix='_failed', copyInfo=True) \
+            if self.outputFailed.get() else None
+
+        for mol in molSet:
             newMol = mol.clone()
             newMol.PoseBusters_file = String(resultsFile)
 
-            baseName = getBaseName(mol.getPoseFile())
-            if baseName in resTestsDic:
-                resDic = resTestsDic[baseName]
-                if self.checkPassedTests(resDic) >= self.testsPassed.get():
-                    for testName, testVal in resDic.items():
-                        newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
-                    newMols.append(newMol)
+            resDic = resTestsDic.get(getBaseName(mol.getPoseFile()))
+            if resDic is not None:
+                for testName, testVal in resDic.items():
+                    newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
+
+            if resDic is not None and self.checkPassedTests(resDic) >= self.testsPassed.get():
+                newMols.append(newMol)
+            elif failedMols is not None:
+                failedMols.append(newMol)
 
         self._defineOutputs(outputSmallMolecules=newMols)
+        if failedMols is not None:
+            if len(failedMols) > 0:
+                self._defineOutputs(outputSmallMoleculesFailed=failedMols)
+            else:
+                print('Every molecule passed the tests: there is no set of discarded molecules to create')
+                failedPath = failedMols.getSetPath()
+                failedMols.close()
+                os.remove(failedPath)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
