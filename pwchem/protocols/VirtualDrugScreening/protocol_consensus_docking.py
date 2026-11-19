@@ -51,6 +51,9 @@ REF_AS, REF_SET = 0, 1
 # Cluster provenance attributes written on every representative (see clusterStats)
 STAT_ATTRS = ['consensusMethods', 'consensusPoses', 'consensusScore', 'clusterRMSD']
 
+# Outlier rejection of the receptor superposition (fitAtoms), as in PyMOL align.
+FIT_CYCLES, FIT_CUTOFF = 5, 2.0
+
 class ProtocolConsensusDocking(EMProtocol):
     """
     AI Generated:
@@ -377,7 +380,7 @@ class ProtocolConsensusDocking(EMProtocol):
         reference one. Done on the converted files, so the clustering RMSD, which does not fit
         anything, compares poses living in the same coordinate frame'''
         recDic, molsDir = self.buildReceptorDic(), self.getInputMolsDir()
-        self.transDic, self.fitDic = {}, {}
+        self.transDic, self.fitDic, self.nFitDic = {}, {}, {}
 
         for molFile in glob.glob(os.path.join(molsDir, '*')):
             uName = getBaseName(molFile)
@@ -387,31 +390,67 @@ class ProtocolConsensusDocking(EMProtocol):
             rot, tran = self.getTransform(recDic[uName])
             self.transformMolFile(molFile, rot, tran)
 
+        allRMSD = list(self.fitDic.values())
+
         badFits = {rec: rms for rec, rms in self.fitDic.items() if rms > self.maxFitRMSD.get()}
-        print(f'Receptors superposed onto {self.getReferenceFile()}: {len(self.fitDic)}')
         if badFits:
             print(f'WARNING: {len(badFits)} receptor(s) fitted with a CA RMSD above '
                   f'{self.maxFitRMSD.get()} A. Their poses may look like a disagreement when they are '
-                  f'just badly superposed:')
-            for rec, rms in badFits.items():
-                print(f'\t{rms:.2f} A\t{rec}')
+                  f'just badly superposed.')
 
     def getTransform(self, recFile):
         '''(rotation, translation) taking recFile onto the reference. Cached by receptor file, so a
         receptor shared by a whole input set is only fitted once'''
         recFile = os.path.abspath(recFile)
         if recFile not in self.transDic:
-            refCAs, movCAs = self.getReferenceCAs(), self.getCAs(recFile)
-            keys = [k for k in refCAs if k in movCAs]
-            if len(keys) < 3:
-                raise Exception(f'Only {len(keys)} CA atoms could be matched between {recFile} and the '
-                                f'reference {self.getReferenceFile()}. They are matched by chain and '
-                                f'residue number, so both structures must share the numbering.')
+            refChains, movChains = self.getReferenceChains(), self.getChains(recFile)
+            refCAs, movCAs = self.pairCAs(refChains, movChains)
+            if len(refCAs) < 3:
+                raise Exception(f'Only {len(refCAs)} CA atoms could be paired between {recFile} and the '
+                                f'reference {self.getReferenceFile()}. Check that both structures are the '
+                                f'same protein.')
 
-            sup = Superimposer()
-            sup.set_atoms([refCAs[k] for k in keys], [movCAs[k] for k in keys])
-            self.transDic[recFile], self.fitDic[recFile] = sup.rotran, sup.rms
+            rotran, rms, nUsed = self.fitAtoms(refCAs, movCAs)
+            self.transDic[recFile], self.fitDic[recFile] = rotran, rms
+            self.nFitDic[recFile] = (nUsed, len(refCAs))
         return self.transDic[recFile]
+
+    def fitAtoms(self, refAtoms, movAtoms):
+        '''Superpose movAtoms onto refAtoms, rejecting the pairs further apart than FIT_CUTOFF and
+        fitting again, as PyMOL align does. Returns (rotran, RMSD, atoms used in the last cycle)'''
+        sup = Superimposer()
+        sup.set_atoms(refAtoms, movAtoms)
+
+        for _ in range(FIT_CYCLES):
+            rot, tran = sup.rotran
+            dists = [np.linalg.norm(np.dot(mov.coord, rot) + tran - ref.coord)
+                     for ref, mov in zip(refAtoms, movAtoms)]
+            keep = [i for i, dist in enumerate(dists) if dist <= FIT_CUTOFF]
+            if len(keep) < 3 or len(keep) == len(refAtoms):
+                break
+
+            refAtoms = [refAtoms[i] for i in keep]
+            movAtoms = [movAtoms[i] for i in keep]
+            sup = Superimposer()
+            sup.set_atoms(refAtoms, movAtoms)
+
+        return sup.rotran, sup.rms, len(refAtoms)
+
+    def pairCAs(self, refChains, movChains):
+        '''Pair the CA atoms of two structures chain by chain, in the order they appear in the file.
+        Residue numbering is not used, so a model numbered from 1 can be superposed on a reference
+        with its own numbering, as long as both contain the same residues in the same order'''
+        chainPairs = [(cId, cId) for cId in refChains if cId in movChains]
+        if not chainPairs:
+            chainPairs = list(zip(refChains.keys(), movChains.keys()))
+
+        refCAs, movCAs = [], []
+        for refId, movId in chainPairs:
+            refAtoms, movAtoms = refChains[refId], movChains[movId]
+
+            refCAs += [atom for atom, _ in zip(refAtoms, movAtoms)]
+            movCAs += [atom for _, atom in zip(refAtoms, movAtoms)]
+        return refCAs, movCAs
 
     def getRefSetId(self):
         """Return the index of the input set whose name matches refSet"""
@@ -430,25 +469,25 @@ class ProtocolConsensusDocking(EMProtocol):
         refFile = molSet.getFirstItem().getProteinFile() or molSet.getProteinFile()
         return os.path.abspath(refFile)
 
-    def getReferenceCAs(self):
-        if not hasattr(self, 'refCAs'):
-            self.refCAs = self.getCAs(self.getReferenceFile())
-        return self.refCAs
+    def getReferenceChains(self):
+        if not hasattr(self, 'refChains'):
+            self.refChains = self.getChains(self.getReferenceFile())
+        return self.refChains
 
-    def getCAs(self, structFile):
-        '''{(chainId, residueNumber): CA atom} of the first model of a structure'''
+    def getChains(self, structFile):
+        '''{chainId: [CA atoms]} of the first model of a structure, in file order'''
         parser = MMCIFParser(QUIET=True) if structFile.lower().endswith(('.cif', '.mmcif')) \
             else PDBParser(QUIET=True)
         struct = parser.get_structure(getBaseName(structFile), structFile)
 
-        cas = {}
+        chains = {}
         for model in struct:
             for chain in model:
-                for residue in chain:
-                    if 'CA' in residue:
-                        cas[(chain.id, residue.id[1])] = residue['CA']
+                atoms = [residue['CA'] for residue in chain if 'CA' in residue]
+                if atoms:
+                    chains[chain.id] = atoms
             break
-        return cas
+        return chains
 
     def transformMolFile(self, molFile, rot, tran):
         '''Apply a rotation and a translation to the coordinates of a (multi)molecule SDF file'''
