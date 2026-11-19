@@ -139,17 +139,10 @@ def detectClusters(graphG: nx.Graph, method: str = "louvain", resolution: float 
         List of communities, each community is a list of group indices
     """
     if method == "louvain":
-        import community as community_louvain
-        partition = community_louvain.best_partition(
+        communities = nx.community.louvain_communities(
             graphG, weight='weight', resolution=resolution
         )
-
-        # Group nodes by community
-        communitiesDict = {}
-        for node, commId in partition.items():
-            communitiesDict.setdefault(commId, []).append(node)
-
-        return list(communitiesDict.values())
+        return [list(comm) for comm in communities]
 
     elif method == "connected_components":
         # Fallback: use connected components
