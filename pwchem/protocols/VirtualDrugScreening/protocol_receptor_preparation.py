@@ -226,7 +226,7 @@ Notes
         fnOut = self.getPreparedFile(fnIn)
         shutil.copy(fnIn, fnOut)
         if os.path.exists(fnOut):
-            target = AtomStruct(filename=fnOut)
+            target = AtomStruct(filename=os.path.relpath(fnOut))
             self._defineOutputs(outputStructure=target)
             self._defineSourceRelation(self.inputAtomStruct, target)
 
