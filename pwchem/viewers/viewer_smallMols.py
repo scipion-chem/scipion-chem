@@ -39,6 +39,7 @@ from pwchem.viewers import PyMolViewer, BioinformaticsDataViewer
 from pwchem.utils.utilsViewer import *
 from pwchem.utils import runOpenBabel, mergePDBs, cleanPDB, natural_sort, addHydrogensToMol, relabelAtomsPDB
 from pwchem import Plugin as pwchemPlugin
+from pwchem.constants import RDKIT_DIC
 from pwchem.protocols import ProtocolConsensusDocking, ProtocolLigandsFetching
 
 PYMOL, CHIMERAX, VIEWDOCKX = 0, 1, 2
@@ -139,6 +140,11 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         group.addParam('displayPymolPLIP', params.StringParam, default='',
                        label='Display ligand interactions: ',
                        help='Display this single ligand with the binding site and interactions')
+        group.addParam('displayPlipDiagram', params.StringParam, default='',
+                       label='Draw ligand interactions diagram: ',
+                       help='Draw the interactions of this single ligand as a 2D diagram, with the '
+                            'interacting residues placed around the molecule as they are in the pocket. '
+                            'The residues can be dragged and the figure is saved when its window is closed')
 
     #Covalent section: only when the molecules carry a covalent complex file
     if self.checkIfCovalent():
@@ -241,6 +247,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       'displayMoleculeDock': self._viewMoleculeDock,
       'displaySingleDock': self._viewSingleDock,
       'displayPymolPLIP': self._viewPymolPLIP,
+      'displayPlipDiagram': self._viewPlipDiagram,
 
       #Ligand
       'displaySet': self._viewSet,
@@ -314,56 +321,17 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       molFile = mol.getPoseFile()
     return molFile
 
-  def getMolDic(self, mols, pose, vinaDock):
-    molDic = {}
-    for mol in mols:
-      poseB, dockB = True, True
-      if vinaDock:
-        poseB, dockB = False, False
-
-      molName = mol.getUniqueName(pose=poseB, dock=dockB)
-      if vinaDock:
-        molFile = self.getDockFile(mol)
-      elif pose:
-        molFile = mol.getPoseFile()
-      else:
-        molFile = mol.getFileName()
-
-      molDic[molName] = molFile
-    return molDic
-
-  def writeChimeraScript(self, molDic, ligandLabel, addTarget=True, disable=True, vinaDock=False):
-      pmlsDir = self.getPmlsDir()
-      chimScript = os.path.join(pmlsDir, f'{ligandLabel}_chimeraX.py')
-      with open(chimScript, "w") as f:
-        f.write("from chimerax.core.commands import run\n")
-
-        f.write(f"run(session, 'cd {os.getcwd()}')\n")
-        f.write("run(session, 'cofr 0,0,0')\n")  # set center of coordinates
-
-        if addTarget:
-          _inputStruct = os.path.abspath(self.protocol.getOriginalReceptorFile())
-          f.write(f"run(session, 'open {_inputStruct}')\n")
-
-        i = 2
-        for molName, dockFile in molDic.items():
-          f.write(f"run(session, 'open {dockFile} name {molName}')\n")
-          if disable:
-            f.write(f"run(session, 'hide #{i} models')\n")
-          i += 1
-
-        if vinaDock:
-          f.write("run(session, 'viewdockx')\n")
-      return chimScript
-
   def viewChimeraXMols(self, mols, ligandLabel, addTarget=True, disable=True,
                        pose=True, vinaDock=False, e=None):
     if not chimeraInstalled():
         print(getChimeraError())
         return [self.warnMessage(getChimeraError(), 'Chimera not found')]
     else:
-        molDic = self.getMolDic(mols, pose, vinaDock)
-        chimScript = self.writeChimeraScript(molDic, ligandLabel, addTarget, disable, vinaDock)
+        chimScript = os.path.join(self.getPmlsDir(), f'{ligandLabel}_chimeraX.py')
+        writeChimeraFile(chimScript, buildChimeraDockingGroupsStr(self, mols, addTarget=addTarget,
+                                                                  pose=pose, disable=disable,
+                                                                  vinaDock=vinaDock),
+                         vinaDock=vinaDock)
         view = ChimeraView(chimScript)
         return [view]
 
@@ -423,21 +391,50 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       elif self.getEnumText('displaySoftware') == VIEWDOCKX_LAB:
         return self.viewChimeraXMols(mols, ligandLabel, vinaDock=True)
 
-  def _viewPymolPLIP(self, e=None):
-    pmlsDir = self.getPmlsDir()
-
-    ligandLabel = self.displayPymolPLIP.get()
+  def runPlipOnPose(self, ligandLabel, plipArgs='-yt'):
+    """Analyse a single pose with PLIP, in the complex formed with the receptor it was docked into."""
     mols = self.getGroupMols(self.singleLigandsDic, ligandLabel)
-    if len(mols) > 0:
-      mol = mols[0].clone()
-      mergedPDB = self.createComplexPDB(self.protocol.getOriginalReceptorFile(), mol.getPoseFile(),
-                                        os.path.join(pmlsDir, ligandLabel + '.pdb'))
+    if not mols:
+      return None, None
 
-      pwchemPlugin.runPLIP('-f {} -yt -o {}'.format(os.path.abspath(mergedPDB), ligandLabel),
-                           cwd=os.path.abspath(pmlsDir))
+    pmlsDir = self.getPmlsDir()
+    mol = mols[0].clone()
+    mergedPDB = self.createComplexPDB(self.getReceptorFile(mol), mol.getPoseFile(),
+                                      os.path.join(pmlsDir, ligandLabel + '.pdb'))
 
+    pwchemPlugin.runPLIP('-f {} {} -o {}'.format(os.path.abspath(mergedPDB), plipArgs, ligandLabel),
+                         cwd=os.path.abspath(pmlsDir))
+    return mol, os.path.abspath(os.path.join(pmlsDir, ligandLabel))
+
+  def _viewPlipDiagram(self, e=None):
+    ligandLabel = self.displayPlipDiagram.get()
+    mol, plipDir = self.runPlipOnPose(ligandLabel, plipArgs='-x')
+    if mol is None:
+      return
+
+    xmlFile = os.path.join(plipDir, f'{ligandLabel}_report.xml')
+    intDic, resCoords = parsePlipXML(xmlFile)
+    if not intDic:
+      showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
+      return
+
+    ligFile = writePlipLigandFile(plipDir, xmlFile, os.path.join(plipDir, f'{ligandLabel}_ligand.pdb'),
+                                  os.path.join(self.getPmlsDir(), f'{ligandLabel}.pdb'))
+    paramsFile = writeDrawInteractionsParams(os.path.join(plipDir, 'drawInteractionsParams.txt'),
+                                             ligFile, intDic,
+                                             os.path.join(plipDir, f'{ligandLabel}_interactions.png'),
+                                             poseFile=mol.getFileName(), resCoords=resCoords,
+                                             valueUnit='Å')
+
+    pwchemPlugin.runScript(self.protocol, 'drawInteractions.py', os.path.abspath(paramsFile),
+                           env=RDKIT_DIC, cwd=plipDir, popen=True, wait=False)
+
+  def _viewPymolPLIP(self, e=None):
+    ligandLabel = self.displayPymolPLIP.get()
+    mol, plipDir = self.runPlipOnPose(ligandLabel)
+    if mol is not None:
       pmlFile, pmlFiles = '', []
-      for file in os.listdir(os.path.abspath(os.path.join(pmlsDir, ligandLabel))):
+      for file in os.listdir(plipDir):
           if file.endswith('.pse') and ligandLabel.upper().replace('-', '_') in file:
               pmlFiles.append(file)
 
@@ -450,7 +447,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           pmlFile = pmlFiles[0]
 
       if pmlFile != '':
-        pmlFile = os.path.join(os.path.abspath(pmlsDir), ligandLabel, pmlFile)
+        pmlFile = os.path.join(plipDir, pmlFile)
         pymolV = PyMolViewer(project=self.getProject())
         return pymolV._visualize(os.path.abspath(pmlFile), cwd=os.path.dirname(pmlFile))
       else:
@@ -504,10 +501,9 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         print(CHIMERA_ERROR)
         return [self.warnMessage(CHIMERA_ERROR, 'Chimera not found')]
 
-      # addTarget=False: the receptor is inside each complex already, and adding
-      # the original one on top would double every atom of the protein.
-      chimScript = self.writeChimeraScript(covDic, f'{ligandLabel}_covalent',
-                                           addTarget=False, disable=disable)
+      # The receptor is inside each complex already, so no target is added on top of it
+      chimScript = os.path.join(self.getPmlsDir(), f'{ligandLabel}_covalent_chimeraX.py')
+      writeChimeraFile(chimScript, buildChimeraCovalentStr(covDic, disable=disable))
       return [ChimeraView(chimScript)]
 
     pmlFile = os.path.join(self.getPmlsDir(), f'{ligandLabel}_covalent.pml')
@@ -639,10 +635,25 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
           os.mkdir(pmlsDir)
     return pmlsDir
 
+  def getReceptorFile(self, mol):
+    '''Receptor of a single pose: the one it was docked into if the molecule carries its own
+    (flexible receptors, cofolding), else the general one of the set'''
+    if mol.getProteinFile():
+      return mol.getProteinFile()
+    elif hasattr(self.protocol, 'getOriginalReceptorFile'):
+      return self.protocol.getOriginalReceptorFile()
+
+    # Protocols not defining it still store the receptor in their output sets
+    for molSet in self.getOutputMolSets().values():
+      if molSet.getProteinFile():
+        return molSet.getProteinFile()
+    return None
+
   def createComplexPDB(self, receptorFile, molFile, outPath):
     receptorFile, molFile = os.path.abspath(receptorFile), os.path.abspath(molFile)
     outBase, ext = os.path.splitext(molFile)
-    auxPath = '/tmp/{}.pdb'.format(os.path.basename(outBase))
+    auxPath = os.path.join(os.path.dirname(os.path.abspath(outPath)),
+                           '{}_merged.pdb'.format(os.path.basename(outBase)))
     if not molFile.endswith('.pdb'):
       outFile = os.path.abspath(outBase + '.pdb')
       runOpenBabel(self.protocol, '-i{} {} -opdb -O {}'.format(ext[1:], molFile, outFile), popen=True)
