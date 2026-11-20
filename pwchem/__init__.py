@@ -243,14 +243,27 @@ class Plugin(pwem.Plugin):
     @classmethod
     def addDEAPPackage(cls, env, default=True):
         # Instantiating install helper
-        installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
-                                                            packageVersion=DEAP_DIC['version'])
+        installer = InstallHelper(
+            DEAP_DIC['name'],
+            packageHome=cls.getVar(DEAP_DIC['home']),
+            packageVersion=DEAP_DIC['version']
+        )
 
-        scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
-        installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate scipion3 && conda install conda-forge::deap -y')\
-            .addCommand('git clone https://github.com/bdsul/grape.git') \
-            .addCommand(f'mv grape {scipionEnvPath}') \
-            .addPackage(env, dependencies=['conda', 'git'], default=default)
+        scipionEnvPython = cls.getEnvPath(
+            innerPath='envs/scipion3/bin/python'
+        )
+
+        installer.addCommand(
+            f'{cls.getCondaActivationCmd()}conda activate scipion3 && '
+            'conda install conda-forge::deap -y'
+        ).addCommand(
+            'git clone https://github.com/bdsul/grape.git'
+        ).addCommand(
+            f'mv grape "$({scipionEnvPython} -c '
+            '"import sysconfig; print(sysconfig.get_paths()[\'purelib\'])")/grape'
+        ).addPackage(
+            env, dependencies=['conda', 'git'], default=default
+        )
 
     @classmethod
     def addRanxPackage(cls, env, default=True):
