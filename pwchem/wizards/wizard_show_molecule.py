@@ -33,113 +33,126 @@ class PyMol:
 class PreviewLigandAtomIDsWizard(VariableWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
-    def show(self, form, *params):
-        import os
-        import shlex
-        from subprocess import Popen
+    def _getLigandFile(self, protocol):
+        """Retrieve and validate the input ligand file."""
 
-        protocol = form.protocol
         ligandSet = protocol.inputLigandSet.get()
+        molObj = next(iter(ligandSet), None)
 
-        mol_obj = next(iter(ligandSet), None)
-
-        if mol_obj is None:
+        if molObj is None:
             print("ERROR: The input ligand set is empty.")
-            return
+            return None
 
-        ligandFile = mol_obj.getPoseFile() or mol_obj.getFileName()
+        ligandFile = molObj.getPoseFile() or molObj.getFileName()
 
         if not ligandFile or not os.path.isfile(ligandFile):
             print("ERROR: The ligand pose file was not found.")
-            return
+            return None
 
-        ligandFile = os.path.abspath(ligandFile)
+        return os.path.abspath(ligandFile)
+
+    def _convertLigandToSdf(self, protocol, ligandFile):
+        """Convert unsupported ligand formats to SDF using Open Babel."""
+
         extension = os.path.splitext(ligandFile)[1].lower()
+
+        if extension in (".sdf", ".mol"):
+            return ligandFile
+
+        import shlex
+
         project = protocol.getProject()
 
-        # Convert unsupported formats to SDF using the Scipion-chem
-        # Open Babel conversion script.
-        if extension not in (".sdf", ".mol"):
-            convertedFile = os.path.abspath(
-                project.getTmpPath(
-                    "ligand_atom_numbers_{}.sdf".format(
-                        protocol.getObjId()
-                    )
-                )
-            )
-
-            os.makedirs(os.path.dirname(convertedFile), exist_ok=True)
-
-            try:
-                args = '-i "{}" -of sdf -o "{}" -od "{}" --overWrite'.format(
-                    os.path.abspath(ligandFile),
-                    os.path.splitext(os.path.basename(convertedFile))[0],
-                    os.path.dirname(convertedFile)
-                )
-
-                pwchemPlugin.runScript(
-                    protocol,
-                    "obabel_IO.py",
-                    args,
-                    env=OPENBABEL_DIC,
-                    popen=True,
-                    cwd=os.path.dirname(ligandFile)
-                )
-
-                # obabel_IO.py may name the output from the input basename.
-                generatedFile = os.path.join(
-                    os.path.dirname(convertedFile),
-                    os.path.splitext(os.path.basename(ligandFile))[0]
-                    + ".sdf"
-                )
-
-                if os.path.isfile(generatedFile):
-                    if generatedFile != convertedFile:
-                        os.replace(generatedFile, convertedFile)
-
-                if (
-                    not os.path.isfile(convertedFile)
-                    or os.path.getsize(convertedFile) == 0
-                ):
-                    print(
-                        "ERROR: Open Babel did not generate the expected "
-                        "SDF file: {}".format(convertedFile)
-                    )
-                    return
-
-                ligandFile = convertedFile
-
-            except Exception as exc:
-                import traceback
-                traceback.print_exc()
-                print("ERROR: Could not convert ligand to SDF:", exc)
-                return
-
-        imageFile = os.path.abspath(
+        convertedFile = os.path.abspath(
             project.getTmpPath(
-                "ligand_atom_numbers_{}.png".format(
+                "ligand_atom_numbers_{}.sdf".format(
                     protocol.getObjId()
                 )
             )
         )
 
-        outputDirectory = os.path.dirname(imageFile)
+        outputDirectory = os.path.dirname(convertedFile)
 
-        args = '{} {} {}'.format(
-            shlex.quote(ligandFile),
-            shlex.quote(imageFile),
-            shlex.quote(outputDirectory)
-        )
+        os.makedirs(outputDirectory, exist_ok=True)
 
         try:
+            args = '-i {} -of sdf -o {} -od {} --overWrite'.format(
+                shlex.quote(ligandFile),
+                shlex.quote(
+                    os.path.splitext(os.path.basename(convertedFile))[0]
+                ),
+                shlex.quote(outputDirectory)
+            )
+
             pwchemPlugin.runScript(
                 protocol,
-                "rdkit_ligand_atom_numbers.py",
+                "obabel_IO.py",
                 args,
-                env=RDKIT_DIC,
+                env=OPENBABEL_DIC,
                 popen=True,
                 cwd=os.path.dirname(ligandFile)
             )
+
+            generatedFile = os.path.join(
+                outputDirectory,
+                os.path.splitext(os.path.basename(ligandFile))[0]
+                + ".sdf"
+            )
+
+            if os.path.isfile(generatedFile):
+                if generatedFile != convertedFile:
+                    os.replace(generatedFile, convertedFile)
+
+            if (
+                not os.path.isfile(convertedFile)
+                or os.path.getsize(convertedFile) == 0
+            ):
+                print(
+                    "ERROR: Open Babel did not generate the expected "
+                    "SDF file: {}".format(convertedFile)
+                )
+                return None
+
+            return convertedFile
+
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            print("ERROR: Could not convert ligand to SDF:", exc)
+            return None
+
+    def _generateLigandImage(self, protocol, ligandFile):
+        """Generate a numbered ligand depiction using RDKit."""
+
+        project = protocol.getProject()
+
+        outputDirectory = os.path.abspath(
+            project.getTmpPath(
+                "ligand_atom_numbers_{}".format(
+                    protocol.getObjId()
+                )
+            )
+        )
+
+        os.makedirs(outputDirectory, exist_ok=True)
+
+        imageFile = os.path.join(
+            outputDirectory,
+            "ligand_atom_numbers.png"
+        )
+
+        try:
+            import shlex
+
+            pwchemPlugin.runScript(
+                protocol,
+                "rdkit_ligand_atom_numbers.py",
+                shlex.quote(ligandFile),
+                env=RDKIT_DIC,
+                popen=True,
+                cwd=outputDirectory
+            )
+
         except Exception as exc:
             import traceback
             traceback.print_exc()
@@ -147,14 +160,19 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
                 "ERROR: Could not generate the ligand atom-number figure:",
                 exc
             )
-            return
+            return None
 
         if not os.path.isfile(imageFile):
             print(
                 "ERROR: The RDKit script did not generate the expected "
                 "image: {}".format(imageFile)
             )
-            return
+            return None
+
+        return imageFile
+
+    def _openLigandImage(self, imageFile):
+        """Open the generated ligand image."""
 
         print("Generated atom-number figure: {}".format(imageFile))
 
@@ -163,6 +181,31 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
         except OSError as exc:
             print("ERROR opening ligand figure: {}".format(exc))
             print("Open manually: {}".format(imageFile))
+
+    def show(self, form, *params):
+        """Generate and display the numbered ligand depiction."""
+
+        protocol = form.protocol
+
+        ligandFile = self._getLigandFile(protocol)
+        if not ligandFile:
+            return
+
+        ligandFile = self._convertLigandToSdf(
+            protocol,
+            ligandFile
+        )
+        if not ligandFile:
+            return
+
+        imageFile = self._generateLigandImage(
+            protocol,
+            ligandFile
+        )
+        if not imageFile:
+            return
+
+        self._openLigandImage(imageFile)
 
 PreviewLigandAtomIDsWizard().addTarget(
     protocol=ProtContactLigands,

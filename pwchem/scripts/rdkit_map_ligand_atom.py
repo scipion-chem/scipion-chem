@@ -45,17 +45,17 @@ def main():
     reference = loadMolecule(args.reference)
     pose = loadMolecule(args.pose)
 
-    reference_heavy = heavyAtomIndices(reference)
+    referenceHeavy = heavyAtomIndices(reference)
 
-    if not 1 <= args.atom_index <= len(reference_heavy):
+    if not 1 <= args.atom_index <= len(referenceHeavy):
         raise ValueError(
             'Atom index {} is outside the reference range '
-            '(1-{}).'.format(args.atom_index, len(reference_heavy))
+            '(1-{}).'.format(args.atom_index, len(referenceHeavy))
         )
 
     # Convert the wizard's 1-based heavy-atom index to an RDKit index.
-    reference_idx = reference_heavy[args.atom_index - 1]
-    reference_atom = reference.GetAtomWithIdx(reference_idx)
+    referenceIdx = referenceHeavy[args.atom_index - 1]
+    referenceAtom = reference.GetAtomWithIdx(referenceIdx)
 
     # Map reference atoms to the pose using molecular connectivity.
     match = pose.GetSubstructMatch(reference)
@@ -67,13 +67,13 @@ def main():
             )
         )
 
-    poseIdx = match[reference_idx]
+    poseIdx = match[referenceIdx]
     poseAtom = pose.GetAtomWithIdx(poseIdx)
 
-    if reference_atom.GetAtomicNum() != poseAtom.GetAtomicNum():
+    if referenceAtom.GetAtomicNum() != poseAtom.GetAtomicNum():
         raise ValueError(
             'Mapped atom element mismatch: reference={}, pose={}'.format(
-                reference_atom.GetSymbol(),
+                referenceAtom.GetSymbol(),
                 poseAtom.GetSymbol()
             )
         )
@@ -84,7 +84,7 @@ def main():
         'coordinates': [position.x, position.y, position.z],
         'element': poseAtom.GetSymbol(),
         'pose_atom_index': poseIdx + 1,
-        'reference_atom_index': args.atom_index
+        'referenceAtom_index': args.atom_index
     }
 
     with open(args.output, 'w') as handle:

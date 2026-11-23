@@ -86,6 +86,46 @@ class ProtContactLigands(EMProtocol):
     def filterLigandsStep(self):
         """Calculate atom-to-atom distances and retain passing ligands."""
 
+        inputSet, referenceFile, cutoff, ligandAtomIndex = (
+            self._prepareFilteringInputs()
+        )
+
+        receptorCoordinates = self._prepareReceptorCoordinates(inputSet)
+
+        self._passingMolecules = []
+        reportFile = self._getPath('contact_distances.csv')
+
+        with open(reportFile, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            self._writeReportHeader(writer)
+
+            for molecule in inputSet:
+                result = self._evaluateMolecule(
+                    molecule,
+                    referenceFile,
+                    receptorCoordinates,
+                    cutoff,
+                    ligandAtomIndex
+                )
+                self._writeMoleculeResult(
+                    writer,
+                    molecule,
+                    result,
+                    referenceFile,
+                    receptorCoordinates,
+                    cutoff,
+                    ligandAtomIndex
+                )
+
+        self.info(
+            'Contact filtering completed. Results saved to {}.'.format(
+                reportFile
+            )
+        )
+
+    def _prepareFilteringInputs(self):
+        """Validate the input set and filtering parameters."""
+
         inputSet = self.inputLigandSet.get()
         receptorFile = inputSet.getProteinFile()
 
@@ -116,130 +156,161 @@ class ProtContactLigands(EMProtocol):
             'Reference ligand for atom mapping: {}'.format(referenceFile)
         )
 
-        receptorFile = self.convertFormat(receptorFile)
+        return inputSet, referenceFile, cutoff, ligandAtomIndex
+
+    def _prepareReceptorCoordinates(self, inputSet):
+        """Load the receptor and retrieve the selected atom coordinates."""
+
+        receptorFile = self.convertFormat(inputSet.getProteinFile())
         receptor = self._loadStructure(receptorFile)
         targetResidue = self._getReceptorResidue(receptor)
 
-        receptorAtomCoordinates = (
-            self._getReceptorAtomCoordinates(targetResidue)
-        )
+        return self._getReceptorAtomCoordinates(targetResidue)
 
-        self._passingMolecules = []
-        reportFile = self._getPath('contact_distances.csv')
+    def _evaluateMolecule(
+            self,
+            molecule,
+            referenceFile,
+            receptorCoordinates,
+            cutoff,
+            ligandAtomIndex
+    ):
+        """Map the reference ligand atom and evaluate its distance."""
 
-        with open(reportFile, 'w', newline='') as csvfile:
-            writer = csv.writer(csvfile)
+        result = {
+            'poseFile': '',
+            'ligandCoordinates': None,
+            'ligandElement': '',
+            'poseAtomIndex': '',
+            'distance': None,
+            'error': '',
+            'keep': False
+        }
 
-            writer.writerow([
-                'Molecule',
-                'Pose file',
-                'Reference ligand file',
-                'Receptor chain',
-                'Receptor residue',
-                'Receptor atom',
-                'Reference heavy-atom index',
-                'Mapped pose atom index',
-                'Mapped ligand element',
-                'Ligand atom coordinates (A)',
-                'Receptor atom coordinates (A)',
-                'Distance (A)',
-                'Cutoff (A)',
-                'Retained',
-                'Error'
-            ])
+        try:
+            poseFile = self._getPoseFile(molecule)
+            result['poseFile'] = poseFile
 
-            for molecule in inputSet:
-                molName = molecule.getMolName()
-                poseFile = ''
-                ligandCoordinates = None
-                ligandElement = ''
-                poseAtomIndex = ''
-                distance = None
-                errorMessage = ''
-                keep = False
+            (
+                result['ligandCoordinates'],
+                result['ligandElement'],
+                result['poseAtomIndex']
+            ) = self._getMappedLigandAtomCoordinates(
+                referenceFile,
+                poseFile
+            )
 
-                try:
-                    poseFile = self._getPoseFile(molecule)
+            result['distance'] = self._calculateDistance(
+                result['ligandCoordinates'],
+                receptorCoordinates
+            )
 
-                    (
-                        ligandCoordinates,
-                        ligandElement,
-                        poseAtomIndex
-                    ) = self._getMappedLigandAtomCoordinates(
-                        referenceFile,
-                        poseFile
-                    )
+            result['keep'] = result['distance'] <= cutoff
 
-                    distance = self._calculateDistance(
-                        ligandCoordinates,
-                        receptorAtomCoordinates
-                    )
+            if result['keep']:
+                self._passingMolecules.append(molecule.clone())
 
-                    keep = distance <= cutoff
+            self._logMoleculeEvaluation(
+                poseFile,
+                result,
+                receptorCoordinates,
+                ligandAtomIndex
+            )
 
-                    if keep:
-                        self._passingMolecules.append(molecule.clone())
+        except Exception as exc:
+            result['error'] = str(exc)
+            result['keep'] = False
 
-                    print(
-                        '{} | reference heavy atom {} | '
-                        'pose atom {} ({}) at {} | '
-                        'receptor atom {} at {} | '
-                        'distance={:.3f} A | retained={}'.format(
-                            os.path.basename(poseFile),
-                            ligandAtomIndex,
-                            poseAtomIndex,
-                            ligandElement,
-                            np.round(ligandCoordinates, 3).tolist(),
-                            self.recAtom.get(),
-                            np.round(
-                                receptorAtomCoordinates, 3
-                            ).tolist(),
-                            distance,
-                            keep
-                        )
-                    )
+            self.warning(
+                'Could not evaluate {}: {}'.format(
+                    molecule.getMolName(), result['error']
+                )
+            )
 
-                except Exception as exc:
-                    errorMessage = str(exc)
-                    keep = False
+        return result
 
-                    self.warning(
-                        'Could not evaluate {}: {}'.format(
-                            molName, errorMessage
-                        )
-                    )
+    def _logMoleculeEvaluation(
+            self,
+            poseFile,
+            result,
+            receptorCoordinates,
+            ligandAtomIndex
+    ):
+        """Print the distance evaluation for a molecule."""
 
-                writer.writerow([
-                    molName,
-                    poseFile,
-                    referenceFile,
-                    self.recChain.get(),
-                    self.recResidue.get(),
-                    self.recAtom.get(),
-                    ligandAtomIndex,
-                    poseAtomIndex,
-                    ligandElement,
-                    (
-                        np.round(ligandCoordinates, 3).tolist()
-                        if ligandCoordinates is not None else ''
-                    ),
-                    np.round(
-                        receptorAtomCoordinates, 3
-                    ).tolist(),
-                    (
-                        '{:.3f}'.format(distance)
-                        if distance is not None else ''
-                    ),
-                    cutoff,
-                    'Yes' if keep else 'No',
-                    errorMessage
-                ])
-
-        self.info(
-            'Contact filtering completed. Results saved to {}.'.format(
-                reportFile
+        print(
+            '{} | reference heavy atom {} | '
+            'pose atom {} ({}) at {} | '
+            'receptor atom {} at {} | '
+            'distance={:.3f} A | retained={}'.format(
+                os.path.basename(poseFile),
+                ligandAtomIndex,
+                result['poseAtomIndex'],
+                result['ligandElement'],
+                np.round(result['ligandCoordinates'], 3).tolist(),
+                self.recAtom.get(),
+                np.round(receptorCoordinates, 3).tolist(),
+                result['distance'],
+                result['keep']
             )
         )
+
+    def _writeReportHeader(self, writer):
+        """Write the contact-distance report header."""
+
+        writer.writerow([
+            'Molecule',
+            'Pose file',
+            'Reference ligand file',
+            'Receptor chain',
+            'Receptor residue',
+            'Receptor atom',
+            'Reference heavy-atom index',
+            'Mapped pose atom index',
+            'Mapped ligand element',
+            'Ligand atom coordinates (A)',
+            'Receptor atom coordinates (A)',
+            'Distance (A)',
+            'Cutoff (A)',
+            'Retained',
+            'Error'
+        ])
+
+    def _writeMoleculeResult(
+            self,
+            writer,
+            molecule,
+            result,
+            referenceFile,
+            receptorCoordinates,
+            cutoff,
+            ligandAtomIndex
+    ):
+        """Write one molecule's evaluation to the CSV report."""
+
+        ligandCoordinates = result['ligandCoordinates']
+        distance = result['distance']
+
+        writer.writerow([
+            molecule.getMolName(),
+            result['poseFile'],
+            referenceFile,
+            self.recChain.get(),
+            self.recResidue.get(),
+            self.recAtom.get(),
+            ligandAtomIndex,
+            result['poseAtomIndex'],
+            result['ligandElement'],
+            (
+                np.round(ligandCoordinates, 3).tolist()
+                if ligandCoordinates is not None else ''
+            ),
+            np.round(receptorCoordinates, 3).tolist(),
+            '{:.3f}'.format(distance) if distance is not None else '',
+            cutoff,
+            'Yes' if result['keep'] else 'No',
+            result['error']
+        ])
 
     def createOutputStep(self):
         """Create the output set containing the retained molecules."""
@@ -360,7 +431,7 @@ class ProtContactLigands(EMProtocol):
             chain = model[chainId]
 
             for residue in chain:
-                heteroFlag, resseq, icode = residue.id
+                heteroFlag, resseq, _ = residue.id
 
                 if (
                         str(resseq) == residueIndex
@@ -515,10 +586,10 @@ class ProtContactLigands(EMProtocol):
                         continue
 
                     # The final PDBQT field is the AutoDock atom type.
-                    atom_type = fields[-1].strip().upper()
+                    atomType = fields[-1].strip().upper()
 
                     # Examples of hydrogen types include H and HD.
-                    if atom_type in ('H', 'HD', 'D'):
+                    if atomType in ('H', 'HD', 'D'):
                         continue
 
                     heavyAtomCoordinates.append([x, y, z])
@@ -550,9 +621,9 @@ class ProtContactLigands(EMProtocol):
                     )
                 )
 
-            counts_line = lines[3]
+            atomLines = lines[3]
 
-            if 'V3000' in counts_line:
+            if 'V3000' in atomLines:
                 raise ValueError(
                     'V3000 MOL/SDF files are not supported by this '
                     'parser: {}. Convert the file to V2000 first.'
@@ -560,23 +631,23 @@ class ProtContactLigands(EMProtocol):
                 )
 
             try:
-                n_atoms = int(counts_line[0:3])
+                nAtoms = int(atomLines[0:3])
             except ValueError:
                 raise ValueError(
                     'Could not read the V2000 atom count from {}.'
                     .format(poseFile)
                 )
 
-            atom_lines = lines[4:4 + n_atoms]
+            atomLines = lines[4:4 + nAtoms]
 
-            if len(atom_lines) != n_atoms:
+            if len(atomLines) != nAtoms:
                 raise ValueError(
                     'Atom block is incomplete in {}.'.format(poseFile)
                 )
 
             heavyAtomCoordinates = []
 
-            for i, line in enumerate(atom_lines, start=1):
+            for i, line in enumerate(atomLines, start=1):
                 try:
                     x = float(line[0:10])
                     y = float(line[10:20])
