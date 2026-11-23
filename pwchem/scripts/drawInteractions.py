@@ -21,7 +21,7 @@
 # * 02111-1307  USA
 # *
 # *  All comments concerning this program package may be sent to the
-# *  e-mail address 'you@yourinstitution.email'
+# *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
 import os
@@ -38,7 +38,7 @@ from matplotlib.figure import Figure
 
 from rdkit import Chem
 from rdkit.Chem import rdDepictor, AllChem
-from rdkit.Geometry import Point2D, Point3D
+from rdkit.Geometry import Point3D
 from rdkit.Chem.Draw import rdMolDraw2D
 
 from utils import parseParams, getMolFilesDic
@@ -224,14 +224,12 @@ def getAtomsRepulsion(circle, atomPositions, atomInteractRadius, kRep):
 	return repulsionForce
 
 def optimizeCirclePositions(circlePositions, atomPositions, molCenter,
-														interactDistance, atomInteractRadius, iterations=100, anchors=None,
-														kAnchor=0.05):
+														interactDistance, atomInteractRadius, iterations=100):
 	"""Optimize the initial positions of the resdiue circles to avoid overlaps using repulsion forces between circles and 
   other circles and atoms. 
   Originally, the circle positions are next to the interactions atoms.
   """
 	circles = np.array(circlePositions)
-	anchors = np.array(anchors) if anchors is not None else None
 	kRep = 1000
 
 	for _ in range(iterations):
@@ -241,10 +239,6 @@ def optimizeCirclePositions(circlePositions, atomPositions, molCenter,
 			repulsionForce = getCirclesRepulsion((circle, i), circles, interactDistance, molCenter, kRep)
 			# Repulsion against closeby atoms
 			repulsionForce += getAtomsRepulsion(circle, atomPositions, atomInteractRadius, kRep)
-			if anchors is not None:
-				# Pulled back to where the residue was placed, so solving the overlaps does not spread the
-				# circles over arbitrary positions and the real arrangement of the pocket survives
-				repulsionForce += (anchors[i] - circle) * kAnchor
 
 			# Update position
 			circles[i] += repulsionForce
@@ -312,8 +306,7 @@ class MoleculeInteractions:
 	The residues are placed surrounding the moelcule, next to their interacting atoms, but their positions can be 
 	dynamically changed.
 	'''
-	def __init__(self, molFile, inDic, outFile, poseFile=None, resCoords=None,
-			 valueUnit=DEF_VALUE_UNIT):
+	def __init__(self, molFile, inDic, outFile, poseFile=None, valueUnit=DEF_VALUE_UNIT):
 		self.canvasSize = 2000
 		self.circleRadius = 40
 		self.interactDistance = 200
@@ -324,11 +317,7 @@ class MoleculeInteractions:
 		self.cirLabels = {}
 		self.selectedCircle = None
 		
-		self.resCoords = {resId.replace('_', ''): coords for resId, coords in resCoords.items()} \
-			if resCoords else {}
-		self.projection = None
-
-		self.mol, self.mol3D = self.loadMolecule(molFile, poseFile)
+		self.mol = self.loadMolecule(molFile, poseFile)
 		self.atomNumDic = parsePDBAtomNumbers(molFile)
 
 		self.nDic = self.processInputDic(inDic)
@@ -377,7 +366,7 @@ class MoleculeInteractions:
 
 	########## Molecule tools ########################
 	def loadMolecule(self, molFile, poseFile):
-		"""Molecule to draw and the 3D pose it comes from.
+		"""Molecule to draw.
 
 		The PDB fixes the atom numbering the interactions refer to, but carries no bond orders, so the
 		pose file (sdf, mol2...) is used as a template to recover them and draw the right molecule.
@@ -392,51 +381,13 @@ class MoleculeInteractions:
 			except Exception as e:
 				print(f'Bond orders could not be taken from {poseFile} ({type(e).__name__}: {e})')
 
-		return mol, Chem.Mol(mol)
-
-	def getProjection(self):
-		"""Least squares affine map from the coordinates of the pose to those of the drawn molecule.
-
-		The depiction is generated to match the 3D pose, so this map is a good approximation of it and
-		can be applied to any other point: an interacting residue is then placed where it actually is
-		with respect to the molecule as it is drawn, instead of just outwards of the atom it touches.
-		"""
-		if not self.mol3D.GetNumConformers():
-			return None
-
-		conf3D, conf2D = self.mol3D.GetConformer(), self.mol.GetConformer()
-		nAtoms = min(self.mol3D.GetNumAtoms(), self.mol.GetNumAtoms())
-		if nAtoms < 4:
-			return None
-
-		A, B = [], []
-		for i in range(nAtoms):
-			p3D, p2D = conf3D.GetAtomPosition(i), conf2D.GetAtomPosition(i)
-			A.append([p3D.x, p3D.y, p3D.z, 1.0])
-			B.append([p2D.x, p2D.y])
-		return np.linalg.lstsq(np.array(A), np.array(B), rcond=None)[0]
-
-	def projectResidue(self, resId):
-		"""Drawing coordinates of a residue, from where it sits in 3D. None if it cannot be placed"""
-		if self.projection is None or resId not in self.resCoords:
-			return None
-
-		x, y = np.array([*self.resCoords[resId], 1.0]) @ self.projection
-		point = self.drawer.GetDrawCoords(Point2D(float(x), float(y)))
-		return [point.x, int(self.canvasSize * 0.5) - point.y]
+		return mol
 
 	########## Main tools ########################
 	def drawMolecule(self):
 			'''Draw the moelcule using RDKit'''
-			# Drawn in the orientation it binds in, so the pocket can be projected onto the depiction
-			try:
-				rdDepictor.GenerateDepictionMatching3DStructure(self.mol, self.mol3D)
-			except Exception as e:
-				print(f'Depiction could not be matched to the pose ({type(e).__name__}: {e})')
-				rdDepictor.Compute2DCoords(self.mol)
-
+			rdDepictor.Compute2DCoords(self.mol)
 			orientHorizontally(self.mol)
-			self.projection = self.getProjection()
 			Chem.RemoveStereochemistry(self.mol)
 			self.mol = rdMolDraw2D.PrepareMolForDrawing(self.mol)
 
@@ -450,14 +401,9 @@ class MoleculeInteractions:
 		molPoints = self.getMolPoints()
 		cirDic = self.getCirclesDic(nDic)
 
-		# Only worth holding the circles in place when they were placed by projecting the pocket:
-		# otherwise their position is just a guess and moving them freely solves more overlaps
-		anchors = list(cirDic.values()) if self.resCoords else None
-
 		centerX, centerY = getMoleculeCenter(self.drawer, self.mol, self.canvasSize)
 		newCircles = optimizeCirclePositions(list(cirDic.values()), molPoints, [centerX, centerY],
-											 self.interactDistance, self.interactDistance,
-											 anchors=anchors)
+											 self.interactDistance, self.interactDistance)
 
 		for i, resId in enumerate(cirDic):
 			newCircle = newCircles[i]
@@ -602,10 +548,8 @@ class MoleculeInteractions:
 				iDist = self.interactDistance
 
 			atomPoint = getDrawCoords(self.drawer, self.canvasSize, atomIdx)
-			# Outwards of where the residue projects to, or of the atom it touches if it cannot be projected
-			refPoint = self.projectResidue(resId)
-			refPoint = refPoint if refPoint else [atomPoint.x, atomPoint.y]
-			circleX, circleY = getExternalPosition(refPoint, (centerX, centerY), iDist)
+			atomPoint = [atomPoint.x, atomPoint.y]
+			circleX, circleY = getExternalPosition(atomPoint, (centerX, centerY), iDist)
 			cirDic[resId] = [circleX, circleY]
 		return cirDic
 	
@@ -674,12 +618,10 @@ if __name__ == "__main__":
 		pDic = parseParams(sys.argv[1], sep='::')
 		molFile, intDic = pDic['molFile'], eval(pDic['intDic'])
 		outFile = pDic['outFile'] if 'outFile' in pDic else DEF_SAVE_FILE
-		# Optional: molecule with bond orders and where the residues are, to draw the real pose
+		# Optional: molecule with the bond orders a PDB lacks
 		poseFile = pDic.get('poseFile', None)
-		resCoords = eval(pDic['resCoords']) if 'resCoords' in pDic else None
 		valueUnit = pDic.get('valueUnit', DEF_VALUE_UNIT)
 
-		app = MoleculeInteractions(molFile, intDic, outFile, poseFile=poseFile, resCoords=resCoords,
-															 valueUnit=valueUnit)
+		app = MoleculeInteractions(molFile, intDic, outFile, poseFile=poseFile, valueUnit=valueUnit)
 		app.display()
 

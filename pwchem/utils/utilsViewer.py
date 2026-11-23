@@ -196,10 +196,9 @@ def writePmlFile(pmlFile, pmlStr):
 def parsePlipXML(xmlFile):
     """Interactions PLIP found for a pose, in the shape drawInteractions.py expects.
 
-    :return: ({(residueId, ligandAtomIds): {interactionType: distance}}, {residueId: (x, y, z)}), the
-             second being where the protein atom of the interaction is, used to place the residue
+    :return: {(residueId, ligandAtomIds): {interactionType: distance}}
     """
-    intDic, resCoords = {}, {}
+    intDic = {}
     for site in ET.parse(xmlFile).getroot().iter('bindingsite'):
         for container in site.find('interactions'):
             if container.tag not in PLIP_INTERACTIONS:
@@ -214,11 +213,8 @@ def parsePlipXML(xmlFile):
                 resId = '{}_{}'.format(getPlipText(contact, 'restype'), getPlipText(contact, 'resnr'))
                 pairId = (resId, '_'.join(ligIdxs))
                 intDic.setdefault(pairId, {})[intType] = float(getPlipText(contact, distField, 0))
-                resCoords.setdefault(resId, []).append(getPlipCoords(contact, 'protcoo'))
 
-    # Several contacts of the same residue: it is drawn where they average
-    resCoords = {resId: [sum(cs) / len(cs) for cs in zip(*coords)] for resId, coords in resCoords.items()}
-    return intDic, resCoords
+    return intDic
 
 def getPlipText(element, tag, default=None):
     found = element.find(tag)
@@ -239,10 +235,6 @@ def getPlipLigandIdxs(contact, idxField):
     idx = getPlipText(contact, idxField)
     return [idx] if idx else []
 
-def getPlipCoords(contact, tag):
-    coo = contact.find(tag)
-    return [float(coo.find(c).text) for c in ('x', 'y', 'z')] if coo is not None else [0.0, 0.0, 0.0]
-
 def getPlipLigandName(xmlFile):
     """Residue name PLIP gave to the ligand of the complex"""
     hetId = ET.parse(xmlFile).getroot().find('.//identifiers/hetid')
@@ -261,18 +253,15 @@ def writePlipLigandFile(plipDir, xmlFile, outFile, complexFile):
                 fOut.write(line)
     return outFile
 
-def writeDrawInteractionsParams(paramsFile, molFile, intDic, outFile, poseFile=None, resCoords=None,
-                                valueUnit=None):
+def writeDrawInteractionsParams(paramsFile, molFile, intDic, outFile, poseFile=None, valueUnit=None):
     """Parameters file read by drawInteractions.py. The pose file (with the bond orders a PDB has
-    lost) and the coordinates of the residues are optional, but the diagram is better with them"""
+    lost) is optional, but the molecule is drawn wrong without it"""
     with open(paramsFile, 'w') as f:
         f.write(f'molFile :: {os.path.abspath(molFile)}\n')
         f.write(f'intDic :: {intDic}\n')
         f.write(f'outFile :: {os.path.abspath(outFile)}\n')
         if poseFile:
             f.write(f'poseFile :: {os.path.abspath(poseFile)}\n')
-        if resCoords:
-            f.write(f'resCoords :: {resCoords}\n')
         if valueUnit:
             f.write(f'valueUnit :: {valueUnit}\n')
     return paramsFile

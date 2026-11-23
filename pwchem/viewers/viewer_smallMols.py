@@ -413,7 +413,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
       return
 
     xmlFile = os.path.join(plipDir, f'{ligandLabel}_report.xml')
-    intDic, resCoords = parsePlipXML(xmlFile)
+    intDic = parsePlipXML(xmlFile)
     if not intDic:
       showError('PLIP error', 'PLIP found no interactions in this docking position', self.getTkRoot())
       return
@@ -423,8 +423,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
     paramsFile = writeDrawInteractionsParams(os.path.join(plipDir, 'drawInteractionsParams.txt'),
                                              ligFile, intDic,
                                              os.path.join(plipDir, f'{ligandLabel}_interactions.png'),
-                                             poseFile=mol.getFileName(), resCoords=resCoords,
-                                             valueUnit='Å')
+                                             poseFile=mol.getFileName(), valueUnit='Å')
 
     pwchemPlugin.runScript(self.protocol, 'drawInteractions.py', os.path.abspath(paramsFile),
                            env=RDKIT_DIC, cwd=plipDir, popen=True, wait=False)
