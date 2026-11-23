@@ -123,9 +123,12 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
             )
         )
 
-        args = '{} "{}"'.format(
+        outputDirectory = os.path.dirname(imageFile)
+
+        args = '{} {} {}'.format(
             shlex.quote(ligandFile),
-            imageFile
+            shlex.quote(imageFile),
+            shlex.quote(outputDirectory)
         )
 
         try:
