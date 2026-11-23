@@ -143,8 +143,7 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
         group.addParam('displayPlipDiagram', params.StringParam, default='',
                        label='Draw ligand interactions diagram: ',
                        help='Draw the interactions of this single ligand as a 2D diagram, with the '
-                            'interacting residues placed around the molecule as they are in the pocket. '
-                            'The residues can be dragged and the figure is saved when its window is closed')
+                            'interacting residues placed around the molecule. The residues can be dragged.')
 
     #Covalent section: only when the molecules carry a covalent complex file
     if self.checkIfCovalent():
@@ -422,7 +421,6 @@ class SmallMoleculesViewer(pwviewer.ProtocolViewer):
                                   os.path.join(self.getPmlsDir(), f'{ligandLabel}.pdb'))
     paramsFile = writeDrawInteractionsParams(os.path.join(plipDir, 'drawInteractionsParams.txt'),
                                              ligFile, intDic,
-                                             os.path.join(plipDir, f'{ligandLabel}_interactions.png'),
                                              poseFile=mol.getFileName(), valueUnit='Å')
 
     pwchemPlugin.runScript(self.protocol, 'drawInteractions.py', os.path.abspath(paramsFile),

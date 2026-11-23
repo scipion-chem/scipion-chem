@@ -275,13 +275,12 @@ def writePlipLigandFile(plipDir, xmlFile, outFile, complexFile):
                 fOut.write(line)
     return outFile
 
-def writeDrawInteractionsParams(paramsFile, molFile, intDic, outFile, poseFile=None, valueUnit=None):
+def writeDrawInteractionsParams(paramsFile, molFile, intDic, poseFile=None, valueUnit=None):
     """Parameters file read by drawInteractions.py. The pose file (with the bond orders a PDB has
     lost) is optional, but the molecule is drawn wrong without it"""
     with open(paramsFile, 'w') as f:
         f.write(f'molFile :: {os.path.abspath(molFile)}\n')
         f.write(f'intDic :: {intDic}\n')
-        f.write(f'outFile :: {os.path.abspath(outFile)}\n')
         if poseFile:
             f.write(f'poseFile :: {os.path.abspath(poseFile)}\n')
         if valueUnit:

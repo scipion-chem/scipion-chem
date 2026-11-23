@@ -55,10 +55,11 @@ COLOR_DIC = {res: RES_COLORS[group] for group, resGroup in RES_GROUPS.items() fo
 COLOR_INT_DIC = {'halogen': 'red', 'hbond': 'royalblue', 'hydrophobic': 'green', 'pication': 'orange',
 								 'pistacking': 'brown', 'saltbridge': 'gray', 'waterbridge': 'navy'}
 
-DEF_SAVE_FILE = 'moleculeInteractions.png'
 # Unit of the number written on each interaction line: a distance for a single pose, the
 # fraction of frames it is present in for a trajectory
 DEF_VALUE_UNIT = ''
+# Free space left around what is drawn, in the units of the drawing, so there is room to move the residues around
+VIEW_MARGIN = 300
 
 
 class ResidueBox(FancyBboxPatch):
@@ -169,7 +170,7 @@ def setConnectionLineCoords(c1, c2, displac, margin=50, spacing=45):
 	return (x1New, y1New), (x2New, y2New)
 
 
-def getBoundingBox(allPoints, margin=200):
+def getBoundingBox(allPoints, margin=VIEW_MARGIN):
 	'''Get the bounding box for the figure given all the points drawn, with a given margin to accommodate them'''
 	allX = [p[0] for p in allPoints]
 	allY = [p[1] for p in allPoints]
@@ -297,7 +298,7 @@ def addParallelLabel(ax, x, y, texto, color, distancia=5, offSign=1, **kwargs):
 	angle, offsetX, offsetY = normalizeAngle(angle, offsetX, offsetY)
 
 	label = ax.annotate(texto, xy=(midX, midY), xytext=(offsetX, offsetY), color=color, textcoords='offset points',
-							rotation=angle, ha='center', va='center', **kwargs)
+							rotation=angle, ha='center', va='center', annotation_clip=False, **kwargs)
 	return label
 
 
@@ -306,11 +307,10 @@ class MoleculeInteractions:
 	The residues are placed surrounding the moelcule, next to their interacting atoms, but their positions can be 
 	dynamically changed.
 	'''
-	def __init__(self, molFile, inDic, outFile, poseFile=None, valueUnit=DEF_VALUE_UNIT):
+	def __init__(self, molFile, inDic, poseFile=None, valueUnit=DEF_VALUE_UNIT):
 		self.canvasSize = 2000
 		self.circleRadius = 40
 		self.interactDistance = 200
-		self.outFile = outFile
 		self.valueUnit = valueUnit
 		
 		self.circles, self.resCircles = {}, {}
@@ -344,12 +344,14 @@ class MoleculeInteractions:
 		self.selectedCircle = None
 
 	def onMotion(self, event):
-		if self.selectedCircle is None or event.inaxes != self.ax:
+		if self.selectedCircle is None:
 			return
 
+		xData, yData = self.ax.transData.inverted().transform((event.x, event.y))
+
 		#  Moving residue Circle and label
-		self.selectedCircle.center = (event.xdata, event.ydata)
-		self.cirLabels[self.selectedCircle].set_position((event.xdata, event.ydata))
+		self.selectedCircle.center = (xData, yData)
+		self.cirLabels[self.selectedCircle].set_position((xData, yData))
 
 		# Redoing interactions in new position
 		self.removeCircleInteractions(self.selectedCircle)
@@ -359,10 +361,6 @@ class MoleculeInteractions:
 
 		if hasattr(self, 'plot_element'):
 			self.plot_element.set_cursor_data(False)
-
-	def onClose(self, event):
-		event.canvas.figure.savefig(self.outFile, dpi=300, bbox_inches='tight')
-		plt.close('all')
 
 	########## Molecule tools ########################
 	def loadMolecule(self, molFile, poseFile):
@@ -423,6 +421,8 @@ class MoleculeInteractions:
 
 			matplotlib.use('tkagg')
 			self.fig, self.ax = plt.subplots(figsize=(10, 10 * bboxHeight / bboxWidth))
+			# The plot takes the whole window and not the part of it matplotlib leaves free around the axes
+			self.fig.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
 			self.ax.imshow(imgFull)
 			self.ax.set_xlim(bboxX[0], bboxX[1])
 			self.bboxY = bboxY
@@ -432,7 +432,6 @@ class MoleculeInteractions:
 			self.fig.canvas.mpl_connect('button_press_event', self.onPress)
 			self.fig.canvas.mpl_connect('button_release_event', self.onRelease)
 			self.fig.canvas.mpl_connect('motion_notify_event', self.onMotion)
-			self.fig.canvas.mpl_connect('close_event', self.onClose)
 
 	def drawAminoacids(self):
 		'''Draw all the interacting resiudes and their labels'''
@@ -442,7 +441,7 @@ class MoleculeInteractions:
 			width = max(len(resId) * self.circleRadius * 0.55, self.circleRadius * 2)
 			circle = ResidueBox(circleCoords, width, self.circleRadius * 1.2,
 											facecolor=COLOR_DIC[removeNumbers(resId.upper())],
-											linewidth=2, alpha=0.2, transform=self.ax.transData)
+											linewidth=2, alpha=0.2, transform=self.ax.transData, clip_on=False)
 			self.ax.add_patch(circle)
 			cirLabel = self.ax.text(circleX, circleY, resId, color='black', weight='bold', fontsize=8,
 															ha='center', va='center', transform=self.ax.transData)
@@ -566,7 +565,7 @@ class MoleculeInteractions:
 		'''
 		c1, c2 = setConnectionLineCoords(atomCoords, circleCoords, disp, margin=margin)
 		xs, ys = [c1[0], c2[0]], [c1[1], c2[1]]
-		line = Line2D(xs, ys, color=intColor, alpha=0.6, linewidth=1.5, linestyle='--')
+		line = Line2D(xs, ys, color=intColor, alpha=0.6, linewidth=1.5, linestyle='--', clip_on=False)
 		self.ax.add_line(line)
 		n = '{} {}'.format(round(float(n), 2), self.valueUnit).strip()
 		label = addParallelLabel(self.ax, xs, ys, n, intColor, offSign=offSign)
@@ -617,11 +616,10 @@ class MoleculeInteractions:
 if __name__ == "__main__":
 		pDic = parseParams(sys.argv[1], sep='::')
 		molFile, intDic = pDic['molFile'], eval(pDic['intDic'])
-		outFile = pDic['outFile'] if 'outFile' in pDic else DEF_SAVE_FILE
 		# Optional: molecule with the bond orders a PDB lacks
 		poseFile = pDic.get('poseFile', None)
 		valueUnit = pDic.get('valueUnit', DEF_VALUE_UNIT)
 
-		app = MoleculeInteractions(molFile, intDic, outFile, poseFile=poseFile, valueUnit=valueUnit)
+		app = MoleculeInteractions(molFile, intDic, poseFile=poseFile, valueUnit=valueUnit)
 		app.display()
 
