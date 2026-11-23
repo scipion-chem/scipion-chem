@@ -119,11 +119,9 @@ def buildPMLCovalentStr(covDic, disable=True):
         pmlStr += f'orient {next(iter(covDic))} and resn LIG\n'
     return pmlStr
 
-def buildChimeraDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True,
-                                 vinaDock=False):
-    """ChimeraX counterpart of buildPMLDockingGroupsStr: each receptor is shown with the poses
-    docked into it, grouped together as a pymol group is.
-    """
+def getChimeraDockingGroups(viewer, mols, addTarget, pose, vinaDock):
+    """Poses grouped by the receptor they were docked into, so that those that share it are shown together:
+    ({receptor file: [pose files]}, {pose file: name of the pose}). Without receptor they are all in 'all'."""
     cGroups, uNames = {}, {}
     for mol in mols:
         if vinaDock:
@@ -134,33 +132,57 @@ def buildChimeraDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disabl
         recFile = viewer.getReceptorFile(mol) if addTarget and pose else None
         cGroups = addToDic(cGroups, os.path.abspath(recFile) if recFile else 'all', molFile)
         uNames[molFile] = molName
+    return cGroups, uNames
+
+def getChimeraGroupOpenStr(recFile, molFiles, uNames, mi, disable):
+    """Commands opening a receptor, if there is one, and the poses docked into it.
+    return: the commands, the number of the next model and the pose files in the order they were opened
+    """
+    chimStr = ''
+    if recFile != 'all':
+        chimStr += f"run(session, 'open {recFile}')\n"
+        mi += 1
+
+    molFiles = natural_sort(set(molFiles))
+    for i, molFile in enumerate(molFiles):
+        chimStr += f"run(session, 'open {os.path.abspath(molFile)} name {uNames[molFile]}')\n"
+        if disable and i != 0:
+            chimStr += f"run(session, 'hide #{mi} models')\n"
+        mi += 1
+    return chimStr, mi, molFiles
+
+def getChimeraGroupName(recFile, molFiles, uNames, ci):
+    """Name of the group of a receptor and its poses: after the pose when it is the only one, else after the receptor"""
+    baseName = getBaseName(recFile) if len(molFiles) > 1 else uNames[molFiles[0]]
+    return f'{baseName}_{ci}'
+
+def getChimeraGroupsRenameStr(cGroupLims, mi, disable):
+    """Commands grouping the models of each receptor. The groups are hidden but the first."""
+    chimStr = ''
+    for ci, (firstId, lastId, groupName) in enumerate(cGroupLims):
+        if firstId < lastId:
+            chimStr += f"""run(session, 'rename #{firstId}-{lastId} "{groupName}" id #{mi + ci}')\n"""
+            if disable and ci != 0:
+                chimStr += f"run(session, 'hide #{mi + ci} models')\n"
+    return chimStr
+
+def buildChimeraDockingGroupsStr(viewer, mols, addTarget=True, pose=True, disable=True,
+                                 vinaDock=False):
+    """ChimeraX counterpart of buildPMLDockingGroupsStr: each receptor is shown with the poses
+    docked into it, grouped together as a pymol group is.
+    """
+    cGroups, uNames = getChimeraDockingGroups(viewer, mols, addTarget, pose, vinaDock)
 
     chimStr, mi, cGroupLims = '', 1, []
     for recFile, molFiles in cGroups.items():
         firstId = mi
+        groupStr, mi, molFiles = getChimeraGroupOpenStr(recFile, molFiles, uNames, mi, disable)
+        chimStr += groupStr
         if recFile != 'all':
-            chimStr += f"run(session, 'open {recFile}')\n"
-            mi += 1
+            groupName = getChimeraGroupName(recFile, molFiles, uNames, len(cGroupLims) + 1)
+            cGroupLims.append((firstId, mi - 1, groupName))
 
-        molFiles = natural_sort(set(molFiles))
-        for i, molFile in enumerate(molFiles):
-            chimStr += f"run(session, 'open {os.path.abspath(molFile)} name {uNames[molFile]}')\n"
-            if disable and i != 0:
-                chimStr += f"run(session, 'hide #{mi} models')\n"
-            mi += 1
-
-        if recFile != 'all':
-            ci = len(cGroupLims) + 1
-            complexName = f'{getBaseName(recFile)}_{ci}' if len(molFiles) > 1 \
-                else f'{uNames[molFiles[0]]}_{ci}'
-            cGroupLims.append((firstId, mi - 1, complexName))
-
-    for ci, (firstId, lastId, complexName) in enumerate(cGroupLims):
-        if firstId < lastId:
-            chimStr += f"""run(session, 'rename #{firstId}-{lastId} "{complexName}" id #{mi + ci}')\n"""
-            if disable and ci != 0:
-                chimStr += f"run(session, 'hide #{mi + ci} models')\n"
-    return chimStr
+    return chimStr + getChimeraGroupsRenameStr(cGroupLims, mi, disable)
 
 
 def buildChimeraCovalentStr(covDic, disable=True):

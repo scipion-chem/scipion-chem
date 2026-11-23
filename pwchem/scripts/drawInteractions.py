@@ -139,7 +139,7 @@ def getMoleculeCenter(drawer, mol, canvasSize):
 			atomPoint = getDrawCoords(drawer, canvasSize, i)
 			coordsX.append(atomPoint.x)
 			coordsY.append(atomPoint.y)
-		except:
+		except RuntimeError:
 			continue
 
 	if coordsX and coordsY:
@@ -372,12 +372,12 @@ class MoleculeInteractions:
 		pose file (sdf, mol2...) is used as a template to recover them and draw the right molecule.
 		"""
 		molsDict, _ = getMolFilesDic([molFile], True)
-		mol = list(molsDict.keys())[0]
+		mol = next(iter(molsDict))
 
 		if poseFile:
 			try:
 				tmplDict, _ = getMolFilesDic([poseFile], True)
-				mol = AllChem.AssignBondOrdersFromTemplate(list(tmplDict.keys())[0], mol)
+				mol = AllChem.AssignBondOrdersFromTemplate(next(iter(tmplDict)), mol)
 			except Exception as e:
 				print(f'Bond orders could not be taken from {poseFile} ({type(e).__name__}: {e})')
 
@@ -540,7 +540,7 @@ class MoleculeInteractions:
 		cirDic = {}
 		centerX, centerY = getMoleculeCenter(self.drawer, self.mol, self.canvasSize)
 		for resId, atomDic in nDic.items():
-			atomIdx = list(atomDic.keys())[0]
+			atomIdx = next(iter(atomDic))
 			if isinstance(atomIdx, str):
 				atomIdx = int(atomIdx.split('_')[0])
 				iDist = self.interactDistance * 2
