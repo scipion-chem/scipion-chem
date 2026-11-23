@@ -46,20 +46,9 @@ def readMolecule(filename):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(
-            "Usage: rdkit_ligand_atom_numbers.py "
-            "<input_ligand.sdf|mol>"
-        )
-        sys.exit(1)
-
     ligandFile = os.path.abspath(sys.argv[1])
-
-    # Always generate the image in the working directory.
-    outputFile = os.path.join(
-        os.getcwd(),
-        "ligand_atom_numbers.png"
-    )
+    outputFile = os.path.abspath(sys.argv[2])
+    allowedDirectory = os.path.realpath(sys.argv[3])
 
     if not os.path.isfile(ligandFile):
         raise FileNotFoundError(
@@ -102,6 +91,31 @@ def main():
 
     for atomIndex, label in atomLabels.items():
         options.atomLabels[atomIndex] = label
+
+    # Ensure the output file stays inside the allowed directory.
+    outputDirectory = os.path.dirname(outputFile)
+
+    try:
+        if os.path.commonpath(
+                [allowedDirectory, outputFile]
+        ) != allowedDirectory:
+            raise ValueError(
+                "Output file must be inside the allowed directory: "
+                "{}".format(allowedDirectory)
+            )
+    except ValueError:
+        raise ValueError(
+            "Invalid output path: {}".format(outputFile)
+        )
+
+    if not os.path.isdir(allowedDirectory):
+        raise FileNotFoundError(
+            "Allowed output directory does not exist: {}".format(
+                allowedDirectory
+            )
+        )
+
+    os.makedirs(outputDirectory, exist_ok=True)
 
     Draw.MolToFile(
         molecule2d,

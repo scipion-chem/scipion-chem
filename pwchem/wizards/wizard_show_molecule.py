@@ -123,19 +123,13 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
             )
         )
 
-        outputDirectory = os.path.abspath(
-            project.getTmpPath(
-                "ligand_atom_numbers_{}".format(
-                    protocol.getObjId()
-                )
-            )
+        outputDirectory = os.path.dirname(imageFile)
+
+        args = '{} {} {}'.format(
+            shlex.quote(ligandFile),
+            shlex.quote(imageFile),
+            shlex.quote(outputDirectory)
         )
-
-        os.makedirs(outputDirectory, exist_ok=True)
-
-        imageFile = os.path.join(outputDirectory, "ligand_atom_numbers.png")
-
-        args = shlex.quote(ligandFile)
 
         try:
             pwchemPlugin.runScript(
@@ -144,7 +138,7 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
                 args,
                 env=RDKIT_DIC,
                 popen=True,
-                cwd=outputDirectory
+                cwd=os.path.dirname(ligandFile)
             )
         except Exception as exc:
             import traceback
