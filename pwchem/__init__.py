@@ -31,7 +31,7 @@ manipulation of atomic struct objects
 """
 
 # General imports
-import os, subprocess
+import os, subprocess, site
 from subprocess import run
 
 # Scipion core imports
@@ -245,11 +245,10 @@ class Plugin(pwem.Plugin):
         # Instantiating install helper
         installer = InstallHelper(DEAP_DIC['name'], packageHome=cls.getVar(DEAP_DIC['home']),
                                                             packageVersion=DEAP_DIC['version'])
-
-        scipionEnvPath = cls.getEnvPath(innerPath='envs/scipion3/lib/python3.8/site-packages/grape')
+        pythonPath = os.path.join(site.getsitepackages()[0], 'grape')
         installer.addCommand(f'{cls.getCondaActivationCmd()}conda activate scipion3 && conda install conda-forge::deap -y')\
             .addCommand('git clone https://github.com/bdsul/grape.git') \
-            .addCommand(f'mv grape {scipionEnvPath}') \
+            .addCommand(f'mv grape {pythonPath}') \
             .addPackage(env, dependencies=['conda', 'git'], default=default)
 
     @classmethod
