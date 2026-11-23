@@ -33,7 +33,7 @@ This protocol is used to perform tests oer predicted molecule poses (https://git
 """
 import os.path
 
-import csv, shutil
+import csv, json, shutil
 
 from pyworkflow.object import Boolean
 from pyworkflow.protocol import params
@@ -121,6 +121,11 @@ Output
     A filtered SetOfSmallMolecules containing only poses that pass the minimum
     number of PoseBusters validation tests.
 
+- outputSmallMoleculesFailed (optional):
+    A SetOfSmallMolecules with the poses that do not pass them, so that nothing
+    is lost: the two sets together hold all the input poses. They carry the
+    result of each test, to see which ones they fail.
+
     Each retained molecule includes:
     - Boolean flags for each evaluated test (TRUE/FALSE)
     - Link to the PoseBusters result file
@@ -129,7 +134,8 @@ Output
 Key Features
 ------------
 - Parallel execution over ligand batches
-- Optional receptor-based validation
+- Optional receptor-based validation, against the receptor each pose was docked into: the one of the
+  molecule when it carries its own (flexible docking, cofolding) and the general one of the set otherwise
 - Optional ground-truth ligand comparison
 - Automatic conversion of input formats (PDBQT → PDB, CIF → PDB)
 - Flexible filtering based on test subsets
@@ -183,6 +189,9 @@ Notes
         fGroup = form.addGroup('Tests')
         fGroup.addParam('testsPassed', params.IntParam, label='Min. tests passed: ', default=self.NTESTS['receptor'],
                         help='Minimum number of tests passed to keep each molecule.')
+        fGroup.addParam('outputFailed', params.BooleanParam, label='Create a set with the discarded molecules: ',
+                        default=False,
+                        help='Create an extra set with the poses that do not pass PoseBusters.')
         fGroup.addParam('doSpecific', params.BooleanParam, label='Check only specific tests: ', default='',
                         expertLevel=params.LEVEL_ADVANCED,
                         help='Check only a subset of specific tests on filtering')
@@ -209,8 +218,7 @@ Notes
             shutil.copy(trueFile, self.getTrueMolFile())
 
         if self.molRec.get():
-            protFile = self.convertFormat(self.inputMoleculesSet.get().getProteinFile(), type='file')
-            shutil.copy(os.path.abspath(protFile), self.getMolRecFile())
+            self.organizeReceptors()
 
         nThreads = self.getNThreads()
         molSubSets = makeSubsets(self.inputMoleculesSet.get(), nThreads, True)
@@ -232,18 +240,8 @@ Notes
     def poseBustersStep(self, it):
         resultsFile = self.getResultsFile(it)
 
-        baseArgs = []
-        baseArgs.append('--outfmt csv')
-        baseArgs.append(f'--output {os.path.abspath(resultsFile)}')
-        baseArgs.append('--full-report')
-        baseArgs.append('--max-workers 1')
-
-        args = ['bust']
-        for inpFile in os.listdir(self.getConvMolsDir(it)):
-            args.append(os.path.join(self.getConvMolsDir(it), inpFile))
-        
-        args.extend(self.getPoseBusterArgs())
-        args.extend(baseArgs)
+        args = ['bust', f'-t {self.writePosesTable(it)}', '--outfmt csv', f'--output {os.path.abspath(resultsFile)}',
+                '--full-report', '--max-workers 1']
 
         Plugin.runCondaCommand(
             self, args=" ".join(args), condaDic=SCORCH2_DIC, program="",
@@ -256,20 +254,34 @@ Notes
             concatThreadFiles(resultsFile, self._getPath())
         resTestsDic = self.parseResultRows(resultsFile)
 
-        newMols = SetOfSmallMolecules.createCopy(self.inputMoleculesSet.get(), self._getPath(), copyInfo=True)
-        for mol in self.inputMoleculesSet.get():
+        molSet = self.inputMoleculesSet.get()
+        newMols = SetOfSmallMolecules.createCopy(molSet, self._getPath(), copyInfo=True)
+        failedMols = SetOfSmallMolecules.createCopy(molSet, self._getPath(), suffix='_failed', copyInfo=True) \
+            if self.outputFailed.get() else None
+
+        for mol in molSet:
             newMol = mol.clone()
             newMol.PoseBusters_file = String(resultsFile)
 
-            baseName = getBaseName(mol.getPoseFile())
-            if baseName in resTestsDic:
-                resDic = resTestsDic[baseName]
-                if self.checkPassedTests(resDic) >= self.testsPassed.get():
-                    for testName, testVal in resDic.items():
-                        newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
-                    newMols.append(newMol)
+            resDic = resTestsDic.get(getBaseName(mol.getPoseFile()))
+            if resDic is not None:
+                for testName, testVal in resDic.items():
+                    newMol.__setattr__(testName, Boolean(testVal.upper() == 'TRUE'))
+
+            if resDic is not None and self.checkPassedTests(resDic) >= self.testsPassed.get():
+                newMols.append(newMol)
+            elif failedMols is not None:
+                failedMols.append(newMol)
 
         self._defineOutputs(outputSmallMolecules=newMols)
+        if failedMols is not None:
+            if len(failedMols) > 0:
+                self._defineOutputs(outputSmallMoleculesFailed=failedMols)
+            else:
+                print('Every molecule passed the tests: there is no set of discarded molecules to create')
+                failedPath = failedMols.getSetPath()
+                failedMols.close()
+                os.remove(failedPath)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -285,6 +297,13 @@ Notes
         molSet = self.inputMoleculesSet.get()
         if not molSet.isDocked():
             validations += ['{} is not docked yet'.format(molSet)]
+
+        if self.molRec.get() and not molSet.getProteinFile():
+            noRec = [mol.getUniqueName() for mol in molSet if not mol.getProteinFile()]
+            if noRec:
+                validations += ['The set has no receptor and neither have {} of its molecules (e.g. {}): '
+                                'uncheck "Use receptor to run tests" or use docked molecules '
+                                'that carry it'.format(len(noRec), ', '.join(noRec[:3]))]
 
         return validations
 
@@ -326,18 +345,82 @@ Notes
 
     # --------------------------- UTILS functions -----------------------------------
 
-    def getPoseBusterArgs(self):
-        args = []
+    def getPoseReceptor(self, mol):
+        '''Receptor a pose was docked into: the one of the molecule when it carries its own (flexible receptors,
+        cofolding), else the general one of the set'''
+        return mol.getProteinFile() or self.inputMoleculesSet.get().getProteinFile()
 
-        if self.useTrueMol.get():
-            trueFile = self.getTrueMolFile()
-            args.append(f'-l {os.path.abspath(trueFile)}')
+    def organizeReceptors(self):
+        '''Write the receptors the poses were docked into as PDB, each of them once, and which of them goes with each
+        pose: {pose name: receptor file}'''
+        poseRecs = {}
+        for mol in self.inputMoleculesSet.get():
+            recFile = self.getPoseReceptor(mol)
+            if not recFile:
+                raise ValueError(f'No receptor found for {mol}: neither the molecule nor its set carry one')
+            poseRecs[getBaseName(mol.getPoseFile())] = os.path.abspath(recFile)
 
-        if self.molRec.get():
-            protFile = self.getMolRecFile()
-            args.append(f'-p {os.path.abspath(protFile)}')
+        pdbFiles = self.convertReceptors(sorted(set(poseRecs.values())))
+        with open(self.getPoseRecsFile(), 'w') as f:
+            json.dump({pose: pdbFiles[recFile] for pose, recFile in poseRecs.items()}, f, indent=1)
 
-        return args
+    def convertReceptors(self, recFiles):
+        '''Receptors in the format PoseBusters reads: {receptor file: its PDB}. The pdbqt ones are all converted in a single call'''
+        recDir, pdbqtDir = self.getRecsDir(), os.path.abspath(self._getTmpPath('receptorsPDBQT'))
+        os.makedirs(recDir, exist_ok=True)
+
+        pdbFiles, nPdbqt = {}, 0
+        for i, recFile in enumerate(recFiles):
+            ext = os.path.splitext(recFile)[1].lower()
+            if ext == '.cif':
+                pdbFiles[recFile] = os.path.join(recDir, f'rec_{i}.pdb')
+                cifToPdb(recFile, pdbFiles[recFile])
+            elif ext == '.pdbqt':
+                os.makedirs(pdbqtDir, exist_ok=True)
+                os.symlink(recFile, os.path.join(pdbqtDir, f'rec_{i}.pdbqt'))
+                pdbFiles[recFile] = os.path.join(recDir, f'rec_{i}.pdb')
+                nPdbqt += 1
+            else:
+                pdbFiles[recFile] = recFile
+
+        if nPdbqt:
+            args = f' --multiFiles -iD "{pdbqtDir}" --pattern "*.pdbqt" -of pdb --outputDir "{recDir}"'
+            pwchemPlugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=recDir)
+
+        # A receptor that was not written would only show up as every test on it failing
+        notConverted = [recFile for recFile, pdbFile in pdbFiles.items() if not os.path.exists(pdbFile)]
+        if notConverted:
+            raise FileNotFoundError(f'{len(notConverted)} receptors could not be converted to PDB, e.g. '
+                                    f'{notConverted[0]}')
+        return pdbFiles
+
+    def getPoseReceptors(self):
+        '''{pose name: receptor PDB} written when organizing the input'''
+        with open(self.getPoseRecsFile()) as f:
+            return json.load(f)
+
+    def writePosesTable(self, it):
+        '''Table PoseBusters reads for a batch of poses: a row for each of them, with the receptor it was docked into
+        and the true molecule, when they are used'''
+        useRec, useTrue = self.molRec.get(), self.useTrueMol.get()
+        poseRecs = self.getPoseReceptors() if useRec else {}
+
+        convDir = self.getConvMolsDir(it)
+        tableFile = os.path.abspath(self._getExtraPath(f'poses_{it}.csv'))
+        with open(tableFile, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['mol_pred'] + (['mol_true'] if useTrue else []) + (['mol_cond'] if useRec else []))
+            for poseFile in sorted(os.listdir(convDir)):
+                row = [os.path.join(convDir, poseFile)]
+                if useTrue:
+                    row.append(self.getTrueMolFile())
+                if useRec:
+                    poseName = getBaseName(poseFile)
+                    if poseName not in poseRecs:
+                        raise ValueError(f'No receptor was organized for the pose {poseName}')
+                    row.append(poseRecs[poseName])
+                writer.writerow(row)
+        return tableFile
 
     def getResultsFile(self, it=None):
         if it is None:
@@ -415,8 +498,11 @@ Notes
     def getTrueMolFile(self):
         return os.path.abspath(self._getExtraPath('trueMol.pdb'))
 
-    def getMolRecFile(self):
-        return os.path.abspath(self._getExtraPath('molRec.pdb'))
+    def getRecsDir(self):
+        return os.path.abspath(self._getExtraPath('receptors'))
+
+    def getPoseRecsFile(self):
+        return os.path.abspath(self._getExtraPath('poseReceptors.json'))
 
     def getInMolsDir(self, it):
         return os.path.abspath(self._getTmpPath(f'inputMols_{it}'))
