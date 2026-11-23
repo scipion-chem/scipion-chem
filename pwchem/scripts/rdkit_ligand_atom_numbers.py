@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 
+
 import os
 import sys
 
 from rdkit import Chem
 from rdkit.Chem import Draw
 from rdkit.Chem import rdDepictor
+
+# Fixed output name; the wizard looks for this file in the cwd it sets.
+OUTPUT_IMAGE_NAME = "ligand_atom_numbers.png"
 
 
 def readMolecule(filename):
@@ -44,12 +48,16 @@ def readMolecule(filename):
         "Unsupported ligand format: {}".format(extension)
     )
 
+OUTPUT_IMAGE_NAME = "ligand_atom_numbers.png"
 
 
 def main():
-    ligandFile = os.path.abspath(sys.argv[1])
-    outputFile = os.path.abspath(sys.argv[2])
-    allowedDirectory = os.path.realpath(sys.argv[3])
+    if len(sys.argv) != 2:
+        raise SystemExit(
+            "Usage: rdkit_ligand_atom_numbers.py <ligand.sdf|ligand.mol>"
+        )
+
+    ligandFile = os.path.realpath(sys.argv[1])
 
     if not os.path.isfile(ligandFile):
         raise FileNotFoundError(
@@ -93,30 +101,8 @@ def main():
     for atomIndex, label in atomLabels.items():
         options.atomLabels[atomIndex] = label
 
-    # Ensure the output file stays inside the allowed directory.
-    outputDirectory = os.path.dirname(outputFile)
-
-    try:
-        if os.path.commonpath(
-                [allowedDirectory, outputFile]
-        ) != allowedDirectory:
-            raise ValueError(
-                "Output file must be inside the allowed directory: "
-                "{}".format(allowedDirectory)
-            )
-    except ValueError:
-        raise ValueError(
-            "Invalid output path: {}".format(outputFile)
-        )
-
-    if not os.path.isdir(allowedDirectory):
-        raise FileNotFoundError(
-            "Allowed output directory does not exist: {}".format(
-                allowedDirectory
-            )
-        )
-
-    os.makedirs(outputDirectory, exist_ok=True)
+    # Saved in the working directory chosen by the caller through cwd.
+    outputFile = os.path.join(os.getcwd(), OUTPUT_IMAGE_NAME)
 
     Draw.MolToFile(
         molecule2d,
@@ -124,7 +110,6 @@ def main():
         size=(1600, 1200),
         options=options
     )
-
 
 if __name__ == "__main__":
     main()

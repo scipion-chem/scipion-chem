@@ -65,7 +65,7 @@ class ProtContactLigands(EMProtocol):
                       help='Chain of the receptor that we want to evaluate.')
         form.addParam('recResidue', params.StringParam,
                       label="Receptor residue:", default='',
-                      help="Select the receptor residue to evaluate." )
+                      help="Select the receptor residue to evaluate.")
         form.addParam('recAtom', params.StringParam,
                       label="Receptor atom:", default='',
                       help="Select the receptor atom to evaluate. Enter the atom name displayed in PyMOL, such as OG, CA, or OD1, not the sequential label number.")
@@ -740,18 +740,23 @@ class ProtContactLigands(EMProtocol):
         referenceFile = self._getRDKitCompatibleLigandFile(referenceFile)
         poseFile = self._getRDKitCompatibleLigandFile(poseFile)
 
-        outputFile = self._getTmpPath('mapped_ligand_atom.json')
+        # The script writes 'mapped_ligand_atom.json' into its cwd.
+        outputDirectory = os.path.abspath(self._getTmpPath())
+        os.makedirs(outputDirectory, exist_ok=True)
+        outputFile = os.path.join(outputDirectory, 'mapped_ligand_atom.json')
+
+        # Remove any result from a previous run so it is never reused.
+        if os.path.isfile(outputFile):
+            os.remove(outputFile)
 
         args = (
             '--reference "{}" '
             '--pose "{}" '
-            '--atom-index {} '
-            '--output "{}"'
+            '--atom-index {}'
         ).format(
             os.path.abspath(referenceFile),
             os.path.abspath(poseFile),
-            int(self.ligAtom.get()),
-            os.path.abspath(outputFile)
+            int(self.ligAtom.get())
         )
 
         pwchemPlugin.runScript(
@@ -760,7 +765,7 @@ class ProtContactLigands(EMProtocol):
             args,
             env=RDKIT_DIC,
             popen=True,
-            cwd=os.path.dirname(os.path.abspath(poseFile))
+            cwd=outputDirectory
         )
 
         # Wait for the external script to finish before reading its output.
@@ -840,5 +845,3 @@ class ProtContactLigands(EMProtocol):
             raise RuntimeError(
                 'Could not convert CIF ligand to SDF: {}'.format(ligandFile)
             )
-
-        return outputFile

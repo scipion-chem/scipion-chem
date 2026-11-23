@@ -1,7 +1,11 @@
 import argparse
 import json
+import os
 
 from rdkit import Chem
+
+# Fixed output name; the protocol looks for this file in the cwd it sets.
+OUTPUT_JSON_NAME = 'mapped_ligand_atom.json'
 
 
 def loadMolecule(filename):
@@ -39,7 +43,6 @@ def main():
     parser.add_argument('--reference', required=True)
     parser.add_argument('--pose', required=True)
     parser.add_argument('--atom-index', required=True, type=int)
-    parser.add_argument('--output', required=True)
     args = parser.parse_args()
 
     reference = loadMolecule(args.reference)
@@ -87,7 +90,12 @@ def main():
         'referenceAtom_index': args.atom_index
     }
 
-    with open(args.output, 'w') as handle:
+    # The result is always written with a fixed name in the current working
+    # directory, which the caller chooses through cwd. No output path is
+    # taken from the command line.
+    outputFile = os.path.join(os.getcwd(), OUTPUT_JSON_NAME)
+
+    with open(outputFile, 'w') as handle:
         json.dump(result, handle)
 
 
