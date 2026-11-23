@@ -45,6 +45,7 @@ def readMolecule(filename):
     )
 
 
+
 def main():
     ligandFile = os.path.abspath(sys.argv[1])
     outputFile = os.path.abspath(sys.argv[2])
