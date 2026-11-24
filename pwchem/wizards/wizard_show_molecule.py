@@ -1,124 +1,37 @@
 import os
+import json
 from subprocess import Popen
+import shlex
+import traceback
 
-import pyworkflow.utils as pwutils
 from pwem.wizards import VariableWizard
 
 from pwchem import Plugin as pwchemPlugin
 from pwchem.protocols.VirtualDrugScreening.protocol_filter_contacts import (
     ProtContactLigands
 )
-import json
 from pwchem.constants import OPENBABEL_DIC, RDKIT_DIC
-
-from pwchem.utils import pdbqt2other
+from pwchem.utils import pdbqt2other, convertToSdf, getChainIds
+from pwchem.viewers.viewers_data import PyMol
 from pwem.convert import cifToPdb
-
-from Bio.PDB import PDBParser, MMCIFParser
-
-class PyMol:
-    """Help class to run PyMOL and manage its environment."""
-
-    @classmethod
-    def getEnviron(cls):
-        environ = pwutils.Environ(os.environ)
-        environ.set(
-            'PATH',
-            pwchemPlugin.getProgramHome(OPENBABEL_DIC, path='bin'),
-            position=pwutils.Environ.BEGIN
-        )
-        return environ
 
 
 class PreviewLigandAtomIDsWizard(VariableWizard):
     _targets, _inputs, _outputs = [], {}, {}
 
     def _getLigandFile(self, protocol):
-        """Retrieve and validate the input ligand file."""
+        """Retrieve the pose file of the first ligand in the input set."""
 
-        ligandSet = protocol.inputLigandSet.get()
-        molObj = next(iter(ligandSet), None)
+        molObj = next(iter(protocol.inputLigandSet.get()), None)
 
         if molObj is None:
             print("ERROR: The input ligand set is empty.")
             return None
 
-        ligandFile = molObj.getPoseFile() or molObj.getFileName()
-
-        if not ligandFile or not os.path.isfile(ligandFile):
-            print("ERROR: The ligand pose file was not found.")
-            return None
-
-        return os.path.abspath(ligandFile)
-
-    def _convertLigandToSdf(self, protocol, ligandFile):
-        """Convert unsupported ligand formats to SDF using Open Babel."""
-
-        extension = os.path.splitext(ligandFile)[1].lower()
-
-        if extension in (".sdf", ".mol"):
-            return ligandFile
-
-        import shlex
-
-        project = protocol.getProject()
-
-        convertedFile = os.path.abspath(
-            project.getTmpPath(
-                "ligand_atom_numbers_{}.sdf".format(
-                    protocol.getObjId()
-                )
-            )
-        )
-
-        outputDirectory = os.path.dirname(convertedFile)
-
-        os.makedirs(outputDirectory, exist_ok=True)
-
         try:
-            args = '-i {} -of sdf -o {} -od {} --overWrite'.format(
-                shlex.quote(ligandFile),
-                shlex.quote(
-                    os.path.splitext(os.path.basename(convertedFile))[0]
-                ),
-                shlex.quote(outputDirectory)
-            )
-
-            pwchemPlugin.runScript(
-                protocol,
-                "obabel_IO.py",
-                args,
-                env=OPENBABEL_DIC,
-                popen=True,
-                cwd=os.path.dirname(ligandFile)
-            )
-
-            generatedFile = os.path.join(
-                outputDirectory,
-                os.path.splitext(os.path.basename(ligandFile))[0]
-                + ".sdf"
-            )
-
-            if os.path.isfile(generatedFile):
-                if generatedFile != convertedFile:
-                    os.replace(generatedFile, convertedFile)
-
-            if (
-                not os.path.isfile(convertedFile)
-                or os.path.getsize(convertedFile) == 0
-            ):
-                print(
-                    "ERROR: Open Babel did not generate the expected "
-                    "SDF file: {}".format(convertedFile)
-                )
-                return None
-
-            return convertedFile
-
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            print("ERROR: Could not convert ligand to SDF:", exc)
+            return os.path.abspath(ProtContactLigands._getPoseFile(molObj))
+        except ValueError as exc:
+            print("ERROR: {}".format(exc))
             return None
 
     def _generateLigandImage(self, protocol, ligandFile):
@@ -142,8 +55,6 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
         )
 
         try:
-            import shlex
-
             pwchemPlugin.runScript(
                 protocol,
                 "rdkit_ligand_atom_numbers.py",
@@ -154,7 +65,6 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
             )
 
         except Exception as exc:
-            import traceback
             traceback.print_exc()
             print(
                 "ERROR: Could not generate the ligand atom-number figure:",
@@ -191,11 +101,16 @@ class PreviewLigandAtomIDsWizard(VariableWizard):
         if not ligandFile:
             return
 
-        ligandFile = self._convertLigandToSdf(
-            protocol,
-            ligandFile
+        project = protocol.getProject()
+        sdfFile = os.path.abspath(project.getTmpPath(
+            "ligand_atom_numbers_{}.sdf".format(protocol.getObjId())))
+        os.makedirs(os.path.dirname(sdfFile), exist_ok=True)
+
+        ligandFile = convertToSdf(
+            protocol, ligandFile, sdfFile=sdfFile, overWrite=True
         )
-        if not ligandFile:
+        if not ligandFile or not os.path.isfile(ligandFile):
+            print("ERROR: Could not convert the ligand to SDF.")
             return
 
         imageFile = self._generateLigandImage(
@@ -227,8 +142,7 @@ class PreviewReceptorAtomIDsWizard(VariableWizard):
             print("ERROR: Receptor file not found.")
             return
 
-        chainData = json.loads(protocol.recChain.get())
-        chainId = str(chainData["chain"])
+        chainId = getChainIds(protocol.recChain.get())[0]
 
         residueData = json.loads(protocol.recResidue.get())
         residueId = str(residueData["index"]).split("-")[0]

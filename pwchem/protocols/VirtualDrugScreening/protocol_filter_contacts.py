@@ -46,8 +46,214 @@ from pwchem.constants import RDKIT_DIC
 
 class ProtContactLigands(EMProtocol):
     """
+            Filters docked small molecules based on the distance between a selected
+            ligand atom and a selected receptor atom.
 
-    """
+            The protocol evaluates a specific atom-to-atom contact for each docked
+            ligand in an input SetOfSmallMolecules. The ligand atom is identified
+            by its 1-based position among the heavy atoms of a reference ligand.
+            RDKit is used to map this atom onto the corresponding atom in each
+            docked pose, allowing the protocol to retrieve its coordinates even
+            when the atom ordering differs between the reference molecule and the
+            docked structures.
+
+            Molecules are retained when the distance between the mapped ligand atom
+            and the selected receptor atom is equal to or below the specified
+            cutoff. The evaluation results are also recorded in a CSV report.
+
+            Workflow
+            --------
+            1. Receive a SetOfSmallMolecules containing docked ligand poses and
+               their associated receptor structure.
+            2. Retrieve the receptor structure and validate the filtering
+               parameters.
+            3. Select the first ligand pose as the reference for ligand atom
+               mapping.
+            4. Load the receptor structure, converting it from PDBQT to PDB when
+               necessary.
+            5. Identify the selected receptor chain and residue.
+            6. Retrieve the coordinates of the selected receptor atom.
+            7. Iterate over the input docked ligands.
+            8. Convert the reference ligand and each docked pose to SDF format
+               when necessary.
+            9. Use RDKit to map the selected reference ligand heavy atom onto the
+               corresponding atom in each docked pose.
+            10. Retrieve the mapped ligand atom coordinates and calculate the
+                Euclidean distance to the selected receptor atom.
+            11. Retain ligands whose atom-to-atom distance is equal to or below
+                the specified cutoff.
+            12. Write the evaluation results for all ligands to a CSV report.
+            13. Create an output SetOfSmallMolecules containing the retained
+                docked ligands.
+
+            Input
+            -----
+            - inputLigandSet:
+                SetOfSmallMolecules containing the docked ligand poses to
+                evaluate.
+
+                The input set must be marked as docked and must contain an
+                accessible receptor structure associated with the docking results.
+
+            Parameters
+            ----------
+            - Receptor chain:
+                Chain identifier of the receptor containing the residue to
+                evaluate.
+
+                The chain is selected using the chain-selection wizard.
+
+            - Receptor residue:
+                Residue in the selected receptor chain containing the atom to
+                evaluate.
+
+                The residue is selected using the residue-selection wizard. Its
+                residue index and, when available, residue name are used to
+                identify it in the receptor structure.
+
+            - Receptor atom:
+                Name of the receptor atom whose coordinates will be used for
+                contact evaluation.
+
+                The atom name must correspond to the name displayed in PyMOL,
+                such as ``OG``, ``CA`` or ``OD1``. It must be an actual atom name,
+                not a sequential atom label.
+
+            - Ligand atom:
+                1-based index of the selected ligand heavy atom in the reference
+                ligand.
+
+                Hydrogen and deuterium atoms are excluded from the indexing.
+                The selected atom is mapped onto the corresponding atom in each
+                docked pose using RDKit.
+
+                The default value is 0, but a valid index starting from 1 must be
+                provided.
+
+            - Distance cutoff:
+                Maximum allowed distance, in Å, between the selected ligand atom
+                and the selected receptor atom.
+
+                A ligand is retained when its calculated distance is equal to or
+                below this cutoff.
+
+                The default value is 4 Å.
+
+            Atom Mapping and Distance Evaluation
+            ------------------------------------
+            The protocol uses the first molecule in the input set as the reference
+            for identifying the selected ligand atom.
+
+            Before mapping, the reference ligand and each docked pose are converted
+            to SDF format using the available molecular conversion utilities.
+
+            The RDKit atom-mapping script identifies the atom corresponding to the
+            selected reference heavy-atom index in each docked pose and returns:
+
+            - The mapped atom coordinates.
+            - The mapped atom element.
+            - The mapped atom index in the pose.
+
+            The protocol then calculates the Euclidean distance between the mapped
+            ligand atom and the selected receptor atom.
+
+            The filtering criterion is:
+
+            - Retained: distance <= cutoff.
+            - Discarded: distance > cutoff.
+
+            Molecules that cannot be evaluated, for example because atom mapping
+            fails or the required pose file is unavailable, are discarded and
+            reported with the corresponding error in the CSV file.
+
+            Output
+            ------
+            - outputSmallMolecules:
+                SetOfSmallMolecules containing the docked ligands that satisfy the
+                specified atom-to-atom distance criterion.
+
+                The output set preserves the input set information and associated
+                receptor structure. It is marked as docked, and each retained
+                molecule is copied from the input set.
+
+            - contact_distances.csv:
+                CSV report containing the evaluation results for every input
+                molecule, including:
+
+                - Molecule name
+                - Docked pose file
+                - Reference ligand file
+                - Receptor chain
+                - Receptor residue
+                - Receptor atom
+                - Reference ligand heavy-atom index
+                - Mapped atom index in the docked pose
+                - Mapped ligand atom element
+                - Ligand atom coordinates
+                - Receptor atom coordinates
+                - Calculated distance
+                - Distance cutoff
+                - Retention status
+                - Error message, when applicable
+
+            Summary
+            -------
+            The protocol filters docked ligands according to a selected
+            ligand–receptor atom contact.
+
+            The output contains only the molecules whose mapped ligand atom is
+            within the specified distance cutoff of the selected receptor atom.
+            Detailed evaluation results are available in
+            ``contact_distances.csv``.
+
+            Use Cases
+            ---------
+            - Filtering docked ligands based on a specific protein–ligand contact
+            - Identifying poses that preserve interactions with selected
+              active-site residues
+            - Prioritizing docking poses according to a known interaction
+              constraint
+            - Selecting ligands that position a specific functional group near a
+              target receptor atom
+            - Applying atom-level geometric constraints to docking results
+            - Preparing filtered ligand collections for downstream analysis
+
+            Notes
+            -----
+            The input must be a docked SetOfSmallMolecules with an accessible
+            associated receptor structure.
+
+            The first molecule in the input set is used as the reference ligand
+            for atom mapping. The selected ligand atom index therefore refers to
+            this reference molecule and must identify the same chemical atom in
+            the other docked poses.
+
+            Atom mapping is performed using RDKit and does not rely on the
+            sequential atom ordering being identical between the reference ligand
+            and the docked poses.
+
+            The ligand atom index is 1-based and excludes hydrogen and deuterium
+            atoms. The receptor atom is identified by its atom name within the
+            selected residue.
+
+            The selected receptor atom must be a unique heavy atom in the selected
+            residue. Hydrogen and deuterium atoms cannot be used for the distance
+            evaluation.
+
+            The protocol evaluates one ligand atom against one receptor atom.
+            It does not calculate the minimum distance between the complete
+            ligand and receptor, nor does it evaluate all possible interactions
+            between the two molecules.
+
+            The distance cutoff must be positive. A ligand is retained when its
+            calculated distance is exactly equal to the cutoff as well as when it
+            is shorter.
+
+            Individual ligand evaluation errors do not stop the entire filtering
+            procedure. Molecules that cannot be evaluated are discarded, and
+            their errors are recorded in the CSV report.
+            """
+
     _label = 'Filter contact ligands'
 
     def _defineParams(self, form):
@@ -533,20 +739,3 @@ class ProtContactLigands(EMProtocol):
             result['element'],
             result['pose_atom_index']
         )
-
-    @staticmethod
-    def _getReferenceLigandFile(inputSet):
-        """Get the ligand file used as reference for atom numbering."""
-
-        for molecule in inputSet:
-            poseFile = molecule.getPoseFile()
-
-            if poseFile and os.path.isfile(poseFile):
-                return poseFile
-
-            molFile = molecule.getFileName()
-
-            if molFile and os.path.isfile(molFile):
-                return molFile
-
-        raise ValueError('Could not find a reference ligand file.')

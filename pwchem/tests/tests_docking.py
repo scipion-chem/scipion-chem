@@ -498,7 +498,7 @@ class TestLigandDistance(TestExtractLigand):
         self._waitOutput(self.protImportPDB, 'outputPdb')
         protExtract = self._runExtractLigand(self.protImportPDB, chainStr)
         self._waitOutput(protExtract, 'outputSmallMolecules', timeOut=30000)
-        ligands = self._runLigDist(protExtract)
+        ligands = self._runLigDist(protExtract.outputSmallMolecules)
         self._waitOutput(ligands, 'outputSmallMolecules')
 
         assertHandle(self.assertIsNotNone, getattr(ligands, 'outputSmallMolecules', None),
