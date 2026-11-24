@@ -8,53 +8,17 @@ from rdkit import Chem
 from rdkit.Chem import Draw
 from rdkit.Chem import rdDepictor
 
+from utils import parseMoleculeFile
+
 # Fixed output name; the wizard looks for this file in the cwd it sets.
 OUTPUT_IMAGE_NAME = "ligand_atom_numbers.png"
 
-
-def readMolecule(filename):
-    """Read the first molecule while preserving its original atom order."""
-
-    extension = os.path.splitext(filename)[1].lower()
-
-    if extension == ".sdf":
-        supplier = Chem.SDMolSupplier(
-            filename,
-            removeHs=False
-        )
-
-        for molecule in supplier:
-            if molecule is not None:
-                return molecule
-
-        raise ValueError(
-            "No valid molecule could be read from {}".format(filename)
-        )
-
-    if extension == ".mol":
-        molecule = Chem.MolFromMolFile(
-            filename,
-            removeHs=False
-        )
-
-        if molecule is None:
-            raise ValueError(
-                "Could not read molecule from {}".format(filename)
-            )
-
-        return molecule
-
-    raise ValueError(
-        "Unsupported ligand format: {}".format(extension)
-    )
-
-OUTPUT_IMAGE_NAME = "ligand_atom_numbers.png"
 
 
 def main():
     if len(sys.argv) != 2:
         raise SystemExit(
-            "Usage: rdkit_ligand_atom_numbers.py <ligand.sdf|ligand.mol>"
+            "Usage: rdkit_ligand_atom_numbers.py <ligand file (sdf, mol, mol2, pdb)>"
         )
 
     ligandFile = os.path.realpath(sys.argv[1])
@@ -64,7 +28,9 @@ def main():
             "Ligand file not found: {}".format(ligandFile)
         )
 
-    molecule = readMolecule(ligandFile)
+    molecule = parseMoleculeFile(ligandFile)
+    if molecule is None:
+        raise ValueError("Could not read molecule from {}".format(ligandFile))
 
     # Assign numbers in original file atom order, skipping H and D.
     # These are 1-based heavy-atom numbers, not RDKit or PyMOL indices.

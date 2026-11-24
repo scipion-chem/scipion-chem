@@ -2,28 +2,22 @@ import argparse
 import json
 import os
 
-from rdkit import Chem
+from utils import parseMoleculeFile
 
 # Fixed output name; the protocol looks for this file in the cwd it sets.
 OUTPUT_JSON_NAME = 'mapped_ligand_atom.json'
 
 
 def loadMolecule(filename):
-    """Load the first molecule from an SDF or MOL file."""
+    """Load a molecule with the shared parser and check it has coordinates."""
 
-    if filename.lower().endswith('.sdf'):
-        supplier = Chem.SDMolSupplier(filename, removeHs=False)
-        mol = next((m for m in supplier if m is not None), None)
-    else:
-        mol = Chem.MolFromMolFile(filename, removeHs=False)
+    mol = parseMoleculeFile(filename)
 
     if mol is None:
         raise ValueError('Could not read molecule: {}'.format(filename))
 
     if mol.GetNumConformers() == 0:
-        raise ValueError(
-            'Molecule has no coordinates: {}'.format(filename)
-        )
+        raise ValueError('Molecule has no coordinates: {}'.format(filename))
 
     return mol
 

@@ -34,16 +34,14 @@ import json
 import csv
 import numpy as np
 
-from Bio.PDB import PDBParser, MMCIFParser
-
 from pyworkflow.protocol import params
 from pwem.protocols import EMProtocol
 
-from pwchem.objects import SmallMolecule, SetOfSmallMolecules
-from pwchem.utils import pdbqt2other
-from pwem.convert import cifToPdb
+from pwchem.objects import SetOfSmallMolecules
+from pwchem.utils import pdbqt2other, getBaseName, parseAtomStruct, \
+    calculateDistance, convertToSdf, getChainIds
 from pwchem import Plugin as pwchemPlugin
-from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
+from pwchem.constants import RDKIT_DIC
 
 
 class ProtContactLigands(EMProtocol):
@@ -80,8 +78,8 @@ class ProtContactLigands(EMProtocol):
     # --------------------------- Steps functions --------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('filterLigandsStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.filterLigandsStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def filterLigandsStep(self):
         """Calculate atom-to-atom distances and retain passing ligands."""
@@ -123,6 +121,71 @@ class ProtContactLigands(EMProtocol):
             )
         )
 
+    def createOutputStep(self):
+        """Create the output set containing the retained molecules."""
+
+        inputSet = self.inputLigandSet.get()
+
+        outputSet = SetOfSmallMolecules().create(
+            outputPath=self._getPath()
+        )
+
+        outputSet.copyInfo(inputSet)
+        outputSet.setProteinFile(inputSet.getProteinFile())
+        outputSet.setDocked(True)
+
+        for molecule in self._passingMolecules:
+            outputSet.append(molecule)
+
+        self._defineOutputs(outputSmallMolecules=outputSet)
+
+        self._defineSourceRelation(self.inputLigandSet, outputSet)
+
+        self.info(
+            'Contact filtering completed: {} molecules retained out of {}.'
+            .format(
+                len(self._passingMolecules),
+                inputSet.getSize()
+            )
+        )
+
+    # --------------------------- INFO functions -----------------------
+
+    def _summary(self):
+        return []
+
+    def _methods(self):
+        return []
+
+    def _validate(self):
+        validations = []
+
+        molSet = self.inputLigandSet.get()
+
+        if not molSet.isDocked():
+            validations.append(
+                '{} is not docked yet.'.format(molSet)
+            )
+
+        if self.cutoff.get() <= 0:
+            validations.append('Cutoff must be positive.')
+
+        if self.ligAtom.get() < 1:
+            validations.append(
+                'Ligand atom index must be greater than or equal to 1.'
+            )
+
+        if not self.recAtom.get().strip():
+            validations.append(
+                'Please specify a receptor atom name.'
+            )
+
+        return validations
+
+    def _warnings(self):
+        return []
+
+    # --------------------------- Utility functions --------------------
     def _prepareFilteringInputs(self):
         """Validate the input set and filtering parameters."""
 
@@ -143,14 +206,7 @@ class ProtContactLigands(EMProtocol):
         if cutoff <= 0:
             raise ValueError('Distance cutoff must be positive.')
 
-        referenceFile = self._getReferenceLigandFile(inputSet)
-
-        if not os.path.isfile(referenceFile):
-            raise ValueError(
-                'Reference ligand file does not exist: {}'.format(
-                    referenceFile
-                )
-            )
+        referenceFile = self._getPoseFile(next(iter(inputSet)))
 
         self.info(
             'Reference ligand for atom mapping: {}'.format(referenceFile)
@@ -162,7 +218,7 @@ class ProtContactLigands(EMProtocol):
         """Load the receptor and retrieve the selected atom coordinates."""
 
         receptorFile = self.convertFormat(inputSet.getProteinFile())
-        receptor = self._loadStructure(receptorFile)
+        receptor = parseAtomStruct(receptorFile)
         targetResidue = self._getReceptorResidue(receptor)
 
         return self._getReceptorAtomCoordinates(targetResidue)
@@ -200,7 +256,7 @@ class ProtContactLigands(EMProtocol):
                 poseFile
             )
 
-            result['distance'] = self._calculateDistance(
+            result['distance'] = calculateDistance(
                 result['ligandCoordinates'],
                 receptorCoordinates
             )
@@ -312,102 +368,13 @@ class ProtContactLigands(EMProtocol):
             result['error']
         ])
 
-    def createOutputStep(self):
-        """Create the output set containing the retained molecules."""
-
-        inputSet = self.inputLigandSet.get()
-
-        outputSet = SetOfSmallMolecules().create(
-            outputPath=self._getPath()
-        )
-
-        outputSet.copyInfo(inputSet)
-        outputSet.setProteinFile(inputSet.getProteinFile())
-        outputSet.setDocked(True)
-
-        for molecule in self._passingMolecules:
-            outputSet.append(molecule)
-
-        self._defineOutputs(outputSmallMolecules=outputSet)
-
-        self._defineSourceRelation(self.inputLigandSet, outputSet)
-
-        self.info(
-            'Contact filtering completed: {} molecules retained out of {}.'
-            .format(
-                len(self._passingMolecules),
-                inputSet.getSize()
-            )
-        )
-
-        # --------------------------- INFO functions -----------------------
-
-    def _summary(self):
-        return []
-
-    def _methods(self):
-        return []
-
-    def _validate(self):
-        validations = []
-
-        molSet = self.inputLigandSet.get()
-
-        if not molSet.isDocked():
-            validations.append(
-                '{} is not docked yet.'.format(molSet)
-            )
-
-        if self.cutoff.get() <= 0:
-            validations.append('Cutoff must be positive.')
-
-        if self.ligAtom.get() < 1:
-            validations.append(
-                'Ligand atom index must be greater than or equal to 1.'
-            )
-
-        if not self.recAtom.get().strip():
-            validations.append(
-                'Please specify a receptor atom name.'
-            )
-
-        return validations
-
-    def _warnings(self):
-        return []
-
-        # --------------------------- Utility functions --------------------
-
-    @staticmethod
-    def _loadStructure(filename):
-        """Read a PDB or mmCIF structure."""
-
-        ext = os.path.splitext(filename)[1].lower()
-
-        if ext in ('.pdb', '.ent'):
-            parser = PDBParser(QUIET=True)
-
-        elif ext in ('.cif', '.mmcif'):
-            parser = MMCIFParser(QUIET=True)
-
-        else:
-            raise ValueError(
-                'Unsupported structure format: {}'.format(filename)
-            )
-
-        return parser.get_structure(
-            os.path.basename(filename),
-            filename
-        )
-
     def _getReceptorResidue(self, structure):
         """Find the selected receptor residue using the wizard outputs."""
 
         try:
-            chainData = json.loads(self.recChain.get())
+            chainId = getChainIds(self.recChain.get())[0]
             residueData = json.loads(self.recResidue.get())
 
-            chainId = str(chainData['chain'])
             residueIndex = str(
                 residueData['index']
             ).split('-')[0]
@@ -513,232 +480,16 @@ class ProtContactLigands(EMProtocol):
             .format(molecule.getMolName())
         )
 
-    def _getLigandAtomCoordinates(self, poseFile):
-        """
-        Obtain the coordinates of the selected ligand heavy atom.
-
-        The ligand atom is identified by its 1-based position among
-        heavy atoms, excluding hydrogen and deuterium.
-
-        Supported formats:
-            PDB, ENT, CIF, mmCIF, PDBQT, SDF and MOL (V2000).
-
-        IMPORTANT:
-            The pose file must contain the ligand alone, or at least
-            list the ligand atoms separately in a way consistent with
-            the atom order used by the PyMOL wizard.
-        """
-
-        ext = os.path.splitext(poseFile)[1].lower()
-        atomIndex = int(self.ligAtom.get())
-
-        if atomIndex < 1:
-            raise ValueError(
-                'Ligand atom index must be >= 1.'
-            )
-
-        # PDB and mmCIF: use the heavy-atom order in the structure file.
-        if ext in ('.pdb', '.ent', '.cif', '.mmcif'):
-            structure = self._loadStructure(poseFile)
-
-            heavyAtoms = [
-                atom for atom in structure.get_atoms()
-                if (atom.element or '').strip().upper() not in ('H', 'D')
-            ]
-
-            if atomIndex > len(heavyAtoms):
-                raise ValueError(
-                    'Heavy-atom index {} exceeds the number of heavy '
-                    'atoms in {} ({} heavy atoms found).'.format(
-                        atomIndex,
-                        poseFile,
-                        len(heavyAtoms)
-                    )
-                )
-
-            atom = heavyAtoms[atomIndex - 1]
-
-            return np.asarray(atom.coord, dtype=float)
-
-        # PDBQT: parse atom coordinates and atom types directly.
-        elif ext == '.pdbqt':
-            heavyAtomCoordinates = []
-
-            with open(poseFile, 'r') as handle:
-                for line in handle:
-                    if not line.startswith(('ATOM  ', 'HETATM')):
-                        continue
-
-                    try:
-                        x = float(line[30:38])
-                        y = float(line[38:46])
-                        z = float(line[46:54])
-                    except (ValueError, IndexError):
-                        raise ValueError(
-                            'Could not parse coordinates in {}: {}'.format(
-                                poseFile, line.rstrip()
-                            )
-                        )
-
-                    fields = line.split()
-
-                    if not fields:
-                        continue
-
-                    # The final PDBQT field is the AutoDock atom type.
-                    atomType = fields[-1].strip().upper()
-
-                    # Examples of hydrogen types include H and HD.
-                    if atomType in ('H', 'HD', 'D'):
-                        continue
-
-                    heavyAtomCoordinates.append([x, y, z])
-
-            if atomIndex > len(heavyAtomCoordinates):
-                raise ValueError(
-                    'Heavy-atom index {} exceeds the number of heavy '
-                    'atoms in {} ({} heavy atoms found).'.format(
-                        atomIndex,
-                        poseFile,
-                        len(heavyAtomCoordinates)
-                    )
-                )
-
-            return np.asarray(
-                heavyAtomCoordinates[atomIndex - 1],
-                dtype=float
-            )
-
-        # SDF/MOL: parse the V2000 atom block.
-        elif ext in ('.sdf', '.mol'):
-            with open(poseFile, 'r') as handle:
-                lines = handle.readlines()
-
-            if len(lines) < 4:
-                raise ValueError(
-                    'Invalid or incomplete MOL/SDF file: {}'.format(
-                        poseFile
-                    )
-                )
-
-            atomLines = lines[3]
-
-            if 'V3000' in atomLines:
-                raise ValueError(
-                    'V3000 MOL/SDF files are not supported by this '
-                    'parser: {}. Convert the file to V2000 first.'
-                    .format(poseFile)
-                )
-
-            try:
-                nAtoms = int(atomLines[0:3])
-            except ValueError:
-                raise ValueError(
-                    'Could not read the V2000 atom count from {}.'
-                    .format(poseFile)
-                )
-
-            atomLines = lines[4:4 + nAtoms]
-
-            if len(atomLines) != nAtoms:
-                raise ValueError(
-                    'Atom block is incomplete in {}.'.format(poseFile)
-                )
-
-            heavyAtomCoordinates = []
-
-            for i, line in enumerate(atomLines, start=1):
-                try:
-                    x = float(line[0:10])
-                    y = float(line[10:20])
-                    z = float(line[20:30])
-                    element = line[31:34].strip().upper()
-
-                except (ValueError, IndexError):
-                    raise ValueError(
-                        'Could not parse an atom record in {}: {}'.format(
-                            poseFile, line.rstrip()
-                        )
-                    )
-
-                # Print the original SDF atom index, including hydrogens.
-                print(
-                    'SDF INDEX={:<3} ELEMENT={:<2} COORDS={}'.format(
-                        i,
-                        element,
-                        np.round([x, y, z], 3).tolist()
-                    )
-                )
-
-                if element in ('H', 'D'):
-                    continue
-
-                heavyAtomCoordinates.append([x, y, z])
-
-            if atomIndex > len(heavyAtomCoordinates):
-                raise ValueError(
-                    'Heavy-atom index {} exceeds the number of heavy '
-                    'atoms in {} ({} heavy atoms found).'.format(
-                        atomIndex,
-                        poseFile,
-                        len(heavyAtomCoordinates)
-                    )
-                )
-
-            return np.asarray(
-                heavyAtomCoordinates[atomIndex - 1],
-                dtype=float
-            )
-
-        else:
-            raise ValueError(
-                'Unsupported ligand pose format: {}'.format(poseFile)
-            )
-
-    @staticmethod
-    def _calculateDistance(ligandCoordinates, receptorCoordinates):
-        """Calculate the Euclidean distance between two atoms in Angstroms."""
-
-        differences = receptorCoordinates - ligandCoordinates
-
-        return float(np.linalg.norm(differences))
-
     def convertFormat(self, filename):
-        """Convert PDBQT or CIF receptor files to PDB when necessary."""
-
-        ext = os.path.splitext(filename)[1].lower()
-
-        if ext == '.pdbqt':
-            outputFile = os.path.abspath(
-                self._getExtraPath(
-                    os.path.splitext(
-                        os.path.basename(filename)
-                    )[0] + '.pdb'
-                )
-            )
-
-            pdbqt2other(self, filename, outputFile)
-
-            return outputFile
-
-        elif ext in ('.cif', '.mmcif'):
-            outputFile = os.path.abspath(
-                self._getExtraPath(
-                    os.path.splitext(
-                        os.path.basename(filename)
-                    )[0] + '.pdb'
-                )
-            )
-
-            cifToPdb(filename, outputFile)
-
-            return outputFile
-
+        """Convert PDBQT receptor files to PDB; other formats are read directly."""
+        if filename.lower().endswith('.pdbqt'):
+            outFile = os.path.abspath(self._getExtraPath(getBaseName(filename) + '.pdb'))
+            return pdbqt2other(self, filename, outFile)
         return filename
 
     def _getMappedLigandAtomCoordinates(self, referenceFile, poseFile):
-        referenceFile = self._getRDKitCompatibleLigandFile(referenceFile)
-        poseFile = self._getRDKitCompatibleLigandFile(poseFile)
+        referenceFile = convertToSdf(self, referenceFile)
+        poseFile = convertToSdf(self, poseFile)
 
         # The script writes 'mapped_ligand_atom.json' into its cwd.
         outputDirectory = os.path.abspath(self._getTmpPath())
@@ -767,16 +518,6 @@ class ProtContactLigands(EMProtocol):
             popen=True,
             cwd=outputDirectory
         )
-
-        # Wait for the external script to finish before reading its output.
-        import time
-
-        timeout = 60
-        elapsed = 0
-
-        while not os.path.isfile(outputFile) and elapsed < timeout:
-            time.sleep(0.2)
-            elapsed += 0.2
 
         if not os.path.isfile(outputFile):
             raise RuntimeError(
@@ -809,39 +550,3 @@ class ProtContactLigands(EMProtocol):
                 return molFile
 
         raise ValueError('Could not find a reference ligand file.')
-
-    def _getRDKitCompatibleLigandFile(self, ligandFile):
-        """Return an SDF file for CIF inputs, otherwise the original file."""
-
-        ext = os.path.splitext(ligandFile)[1].lower()
-
-        if ext not in ('.cif', '.mmcif'):
-            return ligandFile
-
-        outputFile = os.path.abspath(
-            self._getTmpPath(
-                os.path.splitext(os.path.basename(ligandFile))[0] + '.sdf'
-            )
-        )
-
-        if os.path.isfile(outputFile) and os.path.getsize(outputFile) > 0:
-            return outputFile
-
-        args = '-i "{}" -of sdf -o "{}" -od "{}" --overWrite'.format(
-            os.path.abspath(ligandFile),
-            os.path.splitext(os.path.basename(outputFile))[0],
-            os.path.dirname(outputFile)
-        )
-
-        pwchemPlugin.runScript(
-            self,
-            'obabel_IO.py',
-            args,
-            env=OPENBABEL_DIC,
-            cwd=os.path.dirname(os.path.abspath(ligandFile))
-        )
-
-        if not os.path.isfile(outputFile) or os.path.getsize(outputFile) == 0:
-            raise RuntimeError(
-                'Could not convert CIF ligand to SDF: {}'.format(ligandFile)
-            )
