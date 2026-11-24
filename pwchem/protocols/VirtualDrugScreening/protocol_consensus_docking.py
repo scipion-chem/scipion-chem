@@ -166,7 +166,7 @@ class ProtocolConsensusDocking(EMProtocol):
 
         group = form.addGroup('Receptor alignment')
         group.addParam('doAlign', params.BooleanParam, default=False,
-                       label='Align receptors: ',
+                       label='Superpose receptors: ',
                        help='Superpose every pose onto a common reference before clustering.\n'
                             'The RMSD used for the clustering is calculated on the coordinates as they are, '
                             'with no fitting, so it is only meaningful when every pose has been generated in '
