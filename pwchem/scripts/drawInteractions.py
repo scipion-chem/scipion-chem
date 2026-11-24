@@ -31,7 +31,8 @@ import numpy as np
 
 import matplotlib
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, Patch
+from matplotlib.colors import to_rgb
+from matplotlib.patches import Ellipse, FancyBboxPatch, Patch
 import matplotlib.image as mpimg
 from matplotlib.lines import Line2D
 from matplotlib.figure import Figure
@@ -58,6 +59,8 @@ COLOR_INT_DIC = {'halogen': 'red', 'hbond': 'royalblue', 'hydrophobic': 'green',
 # Unit of the number written on each interaction line: a distance for a single pose, the
 # fraction of frames it is present in for a trajectory
 DEF_VALUE_UNIT = ''
+# Layers, from the back to the front
+Z_LINES, Z_KNOCKOUT, Z_BOX, Z_MOLECULE, Z_LINE_LABELS, Z_BOX_TEXT = 1, 1.5, 2, 3, 4, 5
 # Free space left around what is drawn, in the units of the drawing, so there is room to move the residues around
 VIEW_MARGIN = 300
 
@@ -89,14 +92,50 @@ class ResidueBox(FancyBboxPatch):
 		self.set_y(coords[1] - self.size[1] / 2)
 
 	def getBorderDistance(self, dx, dy):
-		"""How far its border is from its centre in a direction, so a line can stop there"""
+		"""How far its border is from its centre in a direction"""
 		length = np.hypot(dx, dy)
 		if not length:
 			return max(self.size) / 2
 
 		width, height = self.size
-		distances = [size / 2 / abs(d / length) for size, d in ((width, dx), (height, dy)) if d]
-		return min(distances)
+		return min([size / 2 / abs(d / length) for size, d in ((width, dx), (height, dy)) if d])
+
+
+# Size of the labels RDKit draws, as a fraction of its font size
+LETTER_WIDTH, SUBSCRIPT_WIDTH, LABEL_PADDING, LABEL_HEIGHT = 0.65, 0.45, 0.45, 1.05
+
+def hasAtomLabel(atom):
+    """Whether RDKit writes the atom (O, NH2, Cl, N+...) instead of leaving it as the corner of a bond"""
+    return atom.GetAtomicNum() != 6 or atom.GetFormalCharge() != 0 or atom.GetIsotope() != 0
+
+
+def getLabelSpan(atom, x, neighborsX, fontSize):
+    """Horizontal extent (left, right) of the label of an atom drawn at x. A letter is centred on the atom, and
+    the hydrogens of OH or NH2 are drawn at its side away from the bonds, which are those of its neighbors"""
+    half = (LETTER_WIDTH + LABEL_PADDING) / 2 * fontSize
+    extra = LETTER_WIDTH * fontSize * (len(atom.GetSymbol()) - 1) / 2         # Cl, Br
+    left, right = x - half - extra, x + half + extra
+
+    nHs = atom.GetTotalNumHs()
+    hydrogens = (LETTER_WIDTH * (nHs > 0) + SUBSCRIPT_WIDTH * (nHs > 1)) * fontSize
+    if sum(nx - x for nx in neighborsX) <= 0:
+        return left, right + hydrogens
+    return left - hydrogens, right
+
+
+def getEllipseExit(center, semiAxes, origin, direction):
+    """Distance, along a unit direction, from a point inside an ellipse to the border of it"""
+    (cx, cy), (a, b) = center, semiAxes
+    ox, oy = origin[0] - cx, origin[1] - cy
+    qa = (direction[0] / a) ** 2 + (direction[1] / b) ** 2
+    qb = 2 * (ox * direction[0] / a ** 2 + oy * direction[1] / b ** 2)
+    qc = (ox / a) ** 2 + (oy / b) ** 2 - 1
+    return (-qb + np.sqrt(qb ** 2 - 4 * qa * qc)) / (2 * qa)
+
+
+def lighten(color, amount=0.2):
+	"""Opaque color that looks like the given one drawn with that opacity over a white background"""
+	return tuple(amount * c + (1 - amount) for c in to_rgb(color))
 
 
 def getExternalPosition(atomPoint, molCenter, distance=80):
@@ -154,7 +193,7 @@ def getDrawCoords(drawer, canvasSize, i):
 	atomPoint.y = int(canvasSize * 0.5) - atomPoint.y
 	return atomPoint
 
-def setConnectionLineCoords(c1, c2, displac, margin=50, spacing=45):
+def setConnectionLineCoords(c1, c2, displac, margin=0, spacing=15):
 	'''Draw the connection lines based on the extreme coordinates, with some margin.
 	Also, the lines are displaced perpendicularly to themselves, by a fixed spacing, so several
 	interactions of the same residue stay apart whatever direction they run in'''
@@ -325,6 +364,7 @@ class MoleculeInteractions:
 		self.cirDic, allPoints = self.getDrawnPoints(self.nDic)
 
 		self.getBoundingBoxes(allPoints)
+		self.addLabelKnockouts()
 		self.addLegends()
 		self.drawAminoacids()
 		self.drawInteractions()
@@ -390,6 +430,8 @@ class MoleculeInteractions:
 			self.mol = rdMolDraw2D.PrepareMolForDrawing(self.mol)
 
 			self.drawer = rdMolDraw2D.MolDraw2DCairo(int(self.canvasSize * 0.5), int(self.canvasSize * 0.5))
+			# Transparent, so the interaction lines that go behind the molecule can be seen through it
+			self.drawer.drawOptions().clearBackground = False
 			self.drawer.DrawMolecule(self.mol)
 			self.drawer.FinishDrawing()
 
@@ -423,7 +465,7 @@ class MoleculeInteractions:
 			self.fig, self.ax = plt.subplots(figsize=(10, 10 * bboxHeight / bboxWidth))
 			# The plot takes the whole window and not the part of it matplotlib leaves free around the axes
 			self.fig.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
-			self.ax.imshow(imgFull)
+			self.ax.imshow(imgFull, zorder=Z_MOLECULE)
 			self.ax.set_xlim(bboxX[0], bboxX[1])
 			self.bboxY = bboxY
 			self.ax.set_ylim(bboxY[0], bboxY[1])
@@ -433,6 +475,24 @@ class MoleculeInteractions:
 			self.fig.canvas.mpl_connect('button_release_event', self.onRelease)
 			self.fig.canvas.mpl_connect('motion_notify_event', self.onMotion)
 
+	def addLabelKnockouts(self):
+		'''A white shape under every atom label cuts the interaction lines where the letter is: they go to the centre of
+		the atom and would otherwise run through it. It is under the molecule, which keeps its bonds and its letters'''
+		fontSize = self.drawer.FontSize()
+		self.labelShapes = {}
+		for atom in self.mol.GetAtoms():
+			if not hasAtomLabel(atom):
+				continue
+
+			atomPoint = getDrawCoords(self.drawer, self.canvasSize, atom.GetIdx())
+			x, y = atomPoint.x, atomPoint.y
+			neighborsX = [getDrawCoords(self.drawer, self.canvasSize, n.GetIdx()).x for n in atom.GetNeighbors()]
+			left, right = getLabelSpan(atom, x, neighborsX, fontSize)
+			center, semiAxes = ((left + right) / 2, y), ((right - left) / 2, LABEL_HEIGHT * fontSize / 2)
+			self.labelShapes[atom.GetIdx()] = (center, semiAxes)
+			self.ax.add_patch(Ellipse(center, 2 * semiAxes[0], 2 * semiAxes[1], facecolor='white', edgecolor='none',
+									   zorder=Z_KNOCKOUT, clip_on=False))
+
 	def drawAminoacids(self):
 		'''Draw all the interacting resiudes and their labels'''
 		for resId, (circleX, circleY) in self.cirDic.items():
@@ -440,11 +500,11 @@ class MoleculeInteractions:
 			# Wide enough for the name it holds, so "GLY101" is not written outside of its own box
 			width = max(len(resId) * self.circleRadius * 0.55, self.circleRadius * 2)
 			circle = ResidueBox(circleCoords, width, self.circleRadius * 1.2,
-											facecolor=COLOR_DIC[removeNumbers(resId.upper())],
-											linewidth=2, alpha=0.2, transform=self.ax.transData, clip_on=False)
+											facecolor=lighten(COLOR_DIC[removeNumbers(resId.upper())]), edgecolor=lighten('black'),
+											linewidth=2, transform=self.ax.transData, clip_on=False, zorder=Z_BOX)
 			self.ax.add_patch(circle)
 			cirLabel = self.ax.text(circleX, circleY, resId, color='black', weight='bold', fontsize=8,
-															ha='center', va='center', transform=self.ax.transData)
+															ha='center', va='center', transform=self.ax.transData, zorder=Z_BOX_TEXT)
 
 			self.resCircles[resId] = circle
 			self.circles[circle] = resId
@@ -560,15 +620,22 @@ class MoleculeInteractions:
 			allPoints.append((atomPoint.x, atomPoint.y))
 		return allPoints
 
-	def addInteractLine(self, atomCoords, circleCoords, disp, intColor, n, offSign, margin=50):
-		'''Adds a interaction line and its label given the circle and atom coordinates
+	def addInteractLine(self, atomCoords, circleCoords, disp, intColor, n, offSign, border=0, labelShape=None):
+		'''Adds a interaction line and its label given the circle and atom coordinates. The line goes from the
+		centre of the one to the centre of the other, and behind everything else.
 		'''
-		c1, c2 = setConnectionLineCoords(atomCoords, circleCoords, disp, margin=margin)
+		c1, c2 = setConnectionLineCoords(atomCoords, circleCoords, disp)
 		xs, ys = [c1[0], c2[0]], [c1[1], c2[1]]
-		line = Line2D(xs, ys, color=intColor, alpha=0.6, linewidth=1.5, linestyle='--', clip_on=False)
+		line = Line2D(xs, ys, color=intColor, alpha=0.6, linewidth=1.5, linestyle='--', clip_on=False, zorder=Z_LINES)
 		self.ax.add_line(line)
 		n = '{} {}'.format(round(float(n), 2), self.valueUnit).strip()
-		label = addParallelLabel(self.ax, xs, ys, n, intColor, offSign=offSign)
+		length = np.hypot(xs[1] - xs[0], ys[1] - ys[0]) or 1
+		unit = ((xs[1] - xs[0]) / length, (ys[1] - ys[0]) / length)
+		start = getEllipseExit(*labelShape, (xs[0], ys[0]), unit) if labelShape else 0
+		end = length - min(border, length)
+		start = start if start < end else 0
+		labelXs, labelYs = [xs[0] + unit[0] * start, xs[0] + unit[0] * end], [ys[0] + unit[1] * start, ys[0] + unit[1] * end]
+		label = addParallelLabel(self.ax, labelXs, labelYs, n, intColor, offSign=offSign)
 		return line, label
 
 	def drawCircleInteractions(self, circle):
@@ -576,11 +643,7 @@ class MoleculeInteractions:
 		resId = self.circles[circle]
 		circleCoords = circle.get_center()
 
-		# Displaced over all the interactions of the residue and not over those of each atom, so lines
-		# reaching different atoms do not lie on top of each other when they come out nearly parallel
-		displacs = getDisplacements(sum([len(intsDic) for intsDic in self.nDic[resId].values()]))
-
-		circleLines, di = [], 0
+		circleLines = []
 		for atomIdx, intsDic in self.nDic[resId].items():
 			if isinstance(atomIdx, str):
 				piCoords = []
@@ -595,15 +658,15 @@ class MoleculeInteractions:
 				atomPoint = getDrawCoords(self.drawer, self.canvasSize, atomIdx)
 				atomCoords = (atomPoint.x, atomPoint.y)
 
-			for intType, n in intsDic.items():
-				offSign = 1 if di % 2 == 0 else -1
+			# Displaced among the interactions of the atom only: those of different atoms already come apart
+			displacs = getDisplacements(len(intsDic))
+			for i, (intType, n) in enumerate(intsDic.items()):
+				offSign = 1 if i == 0 else -1
 				intColor = COLOR_INT_DIC[intType.lower()]
-				border = circle.getBorderDistance(circleCoords[0] - atomCoords[0],
-																		  circleCoords[1] - atomCoords[1])
-				linea, label = self.addInteractLine(atomCoords, circleCoords, displacs[di], intColor, n,
-																	 offSign, margin=border + 10)
+				border = circle.getBorderDistance(circleCoords[0] - atomCoords[0], circleCoords[1] - atomCoords[1])
+				linea, label = self.addInteractLine(atomCoords, circleCoords, displacs[i], intColor, n, offSign, border,
+														  self.labelShapes.get(atomIdx))
 				circleLines.append([linea, label])
-				di += 1
 
 		self.circleInteractions[circle] = circleLines
 
