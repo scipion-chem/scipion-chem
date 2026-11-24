@@ -271,7 +271,8 @@ def writePlipLigandFile(plipDir, xmlFile, outFile, complexFile):
 
     with open(outFile, 'w') as fOut, open(source) as fIn:
         for line in fIn:
-            if line.startswith(('ATOM', 'HETATM')) and line[17:20].strip() == ligName:
+            #mgltools (sometimes) puts H in separate chains, so they would be drawn as loose atoms -> remove them
+            if line.startswith(('ATOM', 'HETATM')) and line[17:20].strip() == ligName and line[76:78].strip() != 'H':
                 fOut.write(line)
     return outFile
 
