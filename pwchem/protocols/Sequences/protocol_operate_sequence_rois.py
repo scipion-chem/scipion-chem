@@ -331,14 +331,15 @@ class ProtOperateSeqROI(EMProtocol):
                 totalSequence = roi1._sequence
                 consRanges = self.getConsecutiveRanges(operIdxs)
                 for consIdxs in consRanges:
-                    roiStr = totalSequence.getSequence()[consIdxs[0]-1:consIdxs[-1]]
+                    roi2Idxs = [roi2.getROIIdx(), roi2.getROIIdx2()]
+                    srcROI = roi1
+                    if consIdxs[0] == roi2Idxs[0] and consIdxs[-1] == roi2Idxs[1]:
+                        srcROI = roi2
+                    roiStr, roiDesc = self.getOperatedROISequence(srcROI, consIdxs, totalSequence)
                     roiId = 'ROI_{}-{}'.format(consIdxs[0], consIdxs[-1])
-                    roiSeq = Sequence(sequence=roiStr, id=roiId)
+                    roiSeq = Sequence(sequence=roiStr, name=roiId, id=roiId, description=roiDesc)
                     if self.keepAttributes or operation == self._operations[BEST]:
-                        roi2Idxs = [roi2.getROIIdx(), roi2.getROIIdx2()]
-                        newROI = roi1
-                        if consIdxs[0] == roi2Idxs[0] and consIdxs[-1] == roi2Idxs[1]:
-                            newROI = roi2
+                        newROI = srcROI
                         setattr(newROI, '_ROISequence', roiSeq)
                         newROI.setROIIdx(consIdxs[0]), newROI.setROIIdx2(consIdxs[-1])
                     else:
@@ -350,6 +351,15 @@ class ProtOperateSeqROI(EMProtocol):
         return newROIs
 
 
+
+    def getOperatedROISequence(self, srcROI, consIdxs, totalSequence):
+        """Sequence and description of the operated ROI. They are taken from the ROI it comes from whenever the
+        operated region is contained in it, so the residues of a ROI defined from a mutation are kept instead of
+        being replaced by those of the original sequence"""
+        srcSeq, srcIdx = srcROI.getROISequence(), srcROI.getROIIdx()
+        if srcSeq and len(srcSeq) == srcROI.getROILength() and srcIdx <= consIdxs[0] <= consIdxs[-1] <= srcROI.getROIIdx2():
+            return srcSeq[consIdxs[0] - srcIdx:consIdxs[-1] - srcIdx + 1], srcROI._ROISequence.getDescription()
+        return totalSequence.getSequence()[consIdxs[0] - 1:consIdxs[-1]], None
 
     def getConsecutiveRanges(self, rang):
         ranges = []
