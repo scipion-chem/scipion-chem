@@ -5,7 +5,6 @@ lxml==6.1.2
 scipy
 parmed
 scikit-learn
-deap==1.4
 pandas==2.0
 tqdm
 xgboost
