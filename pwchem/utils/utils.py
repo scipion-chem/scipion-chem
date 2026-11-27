@@ -911,10 +911,11 @@ def sortSet(seti):
   return seti
 
 class CleanStructureSelect(Select):
-  def __init__(self, chainIds, remHETATM, remWATER, het2keep=[], het2rem=[]):
+  def __init__(self, chainIds, remHETATM, remWATER, het2keep=[], het2rem=[], remAltloc=False):
     self.chainIds = chainIds
     self.remHETATM, self.remWATER = remHETATM, remWATER
     self.het2keep, self.het2rem = het2keep, het2rem
+    self.remAltloc = remAltloc
 
   def accept_chain(self, chain):
     model = chain.get_parent()
@@ -932,7 +933,12 @@ class CleanStructureSelect(Select):
         accept = False
     return accept
 
-def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None):
+  def accept_atom(self, atom):
+    """ Keep a single conformation of the atoms with alternate locations """
+    return not self.remAltloc or not atom.is_disordered() or atom.get_altloc() in [' ', 'A']
+
+def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2keep=[], het2rem=[], singleModel=None,
+             remAltloc=False):
   """ Extraction of the heteroatoms of .pdb files """
   structName = getBaseName(structFile)
   ext = os.path.splitext(structFile)[1]
@@ -942,7 +948,7 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
           struct = struct[singleModel]
       io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
       io.set_structure(struct)
-      io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+      io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem, remAltloc))
 
   elif structFile.endswith('.cif'):
       # Detect multiple blocks
@@ -973,7 +979,8 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
                   chainIds=chainIds,
                   het2keep=het2keep,
                   het2rem=het2rem,
-                  singleModel=singleModel
+                  singleModel=singleModel,
+                  remAltloc=remAltloc
               )
               cleanedBlocks.append(tmpOut)
 
@@ -989,7 +996,7 @@ def cleanPDB(structFile, outFn, waters=False, hetatm=False, chainIds=None, het2k
               struct = struct[singleModel]
           io = PDBIO() if outFn.endswith('pdb') else MMCIFIO()
           io.set_structure(struct)
-          io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem))
+          io.save(outFn, CleanStructureSelect(chainIds, hetatm, waters, het2keep, het2rem, remAltloc))
 
   else:
       print('Unknown format for file ', structFile)
