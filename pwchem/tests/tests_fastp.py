@@ -27,14 +27,6 @@ from pwchem.protocols import ProtImportFastq, ProtFastpFilter
 from pwchem.utils import assertHandle
 
 
-def assertOutputExists(test, protocol, outputFastq):
-    assertHandle(
-        test.assertIsNotNone,
-        outputFastq,
-        cwd=protocol.getWorkingDir()
-    )
-
-
 class TestFastpFilter(BaseTest):
 
     @classmethod
@@ -122,8 +114,7 @@ class TestFastpFilter(BaseTest):
             None
         )
 
-        assertOutputExists(
-            self,
+        self.assertOutputExists(
             protFastp,
             outputFastq
         )
@@ -225,4 +216,11 @@ class TestFastpFilter(BaseTest):
 
         self._testFastpFilter(
             isPaired=True
+        )
+
+    def assertOutputExists(self, protocol, outputFastq):
+        assertHandle(
+            self.assertIsNotNone,
+            outputFastq,
+            cwd=protocol.getWorkingDir()
         )

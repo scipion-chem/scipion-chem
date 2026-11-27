@@ -23,7 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
+from pathlib import Path
 import webbrowser
 
 from pyworkflow.viewer import Viewer, DESKTOP_TKINTER
@@ -32,7 +32,11 @@ from pwchem.objects import FastqFile
 
 
 class FastqHtmlViewer(Viewer):
-    """Viewer to open FASTQ-related HTML reports stored in a FastqFile object."""
+    """Open FASTQ HTML reports stored in a FastqFile object.
+
+    All reports are checked before the browser is launched. Duplicate paths
+    open once, and local file URIs preserve spaces, accents and URL characters.
+    """
 
     _label = 'FASTQ HTML reports viewer'
     _targets = [FastqFile]
@@ -46,20 +50,12 @@ class FastqHtmlViewer(Viewer):
                 'No HTML reports found for this FASTQ object.'
             )
 
-        for filePath in htmlFiles:
-            if not os.path.exists(filePath):
-                raise RuntimeError(
-                    f'HTML report does not exist: {filePath}'
-                )
-
-            if not filePath.endswith('.html'):
-                raise RuntimeError(
-                    f'Report is not an HTML file: {filePath}'
-                )
-
-            webbrowser.open(
-                'file://' + os.path.abspath(filePath)
-            )
-
+        paths = [Path(path).absolute() for path in dict.fromkeys(htmlFiles)]
+        for path in paths:
+            if not path.is_file() or path.stat().st_size == 0:
+                raise RuntimeError('HTML report is missing or empty: {}'.format(path))
+            if path.suffix.lower() != '.html':
+                raise RuntimeError('Report is not an HTML file: {}'.format(path))
+        for path in paths:
+            webbrowser.open(path.as_uri())
         return []
-

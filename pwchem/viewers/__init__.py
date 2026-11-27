@@ -8,4 +8,5 @@ from .viewers_MD import *
 from .viewer_roi_voting import *
 from .viewer_fastq import FastqHtmlViewer
 from .viewer_alignment import AlignmentViewer
+from .viewer_picard import PicardViewer
 from .viewer_ranx_fuse import RANXFuseViewer

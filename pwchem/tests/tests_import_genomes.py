@@ -28,83 +28,7 @@ from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
 from pwchem.protocols import ProtImportGenomes
 from pwchem.utils import assertHandle
-from pwchem.utils.utilsRNA import (
-    assertOutputExists,
-    assertGenomeFiles
-)
-
-
-def assertGenomeMetadata(
-        test,
-        protocol,
-        genome,
-        scientificName,
-        assembly,
-        release
-):
-    """Check the metadata stored in an imported Genome object."""
-    assertHandle(
-        test.assertEqual,
-        genome.getScientificName(),
-        scientificName,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertEqual,
-        genome.getAssembly(),
-        assembly,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertEqual,
-        genome.getRelease(),
-        release,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertEqual,
-        genome.getSource(),
-        'Imported',
-        cwd=protocol.getWorkingDir()
-    )
-
-
-def assertFilesInExtra(test, protocol, genome):
-    """Check that imported genome files are stored in the extra directory."""
-    extraPath = os.path.abspath(
-        protocol._getExtraPath()
-    )
-
-    fastaPath = os.path.abspath(
-        genome.getFastaFile()
-    )
-
-    gtfPath = os.path.abspath(
-        genome.getGtfFile()
-    )
-
-    assertHandle(
-        test.assertEqual,
-        os.path.commonpath([
-            extraPath,
-            fastaPath
-        ]),
-        extraPath,
-        cwd=protocol.getWorkingDir()
-    )
-
-    assertHandle(
-        test.assertEqual,
-        os.path.commonpath([
-            extraPath,
-            gtfPath
-        ]),
-        extraPath,
-        cwd=protocol.getWorkingDir()
-    )
+from pwchem.utils.utilsRNA import assertOutputExists, assertGenomeFiles
 
 
 class TestImportGenomes(BaseTest):
@@ -187,8 +111,7 @@ class TestImportGenomes(BaseTest):
             )
 
             if scientificName == 'Homo sapiens':
-                assertGenomeMetadata(
-                    self,
+                self.assertGenomeMetadata(
                     prot,
                     genome,
                     'Homo sapiens',
@@ -203,8 +126,7 @@ class TestImportGenomes(BaseTest):
                     expectGtf=True
                 )
 
-                assertFilesInExtra(
-                    self,
+                self.assertFilesInExtra(
                     prot,
                     genome
                 )
@@ -228,8 +150,7 @@ class TestImportGenomes(BaseTest):
                 )
 
             elif scientificName == 'Mus musculus':
-                assertGenomeMetadata(
-                    self,
+                self.assertGenomeMetadata(
                     prot,
                     genome,
                     'Mus musculus',
@@ -244,8 +165,7 @@ class TestImportGenomes(BaseTest):
                     expectGtf=True
                 )
 
-                assertFilesInExtra(
-                    self,
+                self.assertFilesInExtra(
                     prot,
                     genome
                 )
@@ -287,4 +207,76 @@ class TestImportGenomes(BaseTest):
             'Mus musculus',
             scientificNames,
             cwd=prot.getWorkingDir()
+        )
+
+    def assertGenomeMetadata(
+            self,
+            protocol,
+            genome,
+            scientificName,
+            assembly,
+            release
+    ):
+        """Check the metadata stored in an imported Genome object."""
+        assertHandle(
+            self.assertEqual,
+            genome.getScientificName(),
+            scientificName,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            genome.getAssembly(),
+            assembly,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            genome.getRelease(),
+            release,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            genome.getSource(),
+            'Imported',
+            cwd=protocol.getWorkingDir()
+        )
+
+
+    def assertFilesInExtra(self, protocol, genome):
+        """Check that imported genome files are stored in the extra directory."""
+        extraPath = os.path.abspath(
+            protocol._getExtraPath()
+        )
+
+        fastaPath = os.path.abspath(
+            genome.getFastaFile()
+        )
+
+        gtfPath = os.path.abspath(
+            genome.getGtfFile()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            os.path.commonpath([
+                extraPath,
+                fastaPath
+            ]),
+            extraPath,
+            cwd=protocol.getWorkingDir()
+        )
+
+        assertHandle(
+            self.assertEqual,
+            os.path.commonpath([
+                extraPath,
+                gtfPath
+            ]),
+            extraPath,
+            cwd=protocol.getWorkingDir()
         )

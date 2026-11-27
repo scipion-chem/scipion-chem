@@ -23,6 +23,8 @@
 import gzip
 import json
 import os
+import tempfile
+import unittest
 
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 
@@ -35,6 +37,47 @@ from pwchem.protocols import (
 
 
 N_TEST_READS = 1000
+
+
+class TestPicardMetrics(unittest.TestCase):
+    """Check duplication reports without running external alignment tools."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = os.path.join(self.directory.name, 'duplication_metrics.txt')
+
+    def writeMetrics(self, rows):
+        with open(self.path, 'w') as handle:
+            handle.write('## METRICS CLASS\tpicard.sam.DuplicationMetrics\n')
+            handle.write('LIBRARY\tPERCENT_DUPLICATION\n')
+            handle.write(rows)
+            handle.write('\n## HISTOGRAM\tjava.lang.Double\nBIN\tVALUE\n1\t100\n')
+
+    def testMultipleLibrariesExcludeHistogram(self):
+        self.writeMetrics('library1\t0.125\nlibrary2\t0.5\n')
+        self.assertEqual(ProtPicard._readDuplicationMetrics(self.path), [
+            {'LIBRARY': 'library1', 'PERCENT_DUPLICATION': 0.125},
+            {'LIBRARY': 'library2', 'PERCENT_DUPLICATION': 0.5}])
+        self.assertEqual(ProtPicard._readDuplicationPercentages(self.path),
+                         [('library1', 12.5), ('library2', 50.0)])
+
+    def testRejectInvalidOrMissingFractions(self):
+        for row in ('library1\tnan\n', 'library1\t-0.1\n', 'library1\t1.1\n',
+                    'library1\tinvalid\n', 'library1\n'):
+            with self.subTest(row=row):
+                self.writeMetrics(row)
+                with self.assertRaises(ValueError):
+                    ProtPicard._readDuplicationMetrics(self.path)
+
+    def testRejectMissingOrEmptyTable(self):
+        with open(self.path, 'w') as handle:
+            handle.write('## command only\n')
+        with self.assertRaisesRegex(ValueError, 'No Picard'):
+            ProtPicard._readDuplicationMetrics(self.path)
+        self.writeMetrics('')
+        with self.assertRaisesRegex(ValueError, 'no library rows'):
+            ProtPicard._readDuplicationMetrics(self.path)
 
 
 class TestPicard(BaseTest):
