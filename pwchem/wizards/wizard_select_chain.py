@@ -472,6 +472,15 @@ class SelectMultiResidueWizardQT(SelectResidueWizardQT):
       return default
 
 
+class SelectResidueIndexesWizardQT(SelectMultiResidueWizardQT):
+  """Same selection, written as the plain list of residue numbers of the input structure, with the
+  consecutive ones collapsed into ranges (e.g. "333-526" or "333-400,450-526")."""
+  _targets, _inputs, _outputs = [], {}, {}
+
+  def formatSelection(self, resDics, chainStr):
+    return groupResidueIndexes([rD['index'] for rD in resDics])
+
+
 class SelectSpecificResiduesWizardQT(SelectMultiResidueWizardQT):
   """Same selection, written as the "chain:residueNumber" list used for the flexible
   residues of vina-like dockings (e.g. "A:12,A:15")."""
@@ -547,6 +556,11 @@ SelectChainWizardQT().addTarget(protocol=ProtMapSequenceROI,
                                 inputs=['inputAtomStruct', 'inputSequenceROIs'],
                                 outputs=['chain_name'])
 
+SelectChainWizardQT().addTarget(protocol=ProtAnnotateStructROIsWithSeqROIs,
+                                targets=['chain_name'],
+                                inputs=['inputStructROIs', 'inputSequenceROIs'],
+                                outputs=['chain_name'])
+
 
 class SelectMultiChainWizard(SelectChainWizardQT):
   _targets, _inputs, _outputs = [], {}, {}
@@ -597,7 +611,9 @@ class PreviewAlignmentWizard(VariableWizard):
   _targets, _inputs, _outputs = [], {}, {}
 
   def getPDBInputAS(self, AS, protocol):
-      if str(type(AS).__name__) == 'SchrodingerAtomStruct':
+      if isinstance(AS, SetOfStructROIs):
+        fileName = os.path.abspath(AS.getProteinFile())
+      elif str(type(AS).__name__) == 'SchrodingerAtomStruct':
         fileName = os.path.abspath(AS.convert2PDB())
       elif AS.getFileName().endswith('.pdbqt'):
         proteinFile = AS.getFileName()
@@ -633,6 +649,16 @@ PreviewAlignmentWizard().addTarget(protocol=ProtMapSequenceROI,
                                    targets=['preview'],
                                    inputs=['chain_name', 'inputAtomStruct', 'inputSequenceROIs'],
                                    outputs=[])
+
+PreviewAlignmentWizard().addTarget(protocol=ProtAnnotateStructROIsWithSeqROIs,
+                                   targets=['preview'],
+                                   inputs=['chain_name', 'inputStructROIs', 'inputSequenceROIs'],
+                                   outputs=[])
+
+SelectMultiChainWizard().addTarget(protocol=ProtAnnotateStructROIsWithSeqROIs,
+                                   targets=['partnerChains'],
+                                   inputs=['inputStructROIs'],
+                                   outputs=['partnerChains'])
 
 
 class SelectElementWizard(VariableWizard):
