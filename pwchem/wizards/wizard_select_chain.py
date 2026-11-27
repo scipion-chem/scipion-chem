@@ -717,6 +717,11 @@ SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                outputs=['displayPymolPLIP'])
 
 SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
+                               targets=['displayPlipDiagram'],
+                               inputs=['singleLabels'],
+                               outputs=['displayPlipDiagram'])
+
+SelectElementWizard().addTarget(protocol=SmallMoleculesViewer,
                                targets=['displayMoleculeCov'],
                                inputs=['moleculeLabels'],
                                outputs=['displayMoleculeCov'])
