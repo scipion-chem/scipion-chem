@@ -1729,8 +1729,23 @@ class SetOfStructROIs(data.EMSet, SetClass):
         f.write(PML_BBOX_STR_POCK.format(outHETMFile, toWrite))
       else:
         f.write(PML_STR.format(outHETMFile))
+      f.write(self.getResiduesSelectionsPml())
 
     return pmlFile
+
+  def getResiduesSelectionsPml(self):
+    pmlStr = '\n'
+    for pocket in self:
+      chainRes = {}
+      for resId in pocket.getDecodedCResidues():
+        if '_' in resId:
+          chainId, resNum = resId.rsplit('_', 1)
+          chainRes.setdefault(chainId, []).append(resNum)
+      if chainRes:
+        resSel = ' or '.join(f'(chain {chainId} and resi {"+".join(resNums)})'
+                             for chainId, resNums in chainRes.items())
+        pmlStr += f'select pocket{pocket.getObjId()}_residues, polymer and ({resSel})\n'
+    return pmlStr + 'deselect\n'
 
   def createSurfacePml(self, bBox=False):
     outHETMFile = os.path.abspath(self.getProteinHetatmFile())
@@ -1755,6 +1770,7 @@ class SetOfStructROIs(data.EMSet, SetClass):
         f.write(PML_BBOX_STR_POCKSURF.format(outHETMFile, surfaceStr, toWrite))
       else:
         f.write(PML_SURF_STR.format(outHETMFile, surfaceStr))
+      f.write(self.getResiduesSelectionsPml())
     return pmlFile
 
   def createTCL(self):
